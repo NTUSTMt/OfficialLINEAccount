@@ -253,8 +253,8 @@ function App() {
         <div className="header-logo">
           <span className="logo-icon">🏕️</span>
           <div className="logo-text">
-            <h1>野境戶外</h1>
-            <p>Gear Rental Store</p>
+            <h1>裝備租借</h1>
+            <p>Equipments Rental</p>
           </div>
         </div>
         <button 
@@ -273,20 +273,42 @@ function App() {
         </button>
       </header>
 
-      {/* 首頁海報 / Banner */}
-      <div className="promo-banner">
+      {/* 費用試算說明 Banner */}
+      <div className="promo-banner pricing-banner">
         <div className="banner-content">
-          <span className="banner-tag">專屬戶外裝備租借</span>
-          <h2>探索自然，說走就走</h2>
-          <p>優質露營與登山裝備，專業清洗維護，安心出發</p>
+          <h2 className="pricing-title">費用試算說明</h2>
+          
+          <div className="pricing-rules">
+            <div className="pricing-rule-item">
+              <span className="rule-label">社員用於社團活動</span>
+              <span className="rule-value">免費</span>
+            </div>
+            <div className="pricing-rule-item">
+              <span className="rule-label">非社員用於社團活動</span>
+              <span className="rule-value">免費</span>
+            </div>
+            <div className="pricing-rule-item">
+              <span className="rule-label">社員個人使用</span>
+              <span className="rule-value"><span>5</span> 折租金</span>
+            </div>
+            <div className="pricing-rule-item">
+              <span className="rule-label">非社員個人使用</span>
+              <span className="rule-value">全額租金</span>
+            </div>
+          </div>
+          
+          <div className="pricing-notes">
+            <p>。租金試算以「2天」為基本單位</p>
+            <p>。超過 2 天之部分按「每日加價」計算</p>
+          </div>
         </div>
       </div>
 
       {/* 主要內容區 */}
       <main className="main-content">
         <div className="section-title">
-          <h2>精選租借裝備</h2>
-          <span className="products-count">共 {equipments.length} 款裝備</span>
+          <h2>裝備列表</h2>
+          <span className="products-count">共 {equipments.length} 種裝備</span>
         </div>
 
         {loading ? (

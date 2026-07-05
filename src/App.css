@@ -89,11 +89,20 @@ body {
   font-size: 26px;
 }
 
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
 .logo-text h1 {
   font-size: 18px;
   font-weight: 800;
   color: var(--primary-hover);
   letter-spacing: 0.5px;
+  margin: 0;
+  line-height: 1.2;
 }
 
 .logo-text p {
@@ -102,6 +111,8 @@ body {
   text-transform: uppercase;
   font-weight: 600;
   letter-spacing: 1px;
+  margin: 0;
+  line-height: 1.2;
 }
 
 .cart-toggle-btn {
@@ -154,7 +165,7 @@ body {
    📌 首頁海報 (Promo Banner)
    ========================================== */
 .promo-banner {
-  background: linear-gradient(135deg, #10b981 0%, #064e3b 100%);
+  background: linear-gradient(135deg, #10b981 0%, #064e3b 100%); /* 使用原本質感的綠色漸層 */
   color: white;
   padding: 24px 20px;
   margin: 16px;
@@ -172,7 +183,7 @@ body {
   width: 150px;
   height: 150px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .banner-content {
@@ -180,26 +191,74 @@ body {
   z-index: 1;
 }
 
-.banner-tag {
-  background-color: rgba(255, 255, 255, 0.2);
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 20px;
+/* 費用試算樣式 */
+.pricing-banner {
+  padding: 28px 24px;
+}
+
+.pricing-title {
+  font-size: 24px !important;
+  font-weight: 750 !important;
+  font-style: italic;
+  text-align: left;
+  color: white !important;
+  margin-bottom: 20px !important;
+  letter-spacing: 1px;
+}
+
+.pricing-rules {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 24px;
+}
+
+.pricing-rule-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.pricing-rule-item:last-child {
+  border-bottom: none;
+}
+
+.rule-label {
+  font-size: 15px;
+  font-style: italic;
+  font-weight: 500;
+  opacity: 0.95;
+}
+
+.rule-value {
+  font-size: 18px;
   font-weight: bold;
-  display: inline-block;
-  margin-bottom: 8px;
+  letter-spacing: 0.5px;
 }
 
-.banner-content h2 {
-  font-size: 20px;
-  font-weight: 750;
-  margin-bottom: 6px;
+.rule-value span {
+  font-size: 22px;
+  margin-right: 2px;
 }
 
-.banner-content p {
-  font-size: 12px;
+.pricing-notes {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  text-align: left;
+}
+
+.pricing-notes p {
+  font-size: 11px;
   opacity: 0.9;
-  line-height: 1.4;
+  line-height: 1.6;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+.pricing-notes p:last-child {
+  margin-bottom: 0;
 }
 
 /* ==========================================
