@@ -106,13 +106,12 @@ function ProductImage({ name }: { name: string }) {
   );
 }
 
-function Borrow() {
+function Borrow({ userId }: { userId: string }) {
   // ==========================================
   // 📌 2. 狀態管理 (State Management)
   // ==========================================
   const [equipments, setEquipments] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [userId, setUserId] = useState<string>('TEST_USER_ID');
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
 
   const [form, setForm] = useState<FormState>({
@@ -129,17 +128,8 @@ function Borrow() {
   // 📌 3. 初始化與資料獲取 (Initialization)
   // ==========================================
   useEffect(() => {
-    const initLiffAndFetchData = async () => {
+    const fetchData = async () => {
       try {
-        // 初始化 LIFF
-        await liff.init({ liffId: '2009217429-zXvGeSrI' }).catch((err) => {
-          console.log('LIFF 初始化在非 LINE 環境下略過:', err);
-        });
-        if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          setUserId(profile.userId);
-        }
-
         // 呼叫 GAS API 取得裝備清單
         const response = await fetch(GAS_API_URL, { redirect: 'follow' });
         const resData: ApiResponse = await response.json();
@@ -148,13 +138,13 @@ function Borrow() {
           setEquipments(resData.data);
         }
       } catch (error) {
-        console.error('初始化失敗:', error);
+        console.error('裝備清單載入失敗:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    initLiffAndFetchData();
+    fetchData();
   }, []);
 
   // ==========================================

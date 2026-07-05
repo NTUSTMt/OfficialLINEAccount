@@ -1,6 +1,7 @@
 import '../App.css';
 
-function Payment() {
+function Payment({ userId }: { userId: string }) {
+  console.log('Payment initialized for user:', userId);
   return (
     <div className="app-container">
       {/* 頂部導覽列 */}
