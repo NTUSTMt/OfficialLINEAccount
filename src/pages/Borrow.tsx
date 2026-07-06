@@ -201,7 +201,6 @@ function Borrow({ userId }: { userId: string }) {
       const equip = equipments.find(item => item.id === id);
       if (!equip) return '';
       const extraDays = Math.max(0, rentalDays - 2);
-      const itemPrice = equip.price + extraDays * (equip.priceExtra || 0);
       return `($${equip.price} + $${equip.priceExtra || 0} × ${extraDays}天) × ${qty}件`;
     }).filter(Boolean);
     return parts.join(' + ');
