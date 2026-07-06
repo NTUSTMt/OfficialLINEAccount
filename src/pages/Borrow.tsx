@@ -10,6 +10,7 @@ interface Equipment {
   name: string;
   remainQty: number;
   price: number;
+  priceExtra: number;
 }
 
 interface FormState {
@@ -173,13 +174,38 @@ function Borrow({ userId }: { userId: string }) {
     return Object.values(form.cart).reduce((sum, qty) => sum + qty, 0);
   }, [form.cart]);
 
-  // 計算購物車總租金
+  // 計算天數的輔助函式
+  const rentalDays = useMemo(() => {
+    if (!form.pickupDate || !form.returnDate) return 2;
+    const start = new Date(form.pickupDate);
+    const end = new Date(form.returnDate);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays || 1; // 至少為 1 天
+  }, [form.pickupDate, form.returnDate]);
+
+  // 計算購物車總租金 (前 2 天為基本租金，之後每天加收 priceExtra)
   const totalPrice = useMemo(() => {
     return Object.entries(form.cart).reduce((sum, [id, qty]) => {
       const equip = equipments.find(item => item.id === id);
-      return sum + (equip ? equip.price * qty : 0);
+      if (!equip) return sum;
+      const extraDays = Math.max(0, rentalDays - 2);
+      const itemPrice = equip.price + extraDays * (equip.priceExtra || 0);
+      return sum + (itemPrice * qty);
     }, 0);
-  }, [form.cart, equipments]);
+  }, [form.cart, equipments, rentalDays]);
+
+  // 產生試算公式字串
+  const formulaString = useMemo(() => {
+    const parts = Object.entries(form.cart).map(([id, qty]) => {
+      const equip = equipments.find(item => item.id === id);
+      if (!equip) return '';
+      const extraDays = Math.max(0, rentalDays - 2);
+      const itemPrice = equip.price + extraDays * (equip.priceExtra || 0);
+      return `($${equip.price} + $${equip.priceExtra || 0} × ${extraDays}天) × ${qty}件`;
+    }).filter(Boolean);
+    return parts.join(' + ');
+  }, [form.cart, equipments, rentalDays]);
 
   // 處理表單輸入
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -329,9 +355,15 @@ function Borrow({ userId }: { userId: string }) {
                       )}
                     </div>
                     
-                    <div className="product-price-row">
-                      <span className="price-label">租金</span>
-                      <span className="price-value">${item.price}<span className="price-unit">/2天</span></span>
+                    <div className="product-price-row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px', width: '100%' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                        <span className="price-label" style={{ margin: 0 }}>租金 (2天)</span>
+                        <span className="price-value" style={{ fontSize: '15px' }}>${item.price}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}>
+                        <span>續租 (加1天)</span>
+                        <span>+${item.priceExtra || 0}</span>
+                      </div>
                     </div>
 
                     <div className="product-actions">
@@ -418,7 +450,12 @@ function Borrow({ userId }: { userId: string }) {
                         <div key={id} className="cart-item-row">
                           <div className="cart-item-desc">
                             <span className="cart-item-name">{item.name}</span>
-                            <span className="cart-item-price">${item.price} x {qty}</span>
+                            <span className="cart-item-price" style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                              公式: (${item.price} + ${item.priceExtra || 0} × {Math.max(0, rentalDays - 2)}天) × {qty} = 
+                              <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>
+                                ${ (item.price + Math.max(0, rentalDays - 2) * (item.priceExtra || 0)) * qty }
+                              </strong>
+                            </span>
                           </div>
                           <div className="cart-item-controls">
                             <button onClick={() => updateCart(id, -1, item.remainQty)}>-</button>
@@ -486,13 +523,22 @@ function Borrow({ userId }: { userId: string }) {
                 {/* 費用總計 */}
                 <div className="checkout-summary">
                   <div className="summary-row">
+                    <span>租用天數</span>
+                    <span>{rentalDays} 天</span>
+                  </div>
+                  <div className="summary-row">
                     <span>商品總數</span>
                     <span>共 {totalItems} 件</span>
                   </div>
-                  <div className="summary-row total-row">
+                  <div className="summary-row total-row" style={{ borderBottom: formulaString ? 'none' : '1px solid var(--border-color)', paddingBottom: formulaString ? '0' : '8px' }}>
                     <span>預估總租金</span>
                     <span className="total-highlight">${totalPrice}</span>
                   </div>
+                  {formulaString && (
+                    <div className="summary-row" style={{ fontSize: '11px', color: 'var(--text-muted)', justifyContent: 'flex-end', marginTop: '2px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                      <span>試算: {formulaString} = ${totalPrice}</span>
+                    </div>
+                  )}
                   <p className="summary-tip">* 實際租金以取貨時，幹部依實際使用天數與規則核算為準</p>
                 </div>
               </>

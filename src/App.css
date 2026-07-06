@@ -494,7 +494,7 @@ body {
    ========================================== */
 .floating-cart-bar {
   position: fixed;
-  bottom: 20px;
+  bottom: calc(76px + env(safe-area-inset-bottom, 8px));
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 32px);
@@ -776,22 +776,28 @@ body {
   font-size: 12px;
   font-weight: bold;
   color: var(--text-secondary);
+  text-align: left;
 }
 
 .form-group input, 
 .custom-select {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   padding: 10px;
   font-size: 14px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background-color: white;
   color: var(--text-primary);
-  width: 100%;
+  text-align: left;
 }
 
 .form-group input[type="date"] {
   cursor: pointer;
   min-height: 40px;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .custom-select {

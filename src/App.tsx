@@ -20,7 +20,7 @@ function App() {
         } else {
           // 若在 LINE 內部但未登入，強制導向 LINE 登入
           if (liff.isInClient()) {
-            liff.login();
+            liff.login({ redirectUri: window.location.href });
             return; // 登入會跳轉，直接 return
           }
         }

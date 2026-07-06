@@ -3812,6 +3812,7 @@ function getEquipmentsListAPI(ss) {
     remainQty: _fi(headers, "剩餘數量"),
     borrowable: _fi(headers, "是否外借"),
     price2Days: _fi(headers, "2天"),
+    priceExtra: _fi(headers, "+1天"),
     status: _fi(headers, "狀態")
   };
 
@@ -3827,7 +3828,8 @@ function getEquipmentsListAPI(ss) {
         id: hIdx.id > -1 ? data[i][hIdx.id] : "",
         name: hIdx.name > -1 ? data[i][hIdx.name] : "未知裝備",
         remainQty: remainQty,
-        price: hIdx.price2Days > -1 ? parseInt(data[i][hIdx.price2Days], 10) || 0 : 0
+        price: hIdx.price2Days > -1 ? parseInt(data[i][hIdx.price2Days], 10) || 0 : 0,
+        priceExtra: hIdx.priceExtra > -1 ? parseInt(data[i][hIdx.priceExtra], 10) || 0 : 0
       });
     }
   }
@@ -3999,9 +4001,19 @@ function processMultiLoan(payload) {
           // 扣除庫存
           equipSheet.getRange(j + 1, eStockIdx + 1).setValue(currentStock - qty);
           
-          // 計算費用 (簡化版計算，可依照你的天數邏輯擴充)
+          // 計算費用 (依照借用天數計算：前 2 天為基本價，超過 2 天按日加價)
+          var pickupDate = new Date(details.pickupDate);
+          var returnDate = new Date(details.returnDate);
+          var diffTime = Math.abs(returnDate - pickupDate);
+          var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+          
           var price2 = parseInt(eData[j][_fi(eData[0], "2天")], 10) || 0;
-          var itemCost = (isOfficial === "是") ? Math.ceil((price2 * qty) / 2) : (price2 * qty);
+          var priceExtra = parseInt(eData[j][_fi(eData[0], "+1天")], 10) || 0;
+          
+          var extraDays = Math.max(0, diffDays - 2);
+          var baseCost = price2 + extraDays * priceExtra;
+          
+          var itemCost = (isOfficial === "是") ? Math.ceil((baseCost * qty) / 2) : (baseCost * qty);
           totalCost += itemCost;
           
           summaryText.push(equipName + " x" + qty);
