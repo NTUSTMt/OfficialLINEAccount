@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import liff from '@line/liff';
 import Borrow from './pages/Borrow';
 import Payment from './pages/Payment';
@@ -25,7 +25,6 @@ const getInitialRedirectPath = () => {
 };
 
 function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; userId: string } }) {
-  const location = useLocation();
   // ⚠️ 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，
   // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
   const [redirectPath] = useState(() => getInitialRedirectPath());

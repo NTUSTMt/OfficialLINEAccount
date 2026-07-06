@@ -3,11 +3,14 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.27` (v0.0.27)
+- **當前版本**：`0.0.28` (v0.0.28)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 28. 修復編譯時的未宣告使用 (TS6133) 錯誤 (v0.0.28)
+- **清理冗餘宣告**：由於先前移除了底部導覽 Tab Bar，在 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中遺留了未使用的 `NavLink`、`useLocation` 引用以及 `location` 宣告。現已將其完全清除，修復 TypeScript 在 Production 建置時的阻擋錯誤並成功通過建置。
 
 ### 27. 調整資料註冊欄位之必填限制 (v0.0.27)
 - **必填欄位調整**：根據新需求，簡化註冊防呆門檻。除了 **姓名、Email、真實 LINE ID、電話、在校系所、學號** 共 6 個核心欄位維持必填之外，其餘所有欄位（性別、生日、身分證字號、緊急聯絡人姓名、聯絡人關係、聯絡人電話、隱私同意書）皆已改為「非必填 (Optional)」。
