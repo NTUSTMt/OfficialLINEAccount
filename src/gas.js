@@ -174,6 +174,10 @@ function doPost(e) {
     if (msg.action === 'submit_multi_loan') {
       return processMultiLoan(msg);
     }
+    
+    if (msg.action === 'submit_payment') {
+      return processPaymentSubmit(msg);
+    }
 
     for (var i = 0; i < msg.events.length; i++) {
       var event = msg.events[i];
@@ -4051,5 +4055,198 @@ function processMultiLoan(payload) {
   if (typeof pushAdminMessage === "function") pushAdminMessage(adminMsg);
 
   // 4. 回傳成功狀態給 LIFF 前端
+  return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ⭐️ 新增：處理 LIFF 繳費申報的專屬引擎
+function processPaymentSubmit(payload) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var paySheet = ss.getSheetByName("Payments");
+  var mSheet = ss.getSheetByName("Members");
+  var sSheet = ss.getSheetByName("Signups");
+  var lSheet = ss.getSheetByName("Loan_Records");
+  
+  var userId = payload.userId;
+  var details = payload.details; // details: { selectedIds: string[], last5Digits: string, totalAmount: number }
+  
+  // 1. 取得姓名與社員狀態
+  var mData = mSheet.getDataRange().getValues();
+  var sysIdx = _fi(mData[0], "系統識別碼");
+  var userName = "未知社員";
+  var isOfficial = "否";
+  for (var i = 1; i < mData.length; i++) {
+    if (sysIdx > -1 && mData[i][sysIdx] === userId) {
+      userName = mData[i][_fi(mData[0], "姓名")] || "未知社員";
+      var payStatus = mData[i][_fi(mData[0], "繳費狀態")] || "";
+      if (String(payStatus).trim() === "已繳費 Paid") isOfficial = "是";
+      break;
+    }
+  }
+  
+  var confirmedItems = [];
+  var insertedRowIndex = 0;
+  
+  // 2. 鎖定並更改狀態為 "待確認 Checking" (加鎖防止並發衝突)
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    
+    var selectedIds = details.selectedIds;
+    
+    for (var k = 0; k < selectedIds.length; k++) {
+      var itemId = selectedIds[k];
+      
+      // A. 社費
+      if (itemId === "fee_membership") {
+        var mPayIdx = _fi(mData[0], "繳費狀態");
+        for (var m = 1; m < mData.length; m++) {
+          if (sysIdx > -1 && mData[m][sysIdx] === userId) {
+            mSheet.getRange(m + 1, mPayIdx + 1).setValue("待確認 Checking");
+            confirmedItems.push("🔸 社籍與社費 (Membership Fee)");
+            break;
+          }
+        }
+      }
+      // B. 活動
+      else if (itemId.startsWith("act_")) {
+        var targetEventId = itemId.substring(4);
+        var sData = sSheet.getDataRange().getValues();
+        var sSysIdx = _fi(sData[0], "系統識別碼");
+        var sPayIdx = _fi(sData[0], "繳費狀態");
+        var sEvtIdx = _fi(sData[0], "活動編號");
+        for (var s = 1; s < sData.length; s++) {
+          if (sSysIdx > -1 && sData[s][sSysIdx] === userId && sEvtIdx > -1 && String(sData[s][sEvtIdx]).trim() === targetEventId) {
+            sSheet.getRange(s + 1, sPayIdx + 1).setValue("待確認 Checking");
+            var eventName = _getEventName(ss, targetEventId);
+            confirmedItems.push("🔸 活動：" + eventName);
+            break;
+          }
+        }
+      }
+      // C. 裝備
+      else if (itemId.startsWith("eq_")) {
+        var targetOrderId = itemId.substring(3);
+        var lData = lSheet.getDataRange().getValues();
+        var lSysIdx = _fi(lData[0], "系統識別碼");
+        var lPayIdx = _fi(lData[0], "繳費狀態");
+        var lOrderIdx = _fi(lData[0], "租借編號");
+        var lName1Idx = _fi(lData[0], "裝備名稱");
+        var lName2Idx = _fi(lData[0], "租借項目");
+        var lIdIdx = _fi(lData[0], "裝備代號");
+        for (var l = 1; l < lData.length; l++) {
+          if (lSysIdx > -1 && lData[l][lSysIdx] === userId && lOrderIdx > -1 && String(lData[l][lOrderIdx]).trim() === targetOrderId) {
+            lSheet.getRange(l + 1, lPayIdx + 1).setValue("待確認 Checking");
+            var equipName = _getEquipName(lData[l], lName1Idx, lName2Idx, lIdIdx, "未知裝備");
+            confirmedItems.push("🔹 裝備：" + equipName);
+          }
+        }
+      }
+    }
+    
+    // 3. 寫入 Payments 工作表
+    if (paySheet) {
+      var pHeaders = paySheet.getRange(1, 1, 1, paySheet.getLastColumn()).getValues()[0];
+      var newRow = new Array(pHeaders.length).fill("");
+      
+      newRow[_fi(pHeaders, "時間")] = new Date();
+      newRow[_fi(pHeaders, "姓名")] = userName;
+      newRow[_fi(pHeaders, "系統識別碼")] = userId;
+      newRow[_fi(pHeaders, "繳費項目")] = confirmedItems.join(", ");
+      newRow[_fi(pHeaders, "金額")] = details.totalAmount;
+      newRow[_fi(pHeaders, "帳號末5碼")] = details.last5Digits;
+      newRow[_fi(pHeaders, "對帳狀態")] = "待核對";
+      
+      paySheet.appendRow(newRow);
+      insertedRowIndex = paySheet.getLastRow();
+    }
+    
+  } catch (e) {
+    console.error("處理繳費申報失敗", e);
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中：" + e.toString() })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+  
+  // 4. 發送推播通知幹部對帳 Flex Message
+  var altText = "🔔 收到一筆新對帳申報！";
+  var postbackData = "action=admin_confirm&row=" + insertedRowIndex + "&userId=" + userId + "&type=combined";
+  
+  var flexContent = {
+    "type": "bubble",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [
+        {
+          "type": "text",
+          "text": "💰 繳費核對申請",
+          "weight": "bold",
+          "size": "lg",
+          "color": "#ffffff"
+        }
+      ],
+      "backgroundColor": "#10b981"
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [
+        {
+          "type": "text",
+          "text": "👤 申報人：" + userName,
+          "weight": "bold",
+          "size": "md"
+        },
+        {
+          "type": "text",
+          "text": "💵 申報金額：$" + details.totalAmount,
+          "weight": "bold",
+          "size": "md",
+          "color": "#059669",
+          "margin": "sm"
+        },
+        {
+          "type": "text",
+          "text": "🔢 帳號末5碼：" + details.last5Digits,
+          "weight": "bold",
+          "size": "md",
+          "margin": "sm"
+        },
+        {
+          "type": "separator",
+          "margin": "md"
+        },
+        {
+          "type": "text",
+          "text": "📋 申報明細：\n" + confirmedItems.join("\n"),
+          "wrap": true,
+          "size": "sm",
+          "color": "#475569",
+          "margin": "md"
+        }
+      ]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [
+        {
+          "type": "button",
+          "style": "primary",
+          "color": "#10b981",
+          "action": {
+            "type": "postback",
+            "label": "✅ 確認無誤並發送通知",
+            "data": postbackData
+          }
+        }
+      ]
+    }
+  };
+  
+  if (typeof pushAdminFlexMessage === "function") {
+    pushAdminFlexMessage(altText, flexContent);
+  }
+  
   return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
 }
