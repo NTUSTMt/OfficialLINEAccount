@@ -50,8 +50,11 @@ function App() {
         {/* 路由主體頁面 */}
         <Routes>
           <Route path="/" element={<Navigate to="/borrow" replace />} />
+          <Route path="/index.html" element={<Navigate to="/borrow" replace />} />
           <Route path="/borrow" element={<Borrow userId={liffInit.userId} />} />
           <Route path="/payment" element={<Payment userId={liffInit.userId} />} />
+          {/* 萬用路由：避免任何其他路徑或 LIFF 狀態字串導致白畫面 */}
+          <Route path="*" element={<Navigate to="/borrow" replace />} />
         </Routes>
 
         {/* 底部導覽 Tab Bar (手機 App 質感) */}
