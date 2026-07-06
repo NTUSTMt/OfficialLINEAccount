@@ -3,11 +3,17 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.28` (v0.0.28)
+- **當前版本**：`0.0.29` (v0.0.29)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 29. 修復第二次加載個人資料白屏、防止舊資料覆寫、移除電話防呆 (v0.0.29)
+- **修復載入白屏**：在 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 中，先前直接使用來自 GAS 查詢到的原始 profile 資料。如果試算表中的生日欄位為非標準字串或為數字時，在 React 中調用 `new Date(p.birthday).toISOString()` 會拋出 RangeError 並引發 React 崩潰白屏。現已改為安全的 `birthday` 格式轉換，若無效則安全回傳空字串，防止白屏。
+- **優化資料載入**：在 [src/GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的 `getMemberProfileAPI` 中，若是 Date 物件，會主動以 `yyyy-MM-dd` 格式序列化後回傳，優化前後端資料讀取。
+- **防止覆寫未映射欄位**：修復了 `processSaveProfile` 寫入邏輯的重大缺陷。先前舊社員在更新資料時會重新開闢空陣列，導致「社籍到期日」等未映射欄位被清空。現已改為更新時預先複製原有整列的全部舊資料值，再複寫填寫的資料欄位。
+- **移除電話防呆限制**：移除 `isStepValid` 中手機號碼與緊急聯絡人電話的 Regular Expression 格式限制，手機號碼改為僅進行「非空」檢查，緊急聯絡電話則完全無須任何字元或非空限制。
 
 ### 28. 修復編譯時的未宣告使用 (TS6133) 錯誤 (v0.0.28)
 - **清理冗餘宣告**：由於先前移除了底部導覽 Tab Bar，在 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中遺留了未使用的 `NavLink`、`useLocation` 引用以及 `location` 宣告。現已將其完全清除，修復 TypeScript 在 Production 建置時的阻擋錯誤並成功通過建置。

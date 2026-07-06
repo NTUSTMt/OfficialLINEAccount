@@ -83,7 +83,37 @@ function Register({ userId }: { userId: string }) {
           const result = await res.json();
           if (result.status === 'success' && result.isMember && result.profile) {
             setIsNewUser(false);
-            setFormData(result.profile);
+            const p = result.profile;
+            
+            // 安全解析生日字串，避免 typeof/Invalid Date 造成 toISOString 崩潰或白屏
+            let birthdayStr = '';
+            if (p.birthday) {
+              const d = new Date(p.birthday);
+              if (!isNaN(d.getTime())) {
+                birthdayStr = d.toISOString().split('T')[0];
+              } else {
+                birthdayStr = String(p.birthday).substring(0, 10);
+              }
+            }
+
+            setFormData({
+              name: p.name ? String(p.name) : '',
+              gender: p.gender ? String(p.gender) : '',
+              birthday: birthdayStr,
+              idNumber: p.idNumber ? String(p.idNumber) : '',
+              department: p.department ? String(p.department) : '臺科大在校學生',
+              studentId: p.studentId ? String(p.studentId) : '',
+              phone: p.phone ? String(p.phone) : '',
+              email: p.email ? String(p.email) : '',
+              realLineId: p.realLineId ? String(p.realLineId) : '',
+              emerName: p.emerName ? String(p.emerName) : '',
+              emerRel: p.emerRel ? String(p.emerRel) : '',
+              emerPhone: p.emerPhone ? String(p.emerPhone) : '',
+              medicalHistory: p.medicalHistory ? String(p.medicalHistory) : '',
+              exp: p.exp ? String(p.exp) : '',
+              strength: p.strength ? String(p.strength) : '',
+              strengthProof: p.strengthProof ? String(p.strengthProof) : '',
+            });
             setPrivacyAgreed(true);
           }
         } else {
@@ -137,20 +167,16 @@ function Register({ userId }: { userId: string }) {
         return formData.name.trim() !== '';
       case 2:
         // 系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId) 均為必填
-        const phoneValid = /^\+?\d{8,15}$/.test(formData.phone.trim().replace(/[- ]/g, ''));
         const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim());
         return (
           formData.department.trim() !== '' &&
           formData.studentId.trim() !== '' &&
-          phoneValid &&
+          formData.phone.trim() !== '' &&
           emailValid &&
           formData.realLineId.trim() !== ''
         );
       case 3:
-        // 緊急聯絡人資訊變更為選填，若有填寫才驗證電話格式
-        if (formData.emerPhone.trim() !== '') {
-          return /^\+?\d{8,15}$/.test(formData.emerPhone.trim().replace(/[- ]/g, ''));
-        }
+        // 緊急聯絡人資訊變更為選填，無須驗證電話格式
         return true;
       case 4:
         // 隱私權同意書變更為選填

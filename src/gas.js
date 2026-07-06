@@ -843,7 +843,7 @@ function handlePostback(replyToken, userId, postbackData) {
     var adminMsg = "🔔 【幹部通知：繳費確認完成】\n\n" +
       "👤 繳費人：" + userName + " (" + isOfficial + "社員)\n" +
       "─────────────\n" +
-      "已成功將該筆帳務標記為「已確認無誤」，並同步更新社員欠款狀態為「已繳費」！\n\n" +
+      "已成功將該筆帳務標記為「已確認無誤」，並同步更新社員繳費狀態為「已繳費」！\n\n" +
       "👉 詳細項目：\n" +
       confirmedItemsStr +
       "\n\n系統已自動發送詳細項目通知給社員囉！";
@@ -4289,7 +4289,22 @@ function getMemberProfileAPI(ss, userId) {
       profile.phone = mData[i][mH.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); })] || "";
       profile.department = mData[i][_fi(mH, "系所")] || "";
       profile.studentId = mData[i][_fi(mH, "學號")] || "";
-      profile.birthday = mData[i][_fi(mH, "生日")] || "";
+      
+      var birthdayVal = mData[i][_fi(mH, "生日")];
+      if (birthdayVal instanceof Date) {
+        profile.birthday = Utilities.formatDate(birthdayVal, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
+      } else if (birthdayVal) {
+        // 如果是字串或數字，安全處理為 YYYY-MM-DD 格式
+        var bStr = String(birthdayVal).trim();
+        if (bStr.indexOf("T") > -1) {
+          profile.birthday = bStr.split("T")[0];
+        } else {
+          profile.birthday = bStr;
+        }
+      } else {
+        profile.birthday = "";
+      }
+
       profile.idNumber = mData[i][_fi(mH, "證件")] || "";
       
       var addrIdx = mH.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
@@ -4399,7 +4414,15 @@ function processSaveProfile(payload) {
   }
   
   var isUpdate = (userRow !== -1);
-  var rowData = new Array(headers.length);
+  var rowData = new Array(headers.length).fill("");
+  
+  // 若為更新，預先複製原有整列的所有舊資料值，以防漏掉某些不在此程式寫入範圍內的欄位 (例如社籍到期日) 被覆蓋為空值！
+  if (isUpdate) {
+    var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
+    for (var col = 0; col < headers.length; col++) {
+      rowData[col] = oldValues[col];
+    }
+  }
   
   // 填入對應欄位資料
   rowData[sysIdx] = userId;
