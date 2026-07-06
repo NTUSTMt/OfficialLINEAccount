@@ -3,11 +3,17 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.19` (v0.0.19)
+- **當前版本**：`0.0.20` (v0.0.20)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 20. 修復 LIFF SDK 清除 URL 參數後繳費連結仍跳至裝備租借的問題 (v0.0.20)
+- **問題原因**：`AppContent` 元件中的 `redirectPath` 每次 render 都會重新呼叫 `getInitialRedirectPath()` 計算。LINE App 開啟 `https://liff.line.me/.../payment` 時，LIFF SDK 會將路徑包成 `?liff.state=%2Fpayment` 附在 URL 後，供第一次渲染正確解析。然而 `liff.init()` 完成後，LIFF SDK 會自動清除 URL 中的 `liff.state` 參數；此時 `liffInit.loading` 由 `true` 變為 `false` 觸發重新渲染，`getInitialRedirectPath()` 再次執行時 URL 已被清空，找不到 `liff.state` 便 fallback 回 `'/borrow'`，導致繳費連結永遠跳至裝備租借頁面。
+- **修復方案**：
+  - 將 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中的 `const redirectPath = getInitialRedirectPath()` 改為 `const [redirectPath] = useState(() => getInitialRedirectPath())`。
+  - 利用 `useState` 初始化函式（lazy initializer）的特性，確保 `redirectPath` 僅在元件**首次掛載時**計算一次（此時 `liff.state` 仍存在於 URL），後續任何重新渲染均不會再次呼叫，徹底防止 LIFF SDK 清除 URL 後的 fallback 問題。
 
 ### 19. 配合 Members 試算表欄位調整與移除學生證照片上傳 (v0.0.19)
 - **移除學生證上傳**：根據社團實際試算表結構與要求，前端 `Register.tsx` 與 GAS 後端 `GAS.js` 均已移除「學生證照片上傳」功能與欄位寫入邏輯，簡化表單。

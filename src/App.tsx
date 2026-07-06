@@ -26,7 +26,9 @@ const getInitialRedirectPath = () => {
 
 function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; userId: string } }) {
   const location = useLocation();
-  const redirectPath = getInitialRedirectPath();
+  // ⚠️ 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，
+  // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
+  const [redirectPath] = useState(() => getInitialRedirectPath());
 
   // 當處於註冊頁面時，隱藏底部 Tab Bar
   const showBottomNav = location.pathname !== '/register';
