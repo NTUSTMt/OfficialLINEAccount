@@ -30,7 +30,7 @@ interface UploadedFile {
 
 function Register({ userId }: { userId: string }) {
   const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNewUser, setIsNewUser] = useState(true);
   const [lineProfile, setLineProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(null);
