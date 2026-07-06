@@ -881,11 +881,11 @@ function handleTextCommand(replyToken, userId, text, sourceType) {
   else if (text === "填寫資料" || text === "填寫資料 Register") sendRegisterForm(replyToken, userId);
   else if (text === "最新活動" || text === "最新活動 Activities") sendEventList(replyToken, ss);
   else if (text === "器材借用" || text === "器材借用 Equipment Loan") {
-    replyMessage(replyToken, "🏕️ 歡迎使用裝備租借系統！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI/borrow");
+    replyMessage(replyToken, "🏕️ 歡迎使用裝備租借系統！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI");
   }
   else if (text === "取消預約" || text === "取消預約 Cancel") sendCancelMenu(replyToken, userId, ss);
   else if (text === "繳費系統" || text === "繳費系統 Payment System") {
-    replyMessage(replyToken, "💰 歡迎使用繳費與對帳系統！\n請點擊下方連結進入多選結帳表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI/payment");
+    replyMessage(replyToken, "💰 歡迎使用繳費與對帳系統！\n請點擊下方連結進入多選結帳表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
   }
   else if (text === "歷史繳費紀錄" || text === "歷史繳費紀錄 Payment History") sendPaymentHistory(replyToken, userId, ss);
   else if (text === "意見與回饋" || text === "意見與回饋 Feedback") sendFeedbackLink(replyToken);
@@ -2009,9 +2009,8 @@ function handleSignup(replyToken, userId, eventId, ss) {
 // 自動帶入並填寫在 Google 表單的特定格子裡。
 // 這樣社員就不需要自己去查一長串複雜的 ID，系統也能百分之百保證資料不會對錯人！
 function sendRegisterForm(replyToken, userId) {
-  var baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSf_CovVykMXHwO2Vi7ubd_M8W9QZ7iP2BFVaIllf2MRgiWpBQ/viewform?usp=pp_url&entry.1163700615=YYYYY";
-  var personalUrl = baseUrl.replace("YYYYY", userId);
-  replyMessage(replyToken, "📝 登山社資料填寫 / Club Registration\n\n請點擊下方專屬連結填寫您的個人資料：\nPlease click the link below to fill out your profile:\n\n" + personalUrl + "\n\n⚠️ 提醒：表單中的「系統識別碼」已由系統自動填寫，請勿修改！\n(Note: Your System ID is automatically filled, please do NOT modify it!)");
+  var liffUrl = "https://liff.line.me/2009217429-AhPRqAHg";
+  replyMessage(replyToken, "📝 登山社資料填寫 / Club Registration\n\n請點擊下方專屬連結填寫或更新您的個人資料：\nPlease click the link below to fill out or update your profile:\n\n" + liffUrl);
 }
 
 // ⭐️ 產生最新活動卡片 (100% 全動態對應最新欄位版 / 雙語升級)

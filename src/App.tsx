@@ -93,7 +93,23 @@ function App() {
   useEffect(() => {
     const initializeLiff = async () => {
       try {
-        await liff.init({ liffId: '2009217429-zXvGeSrI' });
+        let liffId = '2009217429-zXvGeSrI'; // default (borrow)
+        const path = window.location.pathname;
+        const searchParams = new URLSearchParams(window.location.search);
+        
+        let statePath = searchParams.get('liff.state') || '';
+        if (!statePath && window.location.hash) {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          statePath = hashParams.get('liff.state') || '';
+        }
+
+        if (path.includes('/register') || statePath.includes('/register')) {
+          liffId = '2009217429-AhPRqAHg';
+        } else if (path.includes('/payment') || statePath.includes('/payment')) {
+          liffId = '2009217429-u7OCkmQO';
+        }
+
+        await liff.init({ liffId });
         let userId = 'TEST_USER_ID';
         
         if (liff.isLoggedIn()) {
