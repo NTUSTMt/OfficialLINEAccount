@@ -133,39 +133,44 @@ function Register({ userId }: { userId: string }) {
   const isStepValid = useMemo(() => {
     switch (step) {
       case 1:
-        return (
-          formData.name.trim() !== '' &&
-          formData.gender !== '' &&
-          formData.birthday !== '' &&
-          formData.idNumber.trim() !== ''
-        );
+        // 只有姓名是必填
+        return formData.name.trim() !== '';
       case 2:
-        const isStudent = formData.department.includes('在校學生') || formData.department.includes('學生') || (!formData.department.includes('畢業') && !formData.department.includes('校外人士'));
+        // 系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId) 均為必填
         const phoneValid = /^\+?\d{8,15}$/.test(formData.phone.trim().replace(/[- ]/g, ''));
         const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim());
         return (
-          formData.department !== '' &&
-          (!isStudent || formData.studentId.trim() !== '') &&
+          formData.department.trim() !== '' &&
+          formData.studentId.trim() !== '' &&
           phoneValid &&
           emailValid &&
           formData.realLineId.trim() !== ''
         );
       case 3:
-        const emerPhoneValid = /^\+?\d{8,15}$/.test(formData.emerPhone.trim().replace(/[- ]/g, ''));
-        return (
-          formData.emerName.trim() !== '' &&
-          formData.emerRel.trim() !== '' &&
-          emerPhoneValid
-        );
+        // 緊急聯絡人資訊變更為選填，若有填寫才驗證電話格式
+        if (formData.emerPhone.trim() !== '') {
+          return /^\+?\d{8,15}$/.test(formData.emerPhone.trim().replace(/[- ]/g, ''));
+        }
+        return true;
       case 4:
-        return privacyAgreed;
+        // 隱私權同意書變更為選填
+        return true;
       default:
         return false;
     }
-  }, [step, formData, privacyAgreed]);
+  }, [step, formData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 防呆：若在 1~3 步按下鍵盤的 Enter/Go 鍵，應引導至下一步，而非直接送出表單
+    if (step < 4) {
+      if (isStepValid) {
+        setStep(step + 1);
+      }
+      return;
+    }
+
     if (!isStepValid) return;
 
     setIsSubmitting(true);
@@ -180,7 +185,7 @@ function Register({ userId }: { userId: string }) {
 
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(payload),
       });
       const result = await res.json();
@@ -249,8 +254,8 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label className="required">性別</label>
-              <select name="gender" value={formData.gender} onChange={handleChange} required>
+              <label>性別</label>
+              <select name="gender" value={formData.gender} onChange={handleChange}>
                 <option value="">請選擇性別 (山屋床位安排依據)</option>
                 <option value="男">男 (Male)</option>
                 <option value="女">女 (Female)</option>
@@ -258,25 +263,23 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label className="required">生日</label>
+              <label>生日</label>
               <input
                 type="date"
                 name="birthday"
                 value={formData.birthday ? formData.birthday.substring(0, 10) : ''}
                 onChange={handleChange}
-                required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">身分證字號 / 護照號碼</label>
+              <label>身分證字號 / 護照號碼</label>
               <input
                 type="text"
                 name="idNumber"
                 value={formData.idNumber}
                 onChange={handleChange}
-                placeholder="辦理入山與平安保險必備"
-                required
+                placeholder="辦理入山與平安保險"
               />
             </div>
           </div>
@@ -288,7 +291,7 @@ function Register({ userId }: { userId: string }) {
             <h2 className="step-title">📍 步驟 2：聯絡與學籍 (Contact & Academic)</h2>
 
             <div className="form-group">
-              <label className="required">身分狀態</label>
+              <label>身分狀態</label>
               <select
                 name="department"
                 value={formData.department.includes('畢業校友') ? '畢業校友' : formData.department.includes('校外人士') ? '校外人士' : '臺科大在校學生'}
@@ -301,7 +304,6 @@ function Register({ userId }: { userId: string }) {
                     studentId: val === '臺科大在校學生' ? prev.studentId : '',
                   }));
                 }}
-                required
               >
                 <option value="臺科大在校學生">臺科大在校學生</option>
                 <option value="畢業校友">畢業校友</option>
@@ -310,30 +312,26 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label className={formData.department === '臺科大在校學生' ? 'required' : ''}>
-                在校系所 / 單位
-              </label>
+              <label className="required">在校系所 / 單位</label>
               <input
                 type="text"
                 name="department"
                 value={formData.department}
                 onChange={handleChange}
                 placeholder="例如：電機系四乙 / 畢業校友 / 校外人士"
-                required={formData.department === '臺科大在校學生'}
+                required
               />
             </div>
 
             <div className="form-group">
-              <label className={formData.department === '臺科大在校學生' ? 'required' : ''}>
-                學號
-              </label>
+              <label className="required">學號</label>
               <input
                 type="text"
                 name="studentId"
                 value={formData.studentId}
                 onChange={handleChange}
-                placeholder={formData.department === '臺科大在校學生' ? '在校生必填' : '非在校生免填'}
-                required={formData.department === '臺科大在校學生'}
+                placeholder="請輸入學號"
+                required
               />
             </div>
 
@@ -381,38 +379,35 @@ function Register({ userId }: { userId: string }) {
             <h2 className="step-title">📍 步驟 3：留守資訊 (Safety & Emergency) ⚠️</h2>
 
             <div className="form-group">
-              <label className="required">緊急聯絡人姓名</label>
+              <label>緊急聯絡人姓名</label>
               <input
                 type="text"
                 name="emerName"
                 value={formData.emerName}
                 onChange={handleChange}
                 placeholder="家屬或親友姓名"
-                required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">與緊急聯絡人關係</label>
+              <label>與緊急聯絡人關係</label>
               <input
                 type="text"
                 name="emerRel"
                 value={formData.emerRel}
                 onChange={handleChange}
                 placeholder="例如：父母、配偶、兄弟姊妹"
-                required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">緊急聯絡人電話</label>
+              <label>緊急聯絡人電話</label>
               <input
                 type="tel"
                 name="emerPhone"
                 value={formData.emerPhone}
                 onChange={handleChange}
                 placeholder="出隊期間留守聯絡電話"
-                required
               />
             </div>
 

@@ -3,11 +3,30 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.22` (v0.0.22)
+- **當前版本**：`0.0.27` (v0.0.27)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 27. 調整資料註冊欄位之必填限制 (v0.0.27)
+- **必填欄位調整**：根據新需求，簡化註冊防呆門檻。除了 **姓名、Email、真實 LINE ID、電話、在校系所、學號** 共 6 個核心欄位維持必填之外，其餘所有欄位（性別、生日、身分證字號、緊急聯絡人姓名、聯絡人關係、聯絡人電話、隱私同意書）皆已改為「非必填 (Optional)」。
+- **防呆與程式修改**：在 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 中移除了上述非必填欄位的 `required` HTML 屬性與紅色星號標記，並調整 `isStepValid` 驗證邏輯，僅在有填寫緊急聯絡人電話時才進行格式正規表達式檢查，確保使用者可以快速送出表單。
+
+### 26. 攔截中間步驟按鍵 Enter 導致的提前表單提交 (v0.0.26)
+- **防提前提交**：在分步表單（Step 1~3）中，若使用者在文字輸入框焦點狀態下按下手機鍵盤的「Enter」或「Go / 開始」鍵，瀏覽器會觸發 `<form>` 的預設提交行為。由於此時 `step === 3` 且當前步驟必填欄位已填寫，`isStepValid` 會判定為 `true` 並將不完整的表單直接上傳至後端。
+- **修復方案**：修改 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 中的 `handleSubmit`。若目前 `step < 4`，則攔截提交行為並自動前進到下一步 (`step + 1`)，只有當處於第 4 步時才允許真正送出表單，解決了中間步驟提前觸發上傳儲存的 Bug。
+
+### 25. 優化表單下拉選單（select）與導覽按鈕（button）大小與樣式 (v0.0.25)
+- **表單選單放大**：在 [src/App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css) 中將 `.form-group select` 與 `.form-group textarea` 納入全域表單控制樣式，將內距提升至 `12px 14px`，字型大小提升至 `15px`，以匹配文字輸入框的外觀與大小，並加大點擊熱區。
+- **按鈕樣式套用**：為前端分步精靈按鈕（下一步、上一步、確認送出）補上缺漏的 `.btn`、`.btn-primary`、`.btn-secondary` 樣式，設定大按鈕內距 `12px 20px`、字型大小 `16px` 與圓角，符合手機端好按、美觀的觸控體驗。
+
+### 24. 移除底部的導覽列 Tab Bar (v0.0.24)
+- **底欄移除**：在 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中已將全域底部導覽列 (`bottom-nav-bar`) 的 HTML 與 CSS 切換邏輯完全移除。現在所有主要功能頁面（如裝備租借、對帳系統、資料填寫）皆透過各自獨立的 LINE LIFF 應用程式與連結獨立載入，無須保留底欄，提升視覺極簡感並符合 App 單一頁面設計規範。
+
+### 23. 修復資料註冊提交時產生的 CORS 預檢 (OPTIONS) 錯誤 (v0.0.23)
+- **問題原因**：前端 `Register.tsx` 先前使用 `'Content-Type': 'application/json'` 發送 POST 請求。此配置會觸發瀏覽器發送 CORS 預檢 `OPTIONS` 請求，但 Google Apps Script (GAS) Web App 無法處理 `OPTIONS`，導致 preflight 失敗、引發連線阻擋，進而在行動裝置上彈出「網路連線失敗，請檢查您的網路狀態！」警告。
+- **修復方案**：將 `Register.tsx` 的提交 headers 調整為 `'Content-Type': 'text/plain'`，改用「簡單請求 (Simple Request)」避開 `OPTIONS` 預檢，以順暢通過 GAS CORS 存取限制。
 
 ### 22. 支援獨立多 LIFF 應用程式動態初始化與註冊連結更新 (v0.0.22)
 - **動態 LIFF ID 初始化**：在 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中，為避免不同 LIFF 網址（例如：借用 `2009217429-zXvGeSrI`、對帳 `2009217429-u7OCkmQO`、註冊 `2009217429-AhPRqAHg`）在同一份程式碼初始化時發生 LIFF ID 衝突或不對稱錯誤，現在 `liff.init()` 會動態根據目前的瀏覽器 path 或 `liff.state` 內容自動選擇正確的 `liffId` 進行初始化。

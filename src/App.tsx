@@ -30,9 +30,6 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
   // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
   const [redirectPath] = useState(() => getInitialRedirectPath());
 
-  // 當處於註冊頁面時，隱藏底部 Tab Bar
-  const showBottomNav = location.pathname !== '/register';
-
   return (
     <div className="router-wrapper">
       {/* 路由主體頁面 */}
@@ -63,26 +60,6 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
         {/* 萬用路由：避免任何其他路徑或 LIFF 狀態字串導致白畫面 */}
         <Route path="*" element={<Navigate to="/borrow" replace />} />
       </Routes>
-
-      {/* 底部導覽 Tab Bar (手機 App 質感) */}
-      {showBottomNav && (
-        <nav className="bottom-nav-bar">
-          <NavLink 
-            to="/borrow" 
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <span className="nav-icon">🏕️</span>
-            <span className="nav-label">器材借用</span>
-          </NavLink>
-          <NavLink 
-            to="/payment" 
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <span className="nav-icon">💰</span>
-            <span className="nav-label">繳費對帳</span>
-          </NavLink>
-        </nav>
-      )}
     </div>
   );
 }
