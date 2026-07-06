@@ -179,6 +179,10 @@ function doPost(e) {
       return processPaymentSubmit(msg);
     }
 
+    if (msg.action === 'save_profile') {
+      return processSaveProfile(msg);
+    }
+
     for (var i = 0; i < msg.events.length; i++) {
       var event = msg.events[i];
 
@@ -3778,6 +3782,13 @@ function doGet(e) {
       // 呼叫未繳費清單處理引擎
       return getUnpaidListAPI(ss, userId);
       
+    } else if (action === "get_profile") {
+      var userId = e.parameter.userId;
+      if (!userId) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
+      }
+      return getMemberProfileAPI(ss, userId);
+
     } else if (action === "get_equipments") {
       // 呼叫原本的裝備清單處理引擎
       return getEquipmentsListAPI(ss);
@@ -4249,4 +4260,245 @@ function processPaymentSubmit(payload) {
   }
   
   return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ------------------------------------------------------------------
+// 引擎 4：查詢社員基本資料 API (供 LIFF 前端註冊/更新預載資料)
+// ------------------------------------------------------------------
+function getMemberProfileAPI(ss, userId) {
+  var memberSheet = ss.getSheetByName("Members");
+  if (!memberSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Members 資料表" })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  var mData = memberSheet.getDataRange().getValues();
+  var mH = mData.length > 0 ? mData[0] : [];
+  var mSysIdx = _fi(mH, "系統識別碼");
+  
+  var profile = null;
+  var isMember = false;
+  
+  for (var i = 1; i < mData.length; i++) {
+    if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
+      isMember = true;
+      profile = {};
+      
+      profile.name = mData[i][_fi(mH, "姓名")] || "";
+      profile.gender = mData[i][_fi(mH, "性別")] || "";
+      profile.realLineId = mData[i][mH.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); })] || "";
+      profile.email = mData[i][mH.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); })] || "";
+      profile.phone = mData[i][mH.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); })] || "";
+      profile.department = mData[i][_fi(mH, "系所")] || "";
+      profile.studentId = mData[i][_fi(mH, "學號")] || "";
+      profile.birthday = mData[i][_fi(mH, "生日")] || "";
+      profile.idNumber = mData[i][_fi(mH, "證件")] || "";
+      
+      var addrIdx = mH.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
+      profile.studentAddr = addrIdx > -1 ? mData[i][addrIdx] : "";
+      
+      var emerNameIdx = mH.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
+      profile.emerName = emerNameIdx > -1 ? mData[i][emerNameIdx] : "";
+      profile.emerRel = mData[i][_fi(mH, "關係")] || "";
+      profile.emerPhone = mData[i][_fi(mH, "緊急聯絡人電話")] || "";
+      
+      var emerAddrIdx = mH.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
+      profile.emerAddr = emerAddrIdx > -1 ? mData[i][emerAddrIdx] : "";
+      
+      profile.exp = mData[i][_fi(mH, "經驗")] || "";
+      profile.strength = mData[i][_fi(mH, "體能")] || "";
+      profile.strengthProof = mData[i][_fi(mH, "證明")] || "";
+      
+      var medIdx = mH.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
+      profile.medicalHistory = medIdx > -1 ? mData[i][medIdx] : "";
+      break;
+    }
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    status: "success", 
+    isMember: isMember,
+    profile: profile
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ------------------------------------------------------------------
+// 引擎 5：儲存社員基本資料 API (供 LIFF 前端註冊/更新送出)
+// ------------------------------------------------------------------
+function processSaveProfile(payload) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var memberSheet = ss.getSheetByName("Members");
+  if (!memberSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Members 資料表" })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  var userId = payload.userId;
+  if (!userId) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  var data = payload.data || {};
+  var name = data.name || "未具名";
+  var studentId = data.studentId || "無學號";
+  
+  // 處理上傳檔案至 Google Drive，檔名可自訂以利辨識
+  if (payload.strengthProofFile && payload.strengthProofFileName) {
+    var ext = payload.strengthProofFileName.split('.').pop();
+    var customFileName = name + "_體能證明." + ext;
+    data.strengthProof = uploadFileToDrive(payload.strengthProofFile, customFileName);
+  }
+  
+  var mData = memberSheet.getDataRange().getValues();
+  var headers = mData[0];
+  
+  // 確保或建立所有需要的欄位
+  var sysIdx = getOrCreateColIdx(memberSheet, headers, "系統識別碼");
+  var nameIdx = getOrCreateColIdx(memberSheet, headers, "姓名");
+  var genderIdx = getOrCreateColIdx(memberSheet, headers, "性別");
+  
+  var lineIdx = headers.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
+  if (lineIdx === -1) lineIdx = getOrCreateColIdx(memberSheet, headers, "真實 LINE ID");
+  
+  var emailIdx = headers.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); });
+  if (emailIdx === -1) emailIdx = getOrCreateColIdx(memberSheet, headers, "聯絡信箱 Email");
+  
+  var phoneIdx = headers.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); });
+  if (phoneIdx === -1) phoneIdx = getOrCreateColIdx(memberSheet, headers, "聯絡電話");
+  
+  var deptIdx = getOrCreateColIdx(memberSheet, headers, "系所");
+  var studentIdIdx = getOrCreateColIdx(memberSheet, headers, "學號");
+  var birthdayIdx = getOrCreateColIdx(memberSheet, headers, "生日");
+  var idNumberIdx = getOrCreateColIdx(memberSheet, headers, "證件");
+  
+  var studentAddrIdx = headers.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
+  if (studentAddrIdx === -1) studentAddrIdx = getOrCreateColIdx(memberSheet, headers, "聯絡地址");
+  
+  var emerNameIdx = headers.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
+  if (emerNameIdx === -1) emerNameIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人姓名");
+  
+  var emerRelIdx = getOrCreateColIdx(memberSheet, headers, "關係");
+  
+  var emerAddrIdx = headers.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
+  if (emerAddrIdx === -1) emerAddrIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人地址");
+  
+  var emerPhoneIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人電話");
+  var expIdx = getOrCreateColIdx(memberSheet, headers, "經驗");
+  var strengthIdx = getOrCreateColIdx(memberSheet, headers, "體能");
+  var strengthProofIdx = getOrCreateColIdx(memberSheet, headers, "證明");
+  
+  var medIdx = headers.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
+  if (medIdx === -1) medIdx = getOrCreateColIdx(memberSheet, headers, "個人特殊病史或過敏");
+  
+  var payIdx = getOrCreateColIdx(memberSheet, headers, "繳費狀態");
+  
+  // 搜尋是否已存在該社員
+  var userRow = -1;
+  for (var i = 1; i < mData.length; i++) {
+    if (mData[i][sysIdx] === userId) {
+      userRow = i + 1;
+      break;
+    }
+  }
+  
+  var isUpdate = (userRow !== -1);
+  var rowData = new Array(headers.length);
+  
+  // 填入對應欄位資料
+  rowData[sysIdx] = userId;
+  rowData[nameIdx] = data.name || "";
+  rowData[genderIdx] = data.gender || "";
+  rowData[lineIdx] = data.realLineId || "";
+  rowData[emailIdx] = data.email || "";
+  rowData[phoneIdx] = data.phone || "";
+  rowData[deptIdx] = data.department || "";
+  rowData[studentIdIdx] = data.studentId || "";
+  rowData[birthdayIdx] = data.birthday || "";
+  rowData[idNumberIdx] = data.idNumber || "";
+  rowData[studentAddrIdx] = data.studentAddr || "";
+  rowData[emerNameIdx] = data.emerName || "";
+  rowData[emerRelIdx] = data.emerRel || "";
+  rowData[emerAddrIdx] = data.emerAddr || "";
+  rowData[emerPhoneIdx] = data.emerPhone || "";
+  rowData[expIdx] = data.exp || "";
+  rowData[strengthIdx] = data.strength || "";
+  
+  if (isUpdate) {
+    var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
+    rowData[strengthProofIdx] = data.strengthProof || oldValues[strengthProofIdx] || "";
+    rowData[payIdx] = oldValues[payIdx] || "未繳費 Unpaid";
+  } else {
+    rowData[strengthProofIdx] = data.strengthProof || "";
+    rowData[payIdx] = "未繳費 Unpaid";
+  }
+  
+  rowData[medIdx] = data.medicalHistory || "";
+  
+  // 寫入/更新試算表
+  if (isUpdate) {
+    memberSheet.getRange(userRow, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    memberSheet.appendRow(rowData);
+  }
+  
+  // 主動推送 LINE 通知確認信
+  try {
+    var pushMsg = "✅ 您的社員資料已成功" + (isUpdate ? "更新" : "建立") + "！\n" +
+                  "─────────────\n" +
+                  "姓名 Name：" + (data.name || "") + "\n" +
+                  "系所 Dept：" + (data.department || "") + "\n" +
+                  "電話 Phone：" + (data.phone || "") + "\n\n" +
+                  "感謝您的填寫！";
+    pushMessage(userId, pushMsg);
+  } catch (err) {
+    console.error("發送 LINE 註冊成功通知失敗: " + err.toString());
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    status: "success", 
+    message: isUpdate ? "資料已成功更新！" : "註冊成功！" 
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// 動態查找或建立試算表欄位，並擴展 headers 陣列
+function getOrCreateColIdx(sheet, headers, columnName) {
+  var idx = headers.findIndex(function(h) { return String(h).includes(columnName); });
+  if (idx === -1) {
+    sheet.getRange(1, headers.length + 1).setValue(columnName);
+    headers.push(columnName);
+    idx = headers.length - 1;
+  }
+  return idx;
+}
+
+// 將上傳檔案存入雲端硬碟指定資料夾 (預設為 LINE_Uploads) 並設為公開連結
+function uploadFileToDrive(base64Str, fileName) {
+  if (!base64Str) return "";
+  try {
+    var splitData = base64Str.split(",");
+    var contentType = "";
+    var rawData = "";
+    if (splitData.length > 1) {
+      contentType = splitData[0].split(";")[0].split(":")[1];
+      rawData = splitData[1];
+    } else {
+      rawData = splitData[0];
+    }
+    
+    var decoded = Utilities.base64Decode(rawData);
+    var blob = Utilities.newBlob(decoded, contentType, fileName);
+    
+    var folder;
+    var folders = DriveApp.getFoldersByName("LINE_Uploads");
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = DriveApp.createFolder("LINE_Uploads");
+    }
+    
+    var file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl();
+  } catch (err) {
+    console.error("檔案上傳 Google Drive 失敗: " + err.toString());
+    return "上傳失敗: " + err.toString();
+  }
 }
