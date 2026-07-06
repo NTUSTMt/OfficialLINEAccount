@@ -158,14 +158,6 @@ function Payment({ userId }: { userId: string }) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="loading-state" style={{ minHeight: '100vh', justifyContent: 'center' }}>
-        <div className="spinner"></div>
-        <p>撈取欠繳帳單中...</p>
-      </div>
-    );
-  }
 
   if (submitted) {
     return (
@@ -228,7 +220,12 @@ function Payment({ userId }: { userId: string }) {
         <div className="drawer-section" style={{ backgroundColor: 'white', marginTop: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '16px' }}>
           <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>📋 您的未繳費項目</h4>
           
-          {allItemsFlat.length === 0 ? (
+          {loading ? (
+            <div className="loading-state" style={{ padding: '24px 0' }}>
+              <div className="spinner"></div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>撈取欠繳帳單中，請稍候...</p>
+            </div>
+          ) : allItemsFlat.length === 0 ? (
             <div className="empty-cart-state" style={{ padding: '24px 0' }}>
               <span className="empty-icon">👍</span>
               <h5 style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--success-color)' }}>目前無欠繳費用</h5>
@@ -273,7 +270,7 @@ function Payment({ userId }: { userId: string }) {
         </div>
 
         {/* 匯款資料填寫與送出 */}
-        {allItemsFlat.length > 0 && (
+        {!loading && allItemsFlat.length > 0 && (
           <form onSubmit={handleFormSubmit} className="drawer-section" style={{ backgroundColor: 'white', marginTop: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '16px' }}>
             <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>✍️ 填寫匯款資料</h4>
             

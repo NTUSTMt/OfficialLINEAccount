@@ -24,7 +24,7 @@ const getInitialRedirectPath = () => {
 };
 
 function App() {
-  const [liffInit, setLiffInit] = useState({ loading: true, error: null, userId: 'TEST_USER_ID' });
+  const [liffInit, setLiffInit] = useState({ loading: true, error: null, userId: '' });
 
   useEffect(() => {
     const initializeLiff = async () => {
@@ -53,14 +53,7 @@ function App() {
     initializeLiff();
   }, []);
 
-  if (liffInit.loading) {
-    return (
-      <div className="loading-state" style={{ minHeight: '100vh', justifyContent: 'center' }}>
-        <div className="spinner"></div>
-        <p>驗證登入中，請稍候...</p>
-      </div>
-    );
-  }
+
 
   const redirectPath = getInitialRedirectPath();
 
@@ -69,8 +62,26 @@ function App() {
       <div className="router-wrapper">
         {/* 路由主體頁面 */}
         <Routes>
-          <Route path="/" element={<Navigate to={redirectPath} replace />} />
-          <Route path="/index.html" element={<Navigate to={redirectPath} replace />} />
+          <Route path="/" element={
+            liffInit.loading ? (
+              <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
+                <div className="spinner"></div>
+                <p>驗證登入中，請稍候...</p>
+              </div>
+            ) : (
+              <Navigate to={redirectPath} replace />
+            )
+          } />
+          <Route path="/index.html" element={
+            liffInit.loading ? (
+              <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
+                <div className="spinner"></div>
+                <p>驗證登入中，請稍候...</p>
+              </div>
+            ) : (
+              <Navigate to={redirectPath} replace />
+            )
+          } />
           <Route path="/borrow" element={<Borrow userId={liffInit.userId} />} />
           <Route path="/payment" element={<Payment userId={liffInit.userId} />} />
           {/* 萬用路由：避免任何其他路徑或 LIFF 狀態字串導致白畫面 */}
