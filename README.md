@@ -3,11 +3,18 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.41` (v0.0.41)
+- **當前版本**：`0.0.42` (v0.0.42)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 42. 修復 LIFF 跳轉非對應頁面問題 (v0.0.42)
+- **多頁面 LIFF 跳轉相容性修正**：
+  - **問題根源**：因為 LINE Developers 主機後台設定中，`2009217429-jvj3ydDT` (個人主頁) 的 Endpoint URL 設為 `https://.../dashboard`，而 `2009217429-u7OCkmQO` (繳費系統) 設為 `https://.../payment`。當透過 LINE 客戶端開啟 `liff.openWindow()` 連往子路徑（如 `/achievements` 或 `/history`）時，LINE LIFF 會將其拼裝轉換為 `/dashboard/achievements` 與 `/payment/history`，導致 React 路由找不到實體匹配而觸發 `*` 萬用導向至預設的 `/borrow` (裝備租借)。
+  - **雙重安全防護機制**：
+    1. **加入路由別名**：在 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中除了原有的 `/achievements` 與 `/history` 之外，額外註冊了 `/dashboard/achievements` 及 `/payment/history` 路由別名，確保 LINE 自動拼裝的路徑能精準渲染對應頁面。
+    2. **改採 liff.state 進行跳轉**：將頭貼下拉選單中的「🏆 出隊足跡」與「📜 歷史紀錄」點擊導覽連結，修正為以 `liff.state` 參數傳遞路由（如 `?liff.state=%2Fachievements` 及 `?liff.state=%2Fhistory`），此方式符合 LINE 官方的跨 LIFF 跳轉與重定向路徑標準。
 
 ### 41. 已參與活動與心得系統 (Past Events & Reflections) 實作 (v0.0.41)
 - **歷史活動相片牆與寫心得功能**：

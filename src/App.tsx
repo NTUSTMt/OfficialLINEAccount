@@ -162,7 +162,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
                 👤 個人主頁
               </div>
               <div 
-                onClick={() => handleNav('/achievements', 'https://liff.line.me/2009217429-jvj3ydDT/achievements')}
+                onClick={() => handleNav('/achievements', 'https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fachievements')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                 onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -194,7 +194,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
                 💳 繳費系統
               </div>
               <div 
-                onClick={() => handleNav('/history', 'https://liff.line.me/2009217429-u7OCkmQO/history')}
+                onClick={() => handleNav('/history', 'https://liff.line.me/2009217429-u7OCkmQO?liff.state=%2Fhistory')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                 onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -379,7 +379,17 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
             <History userId={liffInit.userId} />
           </ProfileCheck>
         } />
+        <Route path="/payment/history" element={
+          <ProfileCheck userId={liffInit.userId}>
+            <History userId={liffInit.userId} />
+          </ProfileCheck>
+        } />
         <Route path="/achievements" element={
+          <ProfileCheck userId={liffInit.userId}>
+            <Achievements userId={liffInit.userId} />
+          </ProfileCheck>
+        } />
+        <Route path="/dashboard/achievements" element={
           <ProfileCheck userId={liffInit.userId}>
             <Achievements userId={liffInit.userId} />
           </ProfileCheck>
