@@ -1,9 +1,10 @@
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import liff from '@line/liff';
 import Borrow from './pages/Borrow';
 import Payment from './pages/Payment';
 import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
 import './App.css';
 
 // 解析 LIFF 傳入的初始路徑 (解決 liff.state 傳參導致重定向遺失的問題)
@@ -17,7 +18,7 @@ const getInitialRedirectPath = () => {
   }
 
   // 確保路徑為合法子路徑且不重複導向
-  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register'))) {
+  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard'))) {
     return statePath;
   }
   
@@ -183,6 +184,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
           </ProfileCheck>
         } />
         <Route path="/register" element={<Register userId={liffInit.userId} />} />
+        <Route path="/dashboard" element={<Dashboard userId={liffInit.userId} />} />
         {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
         <Route path="*" element={<Navigate to="/borrow" replace />} />
       </Routes>

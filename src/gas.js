@@ -3788,6 +3788,13 @@ function doGet(e) {
       }
       return getMemberProfileAPI(ss, userId);
 
+    } else if (action === "get_my_status") {
+      var userId = e.parameter.userId;
+      if (!userId) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
+      }
+      return getMyStatusAPI(ss, userId);
+
     } else if (action === "get_equipments") {
       // 呼叫原本的裝備清單處理引擎
       return getEquipmentsListAPI(ss);
@@ -4332,6 +4339,149 @@ function getMemberProfileAPI(ss, userId) {
     status: "success", 
     isMember: isMember,
     profile: profile
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ------------------------------------------------------------------
+// 📌 取得個人儀表板狀態 (My Dashboard API)
+// ------------------------------------------------------------------
+function getMyStatusAPI(ss, userId) {
+  var responseData = {
+    profile: {
+      name: "",
+      department: "",
+      studentId: "",
+      isOfficial: false,
+      expireDate: "尚未核發/尚未繳費 (Not issued/Unpaid)"
+    },
+    activities: [],
+    equipments: []
+  };
+
+  // 1. 取得 Members 資料
+  var mSheet = ss.getSheetByName("Members");
+  if (mSheet) {
+    var mData = mSheet.getDataRange().getValues();
+    var mH = mData.length > 0 ? mData[0] : [];
+    var mSysIdx = _fi(mH, "系統識別碼");
+    
+    for (var i = 1; i < mData.length; i++) {
+      if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
+        responseData.profile.name = mData[i][_fi(mH, "姓名")] || "";
+        responseData.profile.department = mData[i][_fi(mH, "系所")] || "";
+        responseData.profile.studentId = mData[i][_fi(mH, "學號")] || "";
+        
+        var mExpireIdx = mH.findIndex(function (h) {
+          return String(h).includes("到期日") || String(h).includes("社籍");
+        });
+        if (mExpireIdx > -1 && mData[i][mExpireIdx]) {
+          var d = new Date(mData[i][mExpireIdx]);
+          if (!isNaN(d.getTime())) {
+            responseData.profile.expireDate = Utilities.formatDate(d, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
+            if (d.getTime() >= new Date().getTime()) {
+              responseData.profile.isOfficial = true;
+            }
+          } else {
+            responseData.profile.expireDate = String(mData[i][mExpireIdx]);
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // 2. 取得活動報名 (Signups & Events)
+  var sSheet = ss.getSheetByName("Signups");
+  var eSheet = ss.getSheetByName("Events");
+  if (sSheet && eSheet) {
+    var sData = sSheet.getDataRange().getValues();
+    var eData = eSheet.getDataRange().getDisplayValues();
+    
+    var sSysIdx = _fi(sData[0], "系統識別碼");
+    var sStatIdx = _fi(sData[0], "審核結果");
+    var sPayIdx = _fi(sData[0], "繳費狀態");
+    var sEvtIdx = _fi(sData[0], "活動編號");
+    
+    var eIdIdx = _fi(eData[0], "活動編號");
+    var eNameIdx = _fi(eData[0], "活動名稱");
+    var eDateIdx = _fi(eData[0], "活動開始日期") > -1 ? _fi(eData[0], "活動開始日期") : _fi(eData[0], "日期");
+
+    for (var s = 1; s < sData.length; s++) {
+      if (sSysIdx > -1 && sData[s][sSysIdx] === userId) {
+        var evId = String(sData[s][sEvtIdx]).trim();
+        var reviewStatus = String(sData[s][sStatIdx]).trim();
+        var payStatus = String(sData[s][sPayIdx]).trim();
+        
+        // 找出活動詳情
+        var eventName = "未知活動";
+        var eventDate = "";
+        for (var e = 1; e < eData.length; e++) {
+          if (eIdIdx > -1 && String(eData[e][eIdIdx]).trim() === evId) {
+            eventName = eNameIdx > -1 ? String(eData[e][eNameIdx]) : "未知活動";
+            eventDate = eDateIdx > -1 ? String(eData[e][eDateIdx]) : "";
+            break;
+          }
+        }
+        
+        responseData.activities.push({
+          eventId: evId,
+          eventName: eventName,
+          date: eventDate,
+          reviewStatus: reviewStatus,
+          payStatus: payStatus
+        });
+      }
+    }
+  }
+
+  // 3. 取得裝備租借 (Loan_Records)
+  var lSheet = ss.getSheetByName("Loan_Records");
+  if (lSheet) {
+    var lData = lSheet.getDataRange().getValues();
+    var lSysIdx = _fi(lData[0], "系統識別碼");
+    var lOrderIdx = _fi(lData[0], "租借編號");
+    var lNameIdx = _fi(lData[0], "裝備名稱");
+    var lQtyIdx = _fi(lData[0], "數量");
+    var lPickupIdx = _fi(lData[0], "預計領取");
+    var lReturnIdx = _fi(lData[0], "預計歸還");
+    var lStatusIdx = _fi(lData[0], "領取/歸還");
+
+    for (var l = 1; l < lData.length; l++) {
+      if (lSysIdx > -1 && lData[l][lSysIdx] === userId) {
+        var statusStr = String(lData[l][lStatusIdx] || "");
+        if (statusStr.indexOf("取消") === -1) {
+          var pickupVal = lData[l][lPickupIdx];
+          var returnVal = lData[l][lReturnIdx];
+          var pickupStr = "";
+          var returnStr = "";
+          
+          if (pickupVal instanceof Date) {
+            pickupStr = Utilities.formatDate(pickupVal, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
+          } else if (pickupVal) {
+            pickupStr = String(pickupVal).split("T")[0].replace(/-/g, "/");
+          }
+          
+          if (returnVal instanceof Date) {
+            returnStr = Utilities.formatDate(returnVal, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
+          } else if (returnVal) {
+            returnStr = String(returnVal).split("T")[0].replace(/-/g, "/");
+          }
+          
+          responseData.equipments.push({
+            orderId: lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : "未知訂單",
+            itemName: (lNameIdx > -1 ? String(lData[l][lNameIdx]) : "未知裝備") + " x" + (lQtyIdx > -1 ? String(lData[l][lQtyIdx]) : "1"),
+            pickupDate: pickupStr,
+            returnDate: returnStr,
+            status: statusStr
+          });
+        }
+      }
+    }
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    data: responseData
   })).setMimeType(ContentService.MimeType.JSON);
 }
 

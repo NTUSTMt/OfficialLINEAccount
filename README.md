@@ -3,17 +3,26 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.31` (v0.0.31)
+- **當前版本**：`0.0.32` (v0.0.32)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 32. 數位社員證與個人總覽 My Dashboard 實作 (v0.0.32)
+- **GAS 後端新增總覽 API**：在 [src/GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 實作 `action=get_my_status` 的處理引擎 `getMyStatusAPI`，打包從 `Members`, `Signups`, `Events` 與 `Loan_Records` 四張大表中所篩選出來的個人資料、活動報名記錄與裝備租借明細。
+- **全新 Dashboard 頁面**：新增 [src/pages/Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 頁面。
+  - **數位社員證**：根據社員到期日狀態動態渲染漸層背景（正式社員為綠色漸層，未繳費或過期為灰色背景）。顯示姓名、系所、學號與到期日，不包含 QR Code 按鈕。
+  - **活動報名追蹤**：條列所有報名活動與審核、繳費狀態。若狀態為「正取且未繳費」，提供「前往申報繳費」按鈕，點擊跳轉至 `/payment`。
+  - **裝備租借清單**：列出所有預約租借裝備之編號、名稱與日期，若預估歸還日過期且狀態不為已歸還，會顯示紅色字體警告。
+- **路由註冊與整合**：在 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 註冊 `/dashboard` 路由。
 
 ### 31. 進入租借與繳費系統前檢查個人資料完整性 (v0.0.31)
 - **個人資料完整性檢查**：在 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中新增 `ProfileCheck` 包裹組件，進入「裝備租借 (`/borrow`)」與「繳費系統 (`/payment`)」路由前會先透過 GAS API 查詢個人資料。
 - **資料完整性規則**：檢查 6 個必填欄位（姓名、系所、學號、手機、Email、LINE ID）是否皆有非空值。
 - **阻擋與跳轉**：若資料不完整或非社員，會彈出「個人資料不完整」的對話視窗阻擋操作，並提供「前往填寫資料」按鈕，點擊後跳轉至註冊的 LINE LIFF 網頁 `https://liff.line.me/2009217429-AhPRqAHg`。
 - **開發者測試與容錯**：若 `userId` 為 `TEST_USER_ID`（本地測試）或 API 請求發生錯誤，預設直接放行不進行阻擋，以避免影響本地端開發與出隊緊急使用。
+- **類型導入修正 (TS1484)**：修復在啟用 `verbatimModuleSyntax` 時的型別編譯錯誤，將 `App.tsx` 中 `ReactNode` 的引入方式改為 `type ReactNode`。
 
 ### 30. 必填項目加紅星與欄位重新編排集中至第一頁 (v0.0.30)
 - **必填欄位紅星標記**：在 [src/App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css) 中新增 `.required::after` 偽元素樣式，在所有必填欄位的標籤後顯示紅色星號標記 ` *`。
