@@ -1250,3 +1250,9 @@ body {
   color: var(--text-muted);
   cursor: not-allowed;
 }
+
+.required::after {
+  content: ' *';
+  color: #ef4444;
+  font-weight: bold;
+}

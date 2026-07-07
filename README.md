@@ -3,11 +3,24 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.29` (v0.0.29)
+- **當前版本**：`0.0.31` (v0.0.31)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 31. 進入租借與繳費系統前檢查個人資料完整性 (v0.0.31)
+- **個人資料完整性檢查**：在 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中新增 `ProfileCheck` 包裹組件，進入「裝備租借 (`/borrow`)」與「繳費系統 (`/payment`)」路由前會先透過 GAS API 查詢個人資料。
+- **資料完整性規則**：檢查 6 個必填欄位（姓名、系所、學號、手機、Email、LINE ID）是否皆有非空值。
+- **阻擋與跳轉**：若資料不完整或非社員，會彈出「個人資料不完整」的對話視窗阻擋操作，並提供「前往填寫資料」按鈕，點擊後跳轉至註冊的 LINE LIFF 網頁 `https://liff.line.me/2009217429-AhPRqAHg`。
+- **開發者測試與容錯**：若 `userId` 為 `TEST_USER_ID`（本地測試）或 API 請求發生錯誤，預設直接放行不進行阻擋，以避免影響本地端開發與出隊緊急使用。
+
+### 30. 必填項目加紅星與欄位重新編排集中至第一頁 (v0.0.30)
+- **必填欄位紅星標記**：在 [src/App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css) 中新增 `.required::after` 偽元素樣式，在所有必填欄位的標籤後顯示紅色星號標記 ` *`。
+- **欄位重新編排**：修改 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx)，將原本分散在步驟 2 的 5 個必填欄位（系所、學號、手機、Email、LINE ID）與步驟 1 的姓名一起集中到第一頁（步驟 1）；原本在步驟 1 的選填欄位（性別、生日、身分證字號）則移往步驟 2。
+- **步驟驗證與標籤名稱**：
+  - 更新進度條標籤為：步驟 1「必填」、步驟 2「基本」、步驟 3「安全」、步驟 4「經驗」。
+  - 調整 `isStepValid` 驗證邏輯，步驟 1 驗證所有必填欄位為非空值（Email 暫不驗證格式），步驟 2、3、4 則無任何必填限制，直接返回 `true`。
 
 ### 29. 修復第二次加載個人資料白屏、防止舊資料覆寫、移除電話防呆 (v0.0.29)
 - **修復載入白屏**：在 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 中，先前直接使用來自 GAS 查詢到的原始 profile 資料。如果試算表中的生日欄位為非標準字串或為數字時，在 React 中調用 `new Date(p.birthday).toISOString()` 會拋出 RangeError 並引發 React 崩潰白屏。現已改為安全的 `birthday` 格式轉換，若無效則安全回傳空字串，防止白屏。

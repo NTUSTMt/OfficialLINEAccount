@@ -163,23 +163,23 @@ function Register({ userId }: { userId: string }) {
   const isStepValid = useMemo(() => {
     switch (step) {
       case 1:
-        // 只有姓名是必填
-        return formData.name.trim() !== '';
-      case 2:
-        // 系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId) 均為必填
-        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim());
+        // 姓名 (name)、系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId) 均為必填
         return (
+          formData.name.trim() !== '' &&
           formData.department.trim() !== '' &&
           formData.studentId.trim() !== '' &&
           formData.phone.trim() !== '' &&
-          emailValid &&
+          formData.email.trim() !== '' &&
           formData.realLineId.trim() !== ''
         );
+      case 2:
+        // 步驟 2 皆為選填欄位
+        return true;
       case 3:
-        // 緊急聯絡人資訊變更為選填，無須驗證電話格式
+        // 緊急聯絡人資訊為選填
         return true;
       case 4:
-        // 隱私權同意書變更為選填
+        // 隱私權同意書為選填
         return true;
       default:
         return false;
@@ -251,7 +251,7 @@ function Register({ userId }: { userId: string }) {
           <div key={s} className={`step-dot-wrapper ${step >= s ? 'active' : ''} ${step === s ? 'current' : ''}`}>
             <div className="step-dot">{s}</div>
             <span className="step-label">
-              {s === 1 ? '基本' : s === 2 ? '學籍' : s === 3 ? '安全' : '經驗'}
+              {s === 1 ? '必填' : s === 2 ? '基本' : s === 3 ? '安全' : '經驗'}
             </span>
           </div>
         ))}
@@ -262,10 +262,10 @@ function Register({ userId }: { userId: string }) {
 
       {/* 表單主體 */}
       <form onSubmit={handleSubmit} className="register-form-card">
-        {/* 步驟 1: 基本資料 */}
+        {/* 步驟 1: 主要必填資料 */}
         {step === 1 && (
           <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍 步驟 1：基本資料 (Basic Info)</h2>
+            <h2 className="step-title">📍 步驟 1：主要必填資料 (Required Info)</h2>
             
             <div className="form-group">
               <label className="required">真實姓名</label>
@@ -278,43 +278,6 @@ function Register({ userId }: { userId: string }) {
                 required
               />
             </div>
-
-            <div className="form-group">
-              <label>性別</label>
-              <select name="gender" value={formData.gender} onChange={handleChange}>
-                <option value="">請選擇性別 (山屋床位安排依據)</option>
-                <option value="男">男 (Male)</option>
-                <option value="女">女 (Female)</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>生日</label>
-              <input
-                type="date"
-                name="birthday"
-                value={formData.birthday ? formData.birthday.substring(0, 10) : ''}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>身分證字號 / 護照號碼</label>
-              <input
-                type="text"
-                name="idNumber"
-                value={formData.idNumber}
-                onChange={handleChange}
-                placeholder="辦理入山與平安保險"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 步驟 2: 聯絡與學籍 */}
-        {step === 2 && (
-          <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍 步驟 2：聯絡與學籍 (Contact & Academic)</h2>
 
             <div className="form-group">
               <label>身分狀態</label>
@@ -394,6 +357,43 @@ function Register({ userId }: { userId: string }) {
                 onChange={handleChange}
                 placeholder="方便幹部建立出隊聯絡群組"
                 required
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 步驟 2: 基本選填資料 */}
+        {step === 2 && (
+          <div className="form-step-content animate-fade-in">
+            <h2 className="step-title">📍 步驟 2：基本選填資料 (Basic Info)</h2>
+
+            <div className="form-group">
+              <label>性別</label>
+              <select name="gender" value={formData.gender} onChange={handleChange}>
+                <option value="">請選擇性別 (山屋床位安排依據)</option>
+                <option value="男">男 (Male)</option>
+                <option value="女">女 (Female)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>生日</label>
+              <input
+                type="date"
+                name="birthday"
+                value={formData.birthday ? formData.birthday.substring(0, 10) : ''}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>身分證字號 / 護照號碼</label>
+              <input
+                type="text"
+                name="idNumber"
+                value={formData.idNumber}
+                onChange={handleChange}
+                placeholder="辦理入山與平安保險"
               />
             </div>
           </div>

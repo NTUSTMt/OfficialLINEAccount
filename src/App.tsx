@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import liff from '@line/liff';
 import Borrow from './pages/Borrow';
@@ -23,6 +23,125 @@ const getInitialRedirectPath = () => {
   
   return '/borrow';
 };
+
+// 檢查個人必填項目是否已填寫的包裹組件
+function ProfileCheck({ userId, children }: { userId: string; children: ReactNode }) {
+  const [loading, setLoading] = useState(true);
+  const [isComplete, setIsComplete] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    const checkProfile = async () => {
+      // 本地開發與測試環境直接跳過檢查，不阻擋
+      if (!userId || userId === 'TEST_USER_ID') {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
+        const res = await fetch(`${GAS_API_URL}?action=get_profile&userId=${userId}`);
+        const result = await res.json();
+        
+        if (result.status === 'success' && result.isMember && result.profile) {
+          const p = result.profile;
+          // 檢查 6 個必填欄位 (姓名、系所、學號、手機、Email、LINE ID) 是否非空
+          const nameOk = p.name ? String(p.name).trim() !== '' : false;
+          const deptOk = p.department ? String(p.department).trim() !== '' : false;
+          const studentIdOk = p.studentId ? String(p.studentId).trim() !== '' : false;
+          const phoneOk = p.phone ? String(p.phone).trim() !== '' : false;
+          const emailOk = p.email ? String(p.email).trim() !== '' : false;
+          const lineIdOk = p.realLineId ? String(p.realLineId).trim() !== '' : false;
+          
+          if (nameOk && deptOk && studentIdOk && phoneOk && emailOk && lineIdOk) {
+            setIsComplete(true);
+          } else {
+            setIsComplete(false);
+            setShowModal(true);
+          }
+        } else {
+          // 非社員或無 profile 資料
+          setIsComplete(false);
+          setShowModal(true);
+        }
+      } catch (err) {
+        console.error('檢查個人資料失敗:', err);
+        // 連線失敗時預設不阻擋，以免影響出隊租借
+        setIsComplete(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkProfile();
+  }, [userId]);
+
+  if (loading) {
+    return (
+      <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
+        <div className="spinner"></div>
+        <p>確認個人資料完整性中...</p>
+      </div>
+    );
+  }
+
+  if (!isComplete && showModal) {
+    return (
+      <div className="modal-overlay" style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '20px',
+        backdropFilter: 'blur(4px)'
+      }}>
+        <div className="modal-content" style={{
+          backgroundColor: 'white',
+          borderRadius: '16px',
+          padding: '28px 24px',
+          maxWidth: '400px',
+          width: '100%',
+          textAlign: 'center',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          boxSizing: 'border-box'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+          <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '12px', color: '#1e293b' }}>個人資料不完整</h3>
+          <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.6', marginBottom: '24px' }}>
+            您尚未填寫完整的社員個人資料，請先完成必填欄位（姓名、系所、學號、手機、Email、LINE ID）後，方可使用裝備租借與繳費系統。
+          </p>
+          <button
+            onClick={() => {
+              window.location.href = 'https://liff.line.me/2009217429-AhPRqAHg';
+            }}
+            style={{
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              fontWeight: 'bold',
+              fontSize: '15px',
+              cursor: 'pointer',
+              width: '100%',
+              transition: 'background-color 0.2s'
+            }}
+          >
+            前往填寫資料
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; userId: string } }) {
   // ⚠️ 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，
@@ -53,10 +172,18 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
             <Navigate to={redirectPath} replace />
           )
         } />
-        <Route path="/borrow" element={<Borrow userId={liffInit.userId} />} />
-        <Route path="/payment" element={<Payment userId={liffInit.userId} />} />
+        <Route path="/borrow" element={
+          <ProfileCheck userId={liffInit.userId}>
+            <Borrow userId={liffInit.userId} />
+          </ProfileCheck>
+        } />
+        <Route path="/payment" element={
+          <ProfileCheck userId={liffInit.userId}>
+            <Payment userId={liffInit.userId} />
+          </ProfileCheck>
+        } />
         <Route path="/register" element={<Register userId={liffInit.userId} />} />
-        {/* 萬用路由：避免任何其他路徑或 LIFF 狀態字串導致白畫面 */}
+        {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
         <Route path="*" element={<Navigate to="/borrow" replace />} />
       </Routes>
     </div>
