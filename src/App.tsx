@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import Borrow from './pages/Borrow';
 import Payment from './pages/Payment';
@@ -24,6 +24,141 @@ const getInitialRedirectPath = () => {
   
   return '/borrow';
 };
+
+// 全域導覽 Header & 頭貼選單組件
+function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; displayName: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const handleNav = (path: string, externalUrl: string) => {
+    setIsOpen(false);
+    if (liff.isInClient()) {
+      // 在 LINE Client 內，開啟對應的 LIFF 連結以加載正確的 LIFF ID 上下文
+      liff.openWindow({ url: externalUrl, external: false });
+    } else {
+      // 瀏覽器/本地開發環境直接以路由切換
+      navigate(path);
+    }
+  };
+
+  return (
+    <header className="global-header" style={{
+      position: 'absolute',
+      top: '16px',
+      right: '16px',
+      zIndex: 1000,
+    }}>
+      <div className="avatar-dropdown-container" style={{ position: 'relative' }}>
+        <button 
+          onClick={() => setIsOpen(!isOpen)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center',
+            outline: 'none'
+          }}
+        >
+          {pictureUrl ? (
+            <img 
+              src={pictureUrl} 
+              alt="Avatar" 
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                border: '2px solid #10b981',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                objectFit: 'cover'
+              }}
+            />
+          ) : (
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#10b981',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '16px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              fontWeight: 'bold'
+            }}>
+              {displayName ? displayName.charAt(0) : '山'}
+            </div>
+          )}
+        </button>
+
+        {isOpen && (
+          <>
+            <div 
+              onClick={() => setIsOpen(false)} 
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 999
+              }}
+            />
+            
+            <div className="dropdown-menu animate-fade-in" style={{
+              position: 'absolute',
+              top: '48px',
+              right: 0,
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+              border: '1px solid #e2e8f0',
+              padding: '6px 0',
+              width: '140px',
+              zIndex: 1000,
+              textAlign: 'left'
+            }}>
+              <div 
+                onClick={() => handleNav('/dashboard', 'https://liff.line.me/2009217429-jvj3ydDT')}
+                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                👤 個人主頁
+              </div>
+              <div 
+                onClick={() => handleNav('/register', 'https://liff.line.me/2009217429-AhPRqAHg')}
+                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                📝 資料填寫
+              </div>
+              <div 
+                onClick={() => handleNav('/borrow', 'https://liff.line.me/2009217429-zXvGeSrI')}
+                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                🎒 裝備租借
+              </div>
+              <div 
+                onClick={() => handleNav('/payment', 'https://liff.line.me/2009217429-u7OCkmQO')}
+                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                💳 繳費系統
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </header>
+  );
+}
 
 // 檢查個人必填項目是否已填寫的包裹組件
 function ProfileCheck({ userId, children }: { userId: string; children: ReactNode }) {
@@ -144,13 +279,18 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
   return <>{children}</>;
 }
 
-function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; userId: string } }) {
+function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; userId: string; displayName: string; pictureUrl: string } }) {
   // ⚠️ 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，
   // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
   const [redirectPath] = useState(() => getInitialRedirectPath());
 
   return (
-    <div className="router-wrapper">
+    <div className="router-wrapper" style={{ position: 'relative' }}>
+      {/* 載入完成後渲染全域導航頭貼選單 */}
+      {!liffInit.loading && liffInit.userId && (
+        <GlobalHeader pictureUrl={liffInit.pictureUrl} displayName={liffInit.displayName} />
+      )}
+
       {/* 路由主體頁面 */}
       <Routes>
         <Route path="/" element={
@@ -193,7 +333,13 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
 }
 
 function App() {
-  const [liffInit, setLiffInit] = useState({ loading: true, error: null, userId: '' });
+  const [liffInit, setLiffInit] = useState({
+    loading: true,
+    error: null,
+    userId: '',
+    displayName: '',
+    pictureUrl: ''
+  });
 
   useEffect(() => {
     const initializeLiff = async () => {
@@ -212,14 +358,20 @@ function App() {
           liffId = '2009217429-AhPRqAHg';
         } else if (path.includes('/payment') || statePath.includes('/payment')) {
           liffId = '2009217429-u7OCkmQO';
+        } else if (path.includes('/dashboard') || statePath.includes('/dashboard')) {
+          liffId = '2009217429-jvj3ydDT';
         }
 
         await liff.init({ liffId });
         let userId = 'TEST_USER_ID';
+        let displayName = '山友';
+        let pictureUrl = '';
         
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
           userId = profile.userId;
+          displayName = profile.displayName;
+          pictureUrl = profile.pictureUrl || '';
         } else {
           // 若在 LINE 內部但未登入，強制導向 LINE 登入
           if (liff.isInClient()) {
@@ -228,10 +380,10 @@ function App() {
           }
         }
         
-        setLiffInit({ loading: false, error: null, userId });
+        setLiffInit({ loading: false, error: null, userId, displayName, pictureUrl });
       } catch (err: any) {
         console.error('LIFF 初始化失敗:', err);
-        setLiffInit({ loading: false, error: err, userId: 'TEST_USER_ID' });
+        setLiffInit({ loading: false, error: err, userId: 'TEST_USER_ID', displayName: '測試山友', pictureUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=150' });
       }
     };
 

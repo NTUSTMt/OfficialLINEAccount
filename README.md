@@ -3,11 +3,17 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.32` (v0.0.32)
+- **當前版本**：`0.0.33` (v0.0.33)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 33. 全域頭貼導覽選單與個人主頁連結更新 (v0.0.33)
+- **更新個人主頁連結**：將個人主頁的 LINE LIFF 連結更新為 `https://liff.line.me/2009217429-jvj3ydDT`。
+- **全頁面右上角頭貼下拉選單**：在 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 實作 `GlobalHeader` 組件，於所有頁面右上角渲染 LINE 頭貼。點擊後展開下拉選單，包含「個人主頁」、「資料填寫」、「裝備租借」與「繳費系統」四個一鍵跳轉選項。
+- **LIFF 環境動態跳轉**：選單跳轉支援在 LINE 內呼叫 `liff.openWindow` 喚起獨立的 LIFF 網頁，在一般瀏覽器/開發環境則使用 React Router `navigate` 跳轉。
+- **GAS 狀態查詢指令附加連結**：在 [src/GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的 `handleStatusQuery`（我的狀態指令）回覆訊息末尾附加個人主頁儀表板連結。
 
 ### 32. 數位社員證與個人總覽 My Dashboard 實作 (v0.0.32)
 - **GAS 後端新增總覽 API**：在 [src/GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 實作 `action=get_my_status` 的處理引擎 `getMyStatusAPI`，打包從 `Members`, `Signups`, `Events` 與 `Loan_Records` 四張大表中所篩選出來的個人資料、活動報名記錄與裝備租借明細。

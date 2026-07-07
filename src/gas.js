@@ -1818,6 +1818,7 @@ function handleStatusQuery(replyToken, userId, ss) {
     }
   }
   userInfo += "🏕️ 【租借裝備 Equipments】\n" + (loanList.length > 0 ? loanList.join("\n\n") : "目前無租借紀錄 (No records found)");
+  userInfo += "\n\n📊 數位個人總覽儀表板 (My Dashboard)：\nhttps://liff.line.me/2009217429-jvj3ydDT";
   replyMessage(replyToken, userInfo);
 }
 
