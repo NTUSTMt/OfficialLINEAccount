@@ -3,11 +3,18 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.33` (v0.0.33)
+- **當前版本**：`0.0.34` (v0.0.34)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 34. 統一全頁面 Header 樣式與移除裝備租借購物車按鈕 (v0.0.34)
+- **統一 Header 佈局尺寸**：重新設計 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中的 `GlobalHeader`，使其作為全域唯一的粘性定位頂部導覽列（`.app-header`）。左側會根據當前路由（`/borrow`、`/payment`、`/register`、`/dashboard`）動態呈現對應的標題、副標題與圖示；右側則為帶有下拉導航選單的頭貼按鈕。
+- **清理各分頁本地 Header**：
+  - 移除了 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 內部的局部 Header。
+  - 移除了 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx) 內部的局部 Header。
+- **移除租借右上角購物車按鈕**：伴隨局部 Header 的移除，同步清除了裝備租借頁面右上角冗餘的購物車圖示按鈕，維持界面視覺的一致與極簡。使用者仍可點擊底部浮動條展開購物車。
 
 ### 33. 全域頭貼導覽選單與個人主頁連結更新 (v0.0.33)
 - **更新個人主頁連結**：將個人主頁的 LINE LIFF 連結更新為 `https://liff.line.me/2009217429-jvj3ydDT`。

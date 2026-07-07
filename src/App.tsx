@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import liff from '@line/liff';
 import Borrow from './pages/Borrow';
 import Payment from './pages/Payment';
@@ -25,10 +25,29 @@ const getInitialRedirectPath = () => {
   return '/borrow';
 };
 
-// 全域導覽 Header & 頭貼選單組件
+// 全域導覽 Header & 頭貼選單組件 (統一全頁面頂部 Header 樣式)
 function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; displayName: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // 根據當前路由，動態決定左側的 Logo、標題與副標題
+  const getHeaderDetails = () => {
+    const path = location.pathname;
+    if (path.includes('/register')) {
+      return { title: '填寫資料', subtitle: 'Register', icon: '📝' };
+    }
+    if (path.includes('/payment')) {
+      return { title: '繳費對帳', subtitle: 'Payment System', icon: '💳' };
+    }
+    if (path.includes('/dashboard')) {
+      return { title: '個人主頁', subtitle: 'My Dashboard', icon: '👤' };
+    }
+    // 預設為裝備租借
+    return { title: '裝備租借', subtitle: 'Equipments Rental', icon: '🏕️' };
+  };
+
+  const { title, subtitle, icon } = getHeaderDetails();
 
   const handleNav = (path: string, externalUrl: string) => {
     setIsOpen(false);
@@ -42,12 +61,15 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
   };
 
   return (
-    <header className="global-header" style={{
-      position: 'absolute',
-      top: '16px',
-      right: '16px',
-      zIndex: 1000,
-    }}>
+    <header className="app-header" style={{ position: 'sticky', top: 0, width: '100%', boxSizing: 'border-box' }}>
+      <div className="header-logo">
+        <span className="logo-icon">{icon}</span>
+        <div className="logo-text">
+          <h1>{title}</h1>
+          <p>{subtitle}</p>
+        </div>
+      </div>
+
       <div className="avatar-dropdown-container" style={{ position: 'relative' }}>
         <button 
           onClick={() => setIsOpen(!isOpen)}

@@ -176,16 +176,7 @@ function Payment({ userId }: { userId: string }) {
 
   return (
     <div className="app-container">
-      {/* 頂部導覽列 */}
-      <header className="app-header">
-        <div className="header-logo">
-          <span className="logo-icon">💰</span>
-          <div className="logo-text">
-            <h1>繳費對帳</h1>
-            <p>Payment System</p>
-          </div>
-        </div>
-      </header>
+
 
       <main className="main-content" style={{ paddingBottom: '90px' }}>
         {/* 宣傳條 */}
