@@ -6,6 +6,7 @@ import Payment from './pages/Payment';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import History from './pages/History';
+import Achievements from './pages/Achievements';
 import './App.css';
 
 // 解析 LIFF 傳入的初始路徑 (解決 liff.state 傳參導致重定向遺失的問題)
@@ -19,7 +20,7 @@ const getInitialRedirectPath = () => {
   }
 
   // 確保路徑為合法子路徑且不重複導向
-  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history'))) {
+  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history') || statePath.startsWith('/achievements'))) {
     return statePath;
   }
   
@@ -46,6 +47,9 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
     }
     if (path.includes('/history')) {
       return { title: '歷史紀錄', subtitle: 'Payment History', icon: '📜' };
+    }
+    if (path.includes('/achievements')) {
+      return { title: '出隊足跡', subtitle: 'Mountaineering Footprint', icon: '🏆' };
     }
     // 預設為裝備租借
     return { title: '裝備租借', subtitle: 'Equipments Rental', icon: '🏕️' };
@@ -149,13 +153,21 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
               zIndex: 1000,
               textAlign: 'left'
             }}>
-              <div 
+               <div 
                 onClick={() => handleNav('/dashboard', 'https://liff.line.me/2009217429-jvj3ydDT')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                 onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
                 👤 個人主頁
+              </div>
+              <div 
+                onClick={() => handleNav('/achievements', 'https://liff.line.me/2009217429-jvj3ydDT/achievements')}
+                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                🏆 出隊足跡
               </div>
               <div 
                 onClick={() => handleNav('/register', 'https://liff.line.me/2009217429-AhPRqAHg')}
@@ -367,6 +379,11 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
             <History userId={liffInit.userId} />
           </ProfileCheck>
         } />
+        <Route path="/achievements" element={
+          <ProfileCheck userId={liffInit.userId}>
+            <Achievements userId={liffInit.userId} />
+          </ProfileCheck>
+        } />
         {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
         <Route path="*" element={<Navigate to="/borrow" replace />} />
       </Routes>
@@ -400,7 +417,7 @@ function App() {
           liffId = '2009217429-AhPRqAHg';
         } else if (path.includes('/payment') || statePath.includes('/payment') || path.includes('/history') || statePath.includes('/history')) {
           liffId = '2009217429-u7OCkmQO';
-        } else if (path.includes('/dashboard') || statePath.includes('/dashboard')) {
+        } else if (path.includes('/dashboard') || statePath.includes('/dashboard') || path.includes('/achievements') || statePath.includes('/achievements')) {
           liffId = '2009217429-jvj3ydDT';
         }
 

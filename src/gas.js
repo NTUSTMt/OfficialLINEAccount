@@ -183,6 +183,10 @@ function doPost(e) {
       return processSaveProfile(msg);
     }
 
+    if (msg.action === 'submit_reflection') {
+      return processSubmitReflection(msg);
+    }
+
     for (var i = 0; i < msg.events.length; i++) {
       var event = msg.events[i];
 
@@ -3803,6 +3807,13 @@ function doGet(e) {
       }
       return getPaymentHistoryAPI(ss, userId);
 
+    } else if (action === "get_past_activities") {
+      var userId = e.parameter.userId;
+      if (!userId) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
+      }
+      return getPastActivitiesAPI(ss, userId);
+
     } else if (action === "get_equipments") {
       // 呼叫原本的裝備清單處理引擎
       return getEquipmentsListAPI(ss);
@@ -4779,5 +4790,218 @@ function getPaymentHistoryAPI(ss, userId) {
       totalSpent: totalSpent,
       history: historyList
     }
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// 📜 全新功能：取得已結束且正取的歷史活動，及已撰寫之心得
+function getPastActivitiesAPI(ss, userId) {
+  var sSheet = ss.getSheetByName("Signups");
+  var eSheet = ss.getSheetByName("Events");
+  var rSheet = ss.getSheetByName("Reflections");
+
+  var pastList = [];
+  var totalAttended = 0;
+  var reflectionsCount = 0;
+
+  if (!sSheet || !eSheet) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      data: { totalAttended: 0, reflectionsCount: 0, activities: [] }
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // 1. 載入活動地圖
+  var eData = eSheet.getDataRange().getValues();
+  var eHeaders = eData[0];
+  var eIdIdx = _fi(eHeaders, "活動編號");
+  var eNameIdx = _fi(eHeaders, "活動名稱");
+  var eEndIdx = eHeaders.findIndex(function (h) {
+    return String(h).includes("結束日期") || String(h).includes("活動日期");
+  });
+  var eImgIdx = eHeaders.findIndex(function (h) {
+    return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片");
+  });
+
+  var eventMap = {};
+  for (var j = 1; j < eData.length; j++) {
+    var eid = eIdIdx > -1 ? String(eData[j][eIdIdx]).trim() : "";
+    if (eid) {
+      eventMap[eid] = {
+        name: eNameIdx > -1 ? String(eData[j][eNameIdx]).trim() : "未命名活動",
+        endDateStr: eEndIdx > -1 ? String(eData[j][eEndIdx]).trim() : "",
+        imgUrl: eImgIdx > -1 ? String(eData[j][eImgIdx]).trim() : ""
+      };
+    }
+  }
+
+  // 2. 載入心得地圖
+  var refMap = {};
+  if (rSheet) {
+    var rData = rSheet.getDataRange().getValues();
+    if (rData.length > 1) {
+      var rHeaders = rData[0];
+      var rSysIdx = _fi(rHeaders, "系統識別碼");
+      var rEidIdx = _fi(rHeaders, "活動編號");
+      var rDiffIdx = _fi(rHeaders, "難易度評分");
+      var rViewIdx = _fi(rHeaders, "風景評分");
+      var rContIdx = _fi(rHeaders, "心得內容");
+      var rImgIdx = _fi(rHeaders, "登頂照片網址");
+
+      for (var k = 1; k < rData.length; k++) {
+        var rUid = rSysIdx > -1 ? String(rData[k][rSysIdx]).trim() : "";
+        var rEid = rEidIdx > -1 ? String(rData[k][rEidIdx]).trim() : "";
+        if (rUid === userId && rEid) {
+          refMap[rEid] = {
+            difficulty: rDiffIdx > -1 ? parseInt(rData[k][rDiffIdx], 10) || 5 : 5,
+            beauty: rViewIdx > -1 ? parseInt(rData[k][rViewIdx], 10) || 5 : 5,
+            content: rContIdx > -1 ? String(rData[k][rContIdx]).trim() : "",
+            imageUrl: rImgIdx > -1 ? String(rData[k][rImgIdx]).trim() : ""
+          };
+          reflectionsCount++;
+        }
+      }
+    }
+  }
+
+  // 3. 載入報名表
+  var sData = sSheet.getDataRange().getValues();
+  var sHeaders = sData[0];
+  var sSysIdx = _fi(sHeaders, "系統識別碼");
+  var sEidIdx = _fi(sHeaders, "活動編號");
+  var sResultIdx = _fi(sHeaders, "審核結果");
+  var sDateIdx = sHeaders.findIndex(function (h) {
+    return String(h).includes("時間") || String(h).includes("日期");
+  });
+
+  var today = new Date();
+
+  for (var i = 1; i < sData.length; i++) {
+    if (sSysIdx > -1 && String(sData[i][sSysIdx]).trim() === userId) {
+      var status = sResultIdx > -1 ? String(sData[i][sResultIdx]).trim() : "";
+      // 判斷是否為「正取」
+      if (status.indexOf("正取") > -1 || status.indexOf("錄取") > -1 || status.indexOf("已錄取") > -1 || status.indexOf("Confirmed") > -1) {
+        var eid = sEidIdx > -1 ? String(sData[i][sEidIdx]).trim() : "";
+        var evt = eventMap[eid];
+        if (evt) {
+          // 判斷活動是否已經結束
+          var isPast = false;
+          var displayDate = "";
+          if (evt.endDateStr) {
+            var ed = new Date(evt.endDateStr);
+            if (!isNaN(ed.getTime())) {
+              isPast = ed.getTime() < today.getTime();
+              displayDate = Utilities.formatDate(ed, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
+            } else {
+              // 字串比對 fallback
+              isPast = true; 
+              displayDate = evt.endDateStr;
+            }
+          } else {
+            isPast = true; // 預設為已參與
+          }
+
+          if (isPast) {
+            totalAttended++;
+            var hasReflected = !!refMap[eid];
+            pastList.push({
+              eventId: eid,
+              title: evt.name,
+              date: displayDate,
+              img: evt.imgUrl || "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400",
+              hasReflected: hasReflected,
+              reflection: hasReflected ? refMap[eid] : null
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 依日期降冪排序
+  pastList.sort(function (a, b) {
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    data: {
+      totalAttended: totalAttended,
+      reflectionsCount: reflectionsCount,
+      activities: pastList
+    }
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// 📜 全新功能：送出心得回饋 API
+function processSubmitReflection(payload) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var rSheet = ss.getSheetByName("Reflections");
+  if (!rSheet) {
+    rSheet = ss.insertSheet("Reflections");
+    rSheet.appendRow(["Timestamp", "系統識別碼", "姓名", "活動編號", "活動名稱", "難易度評分", "風景評分", "心得內容", "登頂照片網址"]);
+  }
+
+  var userId = payload.userId;
+  var details = payload.details; // details: { eventId, eventName, difficulty, beauty, content, imageUrl }
+
+  // 取得姓名
+  var mSheet = ss.getSheetByName("Members");
+  var userName = "未知社員";
+  if (mSheet) {
+    var mData = mSheet.getDataRange().getValues();
+    var sysIdx = _fi(mData[0], "系統識別碼");
+    for (var i = 1; i < mData.length; i++) {
+      if (sysIdx > -1 && mData[i][sysIdx] === userId) {
+        userName = mData[i][_fi(mData[0], "姓名")] || "未知社員";
+        break;
+      }
+    }
+  }
+
+  // 檢查是否重複寫入
+  var rData = rSheet.getDataRange().getValues();
+  var rHeaders = rData[0];
+  var rSysIdx = _fi(rHeaders, "系統識別碼");
+  var rEidIdx = _fi(rHeaders, "活動編號");
+  var targetRow = -1;
+
+  for (var k = 1; k < rData.length; k++) {
+    if (rSysIdx > -1 && String(rData[k][rSysIdx]).trim() === userId && rEidIdx > -1 && String(rData[k][rEidIdx]).trim() === details.eventId) {
+      targetRow = k + 1;
+      break;
+    }
+  }
+
+  var now = new Date();
+  var rHeaders = rSheet.getRange(1, 1, 1, rSheet.getLastColumn()).getValues()[0];
+  var newRow = new Array(rHeaders.length).fill("");
+
+  newRow[_fi(rHeaders, "Timestamp")] = now;
+  newRow[_fi(rHeaders, "系統識別碼")] = userId;
+  newRow[_fi(rHeaders, "姓名")] = userName;
+  newRow[_fi(rHeaders, "活動編號")] = details.eventId;
+  newRow[_fi(rHeaders, "活動名稱")] = details.eventName;
+  newRow[_fi(rHeaders, "難易度評分")] = details.difficulty;
+  newRow[_fi(rHeaders, "風景評分")] = details.beauty;
+  newRow[_fi(rHeaders, "心得內容")] = details.content;
+  newRow[_fi(rHeaders, "登頂照片網址")] = details.imageUrl || "";
+
+  if (targetRow > -1) {
+    // 更新
+    for (var col = 0; col < newRow.length; col++) {
+      rSheet.getRange(targetRow, col + 1).setValue(newRow[col]);
+    }
+  } else {
+    // 新增
+    rSheet.appendRow(newRow);
+  }
+
+  // 推送給幹部群組 (通知有新心得)
+  var alertMsg = "🏕️ 【社員心得回饋通知】\n\n👤 社員：" + userName + "\n⛰️ 活動：" + details.eventName + "\n⭐ 路線難易：" + "★".repeat(details.difficulty) + "\n⭐ 風景推薦：" + "★".repeat(details.beauty) + "\n📝 心得內容：\n" + details.content;
+  pushAdminMessage(alertMsg);
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    message: "心得已成功提交"
   })).setMimeType(ContentService.MimeType.JSON);
 }

@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import liff from '@line/liff';
 import '../App.css';
 
 interface HistoryItem {

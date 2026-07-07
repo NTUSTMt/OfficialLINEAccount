@@ -3,11 +3,25 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.39` (v0.0.39)
+- **當前版本**：`0.0.41` (v0.0.41)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 41. 已參與活動與心得系統 (Past Events & Reflections) 實作 (v0.0.41)
+- **歷史活動相片牆與寫心得功能**：
+  - 新增了 [Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx) 頁面，顯示使用者的出隊次數、心得篇數等足跡統計。
+  - 系統自動過濾並顯示該社員所有「已結束且正取」的歷史活動，並為其提供高亮的「✏️ 寫出隊心得」與「📖 查看我的心得」操作。
+  - 實作了心得填寫彈出視窗（Modal），支援「路線難易度評分（1-5星）」、「風景推薦度評分（1-5星）」、心得內容文字框及登頂合照網址輸入。
+- **GAS 後端 API 與 Reflections 資料庫**：
+  - 在 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 中新增 `action=get_past_activities` 及 `action=submit_reflection` API。
+  - 自動偵測並在 Google Sheets 中建立 `Reflections` 心得回饋工作表，保存社員的心得與評分資料，並在收到新心得時，自動推送 LINE 幹部群組通知。
+- **全域路由與選單**：
+  - 於 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中註冊 `/achievements` 路由，並於全域 Header 的頭貼下拉選單中新增「🏆 出隊足跡」連結。
+
+### 40. 移除未使用的 liff 宣告 (v0.0.40)
+- **修復 TypeScript 編譯錯誤**：移除了 [History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx) 中未使用的 `liff` 導入，修復了因 `noUnusedLocals` 與 `verbatimModuleSyntax` 嚴格 TypeScript 設定導致的編譯失敗。
 
 ### 39. 歷史繳費紀錄 (Payment History) 頁面與後端 API 實作 (v0.0.39)
 - **全新對帳明細時間軸頁面**：
