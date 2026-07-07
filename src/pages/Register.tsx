@@ -265,7 +265,7 @@ function Register({ userId }: { userId: string }) {
         {/* 步驟 1: 主要必填資料 */}
         {step === 1 && (
           <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍 步驟 1：主要必填資料 (Required Info)</h2>
+            <h2 className="step-title">📍主要必填資料 (Required Info)</h2>
             
             <div className="form-group">
               <label className="required">真實姓名</label>
@@ -365,7 +365,7 @@ function Register({ userId }: { userId: string }) {
         {/* 步驟 2: 基本選填資料 */}
         {step === 2 && (
           <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍 步驟 2：基本選填資料 (Basic Info)</h2>
+            <h2 className="step-title">📍基本選填資料 (Basic Info)</h2>
 
             <div className="form-group">
               <label>性別</label>
@@ -402,7 +402,7 @@ function Register({ userId }: { userId: string }) {
         {/* 步驟 3: 留守與安全資訊 */}
         {step === 3 && (
           <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍 步驟 3：留守資訊 (Safety & Emergency) ⚠️</h2>
+            <h2 className="step-title">📍緊急聯絡人資訊 (Safety & Emergency) ⚠️</h2>
 
             <div className="form-group">
               <label>緊急聯絡人姓名</label>
@@ -453,7 +453,7 @@ function Register({ userId }: { userId: string }) {
         {/* 步驟 4: 登山經驗與體能證明 */}
         {step === 4 && (
           <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍 步驟 4：經驗與證明 (Experience & Upload)</h2>
+            <h2 className="step-title">📍登山經驗與體能 (Experience & Upload)</h2>
 
             <div className="form-group">
               <label>過往登山經驗簡述 (選填)</label>

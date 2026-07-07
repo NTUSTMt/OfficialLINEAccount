@@ -765,7 +765,7 @@ body {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .form-group.full-width {
@@ -777,7 +777,7 @@ body {
   font-weight: bold;
   color: var(--text-secondary);
   text-align: left;
-  margin-bottom: 6px;
+  margin-bottom: 0px;
   display: block;
 }
 

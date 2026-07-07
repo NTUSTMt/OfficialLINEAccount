@@ -167,9 +167,9 @@ function Dashboard({ userId }: { userId: string }) {
                 👤
               </div>
             )}
-            <div>
-              <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>{lineProfile?.displayName || '山友'}</h4>
-              <p style={{ margin: 0, fontSize: '11px', opacity: 0.8 }}>LINE Account Connected</p>
+            <div style={{ textAlign: 'left' }}>
+              <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', textAlign: 'left' }}>{lineProfile?.displayName || '山友'}</h4>
+              <p style={{ margin: 0, fontSize: '11px', opacity: 0.8, textAlign: 'left' }}>LINE Account Connected</p>
             </div>
           </div>
           <div 
@@ -201,9 +201,6 @@ function Dashboard({ userId }: { userId: string }) {
           <div>
             <span style={{ opacity: 0.7, display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Expiry Date</span>
             <span style={{ fontWeight: '600' }}>{profile?.expireDate || '尚未啟用'}</span>
-          </div>
-          <div style={{ fontSize: '10px', opacity: 0.6 }}>
-            野境戶外 NTUST OAC
           </div>
         </div>
       </div>
