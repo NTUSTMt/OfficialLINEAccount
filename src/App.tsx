@@ -49,6 +49,19 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
 
   const { title, subtitle, icon } = getHeaderDetails();
 
+  // 點擊空白處（非選單處）關閉選單
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const container = document.querySelector('.avatar-dropdown-container');
+      if (container && !container.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [isOpen]);
+
   const handleNav = (path: string, externalUrl: string) => {
     setIsOpen(false);
     if (liff.isInClient()) {
@@ -117,17 +130,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
 
         {isOpen && (
           <>
-            <div 
-              onClick={() => setIsOpen(false)} 
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 999
-              }}
-            />
+            
             
             <div className="dropdown-menu animate-fade-in" style={{
               position: 'absolute',

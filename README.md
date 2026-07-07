@@ -3,11 +3,15 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.34` (v0.0.34)
+- **當前版本**：`0.0.35` (v0.0.35)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 35. 實現點擊選單外部空白處自動收合下拉選單 (v0.0.35)
+- **新增 Document 點擊接聽器**：由於 `.app-header` 使用了 `backdrop-filter: blur`，這在 CSS 規範中會建立獨立的 Stacking Context (層疊上下文)，導致子元素中 `position: fixed` 的全螢幕背景遮罩無法正確延伸覆蓋至 header 之外的頁面區域。
+- **點擊外部自動收合**：在 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中移除了原本的 fixed 背景遮罩，改為透過 `useEffect` 於 `document` 註冊全域點擊事件接聽器。點擊時自動檢查滑鼠目標是否在 `.avatar-dropdown-container` 外部，若為外部則將選單狀態設為關閉，完美解決點擊網頁其他空白處無法收合選單的體驗瑕疵。
 
 ### 34. 統一全頁面 Header 樣式與移除裝備租借購物車按鈕 (v0.0.34)
 - **統一 Header 佈局尺寸**：重新設計 [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中的 `GlobalHeader`，使其作為全域唯一的粘性定位頂部導覽列（`.app-header`）。左側會根據當前路由（`/borrow`、`/payment`、`/register`、`/dashboard`）動態呈現對應的標題、副標題與圖示；右側則為帶有下拉導航選單的頭貼按鈕。
