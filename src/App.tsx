@@ -5,6 +5,7 @@ import Borrow from './pages/Borrow';
 import Payment from './pages/Payment';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import History from './pages/History';
 import './App.css';
 
 // 解析 LIFF 傳入的初始路徑 (解決 liff.state 傳參導致重定向遺失的問題)
@@ -18,7 +19,7 @@ const getInitialRedirectPath = () => {
   }
 
   // 確保路徑為合法子路徑且不重複導向
-  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard'))) {
+  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history'))) {
     return statePath;
   }
   
@@ -42,6 +43,9 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
     }
     if (path.includes('/dashboard')) {
       return { title: '個人主頁', subtitle: 'My Dashboard', icon: '👤' };
+    }
+    if (path.includes('/history')) {
+      return { title: '歷史紀錄', subtitle: 'Payment History', icon: '📜' };
     }
     // 預設為裝備租借
     return { title: '裝備租借', subtitle: 'Equipments Rental', icon: '🏕️' };
@@ -176,6 +180,14 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
                 onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
                 💳 繳費系統
+              </div>
+              <div 
+                onClick={() => handleNav('/history', 'https://liff.line.me/2009217429-u7OCkmQO/history')}
+                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                📜 歷史紀錄
               </div>
             </div>
           </>
@@ -350,6 +362,11 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
         } />
         <Route path="/register" element={<Register userId={liffInit.userId} />} />
         <Route path="/dashboard" element={<Dashboard userId={liffInit.userId} />} />
+        <Route path="/history" element={
+          <ProfileCheck userId={liffInit.userId}>
+            <History userId={liffInit.userId} />
+          </ProfileCheck>
+        } />
         {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
         <Route path="*" element={<Navigate to="/borrow" replace />} />
       </Routes>
@@ -381,7 +398,7 @@ function App() {
 
         if (path.includes('/register') || statePath.includes('/register')) {
           liffId = '2009217429-AhPRqAHg';
-        } else if (path.includes('/payment') || statePath.includes('/payment')) {
+        } else if (path.includes('/payment') || statePath.includes('/payment') || path.includes('/history') || statePath.includes('/history')) {
           liffId = '2009217429-u7OCkmQO';
         } else if (path.includes('/dashboard') || statePath.includes('/dashboard')) {
           liffId = '2009217429-jvj3ydDT';

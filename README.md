@@ -3,11 +3,31 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.37` (v0.0.37)
+- **當前版本**：`0.0.39` (v0.0.39)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 39. 歷史繳費紀錄 (Payment History) 頁面與後端 API 實作 (v0.0.39)
+- **全新對帳明細時間軸頁面**：
+  - 新增了 [History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx) 頁面，提供美觀的時間軸交易明細卡片。
+  - **累計貢獻 Dashboard**：頁面頂部卡片顯示累計已確認繳費金額（累計贊助金額），並顯示目前有多少筆對帳申請正處於「待確認」審核狀態。
+  - **分類篩選功能**：提供「全部」、「社費」、「活動」、「裝備」水平切換標籤進行快速明細篩選。
+  - **細節手風琴折疊**：點擊卡片可向下展開，顯示當時申報所使用的「匯款帳號末 5 碼」與說明提示。
+- **GAS 後端 API 支援**：
+  - 在 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 中新增 `action=get_payment_history` 分流路由。
+  - 實作 `getPaymentHistoryAPI` 函式，掃描 `Payments` 對帳表，提取使用者名下所有的交易明細，並且自動依據項目名稱匹配分類（社費、活動、裝備），最後依日期降冪排序回傳。
+- **全域路由與導覽註冊**：
+  - 於 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 註冊 `/history` 路由並以 `ProfileCheck` 進行權限保護。
+  - 將 `/history` 綁定至 `2009217429-u7OCkmQO` LIFF ID，並於全域 Header 的頭貼下拉選單中註冊「📜 歷史紀錄」選項。
+
+### 38. 租借費用折扣判定修復與已繳費無到期日顯示優化 (v0.0.38)
+- **裝備租借費用折扣與用途連動**：
+  - 在 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 中引入了 `isOfficial` 狀態，並在組件掛載時向 GAS `action=get_my_status` API 獲取使用者社籍身分。
+  - **費用折扣判定**：修改租金計算邏輯，當出團用途選擇「社團出團」時，租金全免（$0）；當選擇其餘個人使用（個人露營、登山活動等）且使用者具有有效社籍（`isOfficial === true`）時，提供 5 折優惠；非社員個人使用則維持全額收費。該計算將即時呈現在試算公式、商品清單及預訂單明細中。
+- **已繳費無到期日顯示優化**：
+  - 修改了 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 中的 `getMyStatusAPI` 引擎。當社員在 Members 表中的 `繳費狀態` 為「已繳費」（或同義詞），但 `社籍到期日` 欄位為空或無效時，系統會強制將其 `isOfficial` 設定為 `true`（視為正式社員），且到期日欄位回傳「尚未提供，請聯繫幹部確認」，完美避免了因後台到期日尚未填寫而導致已繳費社員無法存取租借系統或顯示為非社員的體驗瑕疵。
 
 ### 37. 繳費頁面宣傳條移除與社費彈性學期方案選擇 (v0.0.37)
 - **移除冗餘宣傳條**：移除了 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx) 頂部的「合併項目，輕鬆對帳」漸層宣傳 Banner，讓對帳申報區版面更加精簡聚焦。

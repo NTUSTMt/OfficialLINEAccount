@@ -114,6 +114,7 @@ function Borrow({ userId }: { userId: string }) {
   const [equipments, setEquipments] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [isOfficial, setIsOfficial] = useState<boolean>(false);
 
   const [form, setForm] = useState<FormState>({
     pickupDate: '',
@@ -138,15 +139,27 @@ function Borrow({ userId }: { userId: string }) {
         if (resData.status === 'success') {
           setEquipments(resData.data);
         }
+
+        // 取得使用者社籍狀態以計算折扣
+        if (userId && userId !== 'TEST_USER_ID') {
+          const myStatusRes = await fetch(`${GAS_API_URL}?action=get_my_status&userId=${userId}`);
+          const myStatusData = await myStatusRes.json();
+          if (myStatusData.status === 'success' && myStatusData.data && myStatusData.data.profile) {
+            setIsOfficial(myStatusData.data.profile.isOfficial);
+          }
+        } else {
+          // 本地測試帳號預設為正式社員
+          setIsOfficial(true);
+        }
       } catch (error) {
-        console.error('裝備清單載入失敗:', error);
+        console.error('裝備清單或社員狀態載入失敗:', error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [userId]);
 
   // ==========================================
   // 📌 4. 核心邏輯處理 (Handlers)
@@ -186,14 +199,22 @@ function Borrow({ userId }: { userId: string }) {
 
   // 計算購物車總租金 (前 2 天為基本租金，之後每天加收 priceExtra)
   const totalPrice = useMemo(() => {
-    return Object.entries(form.cart).reduce((sum, [id, qty]) => {
+    const rawTotal = Object.entries(form.cart).reduce((sum, [id, qty]) => {
       const equip = equipments.find(item => item.id === id);
       if (!equip) return sum;
       const extraDays = Math.max(0, rentalDays - 2);
       const itemPrice = equip.price + extraDays * (equip.priceExtra || 0);
       return sum + (itemPrice * qty);
     }, 0);
-  }, [form.cart, equipments, rentalDays]);
+
+    if (form.purpose === '社團出團') {
+      return 0; // 用於社團活動免費
+    }
+    if (isOfficial) {
+      return Math.round(rawTotal * 0.5); // 社員個人使用 5 折
+    }
+    return rawTotal; // 非社員個人使用全額
+  }, [form.cart, equipments, rentalDays, form.purpose, isOfficial]);
 
   // 產生試算公式字串
   const formulaString = useMemo(() => {
@@ -203,8 +224,18 @@ function Borrow({ userId }: { userId: string }) {
       const extraDays = Math.max(0, rentalDays - 2);
       return `($${equip.price} + $${equip.priceExtra || 0} × ${extraDays}天) × ${qty}件`;
     }).filter(Boolean);
-    return parts.join(' + ');
-  }, [form.cart, equipments, rentalDays]);
+
+    if (parts.length === 0) return '';
+    
+    const baseFormula = parts.join(' + ');
+    if (form.purpose === '社團出團') {
+      return `${baseFormula} = $0 (社團活動免費)`;
+    }
+    if (isOfficial) {
+      return `(${baseFormula}) × 0.5 (社員個人 5 折)`;
+    }
+    return baseFormula;
+  }, [form.cart, equipments, rentalDays, form.purpose, isOfficial]);
 
   // 處理表單輸入
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -431,6 +462,7 @@ function Borrow({ userId }: { userId: string }) {
                               <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>
                                 ${ (item.price + Math.max(0, rentalDays - 2) * (item.priceExtra || 0)) * qty }
                               </strong>
+                              {form.purpose === '社團出團' ? ' (社團出團免費 $0)' : isOfficial ? ' (社員個人 5 折)' : ''}
                             </span>
                           </div>
                           <div className="cart-item-controls">

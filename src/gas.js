@@ -3796,6 +3796,13 @@ function doGet(e) {
       }
       return getMyStatusAPI(ss, userId);
 
+    } else if (action === "get_payment_history") {
+      var userId = e.parameter.userId;
+      if (!userId) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
+      }
+      return getPaymentHistoryAPI(ss, userId);
+
     } else if (action === "get_equipments") {
       // 呼叫原本的裝備清單處理引擎
       return getEquipmentsListAPI(ss);
@@ -4372,19 +4379,38 @@ function getMyStatusAPI(ss, userId) {
         responseData.profile.department = mData[i][_fi(mH, "系所")] || "";
         responseData.profile.studentId = mData[i][_fi(mH, "學號")] || "";
         
+        var mPayIdx = _fi(mH, "繳費狀態");
+        var payStatus = (mPayIdx > -1 && mData[i][mPayIdx]) ? String(mData[i][mPayIdx]).trim() : "";
+        var hasPaid = (payStatus === "已繳費" || payStatus === "已繳費 Paid" || payStatus === "已繳" || payStatus === "是");
+
         var mExpireIdx = mH.findIndex(function (h) {
           return String(h).includes("到期日") || String(h).includes("社籍");
         });
+        
+        var hasExpireDate = false;
         if (mExpireIdx > -1 && mData[i][mExpireIdx]) {
           var d = new Date(mData[i][mExpireIdx]);
           if (!isNaN(d.getTime())) {
+            hasExpireDate = true;
             responseData.profile.expireDate = Utilities.formatDate(d, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
             if (d.getTime() >= new Date().getTime()) {
               responseData.profile.isOfficial = true;
             }
           } else {
-            responseData.profile.expireDate = String(mData[i][mExpireIdx]);
+            var rawExp = String(mData[i][mExpireIdx]).trim();
+            if (rawExp !== "") {
+              hasExpireDate = true;
+              responseData.profile.expireDate = rawExp;
+              if (rawExp.indexOf("過期") === -1 && rawExp.indexOf("未") === -1) {
+                responseData.profile.isOfficial = true;
+              }
+            }
           }
+        }
+        
+        if (hasPaid && !hasExpireDate) {
+          responseData.profile.isOfficial = true;
+          responseData.profile.expireDate = "尚未提供，請聯繫幹部確認";
         }
         break;
       }
@@ -4674,4 +4700,84 @@ function uploadFileToDrive(base64Str, fileName) {
     console.error("檔案上傳 Google Drive 失敗: " + err.toString());
     return "上傳失敗: " + err.toString();
   }
+}
+
+// 📜 全新功能：個人歷史對帳明細打包查詢 API
+function getPaymentHistoryAPI(ss, userId) {
+  var paySheet = ss.getSheetByName("Payments");
+  if (!paySheet) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", data: { totalSpent: 0, history: [] } })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var data = paySheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", data: { totalSpent: 0, history: [] } })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var headers = data[0];
+  var sysIdx = _fi(headers, "系統識別碼");
+  var timeIdx = _fi(headers, "時間") > -1 ? _fi(headers, "時間") : _fi(headers, "Timestamp");
+  var itemIdx = _fi(headers, "繳費項目");
+  var amountIdx = _fi(headers, "金額");
+  var proofIdx = _fi(headers, "帳號末5碼") > -1 ? _fi(headers, "帳號末5碼") : _fi(headers, "帳號末5碼/備註");
+  var statusIdx = _fi(headers, "對帳狀態");
+
+  var historyList = [];
+  var totalSpent = 0;
+
+  for (var i = 1; i < data.length; i++) {
+    if (sysIdx > -1 && String(data[i][sysIdx]).trim() === userId) {
+      var rawDate = timeIdx > -1 ? data[i][timeIdx] : "";
+      var dateStr = "";
+      if (rawDate) {
+        var d = new Date(rawDate);
+        dateStr = !isNaN(d.getTime()) ? Utilities.formatDate(d, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd HH:mm:ss") : String(rawDate);
+      }
+      
+      var rawAmount = amountIdx > -1 ? data[i][amountIdx] : 0;
+      var amount = parseInt(String(rawAmount).replace(/\D/g, ''), 10) || 0;
+      
+      var title = itemIdx > -1 ? String(data[i][itemIdx]).trim() : "未命名項目";
+      var status = statusIdx > -1 ? String(data[i][statusIdx]).trim() : "待確認";
+      var last5Digits = proofIdx > -1 ? String(data[i][proofIdx]).trim() : "";
+
+      // 判斷類型 (社費、活動、裝備)
+      var type = "全部";
+      if (title.indexOf("社籍") > -1 || title.indexOf("社費") > -1 || title.indexOf("Membership") > -1) {
+        type = "社費";
+      } else if (title.indexOf("活動") > -1 || title.indexOf("登山") > -1 || title.indexOf("act_") > -1) {
+        type = "活動";
+      } else if (title.indexOf("裝備") > -1 || title.indexOf("租用") > -1 || title.indexOf("eq_") > -1) {
+        type = "裝備";
+      }
+
+      historyList.push({
+        id: "row_" + i,
+        date: dateStr,
+        type: type,
+        title: title,
+        amount: amount,
+        last5Digits: last5Digits,
+        status: status
+      });
+
+      // 只有對帳狀態為「已確認無誤」或「已確認」或「已繳費」或「已核對」才加總
+      if (status.indexOf("確認") > -1 || status.indexOf("無誤") > -1 || status.indexOf("已繳") > -1 || status.indexOf("已核對") > -1) {
+        totalSpent += amount;
+      }
+    }
+  }
+
+  // 按日期降冪排序 (由新到舊)
+  historyList.sort(function(a, b) {
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    data: {
+      totalSpent: totalSpent,
+      history: historyList
+    }
+  })).setMimeType(ContentService.MimeType.JSON);
 }
