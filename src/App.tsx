@@ -13,7 +13,7 @@ import './App.css';
 const getInitialRedirectPath = () => {
   const searchParams = new URLSearchParams(window.location.search);
   let statePath = searchParams.get('liff.state');
-  
+
   if (!statePath && window.location.hash) {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     statePath = hashParams.get('liff.state');
@@ -23,7 +23,7 @@ const getInitialRedirectPath = () => {
   if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history') || statePath.startsWith('/achievements'))) {
     return statePath;
   }
-  
+
   return '/borrow';
 };
 
@@ -37,10 +37,10 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
   const getHeaderDetails = () => {
     const path = location.pathname;
     if (path.includes('/register')) {
-      return { title: '填寫資料', subtitle: 'Register', icon: '📝' };
+      return { title: '資料填寫', subtitle: 'Register', icon: '📝' };
     }
     if (path.includes('/payment')) {
-      return { title: '繳費對帳', subtitle: 'Payment System', icon: '💳' };
+      return { title: '繳費系統', subtitle: 'Payment System', icon: '💳' };
     }
     if (path.includes('/dashboard')) {
       return { title: '個人主頁', subtitle: 'My Dashboard', icon: '👤' };
@@ -92,7 +92,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
       </div>
 
       <div className="avatar-dropdown-container" style={{ position: 'relative' }}>
-        <button 
+        <button
           onClick={() => setIsOpen(!isOpen)}
           style={{
             background: 'none',
@@ -105,9 +105,9 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
           }}
         >
           {pictureUrl ? (
-            <img 
-              src={pictureUrl} 
-              alt="Avatar" 
+            <img
+              src={pictureUrl}
+              alt="Avatar"
               style={{
                 width: '40px',
                 height: '40px',
@@ -138,8 +138,8 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
 
         {isOpen && (
           <>
-            
-            
+
+
             <div className="dropdown-menu animate-fade-in" style={{
               position: 'absolute',
               top: '48px',
@@ -153,7 +153,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
               zIndex: 1000,
               textAlign: 'left'
             }}>
-               <div 
+              <div
                 onClick={() => handleNav('/dashboard', 'https://liff.line.me/2009217429-jvj3ydDT')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
@@ -161,7 +161,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
               >
                 👤 個人主頁
               </div>
-              <div 
+              <div
                 onClick={() => handleNav('/achievements', 'https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fachievements')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
@@ -169,7 +169,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
               >
                 🏆 出隊足跡
               </div>
-              <div 
+              <div
                 onClick={() => handleNav('/register', 'https://liff.line.me/2009217429-AhPRqAHg')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
@@ -177,7 +177,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
               >
                 📝 資料填寫
               </div>
-              <div 
+              <div
                 onClick={() => handleNav('/borrow', 'https://liff.line.me/2009217429-zXvGeSrI')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
@@ -185,7 +185,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
               >
                 🎒 裝備租借
               </div>
-              <div 
+              <div
                 onClick={() => handleNav('/payment', 'https://liff.line.me/2009217429-u7OCkmQO')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
@@ -193,13 +193,13 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
               >
                 💳 繳費系統
               </div>
-              <div 
+              <div
                 onClick={() => handleNav('/history', 'https://liff.line.me/2009217429-u7OCkmQO?liff.state=%2Fhistory')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                 onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
-                📜 歷史紀錄
+                📜 歷史繳費紀錄
               </div>
             </div>
           </>
@@ -227,7 +227,7 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
         const res = await fetch(`${GAS_API_URL}?action=get_profile&userId=${userId}`);
         const result = await res.json();
-        
+
         if (result.status === 'success' && result.isMember && result.profile) {
           const p = result.profile;
           // 檢查 6 個必填欄位 (姓名、系所、學號、手機、Email、LINE ID) 是否非空
@@ -237,7 +237,7 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
           const phoneOk = p.phone ? String(p.phone).trim() !== '' : false;
           const emailOk = p.email ? String(p.email).trim() !== '' : false;
           const lineIdOk = p.realLineId ? String(p.realLineId).trim() !== '' : false;
-          
+
           if (nameOk && deptOk && studentIdOk && phoneOk && emailOk && lineIdOk) {
             setIsComplete(true);
           } else {
@@ -416,7 +416,7 @@ function App() {
         let liffId = '2009217429-zXvGeSrI'; // default (borrow)
         const path = window.location.pathname;
         const searchParams = new URLSearchParams(window.location.search);
-        
+
         let statePath = searchParams.get('liff.state') || '';
         if (!statePath && window.location.hash) {
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -435,7 +435,7 @@ function App() {
         let userId = 'TEST_USER_ID';
         let displayName = '山友';
         let pictureUrl = '';
-        
+
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
           userId = profile.userId;
@@ -448,7 +448,7 @@ function App() {
             return; // 登入會跳轉，直接 return
           }
         }
-        
+
         setLiffInit({ loading: false, error: null, userId, displayName, pictureUrl });
       } catch (err: any) {
         console.error('LIFF 初始化失敗:', err);

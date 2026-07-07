@@ -27,7 +27,7 @@ function Achievements({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AchievementData | null>(null);
-  
+
   // Modal Form States
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [difficulty, setDifficulty] = useState(5);
@@ -196,7 +196,7 @@ function Achievements({ userId }: { userId: string }) {
 
   return (
     <div className="app-container animate-fade-in" style={{ padding: '16px', maxWidth: '600px', margin: '0 auto' }}>
-      
+
       {error && (
         <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
           ⚠️ {error}
@@ -218,8 +218,8 @@ function Achievements({ userId }: { userId: string }) {
       }}>
         <div>
           <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px', fontWeight: 'bold' }}>My Mountaineering Footprint</span>
-          <div style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0' }}>我的出隊足跡成就</div>
-          <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>一步一腳印，記錄每一次登頂的回憶！</p>
+          <div style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0' }}>我的出隊成就</div>
+          <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>一步一腳印，記錄每一次出隊的回憶！</p>
         </div>
         <div style={{ display: 'flex', gap: '16px', textAlign: 'center' }}>
           <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 14px', borderRadius: '12px', minWidth: '60px' }}>
@@ -228,7 +228,7 @@ function Achievements({ userId }: { userId: string }) {
           </div>
           <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 14px', borderRadius: '12px', minWidth: '60px' }}>
             <div style={{ fontSize: '20px', fontWeight: '800' }}>{data?.reflectionsCount || 0}</div>
-            <div style={{ fontSize: '10px', opacity: 0.8 }}>心得篇數</div>
+            <div style={{ fontSize: '10px', opacity: 0.8 }}>回憶篇數</div>
           </div>
         </div>
       </div>
@@ -267,7 +267,7 @@ function Achievements({ userId }: { userId: string }) {
                 backgroundPosition: 'center',
                 flexShrink: 0
               }}></div>
-              
+
               <div style={{ flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minWidth: 0 }}>
                 <div>
                   <h4 style={{
@@ -299,7 +299,7 @@ function Achievements({ userId }: { userId: string }) {
                         cursor: 'pointer'
                       }}
                     >
-                      📖 查看我的心得
+                      📖 查看我的回憶
                     </button>
                   ) : (
                     <button
@@ -316,7 +316,7 @@ function Achievements({ userId }: { userId: string }) {
                         boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
                       }}
                     >
-                      ✏️ 寫出隊心得
+                      ✏️ 留下回憶
                     </button>
                   )}
                 </div>
@@ -361,7 +361,7 @@ function Achievements({ userId }: { userId: string }) {
             </p>
 
             <form onSubmit={handleSubmit}>
-              
+
               {/* 星等評分 */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
                 <div>
@@ -466,9 +466,9 @@ function Achievements({ userId }: { userId: string }) {
                 />
                 {imageUrl && (
                   <div style={{ marginTop: '8px', borderRadius: '8px', overflow: 'hidden', height: '140px' }}>
-                    <img 
-                      src={imageUrl} 
-                      alt="Preview" 
+                    <img
+                      src={imageUrl}
+                      alt="Preview"
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={(e) => (e.currentTarget.style.display = 'none')}
                     />

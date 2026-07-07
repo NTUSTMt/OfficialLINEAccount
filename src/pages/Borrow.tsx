@@ -29,7 +29,7 @@ interface ApiResponse {
 // 根據商品名稱渲染對應的 SVG 圖示與漸層背景
 function ProductImage({ name }: { name: string }) {
   const lowercaseName = name.toLowerCase();
-  
+
   // 帳篷
   if (lowercaseName.includes('帳') || lowercaseName.includes('tent')) {
     return (
@@ -119,8 +119,8 @@ function Borrow({ userId }: { userId: string }) {
   const [form, setForm] = useState<FormState>({
     pickupDate: '',
     returnDate: '',
-    purpose: '社團出團',
-    cart: {} 
+    purpose: '社團出隊',
+    cart: {}
   });
 
   // ⚠️ 替換成你剛剛重新部署的 GAS 網頁應用程式 URL
@@ -135,7 +135,7 @@ function Borrow({ userId }: { userId: string }) {
         // 呼叫 GAS API 取得裝備清單
         const response = await fetch(GAS_API_URL, { redirect: 'follow' });
         const resData: ApiResponse = await response.json();
-        
+
         if (resData.status === 'success') {
           setEquipments(resData.data);
         }
@@ -164,7 +164,7 @@ function Borrow({ userId }: { userId: string }) {
   // ==========================================
   // 📌 4. 核心邏輯處理 (Handlers)
   // ==========================================
-  
+
   // 購物車數量增減
   const updateCart = (equipId: string, delta: number, maxQty: number) => {
     setForm(prevForm => {
@@ -207,7 +207,7 @@ function Borrow({ userId }: { userId: string }) {
       return sum + (itemPrice * qty);
     }, 0);
 
-    if (form.purpose === '社團出團') {
+    if (form.purpose === '社團出隊') {
       return 0; // 用於社團活動免費
     }
     if (isOfficial) {
@@ -226,9 +226,9 @@ function Borrow({ userId }: { userId: string }) {
     }).filter(Boolean);
 
     if (parts.length === 0) return '';
-    
+
     const baseFormula = parts.join(' + ');
-    if (form.purpose === '社團出團') {
+    if (form.purpose === '社團出隊') {
       return `${baseFormula} = $0 (社團活動免費)`;
     }
     if (isOfficial) {
@@ -276,7 +276,7 @@ function Borrow({ userId }: { userId: string }) {
       alert('連線失敗，請檢查網路狀態或通知幹部！');
       return;
     }
-    
+
     // 2. 在 LINE 聊天室印出確認訊息
     if (liff.isInClient()) {
       await liff.sendMessages([{
@@ -300,7 +300,7 @@ function Borrow({ userId }: { userId: string }) {
       <div className="promo-banner pricing-banner">
         <div className="banner-content">
           <h2 className="pricing-title">費用試算說明</h2>
-          
+
           <div className="pricing-rules">
             <div className="pricing-rule-item">
               <span className="rule-label">社員用於社團活動</span>
@@ -319,7 +319,7 @@ function Borrow({ userId }: { userId: string }) {
               <span className="rule-value">全額租金</span>
             </div>
           </div>
-          
+
           <div className="pricing-notes">
             <p>。租金試算以「2天」為基本單位</p>
             <p>。超過 2 天之部分按「每日加價」計算</p>
@@ -344,14 +344,14 @@ function Borrow({ userId }: { userId: string }) {
             {equipments.map(item => {
               const currentQty = form.cart[item.id] || 0;
               const isOutOfStock = item.remainQty <= 0;
-              
+
               return (
                 <div key={item.id} className={`product-card ${currentQty > 0 ? 'selected' : ''}`}>
                   <ProductImage name={item.name} />
-                  
+
                   <div className="product-info">
                     <h3 className="product-name">{item.name}</h3>
-                    
+
                     <div className="product-status">
                       {isOutOfStock ? (
                         <span className="status-badge out-of-stock">已租完</span>
@@ -361,7 +361,7 @@ function Borrow({ userId }: { userId: string }) {
                         <span className="status-badge in-stock">庫存充足 ({item.remainQty})</span>
                       )}
                     </div>
-                    
+
                     <div className="product-price-row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px', width: '100%' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                         <span className="price-label" style={{ margin: 0 }}>租金 (2天)</span>
@@ -375,7 +375,7 @@ function Borrow({ userId }: { userId: string }) {
 
                     <div className="product-actions">
                       {currentQty === 0 ? (
-                        <button 
+                        <button
                           className="add-to-cart-btn"
                           onClick={() => updateCart(item.id, 1, item.remainQty)}
                           disabled={isOutOfStock}
@@ -384,14 +384,14 @@ function Borrow({ userId }: { userId: string }) {
                         </button>
                       ) : (
                         <div className="quantity-controller">
-                          <button 
+                          <button
                             className="qty-btn"
                             onClick={() => updateCart(item.id, -1, item.remainQty)}
                           >
                             -
                           </button>
                           <span className="qty-number">{currentQty}</span>
-                          <button 
+                          <button
                             className="qty-btn"
                             onClick={() => updateCart(item.id, 1, item.remainQty)}
                             disabled={currentQty >= item.remainQty}
@@ -429,7 +429,7 @@ function Borrow({ userId }: { userId: string }) {
       <div className={`cart-drawer-overlay ${isCartOpen ? 'open' : ''}`}>
         {/* 背景遮罩：點擊關閉抽屜 */}
         <div className="drawer-backdrop" onClick={() => setIsCartOpen(false)}></div>
-        
+
         {/* 抽屜主體 */}
         <div className="cart-drawer">
           <div className="drawer-header">
@@ -458,17 +458,17 @@ function Borrow({ userId }: { userId: string }) {
                           <div className="cart-item-desc">
                             <span className="cart-item-name">{item.name}</span>
                             <span className="cart-item-price" style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                              公式: (${item.price} + ${item.priceExtra || 0} × {Math.max(0, rentalDays - 2)}天) × {qty} = 
+                              公式: (${item.price} + ${item.priceExtra || 0} × {Math.max(0, rentalDays - 2)}天) × {qty} =
                               <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>
-                                ${ (item.price + Math.max(0, rentalDays - 2) * (item.priceExtra || 0)) * qty }
+                                ${(item.price + Math.max(0, rentalDays - 2) * (item.priceExtra || 0)) * qty}
                               </strong>
-                              {form.purpose === '社團出團' ? ' (社團出團免費 $0)' : isOfficial ? ' (社員個人 5 折)' : ''}
+                              {form.purpose === '社團出隊' ? ' (社團出隊免費 $0)' : isOfficial ? ' (社員個人 5 折)' : ''}
                             </span>
                           </div>
                           <div className="cart-item-controls">
                             <button onClick={() => updateCart(id, -1, item.remainQty)}>-</button>
                             <span className="cart-item-qty">{qty}</span>
-                            <button 
+                            <button
                               onClick={() => updateCart(id, 1, item.remainQty)}
                               disabled={qty >= item.remainQty}
                             >
@@ -484,42 +484,42 @@ function Borrow({ userId }: { userId: string }) {
                 {/* 租期選擇 */}
                 <div className="drawer-section">
                   <h4 className="section-subtitle">📅 選擇預約詳情</h4>
-                  
+
                   <div className="form-grid">
                     <div className="form-group">
                       <label htmlFor="pickupDate">領取日期</label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         id="pickupDate"
-                        name="pickupDate" 
-                        value={form.pickupDate} 
-                        onChange={handleInputChange} 
+                        name="pickupDate"
+                        value={form.pickupDate}
+                        onChange={handleInputChange}
                         required
                       />
                     </div>
 
                     <div className="form-group">
                       <label htmlFor="returnDate">歸還日期</label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         id="returnDate"
-                        name="returnDate" 
-                        value={form.returnDate} 
-                        onChange={handleInputChange} 
+                        name="returnDate"
+                        value={form.returnDate}
+                        onChange={handleInputChange}
                         required
                       />
                     </div>
 
                     <div className="form-group full-width">
-                      <label htmlFor="purpose">出團目的 / 用途</label>
-                      <select 
+                      <label htmlFor="purpose">出隊目的 / 用途</label>
+                      <select
                         id="purpose"
                         name="purpose"
                         value={form.purpose}
                         onChange={handleInputChange}
                         className="custom-select"
                       >
-                        <option value="社團出團">社團出團</option>
+                        <option value="社團出隊">社團出隊</option>
                         <option value="個人露營">個人露營</option>
                         <option value="登山活動">登山活動</option>
                         <option value="其他用途">其他用途</option>
@@ -555,7 +555,7 @@ function Borrow({ userId }: { userId: string }) {
 
           {totalItems > 0 && (
             <div className="drawer-footer">
-              <button 
+              <button
                 className="submit-checkout-btn"
                 onClick={submitForm}
                 disabled={totalItems === 0 || !form.pickupDate || !form.returnDate}

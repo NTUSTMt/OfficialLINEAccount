@@ -2871,7 +2871,7 @@ function onBorrowFormSubmit(e) {
           newStock = currentStock - qty;
           if (eStockIdx > -1) equipSheet.getRange(j + 1, eStockIdx + 1).setValue(newStock);
 
-          if (purpose && purpose.indexOf("社團出團") === -1) {
+          if (purpose && purpose.indexOf("社團出隊") === -1) {
             var price2 = parseInt(eData[j][eData[0].findIndex(function (h) {
               return String(h).includes("2天");
             })], 10) || 0;

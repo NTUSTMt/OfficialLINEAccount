@@ -82,7 +82,7 @@ function History({ userId }: { userId: string }) {
         });
       }
     } catch (err) {
-      console.error('取得繳費歷史紀錄失敗:', err);
+      console.error('取得歷史繳費紀錄失敗:', err);
       setError('連線失敗，請檢查網路狀態');
     } finally {
       setLoading(false);
@@ -161,13 +161,13 @@ function History({ userId }: { userId: string }) {
         marginBottom: '24px',
         textAlign: 'left'
       }}>
-        <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px', fontWeight: 'bold' }}>Total Contribution</span>
+        <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px', fontWeight: 'bold' }}>Total Expense</span>
         <div style={{ fontSize: '32px', fontWeight: '800', margin: '4px 0 12px 0' }}>
           ${data?.totalSpent.toLocaleString() || 0}
         </div>
         <div style={{ display: 'flex', gap: '16px', fontSize: '12px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '12px' }}>
           <div>
-            <span style={{ opacity: 0.8 }}>累計贊助金額</span>
+            <span style={{ opacity: 0.8 }}>累計花費金額</span>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <span style={{
@@ -177,7 +177,7 @@ function History({ userId }: { userId: string }) {
               backgroundColor: pendingCount > 0 ? '#fbbf24' : '#34d399',
               display: 'inline-block'
             }}></span>
-            <span>{pendingCount > 0 ? `${pendingCount} 筆對帳審核中` : '所有款項已結清'}</span>
+            <span>{pendingCount > 0 ? `${pendingCount} 筆繳費審核中` : '所有款項已結清'}</span>
           </div>
         </div>
       </div>
@@ -303,7 +303,7 @@ function History({ userId }: { userId: string }) {
                   >
                     <div><strong>申報帳號末 5 碼 / 備註：</strong>{item.last5Digits || '無'}</div>
                     <div style={{ marginTop: '4px' }}>
-                      <strong>說明：</strong>幹部對帳完成後，狀態會自動更新為「已確認無誤」。如有疑問，請私訊社團財務幹部。
+                      <strong>說明：</strong>幹部對帳完成後，狀態會自動更新為「已確認無誤」。如有疑問，請在此帳號聯繫社團幹部。
                     </div>
                   </div>
                 )}
