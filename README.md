@@ -3,11 +3,27 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.45` (v0.0.45)
+- **當前版本**：`0.0.48` (v0.0.48)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 48. 新增聯絡地址與緊急聯絡人地址欄位與標籤優化 (v0.0.48)
+- **新增選填表單欄位**：
+  - **聯絡地址**：於步驟 2 (基本選填資料) 後方新增了選填的 `聯絡地址 (Correspondence Address)` 欄位，變數對應 `studentAddr` 並串接後端儲存。
+  - **緊急聯絡人地址**：於步驟 3 (緊急聯絡人資訊) 後方新增了選填的 `緊急聯絡人地址 (Emergency Address)` 欄位，變數對應 `emerAddr` 並串接後端儲存。
+- **體能證明標籤雙語優化**：
+  - 將步驟 4 (登山經驗與體能證明) 的欄位名稱更新為 `體能證明 (Proof of Physical Fitness) - 連結或描述` 與 `上傳體能證明截圖 (Upload Proof of Physical Fitness)`，並加註其為選填項目。
+
+### 47. 移除註冊表單頂部 LINE 歡迎資訊卡 (v0.0.47)
+- **版面優化調整**：
+  - 應使用者要求，將 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 表單頂部的「LINE 歡迎資訊卡 (暱稱與頭像)」區塊移除，使步驟進度條能直接呈現在頁面最頂部，版面更加簡潔並提升表單欄位的可見度。
+
+### 46. 新增註冊表單載入中 (Loading) 狀態阻擋 (v0.0.46)
+- **載入狀態優化**：
+  - **問題修正**：修復了 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 中已填寫個人資料正在非同步獲取時，因為缺少 `loading` 畫面阻擋，導致表單欄位先呈現空白預設值，容易使使用者產生困惑或發生誤填的狀況。
+  - **實作載入畫面**：將原先未在渲染中被使用的 `_loading` 狀態啟用並重新命名為 `loading`。在 JSX 渲染前，加入 `if (loading)` 的守衛分流，預先呈現旋轉的 Loading 動態提示與「載入個人資料中，請稍候...」字樣，直至 API 資料取得完畢後才完整展示表單。
 
 ### 45. 整合取消活動報名與裝備預約至 LIFF Dashboard (v0.0.45)
 - **取消預約功能 LIFF 整合**：

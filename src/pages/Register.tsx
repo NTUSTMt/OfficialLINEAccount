@@ -14,9 +14,11 @@ interface ProfileData {
   phone: string;
   email: string;
   realLineId: string;
+  studentAddr: string;
   emerName: string;
   emerRel: string;
   emerPhone: string;
+  emerAddr: string;
   medicalHistory: string;
   exp: string;
   strength: string;
@@ -30,7 +32,7 @@ interface UploadedFile {
 
 function Register({ userId }: { userId: string }) {
   const [step, setStep] = useState(1);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNewUser, setIsNewUser] = useState(true);
   const [lineProfile, setLineProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(null);
@@ -46,9 +48,11 @@ function Register({ userId }: { userId: string }) {
     phone: '',
     email: '',
     realLineId: '',
+    studentAddr: '',
     emerName: '',
     emerRel: '',
     emerPhone: '',
+    emerAddr: '',
     medicalHistory: '',
     exp: '',
     strength: '',
@@ -106,9 +110,11 @@ function Register({ userId }: { userId: string }) {
               phone: p.phone ? String(p.phone) : '',
               email: p.email ? String(p.email) : '',
               realLineId: p.realLineId ? String(p.realLineId) : '',
+              studentAddr: p.studentAddr ? String(p.studentAddr) : '',
               emerName: p.emerName ? String(p.emerName) : '',
               emerRel: p.emerRel ? String(p.emerRel) : '',
               emerPhone: p.emerPhone ? String(p.emerPhone) : '',
+              emerAddr: p.emerAddr ? String(p.emerAddr) : '',
               medicalHistory: p.medicalHistory ? String(p.medicalHistory) : '',
               exp: p.exp ? String(p.exp) : '',
               strength: p.strength ? String(p.strength) : '',
@@ -232,18 +238,17 @@ function Register({ userId }: { userId: string }) {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
+        <div className="spinner"></div>
+        <p>載入個人資料中，請稍候...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="register-container animate-fade-in">
-      {/* 頂部親切 LINE 歡迎資訊卡 */}
-      <div className="register-welcome-card">
-        {lineProfile?.pictureUrl && (
-          <img src={lineProfile.pictureUrl} alt="LINE Avatar" className="welcome-avatar" />
-        )}
-        <div className="welcome-info">
-          <h3>哈囉，{lineProfile?.displayName || '山友'}！</h3>
-          <p>{isNewUser ? '歡迎填寫資料加入臺科大登山社 ⛰️' : '隨時更新您的登山社員資料 🎒'}</p>
-        </div>
-      </div>
 
       {/* 步驟進度條 */}
       <div className="step-progress-bar">
@@ -396,6 +401,17 @@ function Register({ userId }: { userId: string }) {
                 placeholder="辦理入山與平安保險"
               />
             </div>
+
+            <div className="form-group">
+              <label>聯絡地址 (Correspondence Address) (選填)</label>
+              <input
+                type="text"
+                name="studentAddr"
+                value={formData.studentAddr}
+                onChange={handleChange}
+                placeholder="請輸入聯絡或現居地址"
+              />
+            </div>
           </div>
         )}
 
@@ -438,6 +454,17 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
+              <label>緊急聯絡人地址 (Emergency Address) (選填)</label>
+              <input
+                type="text"
+                name="emerAddr"
+                value={formData.emerAddr}
+                onChange={handleChange}
+                placeholder="請輸入緊急聯絡人居住地址"
+              />
+            </div>
+
+            <div className="form-group">
               <label>個人特殊病史或過敏 (選填)</label>
               <textarea
                 name="medicalHistory"
@@ -467,7 +494,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>體能證明連結/描述 (選填)</label>
+              <label>體能證明 (Proof of Physical Fitness) - 連結或描述 (選填)</label>
               <input
                 type="text"
                 name="strength"
@@ -479,7 +506,7 @@ function Register({ userId }: { userId: string }) {
 
             {/* 上傳體能證明 */}
             <div className="form-group">
-              <label>上傳體能證明截圖 (選填，針對長天數高山行程)</label>
+              <label>上傳體能證明截圖 (Upload Proof of Physical Fitness) (選填)</label>
               <input
                 type="file"
                 accept="image/*"
