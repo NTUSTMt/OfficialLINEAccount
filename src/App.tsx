@@ -333,35 +333,26 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
   // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
   const [redirectPath] = useState(() => getInitialRedirectPath());
 
+  if (liffInit.loading) {
+    return (
+      <div className="loading-state" style={{ minHeight: '100vh', justifyContent: 'center' }}>
+        <div className="spinner"></div>
+        <p>驗證登入中，請稍候...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="router-wrapper" style={{ position: 'relative' }}>
       {/* 載入完成後渲染全域導航頭貼選單 */}
-      {!liffInit.loading && liffInit.userId && (
+      {liffInit.userId && (
         <GlobalHeader pictureUrl={liffInit.pictureUrl} displayName={liffInit.displayName} />
       )}
 
       {/* 路由主體頁面 */}
       <Routes>
-        <Route path="/" element={
-          liffInit.loading ? (
-            <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
-              <div className="spinner"></div>
-              <p>驗證登入中，請稍候...</p>
-            </div>
-          ) : (
-            <Navigate to={redirectPath} replace />
-          )
-        } />
-        <Route path="/index.html" element={
-          liffInit.loading ? (
-            <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
-              <div className="spinner"></div>
-              <p>驗證登入中，請稍候...</p>
-            </div>
-          ) : (
-            <Navigate to={redirectPath} replace />
-          )
-        } />
+        <Route path="/" element={<Navigate to={redirectPath} replace />} />
+        <Route path="/index.html" element={<Navigate to={redirectPath} replace />} />
         <Route path="/borrow" element={
           <ProfileCheck userId={liffInit.userId}>
             <Borrow userId={liffInit.userId} />
