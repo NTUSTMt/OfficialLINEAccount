@@ -3,11 +3,17 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.53` (v0.0.53)
+- **當前版本**：`0.0.54` (v0.0.54)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 54. 新增前端圖片上傳自動壓縮功能 (v0.0.54)
+- **上傳失敗優化**：
+  - **圖片自動壓縮**：在 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 中重新實作 `handleFileChange`。採用瀏覽器原生的 Canvas 繪圖技術，當使用者上傳體能證明截圖時，系統會自動將圖片等比例縮放至長寬最大 1024px，並以 `0.7` 的品質進行壓縮轉換為 JPEG base64。
+  - **解決 GAS 上傳大小限制**：原本數 MB 的大型手機截圖經由前端壓縮後會降至 150KB ~ 300KB，徹底避免了因上傳資料過大而導致 Google Apps Script 伺服器流量溢出、超時或回傳 CORS / 網路錯誤的連線失敗狀況。
+  - **放寬限制**：因具備壓縮功能，前端選取原始檔案大小限制安全地放寬至 10MB。
 
 ### 53. 解決載入狀態與錯誤畫面閃爍 UX 優化 (v0.0.53)
 - **載入防閃爍機制**：

@@ -135,21 +135,66 @@ function Register({ userId }: { userId: string }) {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // 處理檔案讀取為 Base64
+  // 處理檔案讀取並在前端自動壓縮為 JPEG Base64 (最大 1024px, 品質 0.7)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('檔案大小不能超過 5MB！');
+    if (file.size > 10 * 1024 * 1024) {
+      alert('檔案大小不能超過 10MB！');
       e.target.value = '';
       return;
     }
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      setStrengthProofFile({ base64: base64String, name: file.name });
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxWidth = 1024;
+        const maxHeight = 1024;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          alert('圖片解析失敗！');
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // 壓縮為 0.7 品質的 JPEG
+        const base64 = canvas.toDataURL('image/jpeg', 0.7);
+
+        // 將原檔名副檔名統一規格化為 .jpg
+        const nameParts = file.name.split('.');
+        nameParts[nameParts.length - 1] = 'jpg';
+        const newName = nameParts.join('.');
+
+        setStrengthProofFile({ base64, name: newName });
+      };
+      img.onerror = () => {
+        alert('載入圖片失敗，請嘗試更換圖片檔案！');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      alert('讀取檔案失敗！');
     };
     reader.readAsDataURL(file);
   };
