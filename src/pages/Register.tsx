@@ -35,9 +35,6 @@ function Register({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNewUser, setIsNewUser] = useState(true);
-  const [lineProfile, setLineProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(null);
-
-  // 表單欄位狀態
   const [formData, setFormData] = useState<ProfileData>({
     name: '',
     gender: '',
@@ -73,10 +70,6 @@ function Register({ userId }: { userId: string }) {
         // 1. 取得 LINE Profile
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
-          setLineProfile({
-            displayName: profile.displayName,
-            pictureUrl: profile.pictureUrl,
-          });
           // 預帶 LINE ID
           setFormData((prev) => ({ ...prev, realLineId: profile.displayName }));
         }
@@ -122,14 +115,6 @@ function Register({ userId }: { userId: string }) {
             });
             setPrivacyAgreed(true);
           }
-        } else {
-          // 測試模式模擬載入
-          setTimeout(() => {
-            setLineProfile({
-              displayName: '登山小萌新',
-              pictureUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=150',
-            });
-          }, 500);
         }
       } catch (err) {
         console.error('載入個人資料失敗:', err);

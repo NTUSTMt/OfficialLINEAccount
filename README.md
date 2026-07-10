@@ -3,11 +3,15 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.48` (v0.0.48)
+- **當前版本**：`0.0.49` (v0.0.49)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 49. 清理註冊表單中未使用的 lineProfile 變數 (v0.0.49)
+- **TypeScript 編譯錯誤修正**：
+  - 移除了因刪除「LINE 歡迎資訊卡」後，在 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 中殘留且不再被讀取的 `lineProfile` 狀態變數與其對應的 `setLineProfile` 設定方法，徹底修復 `error TS6133: 'lineProfile' is declared but its value is never read` 的編譯失敗問題。
 
 ### 48. 新增聯絡地址與緊急聯絡人地址欄位與標籤優化 (v0.0.48)
 - **新增選填表單欄位**：
