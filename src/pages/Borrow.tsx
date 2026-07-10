@@ -17,6 +17,7 @@ interface FormState {
   pickupDate: string;
   returnDate: string;
   purpose: string;
+  otherPurpose?: string;
   cart: Record<string, number>; // 動態的 Key-Value，例如 { 'E01': 2 }
 }
 
@@ -120,6 +121,7 @@ function Borrow({ userId }: { userId: string }) {
     pickupDate: '',
     returnDate: '',
     purpose: '社團出隊',
+    otherPurpose: '',
     cart: {}
   });
 
@@ -247,6 +249,9 @@ function Borrow({ userId }: { userId: string }) {
   const submitForm = async () => {
     if (totalItems === 0) return alert('請至少選擇一項裝備！');
     if (!form.pickupDate || !form.returnDate) return alert('請選擇日期！');
+    if (form.purpose === '其他用途' && !form.otherPurpose?.trim()) {
+      return alert('請輸入其他用途說明！');
+    }
 
     const orderPayload = {
       action: 'submit_multi_loan',
@@ -520,11 +525,34 @@ function Borrow({ userId }: { userId: string }) {
                         className="custom-select"
                       >
                         <option value="社團出隊">社團出隊</option>
-                        <option value="個人露營">個人露營</option>
-                        <option value="登山活動">登山活動</option>
+                        <option value="個人使用">個人使用</option>
                         <option value="其他用途">其他用途</option>
                       </select>
                     </div>
+
+                    {form.purpose === '其他用途' && (
+                      <div className="form-group full-width animate-fade-in">
+                        <label htmlFor="otherPurpose">請說明其他用途</label>
+                        <input
+                          type="text"
+                          id="otherPurpose"
+                          name="otherPurpose"
+                          value={form.otherPurpose || ''}
+                          onChange={handleInputChange}
+                          placeholder="請輸入用途說明..."
+                          required
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            boxSizing: 'border-box',
+                            fontSize: '14px',
+                            marginTop: '4px'
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 

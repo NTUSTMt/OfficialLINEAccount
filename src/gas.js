@@ -4081,7 +4081,12 @@ function processMultiLoan(payload) {
           newRow[_fi(lHeaders, "數量")] = qty;
           newRow[_fi(lHeaders, "預計領取")] = details.pickupDate;
           newRow[_fi(lHeaders, "預計歸還")] = details.returnDate;
-          newRow[_fi(lHeaders, "用途")] = details.purpose;
+          
+          var purposeStr = details.purpose;
+          if (purposeStr === "其他用途" && details.otherPurpose) {
+            purposeStr = "其他：" + details.otherPurpose;
+          }
+          newRow[_fi(lHeaders, "用途")] = purposeStr;
           newRow[_fi(lHeaders, "應繳費用")] = itemCost;
           newRow[_fi(lHeaders, "領取/歸還")] = "待領取 To Be Collected";
           newRow[_fi(lHeaders, "繳費狀態")] = "未繳費 Unpaid";
@@ -4100,7 +4105,11 @@ function processMultiLoan(payload) {
   }
 
   // 3. 發送幹部通知推播
-  var adminMsg = "🔔 【幹部通知：新裝備預約 (多選合併)】\n\n申請人：" + userName + " (" + isOfficial + "社員)\n訂單編號：" + orderId + "\n領取：" + details.pickupDate + "\n歸還：" + details.returnDate + "\n\n📦 借用明細：\n" + summaryText.join("\n") + "\n\n💰 總金額：$" + totalCost;
+  var purposeStrForAdmin = details.purpose;
+  if (purposeStrForAdmin === "其他用途" && details.otherPurpose) {
+    purposeStrForAdmin = "其他：" + details.otherPurpose;
+  }
+  var adminMsg = "🔔 【幹部通知：新裝備預約 (多選合併)】\n\n申請人：" + userName + " (" + isOfficial + "社員)\n用途：" + purposeStrForAdmin + "\n訂單編號：" + orderId + "\n領取：" + details.pickupDate + "\n歸還：" + details.returnDate + "\n\n📦 借用明細：\n" + summaryText.join("\n") + "\n\n💰 總金額：$" + totalCost;
   if (typeof pushAdminMessage === "function") pushAdminMessage(adminMsg);
 
   // 4. 回傳成功狀態給 LIFF 前端
