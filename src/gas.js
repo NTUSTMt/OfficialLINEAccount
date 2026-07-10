@@ -236,7 +236,7 @@ function doPost(e) {
 
           var cache = CacheService.getUserCache();
 
-          var menuCommands = ["我的狀態 My Status", "填寫資料 Register", "最新活動 Activities", "器材借用 Equipment Loan", "取消預約 Cancel", "繳費系統 Payment System", "繳費紀錄 History", "繳費回報", "其他", "更多服務 More Services", "幹部是誰 Officers", "意見與回饋 Feedback"];
+          var menuCommands = ["我的狀態 My Status", "個人主頁 My Dashboard", "填寫資料 Register", "最新活動 Activities", "器材借用 Equipment Loan", "裝備租借 Equipment Loan", "取消預約 Cancel", "繳費系統 Payment System", "繳費中心 Payment Center", "繳費紀錄 History", "繳費紀錄 Payment History", "繳費回報", "其他", "更多服務 More Services", "幹部是誰 Officers", "意見與回饋 Feedback"];
           if (menuCommands.indexOf(userText) > -1) {
             cache.remove(userId + "_canceling_event");
             cache.remove(userId + "_payment_type");
@@ -888,18 +888,20 @@ function handleTextCommand(replyToken, userId, text, sourceType) {
     return;
   }
 
-  // 核心圖文選單指令對應
-  if (text === "我的狀態" || text === "我的狀態 My Status") handleStatusQuery(replyToken, userId, ss);
+  if (text === "我的狀態" || text === "我的狀態 My Status" || text === "個人主頁" || text === "個人主頁 My Dashboard") handleStatusQuery(replyToken, userId, ss);
   else if (text === "填寫資料" || text === "填寫資料 Register") sendRegisterForm(replyToken, userId);
   else if (text === "最新活動" || text === "最新活動 Activities") sendEventList(replyToken, ss);
-  else if (text === "器材借用" || text === "器材借用 Equipment Loan") {
+  else if (text === "器材借用" || text === "器材借用 Equipment Loan" || text === "裝備租借" || text === "裝備租借 Equipment Loan") {
     replyMessage(replyToken, "🏕️ 歡迎使用裝備租借系統！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI");
   }
   else if (text === "取消預約" || text === "取消預約 Cancel") sendCancelMenu(replyToken, userId, ss);
   else if (text === "繳費系統" || text === "繳費系統 Payment System") {
     replyMessage(replyToken, "💰 歡迎使用繳費與對帳系統！\n請點擊下方連結進入多選結帳表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
   }
-  else if (text === "繳費紀錄" || text === "繳費紀錄 Payment History") sendPaymentHistory(replyToken, userId, ss);
+  else if (text === "繳費中心" || text === "繳費中心 Payment Center") {
+    sendPaymentCenterMenu(replyToken);
+  }
+  else if (text === "繳費紀錄" || text === "繳費紀錄 Payment History" || text === "繳費紀錄 History") sendPaymentHistory(replyToken, userId, ss);
   else if (text === "意見與回饋" || text === "意見與回饋 Feedback") sendFeedbackLink(replyToken);
   else if (text === "其他" || text === "更多服務" || text === "更多服務 More Services") sendMoreOptionsMenu(replyToken);
   else if (text === "幹部是誰" || text === "幹部是誰 Officers") sendOfficerMenu(replyToken, ss);
@@ -3162,107 +3164,110 @@ function handleEventCancelReason(replyToken, userId, reasonText, signupCode) {
 // 當社團功能變多時，我們就把進階功能（如：繳費系統、查詢幹部名單）
 // 收納進這個「更多服務」的擴充卡片裡。
 function sendMoreOptionsMenu(replyToken) {
-  var carousel = {
-    "type": "carousel",
-    "contents": [{
-      "type": "bubble",
-      "body": {
-        "type": "box",
-        "layout": "vertical",
-        "contents": [{
-          "type": "text",
-          "text": "⚙️ 帳務 Finance",
-          "weight": "bold",
-          "color": "#1DB446",
-          "size": "sm"
-        }, {
-          "type": "text",
-          "text": "繳費中心 Payment Center",
-          "weight": "bold",
-          "size": "xl",
-          "margin": "md"
-        }, {
-          "type": "text",
-          "text": "回報與查詢 Payment Report & Inquiry",
-          "size": "xs",
-          "color": "#999999",
-          "margin": "sm"
-        }]
-      },
-      "footer": {
-        "type": "box",
-        "layout": "vertical",
-        "spacing": "sm",
-        "contents": [{
-          "type": "button",
-          "style": "primary",
-          "color": "#1DB446",
-          "action": {
-            "type": "message",
-            "label": "💰 繳費系統 Payment System",
-            "text": "繳費系統 Payment System"
-          }
-        }, {
-          "type": "button",
-          "style": "secondary",
-          "action": {
-            "type": "message",
-            "label": "📜 繳費紀錄 Payment History",
-            "text": "繳費紀錄 Payment History"
-          }
-        }]
-      }
-    }, {
-      "type": "bubble",
-      "body": {
-        "type": "box",
-        "layout": "vertical",
-        "contents": [{
-          "type": "text",
-          "text": "🛠️ 聯絡與支援 Support",
-          "weight": "bold",
-          "color": "#0367D3",
-          "size": "sm"
-        }, {
-          "type": "text",
-          "text": "幫助中心 Help Center",
-          "weight": "bold",
-          "size": "xl",
-          "margin": "md"
-        }, {
-          "type": "text",
-          "text": "聯絡社團幹部 Contact Officers",
-          "size": "xs",
-          "color": "#999999",
-          "margin": "sm"
-        }]
-      },
-      "footer": {
-        "type": "box",
-        "layout": "vertical",
-        "spacing": "sm",
-        "contents": [{
-          "type": "button",
-          "style": "secondary",
-          "action": {
-            "type": "message",
-            "label": "👤 幹部是誰 Officers",
-            "text": "幹部是誰 Officers"
-          }
-        }, {
-          "type": "button",
-          "style": "secondary",
-          "action": {
-            "type": "message",
-            "label": "📢 意見與回饋 Feedback",
-            "text": "意見與回饋 Feedback"
-          }
-        }]
-      }
-    }]
+  var bubble = {
+    "type": "bubble",
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [{
+        "type": "text",
+        "text": "🛠️ 聯絡與支援 Support",
+        "weight": "bold",
+        "color": "#0367D3",
+        "size": "sm"
+      }, {
+        "type": "text",
+        "text": "幫助中心 Help Center",
+        "weight": "bold",
+        "size": "xl",
+        "margin": "md"
+      }, {
+        "type": "text",
+        "text": "聯絡社團幹部 Contact Officers",
+        "size": "xs",
+        "color": "#999999",
+        "margin": "sm"
+      }]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "sm",
+      "contents": [{
+        "type": "button",
+        "style": "secondary",
+        "action": {
+          "type": "message",
+          "label": "👤 幹部是誰 Officers",
+          "text": "幹部是誰 Officers"
+        }
+      }, {
+        "type": "button",
+        "style": "secondary",
+        "action": {
+          "type": "message",
+          "label": "📢 意見與回饋 Feedback",
+          "text": "意見與回饋 Feedback"
+        }
+      }]
+    }
   };
 
-  replyFlexMessage(replyToken, "請選擇更多進階服務 / More Services", carousel);
+  replyFlexMessage(replyToken, "更多服務 More Services", bubble);
+}
+
+function sendPaymentCenterMenu(replyToken) {
+  var bubble = {
+    "type": "bubble",
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [{
+        "type": "text",
+        "text": "⚙️ 帳務 Finance",
+        "weight": "bold",
+        "color": "#1DB446",
+        "size": "sm"
+      }, {
+        "type": "text",
+        "text": "繳費中心 Payment Center",
+        "weight": "bold",
+        "size": "xl",
+        "margin": "md"
+      }, {
+        "type": "text",
+        "text": "回報與查詢 Payment Report & Inquiry",
+        "size": "xs",
+        "color": "#999999",
+        "margin": "sm"
+      }]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "sm",
+      "contents": [{
+        "type": "button",
+        "style": "primary",
+        "color": "#1DB446",
+        "action": {
+          "type": "message",
+          "label": "💰 繳費系統 Payment System",
+          "text": "繳費系統 Payment System"
+        }
+      }, {
+        "type": "button",
+        "style": "secondary",
+        "action": {
+          "type": "message",
+          "label": "📜 繳費紀錄 Payment History",
+          "text": "繳費紀錄 Payment History"
+        }
+      }]
+    }
+  };
+
+  replyFlexMessage(replyToken, "繳費中心 Payment Center", bubble);
 }
 
 // ⭐️ 引擎一：回報後標記獨立欄位為「待確認」 (100% 全動態防彈版)

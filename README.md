@@ -3,11 +3,18 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.50` (v0.0.50)
+- **當前版本**：`0.0.51` (v0.0.51)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 51. 圖文選單指令對應與繳費中心移出獨立 (v0.0.51)
+- **選單名稱指令升級**：
+  - 更新 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的指令白名單 `menuCommands` 與 `handleTextCommand` 路由。新增對 `個人主頁 My Dashboard` (舊為「我的狀態」)、`裝備租借 Equipment Loan` (舊為「器材借用」)、`繳費中心 Payment Center` 的支援，同時保留舊指令的向下相容性。
+- **繳費中心獨立化**：
+  - 新增 `sendPaymentCenterMenu(replyToken)` 方法，當使用者點擊「繳費中心」時直接發送獨立的帳務卡片（包含「繳費系統」與「繳費紀錄」）。
+  - 將「繳費中心」從「更多服務」中移出，並將 `sendMoreOptionsMenu(replyToken)` 簡化為直接發送「幫助中心 Help Center」（包含「幹部是誰」與「意見與回饋」）單一 bubble 卡片。
 
 ### 50. 獨立身分狀態欄位與必填設定 (v0.0.50)
 - **解耦身分狀態與系所欄位**：
