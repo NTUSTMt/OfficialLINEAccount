@@ -194,7 +194,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
                 💳 繳費系統
               </div>
               <div
-                onClick={() => handleNav('/history', 'https://liff.line.me/2009217429-u7OCkmQO?liff.state=%2Fhistory')}
+                onClick={() => handleNav('/history', 'https://liff.line.me/2009217429-FRB6rjph')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                 onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -425,8 +425,10 @@ function App() {
 
         if (path.includes('/register') || statePath.includes('/register')) {
           liffId = '2009217429-AhPRqAHg';
-        } else if (path.includes('/payment') || statePath.includes('/payment') || path.includes('/history') || statePath.includes('/history')) {
+        } else if (path.includes('/payment') || statePath.includes('/payment')) {
           liffId = '2009217429-u7OCkmQO';
+        } else if (path.includes('/history') || statePath.includes('/history')) {
+          liffId = '2009217429-FRB6rjph';
         } else if (path.includes('/dashboard') || statePath.includes('/dashboard') || path.includes('/achievements') || statePath.includes('/achievements')) {
           liffId = '2009217429-jvj3ydDT';
         }

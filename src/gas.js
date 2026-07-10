@@ -3251,17 +3251,17 @@ function sendPaymentCenterMenu(replyToken) {
         "style": "primary",
         "color": "#1DB446",
         "action": {
-          "type": "message",
+          "type": "uri",
           "label": "💰 繳費系統 Payment System",
-          "text": "繳費系統 Payment System"
+          "uri": "https://liff.line.me/2009217429-u7OCkmQO"
         }
       }, {
         "type": "button",
         "style": "secondary",
         "action": {
-          "type": "message",
+          "type": "uri",
           "label": "📜 繳費紀錄 Payment History",
-          "text": "繳費紀錄 Payment History"
+          "uri": "https://liff.line.me/2009217429-FRB6rjph"
         }
       }]
     }

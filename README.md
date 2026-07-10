@@ -3,11 +3,18 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.51` (v0.0.51)
+- **當前版本**：`0.0.52` (v0.0.52)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 52. 歷史繳費紀錄獨立 LIFF 網址更新與按鈕連結直開優化 (v0.0.52)
+- **歷史紀錄獨立 LIFF**：
+  - 更新 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 導航列中的「歷史紀錄」連結，改為指向專屬獨立的 LIFF ID：`https://liff.line.me/2009217429-FRB6rjph`。
+  - 修改前端 LIFF 初始化分流機制，確保訪問 `/history` 路由時以 `'2009217429-FRB6rjph'` 載入。
+- **點擊按鈕直接打開網頁 (UX 優化)**：
+  - 修改 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 中 `sendPaymentCenterMenu` 的 Flex 訊息按鈕動作。將原本需要回傳文字對話的「💰 繳費系統」與「📜 繳費紀錄」按鈕更改為 `'uri'` 動作類型，使用者點選後可直接在 LINE 內開啟對應的 LIFF 頁面，不需重複點擊。
 
 ### 51. 圖文選單指令對應與繳費中心移出獨立 (v0.0.51)
 - **選單名稱指令升級**：
