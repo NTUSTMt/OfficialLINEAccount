@@ -528,8 +528,9 @@ function Register({ userId }: { userId: string }) {
             <div style={{ width: '45%' }}></div>
           )}
 
-          {step < 4 ? (
+          {step < 4 && (
             <button
+              key="btn-next"
               type="button"
               className="btn btn-primary"
               onClick={() => setStep(step + 1)}
@@ -538,8 +539,10 @@ function Register({ userId }: { userId: string }) {
             >
               下一步
             </button>
-          ) : (
+          )}
+          {step === 4 && (
             <button
+              key="btn-submit"
               type="submit"
               className="btn btn-primary"
               disabled={!isStepValid || isSubmitting}

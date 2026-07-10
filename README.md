@@ -3,11 +3,16 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.42` (v0.0.42)
+- **當前版本**：`0.0.43` (v0.0.43)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 43. 修復註冊表單第三步「下一步」直接送出的問題 (v0.0.43)
+- **問題分析與修正**：
+  - **問題根源**：在 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 中，底部的「下一步」按鈕（`type="button"`）與「確認送出」按鈕（`type="submit"`）原先是透過同一個 DOM 位置的 ternary 條件運算子進行渲染。當使用者在第 3 步點擊「下一步」時，會觸發 `setStep(3 + 1)`，使 `step` 即刻變為 4 並引發重新渲染。但因 React 在相同位置重用了該 button 元素並僅將其 type 更改為 `"submit"`，導致瀏覽器在此時將仍未結束的點擊事件當作 submit 按鈕觸發，進而直接送出表單。
+  - **解決方式**：將按鈕重構為兩個獨立的條件渲染區塊，並分別賦予唯一的 `key` 屬性（`btn-next` 與 `btn-submit`），強迫 React 在步驟變更時完整卸載舊按鈕並掛載新按鈕，避免 DOM 元素被重用，進而徹底根除此事件冒泡與提交錯誤的問題。
 
 ### 42. 修復 LIFF 跳轉非對應頁面問題 (v0.0.42)
 - **多頁面 LIFF 跳轉相容性修正**：
@@ -30,7 +35,7 @@
 ### 40. 移除未使用的 liff 宣告 (v0.0.40)
 - **修復 TypeScript 編譯錯誤**：移除了 [History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx) 中未使用的 `liff` 導入，修復了因 `noUnusedLocals` 與 `verbatimModuleSyntax` 嚴格 TypeScript 設定導致的編譯失敗。
 
-### 39. 歷史繳費紀錄 (Payment History) 頁面與後端 API 實作 (v0.0.39)
+### 39. 繳費紀錄 (Payment History) 頁面與後端 API 實作 (v0.0.39)
 - **全新對帳明細時間軸頁面**：
   - 新增了 [History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx) 頁面，提供美觀的時間軸交易明細卡片。
   - **累計貢獻 Dashboard**：頁面頂部卡片顯示累計已確認繳費金額（累計贊助金額），並顯示目前有多少筆對帳申請正處於「待確認」審核狀態。

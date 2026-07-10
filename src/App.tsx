@@ -199,7 +199,7 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                 onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
-                📜 歷史繳費紀錄
+                📜 繳費紀錄
               </div>
             </div>
           </>

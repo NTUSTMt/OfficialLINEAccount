@@ -228,7 +228,7 @@ function doPost(e) {
 
           var cache = CacheService.getUserCache();
 
-          var menuCommands = ["我的狀態 My Status", "填寫資料 Register", "最新活動 Activities", "器材借用 Equipment Loan", "取消預約 Cancel", "繳費系統 Payment System", "歷史繳費紀錄 History", "繳費回報", "其他", "更多服務 More Services", "幹部是誰 Officers", "意見與回饋 Feedback"];
+          var menuCommands = ["我的狀態 My Status", "填寫資料 Register", "最新活動 Activities", "器材借用 Equipment Loan", "取消預約 Cancel", "繳費系統 Payment System", "繳費紀錄 History", "繳費回報", "其他", "更多服務 More Services", "幹部是誰 Officers", "意見與回饋 Feedback"];
           if (menuCommands.indexOf(userText) > -1) {
             cache.remove(userId + "_canceling_event");
             cache.remove(userId + "_payment_type");
@@ -891,7 +891,7 @@ function handleTextCommand(replyToken, userId, text, sourceType) {
   else if (text === "繳費系統" || text === "繳費系統 Payment System") {
     replyMessage(replyToken, "💰 歡迎使用繳費與對帳系統！\n請點擊下方連結進入多選結帳表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
   }
-  else if (text === "歷史繳費紀錄" || text === "歷史繳費紀錄 Payment History") sendPaymentHistory(replyToken, userId, ss);
+  else if (text === "繳費紀錄" || text === "繳費紀錄 Payment History") sendPaymentHistory(replyToken, userId, ss);
   else if (text === "意見與回饋" || text === "意見與回饋 Feedback") sendFeedbackLink(replyToken);
   else if (text === "其他" || text === "更多服務" || text === "更多服務 More Services") sendMoreOptionsMenu(replyToken);
   else if (text === "幹部是誰" || text === "幹部是誰 Officers") sendOfficerMenu(replyToken, ss);
@@ -3199,8 +3199,8 @@ function sendMoreOptionsMenu(replyToken) {
           "style": "secondary",
           "action": {
             "type": "message",
-            "label": "📜 歷史繳費紀錄 Payment History",
-            "text": "歷史繳費紀錄 Payment History"
+            "label": "📜 繳費紀錄 Payment History",
+            "text": "繳費紀錄 Payment History"
           }
         }]
       }
