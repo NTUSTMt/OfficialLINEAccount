@@ -4322,6 +4322,7 @@ function getMemberProfileAPI(ss, userId) {
       profile.email = mData[i][mH.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); })] || "";
       profile.phone = mData[i][mH.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); })] || "";
       profile.department = mData[i][_fi(mH, "系所")] || "";
+      profile.identityStatus = mData[i][_fi(mH, "身分狀態")] || "";
       profile.studentId = mData[i][_fi(mH, "學號")] || "";
       
       var birthdayVal = mData[i][_fi(mH, "生日")];
@@ -4578,6 +4579,7 @@ function processSaveProfile(payload) {
   if (phoneIdx === -1) phoneIdx = getOrCreateColIdx(memberSheet, headers, "聯絡電話");
   
   var deptIdx = getOrCreateColIdx(memberSheet, headers, "系所");
+  var identityIdx = getOrCreateColIdx(memberSheet, headers, "身分狀態");
   var studentIdIdx = getOrCreateColIdx(memberSheet, headers, "學號");
   var birthdayIdx = getOrCreateColIdx(memberSheet, headers, "生日");
   var idNumberIdx = getOrCreateColIdx(memberSheet, headers, "證件");
@@ -4631,6 +4633,7 @@ function processSaveProfile(payload) {
   rowData[emailIdx] = data.email || "";
   rowData[phoneIdx] = data.phone || "";
   rowData[deptIdx] = data.department || "";
+  rowData[identityIdx] = data.identityStatus || "";
   rowData[studentIdIdx] = data.studentId || "";
   rowData[birthdayIdx] = data.birthday || "";
   rowData[idNumberIdx] = data.idNumber || "";

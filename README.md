@@ -3,11 +3,17 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.49` (v0.0.49)
+- **當前版本**：`0.0.50` (v0.0.50)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 50. 獨立身分狀態欄位與必填設定 (v0.0.50)
+- **解耦身分狀態與系所欄位**：
+  - **欄位解耦**：將「身分狀態」下拉選單與「在校系所 / 校外單位」欄位解耦。在 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 中新增獨立的 `identityStatus` 欄位，變數不再共用 `department`，防止選擇身分時自動帶入或覆蓋系所資料。
+  - **必填設定**：將「身分狀態」下拉選單設為必填（`required`），新增預設的提示選項（`請選擇身分狀態`），並將其加入步驟 1 的 `isStepValid` 驗證，防止用戶漏填。
+  - **後端 API 升級**：在 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的 `processSaveProfile` 與 `getMemberProfileAPI` 中，新增對「身分狀態」這項獨立欄位的資料庫讀寫支援。
 
 ### 49. 清理註冊表單中未使用的 lineProfile 變數 (v0.0.49)
 - **TypeScript 編譯錯誤修正**：

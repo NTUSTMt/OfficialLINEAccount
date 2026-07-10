@@ -10,6 +10,7 @@ interface ProfileData {
   birthday: string;
   idNumber: string;
   department: string;
+  identityStatus: string;
   studentId: string;
   phone: string;
   email: string;
@@ -40,7 +41,8 @@ function Register({ userId }: { userId: string }) {
     gender: '',
     birthday: '',
     idNumber: '',
-    department: '臺科大在校學生',
+    department: '',
+    identityStatus: '',
     studentId: '',
     phone: '',
     email: '',
@@ -98,7 +100,9 @@ function Register({ userId }: { userId: string }) {
               gender: p.gender ? String(p.gender) : '',
               birthday: birthdayStr,
               idNumber: p.idNumber ? String(p.idNumber) : '',
-              department: p.department ? String(p.department) : '臺科大在校學生',
+              department: p.department ? String(p.department) : '',
+              identityStatus: p.identityStatus ? String(p.identityStatus) : 
+                (p.department === '臺科大在校學生' || p.department === '畢業校友' || p.department === '校外人士' ? p.department : '臺科大在校學生'),
               studentId: p.studentId ? String(p.studentId) : '',
               phone: p.phone ? String(p.phone) : '',
               email: p.email ? String(p.email) : '',
@@ -154,9 +158,10 @@ function Register({ userId }: { userId: string }) {
   const isStepValid = useMemo(() => {
     switch (step) {
       case 1:
-        // 姓名 (name)、系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId) 均為必填
+        // 姓名 (name)、身分狀態 (identityStatus)、系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId) 均為必填
         return (
           formData.name.trim() !== '' &&
+          formData.identityStatus.trim() !== '' &&
           formData.department.trim() !== '' &&
           formData.studentId.trim() !== '' &&
           formData.phone.trim() !== '' &&
@@ -270,20 +275,22 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>身分狀態</label>
+              <label className="required">身分狀態</label>
               <select
-                name="department"
-                value={formData.department.includes('畢業校友') ? '畢業校友' : formData.department.includes('校外人士') ? '校外人士' : '臺科大在校學生'}
+                name="identityStatus"
+                value={formData.identityStatus}
                 onChange={(e) => {
                   const val = e.target.value;
                   setFormData((prev) => ({
                     ...prev,
-                    department: val,
-                    // 切換身分時，若非在校生可清空學號
-                    studentId: val === '臺科大在校學生' ? prev.studentId : '',
+                    identityStatus: val,
+                    // 切換身分時，若非在校生可預填無
+                    studentId: val === '臺科大在校學生' ? prev.studentId : '無',
                   }));
                 }}
+                required
               >
+                <option value="">請選擇身分狀態</option>
                 <option value="臺科大在校學生">臺科大在校學生</option>
                 <option value="畢業校友">畢業校友</option>
                 <option value="校外人士">校外人士</option>
@@ -291,19 +298,19 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label className="required">在校系所 / 單位</label>
+              <label className="required">在校系所 / 校外單位</label>
               <input
                 type="text"
                 name="department"
                 value={formData.department}
                 onChange={handleChange}
-                placeholder="例如：電機系四乙 / 畢業校友 / 校外人士"
+                placeholder="例如：電機系四乙 / 臺大電機 / XX公司"
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">學號</label>
+              <label className="required">學號（校外填：無）</label>
               <input
                 type="text"
                 name="studentId"
@@ -388,7 +395,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>聯絡地址 (Correspondence Address) (選填)</label>
+              <label>聯絡地址 (Correspondence Address)</label>
               <input
                 type="text"
                 name="studentAddr"
@@ -439,7 +446,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>緊急聯絡人地址 (Emergency Address) (選填)</label>
+              <label>緊急聯絡人地址 (Emergency Address)</label>
               <input
                 type="text"
                 name="emerAddr"
@@ -450,7 +457,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>個人特殊病史或過敏 (選填)</label>
+              <label>個人特殊病史或過敏</label>
               <textarea
                 name="medicalHistory"
                 value={formData.medicalHistory}
@@ -468,7 +475,7 @@ function Register({ userId }: { userId: string }) {
             <h2 className="step-title">📍登山經驗與體能 (Experience & Upload)</h2>
 
             <div className="form-group">
-              <label>過往登山經驗簡述 (選填)</label>
+              <label>過往登山經驗簡述</label>
               <textarea
                 name="exp"
                 value={formData.exp}
@@ -479,7 +486,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>體能證明 (Proof of Physical Fitness) - 連結或描述 (選填)</label>
+              <label>體能證明 (Proof of Physical Fitness)</label>
               <input
                 type="text"
                 name="strength"
@@ -491,7 +498,7 @@ function Register({ userId }: { userId: string }) {
 
             {/* 上傳體能證明 */}
             <div className="form-group">
-              <label>上傳體能證明截圖 (Upload Proof of Physical Fitness) (選填)</label>
+              <label>上傳體能證明 (Upload Proof of Physical Fitness)</label>
               <input
                 type="file"
                 accept="image/*"
