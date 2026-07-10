@@ -187,6 +187,14 @@ function doPost(e) {
       return processSubmitReflection(msg);
     }
 
+    if (msg.action === 'liff_cancel_event') {
+      return processLiffCancelEvent(msg);
+    }
+
+    if (msg.action === 'liff_cancel_loan') {
+      return processLiffCancelLoan(msg);
+    }
+
     for (var i = 0; i < msg.events.length; i++) {
       var event = msg.events[i];
 
@@ -4439,6 +4447,7 @@ function getMyStatusAPI(ss, userId) {
     var sStatIdx = _fi(sData[0], "審核結果");
     var sPayIdx = _fi(sData[0], "繳費狀態");
     var sEvtIdx = _fi(sData[0], "活動編號");
+    var sCodeIdx = _fi(sData[0], "專屬碼");
     
     var eIdIdx = _fi(eData[0], "活動編號");
     var eNameIdx = _fi(eData[0], "活動名稱");
@@ -4449,6 +4458,7 @@ function getMyStatusAPI(ss, userId) {
         var evId = String(sData[s][sEvtIdx]).trim();
         var reviewStatus = String(sData[s][sStatIdx]).trim();
         var payStatus = String(sData[s][sPayIdx]).trim();
+        var codeVal = sCodeIdx > -1 ? String(sData[s][sCodeIdx]).trim() : "";
         
         // 找出活動詳情
         var eventName = "未知活動";
@@ -4466,7 +4476,8 @@ function getMyStatusAPI(ss, userId) {
           eventName: eventName,
           date: eventDate,
           reviewStatus: reviewStatus,
-          payStatus: payStatus
+          payStatus: payStatus,
+          code: codeVal
         });
       }
     }
@@ -5004,4 +5015,147 @@ function processSubmitReflection(payload) {
     status: "success",
     message: "心得已成功提交"
   })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ------------------------------------------------------------------
+// 引擎 11：LIFF 取消活動報名 API
+// ------------------------------------------------------------------
+function processLiffCancelEvent(payload) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var userId = payload.userId;
+  var targetId = payload.targetId; // code
+  var reason = payload.reason || "";
+
+  if (!userId || !targetId) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少必要參數" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var signupSheet = ss.getSheetByName("Signups");
+  if (!signupSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Signups 資料表" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var sData = signupSheet.getDataRange().getValues();
+  var sH = sData[0];
+  var sCodeIdx = _fi(sH, "專屬碼");
+  var sSysIdx = _fi(sH, "系統識別碼");
+  var sStatusIdx = _fi(sH, "審核結果");
+  var sEventIdIdx = _fi(sH, "活動編號");
+  var sNameIdx = _fi(sH, "姓名");
+  var sNoteIdx = _fi(sH, "備註");
+
+  for (var k = 1; k < sData.length; k++) {
+    if (sCodeIdx > -1 && sSysIdx > -1 && sData[k][sCodeIdx].toString() === targetId.toString() && sData[k][sSysIdx].toString() === userId.toString()) {
+      var eventName = _getEventName(ss, sEventIdIdx > -1 ? sData[k][sEventIdIdx] : "");
+      var userName = sNameIdx > -1 ? sData[k][sNameIdx] : "未知社員";
+      var currentStatus = sStatusIdx > -1 ? String(sData[k][sStatusIdx]) : "";
+
+      // 如果是正取，必須提供取消原因
+      if (currentStatus.indexOf("正取") > -1) {
+        if (!reason.trim()) {
+          return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "正取資格取消必須填寫取消原因" })).setMimeType(ContentService.MimeType.JSON);
+        }
+        
+        // 寫入已取消狀態與取消原因
+        if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
+        if (sNoteIdx > -1) {
+          var oldNote = sData[k][sNoteIdx] ? String(sData[k][sNoteIdx]) + " | " : "";
+          signupSheet.getRange(k + 1, sNoteIdx + 1).setValue(oldNote + "取消原因: " + reason);
+        }
+        
+        // 推送 LINE 給幹部
+        pushAdminMessage("🔔 【幹部通知：正取取消】\n申請人：" + userName + "\n活動：" + eventName + "\n原因：" + reason + "\n請幹部儘速進行備取遞補！");
+      } else {
+        // 備取或審核中直接取消
+        if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "活動報名已成功取消" })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆報名紀錄" })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ------------------------------------------------------------------
+// 引擎 12：LIFF 取消裝備預約 API
+// ------------------------------------------------------------------
+function processLiffCancelLoan(payload) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var userId = payload.userId;
+  var targetId = payload.targetId; // orderId
+
+  if (!userId || !targetId) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少必要參數" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var loanSheet = ss.getSheetByName("Loan_Records");
+  if (!loanSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Loan_Records 資料表" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var lData = loanSheet.getDataRange().getValues();
+  var lH = lData[0];
+  var lOrderIdx = _fi(lH, "租借編號");
+  var lSysIdx = _fi(lH, "系統識別碼");
+  var lStatusIdx = _fi(lH, "領取/歸還");
+  var lEquipIdIdx = _fi(lH, "裝備代號");
+  var lQtyIdx = _fi(lH, "數量");
+  var lNameIdx = _fi(lH, "姓名");
+
+  var foundRecord = false;
+  for (var i = 1; i < lData.length; i++) {
+    var isTarget = (lOrderIdx > -1 && lData[i][lOrderIdx] === targetId) || (lEquipIdIdx > -1 && lData[i][lEquipIdIdx] === targetId);
+
+    if (isTarget && lSysIdx > -1 && lData[i][lSysIdx] === userId) {
+      foundRecord = true;
+      var currentStatus = lStatusIdx > -1 ? String(lData[i][lStatusIdx]) : "";
+      if (currentStatus === "待領取 To Be Collected") {
+        loanSheet.getRange(i + 1, lStatusIdx + 1).setValue("已取消 Cancelled");
+
+        var equipId = lEquipIdIdx > -1 ? lData[i][lEquipIdIdx] : "";
+        var qty = lQtyIdx > -1 ? Number(lData[i][lQtyIdx]) : 0;
+        var userName = lNameIdx > -1 ? lData[i][lNameIdx] : "未知社員";
+        var equipName = "未知裝備";
+
+        // 自動退還庫存 (加鎖保護防止並發寫入衝突)
+        var lock = LockService.getScriptLock();
+        try {
+          lock.waitLock(10000); // 最多等待 10 秒
+          var equipSheet = ss.getSheetByName("Equipments");
+          if (equipSheet && equipId) {
+            var eData = equipSheet.getDataRange().getValues();
+            var eH = eData[0];
+            var eIdIdx = _fi(eH, "裝備代號");
+            var eStockIdx = _fi(eH, "在庫數量");
+            var eNameIdx = _fi(eH, "裝備名稱");
+            for (var m = 1; m < eData.length; m++) {
+              if (eIdIdx > -1 && eData[m][eIdIdx] === equipId) {
+                if (eNameIdx > -1) equipName = eData[m][eNameIdx];
+                if (eStockIdx > -1) {
+                  var curStock = Number(eData[m][eStockIdx]);
+                  equipSheet.getRange(m + 1, eStockIdx + 1).setValue(curStock + qty);
+                }
+                break;
+              }
+            }
+          }
+        } catch (err) {
+          console.error("庫存回補失敗:", err);
+        } finally {
+          lock.releaseLock();
+        }
+
+        // 推送幹部通知
+        pushAdminMessage("🔔 【幹部通知：裝備取消】\n申請人：" + userName + "\n裝備：" + equipName + "\n庫存已自動回補！");
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "裝備預約已成功取消" })).setMimeType(ContentService.MimeType.JSON);
+      } else {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "該預約已非待領取狀態，無法取消" })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+  }
+
+  if (!foundRecord) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆租借預約紀錄" })).setMimeType(ContentService.MimeType.JSON);
+  }
 }

@@ -3,11 +3,23 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.43` (v0.0.43)
+- **當前版本**：`0.0.45` (v0.0.45)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 45. 整合取消活動報名與裝備預約至 LIFF Dashboard (v0.0.45)
+- **取消預約功能 LIFF 整合**：
+  - **後端 API 實作**：在 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的 `doPost` 路由中新增 `liff_cancel_event` 與 `liff_cancel_loan` 處理引擎。並在 `getMyStatusAPI` 中，額外回傳報名資料的「專屬碼 (`code`)」供前端對接。
+  - **裝備預約取消**：於 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 的裝備租借卡片中，針對「待領取」狀態的預約新增「取消預約」按鈕。點選確認後以 POST 發送請求，由後端將狀態設為「已取消」並透過鎖定機制自動回補對應的庫存數量。
+  - **活動報名取消 (含正取原因防呆)**：於活動卡片中新增「取消報名」按鈕。若使用者為「備取/審核中」，點擊確認後直接取消；若為「正取」，系統會自動彈出填寫原因的 Modal，使用者必須輸入取消原因後才能送出，送出後後端會將取消原因附加於 `Signups` 表的「備註」中，並即時以 LINE 幹部群組通知幹部以便進行遞補手續。
+
+### 44. 將隱私權同意書改為必填項目 (v0.0.44)
+- **欄位規則調整**：
+  - 將步驟 4 中的「隱私權同意書」核取方塊改為**必填**，使用者必須勾選同意後，才能啟用「確認送出」按鈕以完成表單。
+  - 修正了 `isStepValid` 的 `case 4` 判定逻辑，引入 `privacyAgreed` 狀態值，並將其加入對應的 `useMemo` 相依性陣列，使狀態變更時按鈕的 disabled 狀態能即時更新。
+  - 在核取方塊文字旁新增了紅色必填星號 `*`，提供直覺的視覺提示。
 
 ### 43. 修復註冊表單第三步「下一步」直接送出的問題 (v0.0.43)
 - **問題分析與修正**：

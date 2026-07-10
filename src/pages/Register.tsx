@@ -179,12 +179,12 @@ function Register({ userId }: { userId: string }) {
         // 緊急聯絡人資訊為選填
         return true;
       case 4:
-        // 隱私權同意書為選填
-        return true;
+        // 隱私權同意書為必填
+        return privacyAgreed;
       default:
         return false;
     }
-  }, [step, formData]);
+  }, [step, formData, privacyAgreed]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -507,6 +507,7 @@ function Register({ userId }: { userId: string }) {
                 <span className="checkmark"></span>
                 <span className="consent-text" style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
                   我同意將個人資料用於社團活動保險、入山申請及緊急聯繫使用。
+                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>*</span>
                 </span>
               </label>
             </div>
