@@ -162,14 +162,6 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
                 👤 個人主頁
               </div>
               <div
-                onClick={() => handleNav('/achievements', 'https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fachievements')}
-                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                🏆 出隊足跡
-              </div>
-              <div
                 onClick={() => handleNav('/register', 'https://liff.line.me/2009217429-AhPRqAHg')}
                 style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                 onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
@@ -200,6 +192,14 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
                 onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
                 📜 繳費紀錄
+              </div>
+              <div
+                onClick={() => handleNav('/achievements', 'https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fachievements')}
+                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                🏆 出隊足跡
               </div>
             </div>
           </>
