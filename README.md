@@ -3,11 +3,19 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.55` (v0.0.55)
+- **當前版本**：`0.0.56` (v0.0.56)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 56. 電話與生日格式強制文字與規格化 (v0.0.56)
+- **試算表電話強制文字**：
+  - 更新 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的 `processSaveProfile` 函數。在寫入「聯絡電話」與「緊急聯絡人電話」時，前置單引號 `'` 逃逸字元，強制 Google 試算表以文字格式儲存，防止手機號碼開頭的 `0` 被自動省略。
+- **試算表生日格式 YYYY/MM/DD**：
+  - 將前端傳來的 `YYYY-MM-DD` 日期字串橫線 `-` 轉為斜線 `/`，同樣前置單引號 `'` 以文字儲存為 `2026/06/20`，配合使用者要求的格式標準。
+- **前端載入解析相容**：
+  - 在 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx) 的 API 讀取區塊中，主動將生日字串中的斜線 `/` 轉回橫線 `-`，確保 HTML5 日期選擇器於各平台皆可完整載入歷史生日值，不產生白屏或無法帶入的情況。
 
 ### 55. 新增社員資料儲存動態變更通知機制 (v0.0.55)
 - **修改明細通知**：

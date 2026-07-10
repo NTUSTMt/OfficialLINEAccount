@@ -87,11 +87,12 @@ function Register({ userId }: { userId: string }) {
             // 安全解析生日字串，避免 typeof/Invalid Date 造成 toISOString 崩潰或白屏
             let birthdayStr = '';
             if (p.birthday) {
-              const d = new Date(p.birthday);
+              const cleanBirthday = String(p.birthday).replace(/\//g, '-');
+              const d = new Date(cleanBirthday);
               if (!isNaN(d.getTime())) {
                 birthdayStr = d.toISOString().split('T')[0];
               } else {
-                birthdayStr = String(p.birthday).substring(0, 10);
+                birthdayStr = cleanBirthday.substring(0, 10);
               }
             }
 

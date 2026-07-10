@@ -1967,7 +1967,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
           if (!cache.get(userId + "_" + eventId)) {
             cache.put(userId + "_" + eventId, 'locked', 10);
             var eventName = _getEventName(ss, eventId);
-            replyMessage(replyToken, "⚠️ 您已經報名過【" + eventName + "】囉！\n請耐心等候幹部審核，或是點選選單「我的狀態」查詢進度。\n─────────────\n⚠️ You have already registered for [" + eventName + "]!\nPlease wait for officer review, or check 'My Status' for progress.");
+            replyMessage(replyToken, "⚠️ 您已經報名過【" + eventName + "】囉！\n請耐心等候幹部審核，或是點選選單「個人主頁」查詢進度。\n─────────────\n⚠️ You have already registered for [" + eventName + "]!\nPlease wait for officer review, or check 'My Status' for progress.");
           }
           return;
         }
@@ -4636,17 +4636,17 @@ function processSaveProfile(payload) {
   rowData[genderIdx] = data.gender || "";
   rowData[lineIdx] = data.realLineId || "";
   rowData[emailIdx] = data.email || "";
-  rowData[phoneIdx] = data.phone || "";
+  rowData[phoneIdx] = data.phone ? "'" + String(data.phone) : "";
   rowData[deptIdx] = data.department || "";
   rowData[identityIdx] = data.identityStatus || "";
   rowData[studentIdIdx] = data.studentId || "";
-  rowData[birthdayIdx] = data.birthday || "";
+  rowData[birthdayIdx] = data.birthday ? "'" + String(data.birthday).replace(/-/g, "/") : "";
   rowData[idNumberIdx] = data.idNumber || "";
   rowData[studentAddrIdx] = data.studentAddr || "";
   rowData[emerNameIdx] = data.emerName || "";
   rowData[emerRelIdx] = data.emerRel || "";
   rowData[emerAddrIdx] = data.emerAddr || "";
-  rowData[emerPhoneIdx] = data.emerPhone || "";
+  rowData[emerPhoneIdx] = data.emerPhone ? "'" + String(data.emerPhone) : "";
   rowData[expIdx] = data.exp || "";
   rowData[strengthIdx] = data.strength || "";
   
