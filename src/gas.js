@@ -4650,8 +4650,10 @@ function processSaveProfile(payload) {
   rowData[expIdx] = data.exp || "";
   rowData[strengthIdx] = data.strength || "";
   
+  var oldValuesForCompare = null;
   if (isUpdate) {
     var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
+    oldValuesForCompare = JSON.parse(JSON.stringify(oldValues)); // 深拷貝一份舊值做比對
     rowData[strengthProofIdx] = data.strengthProof || oldValues[strengthProofIdx] || "";
     rowData[payIdx] = oldValues[payIdx] || "未繳費 Unpaid";
   } else {
@@ -4668,14 +4670,77 @@ function processSaveProfile(payload) {
     memberSheet.appendRow(rowData);
   }
   
-  // 主動推送 LINE 通知確認信
+  // 主動推送 LINE 通知確認信 (動態欄位修改偵測)
   try {
-    var pushMsg = "✅ 您的社員資料已成功" + (isUpdate ? "更新" : "建立") + "！\n" +
-                  "─────────────\n" +
-                  "姓名 Name：" + (data.name || "") + "\n" +
-                  "系所 Dept：" + (data.department || "") + "\n" +
-                  "電話 Phone：" + (data.phone || "") + "\n\n" +
+    var pushMsg = "";
+    var fieldMappings = [
+      { label: "姓名", value: data.name || "", oldVal: isUpdate ? oldValuesForCompare[nameIdx] : "" },
+      { label: "性別", value: data.gender || "", oldVal: isUpdate ? oldValuesForCompare[genderIdx] : "" },
+      { label: "LINE ID", value: data.realLineId || "", oldVal: isUpdate ? oldValuesForCompare[lineIdx] : "" },
+      { label: "聯絡信箱", value: data.email || "", oldVal: isUpdate ? oldValuesForCompare[emailIdx] : "" },
+      { label: "聯絡電話", value: data.phone || "", oldVal: isUpdate ? oldValuesForCompare[phoneIdx] : "" },
+      { label: "在校系所/校外單位", value: data.department || "", oldVal: isUpdate ? oldValuesForCompare[deptIdx] : "" },
+      { label: "身分狀態", value: data.identityStatus || "", oldVal: isUpdate ? oldValuesForCompare[identityIdx] : "" },
+      { label: "學號", value: data.studentId || "", oldVal: isUpdate ? oldValuesForCompare[studentIdIdx] : "" },
+      { label: "生日", value: data.birthday ? String(data.birthday).split("T")[0] : "", oldVal: isUpdate ? (oldValuesForCompare[birthdayIdx] instanceof Date ? Utilities.formatDate(oldValuesForCompare[birthdayIdx], "GMT+8", "yyyy-MM-dd") : String(oldValuesForCompare[birthdayIdx])) : "" },
+      { label: "身份證字號/護照號碼", value: data.idNumber || "", oldVal: isUpdate ? oldValuesForCompare[idNumberIdx] : "" },
+      { label: "聯絡地址", value: data.studentAddr || "", oldVal: isUpdate ? oldValuesForCompare[studentAddrIdx] : "" },
+      { label: "緊急聯絡人姓名", value: data.emerName || "", oldVal: isUpdate ? oldValuesForCompare[emerNameIdx] : "" },
+      { label: "關係", value: data.emerRel || "", oldVal: isUpdate ? oldValuesForCompare[emerRelIdx] : "" },
+      { label: "緊急聯絡人地址", value: data.emerAddr || "", oldVal: isUpdate ? oldValuesForCompare[emerAddrIdx] : "" },
+      { label: "緊急聯絡人電話", value: data.emerPhone || "", oldVal: isUpdate ? oldValuesForCompare[emerPhoneIdx] : "" },
+      { label: "登山/戶外經驗", value: data.exp || "", oldVal: isUpdate ? oldValuesForCompare[expIdx] : "" },
+      { label: "體能證明描述", value: data.strength || "", oldVal: isUpdate ? oldValuesForCompare[strengthIdx] : "" },
+      { label: "個人特殊病史或過敏", value: data.medicalHistory || "", oldVal: isUpdate ? oldValuesForCompare[medIdx] : "" }
+    ];
+
+    if (isUpdate) {
+      var changes = [];
+      fieldMappings.forEach(function(item) {
+        var newValStr = String(item.value).trim();
+        var oldValStr = String(item.oldVal).trim();
+        
+        if (item.label === "生日") {
+          newValStr = newValStr.replace(/\//g, "-");
+          oldValStr = oldValStr.split(" ")[0].replace(/\//g, "-");
+        }
+
+        if (newValStr !== oldValStr) {
+          changes.push("✏️ " + item.label + "：" + (oldValStr || "(空)") + " ➡️ " + (newValStr || "(空)"));
+        }
+      });
+
+      // 檢查是否上傳了新圖片證明
+      if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
+        var oldProofStr = isUpdate ? String(oldValuesForCompare[strengthProofIdx]).trim() : "";
+        if (data.strengthProof !== oldProofStr) {
+          changes.push("📷 體能證明截圖：已重新上傳新檔案");
+        }
+      }
+
+      if (changes.length > 0) {
+        pushMsg = "✅ 您的社員資料已成功更新！\n\n" +
+                  "本次修改項目：\n" +
+                  changes.join("\n") + "\n\n" +
                   "感謝您的填寫！";
+      } else {
+        pushMsg = "✅ 您的社員資料已成功更新（內容無變更）！";
+      }
+    } else {
+      var infoList = [];
+      fieldMappings.forEach(function(item) {
+        if (item.value && String(item.value).trim() !== "") {
+          infoList.push("📝 " + item.label + "：" + item.value);
+        }
+      });
+      if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
+        infoList.push("📷 體能證明截圖：已上傳證明檔案");
+      }
+      pushMsg = "🎉 歡迎加入野境戶外！您的個人資料已建立成功：\n\n" +
+                infoList.join("\n") + "\n\n" +
+                "感謝您的填寫！";
+    }
+
     pushMessage(userId, pushMsg);
   } catch (err) {
     console.error("發送 LINE 註冊成功通知失敗: " + err.toString());
