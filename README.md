@@ -3,11 +3,38 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.56` (v0.0.56)
+- **當前版本**：`0.0.59` (v0.0.59)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 59. 裝備租借頁面優化 (嵌入真實圖片、置底購物車與雙重費用顯示) (v0.0.59)
+- **支援讀取試算表圖片網址**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `getEquipmentsListAPI` 引擎，新增讀取試算表 `Equipments` 工作表的「圖片網址」欄位，並包裝於 JSON 傳送至前端。
+- **Google Drive 連結直連與 Unsplash 美圖 fallback**：
+  - 更新 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx)。新增 `getDirectImageUrl` 輔助函式，支援將使用者的 Google Drive 共享網址轉換為直接下載/嵌入格式。
+  - 重構 `ProductImage` 元件，優先使用轉換後的自訂圖片連結；若無設定，則依據名稱關鍵字自動隨機配對精美的 Unsplash 實體山林裝備圖片（帳篷、睡袋、背包、登山杖、炊具、安全裝備等）。
+- **底置購物車與雙重費用顯示**：
+  - 重調 [App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css)，將 `.floating-cart-bar` 設定為固定在容器底部（寬度 100%、最大寬 600px 貼齊容器、微圓角頂部、移除 Hover 浮動動畫、增加下方安全區域 padding），並加寬主容器底部 padding。
+  - 在購物車欄與結帳彈出 Drawer 中，並排且清晰顯示 **「基本費用 (原價)」** 與 **「個人使用費用 (若是社員即 5 折，非社員則顯示原價)」**。
+  - 針對非社員的使用者，加入顯著黃色小字提醒 `(社員可享 5 折)`。
+
+### 58. 支援體能證明多圖上傳 (最大 5 張) (v0.0.58)
+- **多檔案前端處理**：
+  - 更新 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx)。調整 `strengthProofFiles` 狀態以陣列儲存選取的圖片。
+  - 使用者現在可以同時選取多張圖片，或分次累加選取，上限為 5 張。
+  - 新增「已選取待上傳檔案列表」UI，並支援個別移除。選取的圖片依然會在前端自動壓縮（品質 0.7 JPEG），以維持最佳效能。
+  - 對於資料庫已存有的舊證明連結，若包含多個網址，前端會自動以逗號 `,` 解析，並渲染多個對應的「🔍 查看已上傳證明」超連結。
+- **後端批次上傳與逗號區隔**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `processSaveProfile` 函數。
+  - 遍歷接收到的 `strengthProofFiles` 陣列，逐一呼叫 `uploadFileToDrive` 函數，產生的 Google Drive 預覽網址再以逗號 `,` 拼接成一長字串寫回 Sheets 欄位。
+
+### 57. 修復生日欄位比對誤判問題 (v0.0.57)
+- **問題原因**：Google 試算表儲存日期時，有時以 `Date` 物件或 ISO 8601 字串（含時區，如 `2005-06-01T16:00:00.000Z`）方式回傳。舊的比對邏輯使用 `.split(" ")[0]` 僅能處理空格分隔格式，無法正確去除 `T` 分隔的時間資訊，導致生日未修改時仍被誤判為「已變更」。
+- **修復方式**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中 `processSaveProfile` 的生日比對區塊。
+  - 改為同時對 `T` 與空格進行分割（`.split("T")[0].split(" ")[0]`），確保不論 Sheet 回傳的日期格式為何，都能只取 `YYYY-MM-DD` 日期部分進行比對，杜絕誤報。
 
 ### 56. 電話與生日格式強制文字與規格化 (v0.0.56)
 - **試算表電話強制文字**：

@@ -3866,7 +3866,8 @@ function getEquipmentsListAPI(ss) {
     borrowable: _fi(headers, "是否外借"),
     price2Days: _fi(headers, "2天"),
     priceExtra: _fi(headers, "+1天"),
-    status: _fi(headers, "狀態")
+    status: _fi(headers, "狀態"),
+    imageUrl: _fi(headers, "圖片網址")
   };
 
   var availableEquipments = [];
@@ -3882,7 +3883,8 @@ function getEquipmentsListAPI(ss) {
         name: hIdx.name > -1 ? data[i][hIdx.name] : "未知裝備",
         remainQty: remainQty,
         price: hIdx.price2Days > -1 ? parseInt(data[i][hIdx.price2Days], 10) || 0 : 0,
-        priceExtra: hIdx.priceExtra > -1 ? parseInt(data[i][hIdx.priceExtra], 10) || 0 : 0
+        priceExtra: hIdx.priceExtra > -1 ? parseInt(data[i][hIdx.priceExtra], 10) || 0 : 0,
+        imageUrl: hIdx.imageUrl > -1 ? data[i][hIdx.imageUrl] : ""
       });
     }
   }
@@ -4568,11 +4570,23 @@ function processSaveProfile(payload) {
   var name = data.name || "未具名";
   var studentId = data.studentId || "無學號";
   
-  // 處理上傳檔案至 Google Drive，檔名可自訂以利辨識
-  if (payload.strengthProofFile && payload.strengthProofFileName) {
-    var ext = payload.strengthProofFileName.split('.').pop();
-    var customFileName = name + "_體能證明." + ext;
-    data.strengthProof = uploadFileToDrive(payload.strengthProofFile, customFileName);
+  // 處理多張檔案上傳至 Google Drive，並用逗號區隔多個 URL
+  if (payload.strengthProofFiles && payload.strengthProofFiles.length > 0) {
+    var fileUrls = [];
+    for (var f = 0; f < payload.strengthProofFiles.length; f++) {
+      var fileObj = payload.strengthProofFiles[f];
+      if (fileObj && fileObj.base64 && fileObj.name) {
+        var ext = fileObj.name.split('.').pop();
+        var customFileName = name + "_體能證明_" + (f + 1) + "." + ext;
+        var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName);
+        if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
+          fileUrls.push(uploadedUrl);
+        }
+      }
+    }
+    if (fileUrls.length > 0) {
+      data.strengthProof = fileUrls.join(",");
+    }
   }
   
   var mData = memberSheet.getDataRange().getValues();
@@ -4710,8 +4724,9 @@ function processSaveProfile(payload) {
         var oldValStr = String(item.oldVal).trim();
         
         if (item.label === "生日") {
-          newValStr = newValStr.replace(/\//g, "-");
-          oldValStr = oldValStr.split(" ")[0].replace(/\//g, "-");
+          // 標準化：去掉時間部分，只保留日期（支援 ISO 8601 T 分隔或空格分隔格式）
+          newValStr = newValStr.split("T")[0].split(" ")[0].replace(/\//g, "-");
+          oldValStr = oldValStr.split("T")[0].split(" ")[0].replace(/\//g, "-");
         }
 
         if (newValStr !== oldValStr) {

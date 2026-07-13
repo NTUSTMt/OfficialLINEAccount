@@ -59,7 +59,7 @@ function Register({ userId }: { userId: string }) {
   });
 
   // 上傳檔案狀態
-  const [strengthProofFile, setStrengthProofFile] = useState<UploadedFile | null>(null);
+  const [strengthProofFiles, setStrengthProofFiles] = useState<UploadedFile[]>([]);
 
   // 隱私權同意書勾選
   const [privacyAgreed, setPrivacyAgreed] = useState(false);
@@ -128,6 +128,11 @@ function Register({ userId }: { userId: string }) {
       }
     };
 
+    const script = document.createElement('script');
+    script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
+    script.async = true;
+    document.body.appendChild(script);
+
     fetchProfileData();
   }, [userId]);
 
@@ -136,68 +141,97 @@ function Register({ userId }: { userId: string }) {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // 處理檔案讀取並在前端自動壓縮為 JPEG Base64 (最大 1024px, 品質 0.7)
+  // 處理多個檔案讀取並在前端自動壓縮為 JPEG Base64 (最大 1024px, 品質 0.7)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert('檔案大小不能超過 10MB！');
+    const remainingLimit = 5 - strengthProofFiles.length;
+    if (files.length > remainingLimit) {
+      alert(`最多只能上傳 5 張圖片！您目前還可以選擇 ${remainingLimit} 張。`);
       e.target.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxWidth = 1024;
-        const maxHeight = 1024;
+    const fileList = Array.from(files);
+    const newFiles: UploadedFile[] = [];
+    let processedCount = 0;
 
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
+    fileList.forEach((file) => {
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`檔案 ${file.name} 大小不能超過 10MB！`);
+        processedCount++;
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxWidth = 1024;
+          const maxHeight = 1024;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
           }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            alert('圖片解析失敗！');
+            processedCount++;
+            return;
           }
-        }
 
-        canvas.width = width;
-        canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          // 壓縮為 0.7 品質的 JPEG
+          const base64 = canvas.toDataURL('image/jpeg', 0.7);
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          alert('圖片解析失敗！');
-          return;
-        }
+          // 將原檔名副檔名統一規格化為 .jpg
+          const nameParts = file.name.split('.');
+          nameParts[nameParts.length - 1] = 'jpg';
+          const newName = nameParts.join('.');
 
-        ctx.drawImage(img, 0, 0, width, height);
-        // 壓縮為 0.7 品質的 JPEG
-        const base64 = canvas.toDataURL('image/jpeg', 0.7);
+          newFiles.push({ base64, name: newName });
+          processedCount++;
 
-        // 將原檔名副檔名統一規格化為 .jpg
-        const nameParts = file.name.split('.');
-        nameParts[nameParts.length - 1] = 'jpg';
-        const newName = nameParts.join('.');
-
-        setStrengthProofFile({ base64, name: newName });
+          if (processedCount === fileList.length) {
+            setStrengthProofFiles((prev) => [...prev, ...newFiles]);
+          }
+        };
+        img.onerror = () => {
+          alert(`載入圖片 ${file.name} 失敗，請嘗試更換圖片檔案！`);
+          processedCount++;
+          if (processedCount === fileList.length) {
+            setStrengthProofFiles((prev) => [...prev, ...newFiles]);
+          }
+        };
+        img.src = event.target?.result as string;
       };
-      img.onerror = () => {
-        alert('載入圖片失敗，請嘗試更換圖片檔案！');
+      reader.onerror = () => {
+        alert(`讀取檔案 ${file.name} 失敗！`);
+        processedCount++;
+        if (processedCount === fileList.length) {
+          setStrengthProofFiles((prev) => [...prev, ...newFiles]);
+        }
       };
-      img.src = event.target?.result as string;
-    };
-    reader.onerror = () => {
-      alert('讀取檔案失敗！');
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
   };
 
   // 驗證各步驟欄位
@@ -247,8 +281,7 @@ function Register({ userId }: { userId: string }) {
         action: 'save_profile',
         userId: userId || 'TEST_USER_ID',
         data: formData,
-        strengthProofFile: strengthProofFile?.base64 || null,
-        strengthProofFileName: strengthProofFile?.name || null,
+        strengthProofFiles: strengthProofFiles.length > 0 ? strengthProofFiles : null,
       };
 
       const res = await fetch(GAS_API_URL, {
@@ -544,20 +577,56 @@ function Register({ userId }: { userId: string }) {
 
             {/* 上傳體能證明 */}
             <div className="form-group">
-              <label>上傳體能證明 (Upload Proof of Physical Fitness)</label>
+              <label>上傳體能證明 (Upload Proof of Physical Fitness) - 最多 5 張</label>
               <input
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={handleFileChange}
                 className="file-input"
+                disabled={strengthProofFiles.length >= 5}
               />
-              {strengthProofFile && <p className="file-selected">✓ 已選擇: {strengthProofFile.name}</p>}
-              {formData.strengthProof && formData.strengthProof.startsWith('http') && !strengthProofFile && (
-                <p className="file-link">
-                  <a href={formData.strengthProof} target="_blank" rel="noopener noreferrer">
-                    🔍 查看已上傳體能證明
-                  </a>
-                </p>
+              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                提示：重新上傳將會覆蓋舊的體能證明，可多選或分次選取，上限 5 張。
+              </p>
+
+              {/* 顯示目前選取的待上傳檔案 */}
+              {strengthProofFiles.length > 0 && (
+                <div className="selected-files-list" style={{ marginTop: '8px' }}>
+                  <p style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>已選取待上傳檔案 ({strengthProofFiles.length}/5)：</p>
+                  {strengthProofFiles.map((file, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f3f4f6', padding: '6px 12px', borderRadius: '4px', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '13px', color: '#374151', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '80%' }}>
+                        ✓ {file.name}
+                      </span>
+                      <button 
+                        type="button" 
+                        onClick={() => setStrengthProofFiles(prev => prev.filter((_, i) => i !== idx))}
+                        style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+                      >
+                        移除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 顯示已上傳的舊檔案連結 */}
+              {formData.strengthProof && formData.strengthProof.trim() !== '' && (
+                <div className="existing-files-list" style={{ marginTop: '12px' }}>
+                  <p style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>已上傳的舊體能證明：</p>
+                  {formData.strengthProof.split(',').map((url, idx) => {
+                    const cleanUrl = url.trim();
+                    if (!cleanUrl.startsWith('http')) return null;
+                    return (
+                      <p key={idx} className="file-link" style={{ margin: '4px 0' }}>
+                        <a href={cleanUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px' }}>
+                          🔍 查看已上傳證明 #{idx + 1}
+                        </a>
+                      </p>
+                    );
+                  })}
+                </div>
               )}
             </div>
 

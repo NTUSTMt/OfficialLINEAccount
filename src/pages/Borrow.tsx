@@ -11,6 +11,7 @@ interface Equipment {
   remainQty: number;
   price: number;
   priceExtra: number;
+  imageUrl?: string;
 }
 
 interface FormState {
@@ -27,83 +28,73 @@ interface ApiResponse {
   message?: string;
 }
 
-// 根據商品名稱渲染對應的 SVG 圖示與漸層背景
-function ProductImage({ name }: { name: string }) {
+// 轉換 Google Drive 分享連結為直接嵌入圖片的網址
+function getDirectImageUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const cleanUrl = url.trim();
+  const driveRegex = /(?:https?:\/\/)?(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?id=)([^/\?]+)/;
+  const match = cleanUrl.match(driveRegex);
+  if (match && match[1]) {
+    return `https://docs.google.com/uc?export=view&id=${match[1]}`;
+  }
+  return cleanUrl;
+}
+
+// 根據商品名稱或傳入的圖片網址渲染對應的真實圖片或 Unsplash 高質感圖示
+function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
+  const directUrl = getDirectImageUrl(imageUrl);
+
+  if (directUrl && directUrl.startsWith('http')) {
+    return (
+      <div className="product-img-container">
+        <img
+          src={directUrl}
+          alt={name}
+          className="product-img-real"
+          loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      </div>
+    );
+  }
+
   const lowercaseName = name.toLowerCase();
+  let fallbackSrc = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop'; // 預設大山背景
 
   // 帳篷
   if (lowercaseName.includes('帳') || lowercaseName.includes('tent')) {
-    return (
-      <div className="product-img-container bg-tent">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M2 20L12 4L22 20H2Z" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M12 4V20" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M7 20L12 12L17 20" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-    );
+    fallbackSrc = 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?w=600&auto=format&fit=crop';
   }
   // 睡墊/睡袋
-  if (lowercaseName.includes('墊') || lowercaseName.includes('pad') || lowercaseName.includes('sleeping')) {
-    return (
-      <div className="product-img-container bg-pad">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="3" y="6" width="18" height="12" rx="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M3 10H21" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M3 14H21" strokeLinecap="round" strokeLinejoin="round" />
-          <circle cx="7" cy="8" r="1" fill="currentColor" />
-        </svg>
-      </div>
-    );
+  else if (lowercaseName.includes('墊') || lowercaseName.includes('袋') || lowercaseName.includes('pad') || lowercaseName.includes('sleeping')) {
+    fallbackSrc = 'https://images.unsplash.com/photo-1501555088652-021faa106b9b?w=600&auto=format&fit=crop';
   }
   // 背包
-  if (lowercaseName.includes('包') || lowercaseName.includes('pack')) {
-    return (
-      <div className="product-img-container bg-pack">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="5" y="6" width="14" height="14" rx="3" />
-          <path d="M9 6V3H15V6" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M5 11H19" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M9 11V20" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M15 11V20" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-    );
+  else if (lowercaseName.includes('包') || lowercaseName.includes('pack')) {
+    fallbackSrc = 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=600&auto=format&fit=crop';
   }
   // 登山杖
-  if (lowercaseName.includes('杖') || lowercaseName.includes('pole') || lowercaseName.includes('stick')) {
-    return (
-      <div className="product-img-container bg-pole">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M18 3L6 21" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M5 21H7" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M12 8L15 9" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M9 13L12 14" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M18 3C19 3 20 4 20 5C20 6 19 7 18 7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-    );
+  else if (lowercaseName.includes('杖') || lowercaseName.includes('pole') || lowercaseName.includes('stick')) {
+    fallbackSrc = 'https://images.unsplash.com/photo-1596484552834-6a58f850e0a1?w=600&auto=format&fit=crop';
   }
-  // 鋼盆/炊具
-  if (lowercaseName.includes('盆') || lowercaseName.includes('鍋') || lowercaseName.includes('cook')) {
-    return (
-      <div className="product-img-container bg-bowl">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M3 10h18v1a7 7 0 0 1-14 0v-1Z" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M8 6V10" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M12 5V10" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M16 6V10" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-    );
+  // 鋼盆/炊具/爐
+  else if (lowercaseName.includes('盆') || lowercaseName.includes('鍋') || lowercaseName.includes('爐') || lowercaseName.includes('cook') || lowercaseName.includes('stove')) {
+    fallbackSrc = 'https://images.unsplash.com/photo-1595107519967-df508b5e28a5?w=600&auto=format&fit=crop';
   }
-  // 預設 (其他裝備)
+  // 頭盔/岩盔/吊帶/攀登
+  else if (lowercaseName.includes('盔') || lowercaseName.includes('吊帶') || lowercaseName.includes('繩') || lowercaseName.includes('harness') || lowercaseName.includes('helmet')) {
+    fallbackSrc = 'https://images.unsplash.com/photo-1522163182402-834f871fd851?w=600&auto=format&fit=crop';
+  }
+
   return (
-    <div className="product-img-container bg-default">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M12 2L2 22H22L12 2Z" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="12" cy="14" r="3" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+    <div className="product-img-container">
+      <img
+        src={fallbackSrc}
+        alt={name}
+        className="product-img-real"
+        loading="lazy"
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+      />
     </div>
   );
 }
@@ -199,24 +190,29 @@ function Borrow({ userId }: { userId: string }) {
     return diffDays || 1; // 至少為 1 天
   }, [form.pickupDate, form.returnDate]);
 
-  // 計算購物車總租金 (前 2 天為基本租金，之後每天加收 priceExtra)
-  const totalPrice = useMemo(() => {
-    const rawTotal = Object.entries(form.cart).reduce((sum, [id, qty]) => {
+  // 計算基本費用 (原價總計)
+  const basePrice = useMemo(() => {
+    return Object.entries(form.cart).reduce((sum, [id, qty]) => {
       const equip = equipments.find(item => item.id === id);
       if (!equip) return sum;
       const extraDays = Math.max(0, rentalDays - 2);
       const itemPrice = equip.price + extraDays * (equip.priceExtra || 0);
       return sum + (itemPrice * qty);
     }, 0);
+  }, [form.cart, equipments, rentalDays]);
 
+  // 計算個人使用時的費用 (如果是正式社員打 5 折)
+  const personalPrice = useMemo(() => {
+    return isOfficial ? Math.round(basePrice * 0.5) : basePrice;
+  }, [basePrice, isOfficial]);
+
+  // 計算最後預估總租金 (配合用途，社團出隊免費 $0)
+  const totalPrice = useMemo(() => {
     if (form.purpose === '社團出隊') {
-      return 0; // 用於社團活動免費
+      return 0;
     }
-    if (isOfficial) {
-      return Math.round(rawTotal * 0.5); // 社員個人使用 5 折
-    }
-    return rawTotal; // 非社員個人使用全額
-  }, [form.cart, equipments, rentalDays, form.purpose, isOfficial]);
+    return personalPrice;
+  }, [form.purpose, personalPrice]);
 
   // 產生試算公式字串
   const formulaString = useMemo(() => {
@@ -352,7 +348,7 @@ function Borrow({ userId }: { userId: string }) {
 
               return (
                 <div key={item.id} className={`product-card ${currentQty > 0 ? 'selected' : ''}`}>
-                  <ProductImage name={item.name} />
+                  <ProductImage name={item.name} imageUrl={item.imageUrl} />
 
                   <div className="product-info">
                     <h3 className="product-name">{item.name}</h3>
@@ -419,9 +415,19 @@ function Borrow({ userId }: { userId: string }) {
         <div className="floating-cart-bar" onClick={() => setIsCartOpen(true)}>
           <div className="floating-cart-info">
             <span className="floating-badge">{totalItems}</span>
-            <div className="floating-price-desc">
-              <span className="floating-total-label">預估金額</span>
-              <span className="floating-price">${totalPrice}</span>
+            <div className="floating-price-desc" style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', color: 'white' }}>
+                <span className="floating-total-label" style={{ fontSize: '11px', opacity: 0.8 }}>基本:</span>
+                <span className="floating-price" style={{ fontSize: '14px', fontWeight: 'bold' }}>${basePrice}</span>
+                <span style={{ opacity: 0.3, fontSize: '11px' }}>|</span>
+                <span className="floating-total-label" style={{ fontSize: '11px', opacity: 0.8 }}>個人使用:</span>
+                <span className="floating-price" style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981' }}>${personalPrice}</span>
+              </div>
+              {!isOfficial && (
+                <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: 'normal' }}>
+                  (社員可享 5 折)
+                </span>
+              )}
             </div>
           </div>
           <button className="floating-checkout-btn">
@@ -566,8 +572,24 @@ function Borrow({ userId }: { userId: string }) {
                     <span>商品總數</span>
                     <span>共 {totalItems} 件</span>
                   </div>
-                  <div className="summary-row total-row" style={{ borderBottom: formulaString ? 'none' : '1px solid var(--border-color)', paddingBottom: formulaString ? '0' : '8px' }}>
-                    <span>預估總租金</span>
+                  <div className="summary-row">
+                    <span>基本費用總計 (原價)</span>
+                    <span>${basePrice}</span>
+                  </div>
+                  <div className="summary-row">
+                    <span>個人使用費用</span>
+                    <span>
+                      ${personalPrice}
+                      {isOfficial ? ' (已享社員 5 折)' : ' (非社員全額)'}
+                    </span>
+                  </div>
+                  {!isOfficial && (
+                    <div className="summary-row" style={{ fontSize: '11px', color: '#f59e0b', justifyContent: 'flex-end', marginTop: '-4px', fontWeight: 'bold' }}>
+                      <span>(社員可享 5 折)</span>
+                    </div>
+                  )}
+                  <div className="summary-row total-row" style={{ borderBottom: formulaString ? 'none' : '1px solid var(--border-color)', paddingBottom: formulaString ? '0' : '8px', marginTop: '8px' }}>
+                    <span>本單預估總租金 ({form.purpose})</span>
                     <span className="total-highlight">${totalPrice}</span>
                   </div>
                   {formulaString && (
