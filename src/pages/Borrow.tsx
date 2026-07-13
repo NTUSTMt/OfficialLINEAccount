@@ -41,7 +41,7 @@ function getDirectImageUrl(url: string | undefined): string | undefined {
   return cleanUrl;
 }
 
-// 根據商品名稱或傳入的圖片網址渲染對應的真實圖片或 Unsplash 高質感圖示
+// 根據商品名稱或傳入的圖片網址渲染對應的真實圖片或對應的裝備 Emoji 圖示
 function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
   const directUrl = getDirectImageUrl(imageUrl);
 
@@ -60,42 +60,43 @@ function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
   }
 
   const lowercaseName = name.toLowerCase();
-  let fallbackSrc = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop'; // 預設大山背景
+  let emoji = '🏔️';
+  let bgClass = 'bg-default';
 
   // 帳篷
   if (lowercaseName.includes('帳') || lowercaseName.includes('tent')) {
-    fallbackSrc = 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?w=600&auto=format&fit=crop';
+    emoji = '⛺';
+    bgClass = 'bg-tent';
   }
   // 睡墊/睡袋
   else if (lowercaseName.includes('墊') || lowercaseName.includes('袋') || lowercaseName.includes('pad') || lowercaseName.includes('sleeping')) {
-    fallbackSrc = 'https://images.unsplash.com/photo-1501555088652-021faa106b9b?w=600&auto=format&fit=crop';
+    emoji = '💤';
+    bgClass = 'bg-pad';
   }
   // 背包
   else if (lowercaseName.includes('包') || lowercaseName.includes('pack')) {
-    fallbackSrc = 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=600&auto=format&fit=crop';
+    emoji = '🎒';
+    bgClass = 'bg-pack';
   }
   // 登山杖
   else if (lowercaseName.includes('杖') || lowercaseName.includes('pole') || lowercaseName.includes('stick')) {
-    fallbackSrc = 'https://images.unsplash.com/photo-1596484552834-6a58f850e0a1?w=600&auto=format&fit=crop';
+    emoji = '🦯';
+    bgClass = 'bg-pole';
   }
   // 鋼盆/炊具/爐
   else if (lowercaseName.includes('盆') || lowercaseName.includes('鍋') || lowercaseName.includes('爐') || lowercaseName.includes('cook') || lowercaseName.includes('stove')) {
-    fallbackSrc = 'https://images.unsplash.com/photo-1595107519967-df508b5e28a5?w=600&auto=format&fit=crop';
+    emoji = '🍳';
+    bgClass = 'bg-bowl';
   }
   // 頭盔/岩盔/吊帶/攀登
   else if (lowercaseName.includes('盔') || lowercaseName.includes('吊帶') || lowercaseName.includes('繩') || lowercaseName.includes('harness') || lowercaseName.includes('helmet')) {
-    fallbackSrc = 'https://images.unsplash.com/photo-1522163182402-834f871fd851?w=600&auto=format&fit=crop';
+    emoji = '🪖';
+    bgClass = 'bg-default';
   }
 
   return (
-    <div className="product-img-container">
-      <img
-        src={fallbackSrc}
-        alt={name}
-        className="product-img-real"
-        loading="lazy"
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-      />
+    <div className={`product-img-container ${bgClass}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px' }}>
+      {emoji}
     </div>
   );
 }
@@ -651,15 +652,14 @@ function Borrow({ userId }: { userId: string }) {
                 </div>
 
                 <div className="detail-modal-section">
-                  <h4 style={{ margin: '14px 0 6px 0', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' }}>💰 租金費率 (Rental Price)</h4>
-                  <div className="detail-price-grid" style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
-                    <div className="detail-price-item" style={{ textAlign: 'left' }}>
-                      <span className="price-label" style={{ fontSize: '12px', color: '#64748b', display: 'block' }}>基本租金 (2天)</span>
-                      <span className="price-val" style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>${selectedEquipment.price}</span>
+                  <div className="detail-price-list" style={{ display: 'flex', flexDirection: 'column', gap: '6px', margin: '12px 0 16px 0', alignItems: 'flex-end', width: '100%' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                      <span style={{ fontSize: '13px', color: '#64748b' }}>基本租金 (2天)：</span>
+                      <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a' }}>${selectedEquipment.price}</span>
                     </div>
-                    <div className="detail-price-item" style={{ textAlign: 'right' }}>
-                      <span className="price-label" style={{ fontSize: '12px', color: '#64748b', display: 'block' }}>續租費用 (每加1天)</span>
-                      <span className="price-val" style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>+${selectedEquipment.priceExtra || 0}</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>續租費用 (每加一天)：</span>
+                      <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#64748b' }}>+${selectedEquipment.priceExtra || 0}</span>
                     </div>
                   </div>
                   <div className="detail-discount-tip" style={{ marginTop: '8px', fontSize: '12px', padding: '8px 10px', borderRadius: '6px', backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', textAlign: 'left' }}>
@@ -667,7 +667,7 @@ function Borrow({ userId }: { userId: string }) {
                     {isOfficial ? (
                       <span>您為正式社員，個人使用享 5 折優惠！</span>
                     ) : (
-                      <span>正式社員個人使用享 5 折 (本單個人費用可打五折)。</span>
+                      <span>正式社員個人使用享 5 折。</span>
                     )}
                   </div>
                 </div>
@@ -681,9 +681,9 @@ function Borrow({ userId }: { userId: string }) {
               </div>
             </div>
 
-            <div className="detail-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
-              <div className="detail-qty-section" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>預約數量：</span>
+            <div className="detail-modal-footer" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+              <div className="detail-qty-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>預約數量：</span>
                 {(() => {
                   const currentQty = form.cart[selectedEquipment.id] || 0;
                   return currentQty === 0 ? (
@@ -691,19 +691,19 @@ function Borrow({ userId }: { userId: string }) {
                       className="add-to-cart-btn modal-add-btn"
                       onClick={() => updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty)}
                       disabled={selectedEquipment.remainQty <= 0}
-                      style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '8px', backgroundColor: 'var(--primary-color)', color: 'white', border: 'none', cursor: 'pointer' }}
+                      style={{ padding: '8px 24px', fontSize: '13px', borderRadius: '8px', backgroundColor: 'var(--primary-color)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                     >
                       {selectedEquipment.remainQty <= 0 ? '庫存不足' : '加入預訂'}
                     </button>
                   ) : (
                     <div className="quantity-controller" style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden' }}>
-                      <button className="qty-btn" onClick={() => updateCart(selectedEquipment.id, -1, selectedEquipment.remainQty)} style={{ border: 'none', background: 'transparent', padding: '6px 10px', cursor: 'pointer', fontWeight: 'bold' }}>-</button>
-                      <span className="qty-number" style={{ padding: '0 8px', fontSize: '13px', minWidth: '20px', textAlign: 'center' }}>{currentQty}</span>
+                      <button className="qty-btn" onClick={() => updateCart(selectedEquipment.id, -1, selectedEquipment.remainQty)} style={{ border: 'none', background: 'transparent', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>-</button>
+                      <span className="qty-number" style={{ padding: '0 12px', fontSize: '14px', minWidth: '24px', textAlign: 'center', fontWeight: 'bold' }}>{currentQty}</span>
                       <button
                         className="qty-btn"
                         onClick={() => updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty)}
                         disabled={currentQty >= selectedEquipment.remainQty}
-                        style={{ border: 'none', background: 'transparent', padding: '6px 10px', cursor: 'pointer', fontWeight: 'bold' }}
+                        style={{ border: 'none', background: 'transparent', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
                       >
                         +
                       </button>
@@ -714,9 +714,9 @@ function Borrow({ userId }: { userId: string }) {
               <button 
                 className="btn btn-secondary close-btn-bottom" 
                 onClick={() => setSelectedEquipment(null)}
-                style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', cursor: 'pointer', fontSize: '13px', color: '#475569' }}
+                style={{ padding: '10px 0', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', cursor: 'pointer', fontSize: '14px', color: '#475569', width: '100%', fontWeight: 'bold' }}
               >
-                關閉
+                關閉視窗
               </button>
             </div>
           </div>
