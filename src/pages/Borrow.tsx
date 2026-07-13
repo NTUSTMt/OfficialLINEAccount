@@ -437,7 +437,7 @@ function Borrow({ userId }: { userId: string }) {
             </div>
           </div>
           <button className="floating-checkout-btn">
-            看預訂單 &rarr;
+            下一步 &rarr;
           </button>
         </div>
       )}
@@ -652,23 +652,15 @@ function Borrow({ userId }: { userId: string }) {
                 </div>
 
                 <div className="detail-modal-section">
-                  <div className="detail-price-list" style={{ display: 'flex', flexDirection: 'column', gap: '6px', margin: '12px 0 16px 0', alignItems: 'flex-end', width: '100%' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                  <div className="detail-price-list" style={{ display: 'flex', flexDirection: 'column', gap: '2px', margin: '12px 0 16px 0', alignItems: 'flex-end', width: '100%' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.2' }}>
                       <span style={{ fontSize: '13px', color: '#64748b' }}>基本租金 (2天)：</span>
                       <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a' }}>${selectedEquipment.price}</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.2' }}>
                       <span style={{ fontSize: '12px', color: '#64748b' }}>續租費用 (每加一天)：</span>
                       <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#64748b' }}>+${selectedEquipment.priceExtra || 0}</span>
                     </div>
-                  </div>
-                  <div className="detail-discount-tip" style={{ marginTop: '8px', fontSize: '12px', padding: '8px 10px', borderRadius: '6px', backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', textAlign: 'left' }}>
-                    💡 <strong>社籍優惠：</strong>
-                    {isOfficial ? (
-                      <span>您為正式社員，個人使用享 5 折優惠！</span>
-                    ) : (
-                      <span>正式社員個人使用享 5 折。</span>
-                    )}
                   </div>
                 </div>
 
@@ -711,13 +703,6 @@ function Borrow({ userId }: { userId: string }) {
                   );
                 })()}
               </div>
-              <button 
-                className="btn btn-secondary close-btn-bottom" 
-                onClick={() => setSelectedEquipment(null)}
-                style={{ padding: '10px 0', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', cursor: 'pointer', fontSize: '14px', color: '#475569', width: '100%', fontWeight: 'bold' }}
-              >
-                關閉視窗
-              </button>
             </div>
           </div>
         </div>

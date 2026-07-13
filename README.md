@@ -3,11 +3,17 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.60` (v0.0.60)
+- **當前版本**：`0.0.62` (v0.0.62)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 62. 調整底部浮動購物條顯示位置 (v0.0.62)
+- 由於底部導覽列已移除，將 [App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css) 中的 `.floating-cart-bar` 底部定位從 `calc(76px + ...)` 修正為 `calc(20px + ...)`，將浮動購物條往下移動到適當位置，避免遮擋裝備卡片內容。
+
+### 61. 修復 Borrow 頁面 JSX 語法錯誤 (v0.0.61)
+- 修復 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 中 `<div className="detail-modal-section">` 標籤未正確閉合導致編譯失敗（Unexpected token）的問題。
 
 ### 60. 新增裝備詳情彈窗與註冊意願幹部通知 (v0.0.60)
 - **裝備詳細資訊彈窗**：

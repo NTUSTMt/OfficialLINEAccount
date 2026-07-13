@@ -501,7 +501,7 @@ body {
    ========================================== */
 .floating-cart-bar {
   position: fixed;
-  bottom: calc(76px + env(safe-area-inset-bottom, 8px));
+  bottom: calc(20px + env(safe-area-inset-bottom, 8px));
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 32px);
