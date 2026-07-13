@@ -12,6 +12,7 @@ interface Equipment {
   price: number;
   priceExtra: number;
   imageUrl?: string;
+  description?: string;
 }
 
 interface FormState {
