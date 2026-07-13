@@ -3867,7 +3867,8 @@ function getEquipmentsListAPI(ss) {
     price2Days: _fi(headers, "2天"),
     priceExtra: _fi(headers, "+1天"),
     status: _fi(headers, "狀態"),
-    imageUrl: _fi(headers, "圖片網址")
+    imageUrl: _fi(headers, "圖片網址"),
+    description: headers.findIndex(function(h) { return String(h).includes("說明") || String(h).includes("詳細資訊") || String(h).includes("規格") || String(h).includes("備註"); })
   };
 
   var availableEquipments = [];
@@ -3884,7 +3885,8 @@ function getEquipmentsListAPI(ss) {
         remainQty: remainQty,
         price: hIdx.price2Days > -1 ? parseInt(data[i][hIdx.price2Days], 10) || 0 : 0,
         priceExtra: hIdx.priceExtra > -1 ? parseInt(data[i][hIdx.priceExtra], 10) || 0 : 0,
-        imageUrl: hIdx.imageUrl > -1 ? data[i][hIdx.imageUrl] : ""
+        imageUrl: hIdx.imageUrl > -1 ? data[i][hIdx.imageUrl] : "",
+        description: hIdx.description > -1 ? data[i][hIdx.description] : ""
       });
     }
   }
@@ -4375,6 +4377,9 @@ function getMemberProfileAPI(ss, userId) {
       
       var medIdx = mH.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
       profile.medicalHistory = medIdx > -1 ? mData[i][medIdx] : "";
+
+      profile.intendOfficial = mData[i][_fi(mH, "加入社員意願")] || "";
+      profile.intendOfficer = mData[i][_fi(mH, "擔任幹部意願")] || "";
       break;
     }
   }
@@ -4632,6 +4637,8 @@ function processSaveProfile(payload) {
   if (medIdx === -1) medIdx = getOrCreateColIdx(memberSheet, headers, "個人特殊病史或過敏");
   
   var payIdx = getOrCreateColIdx(memberSheet, headers, "繳費狀態");
+  var intendOfficialIdx = getOrCreateColIdx(memberSheet, headers, "加入社員意願");
+  var intendOfficerIdx = getOrCreateColIdx(memberSheet, headers, "擔任幹部意願");
   
   // 搜尋是否已存在該社員
   var userRow = -1;
@@ -4685,12 +4692,41 @@ function processSaveProfile(payload) {
   }
   
   rowData[medIdx] = data.medicalHistory || "";
+  rowData[intendOfficialIdx] = data.intendOfficial || "";
+  rowData[intendOfficerIdx] = data.intendOfficer || "";
   
   // 寫入/更新試算表
   if (isUpdate) {
     memberSheet.getRange(userRow, 1, 1, rowData.length).setValues([rowData]);
   } else {
     memberSheet.appendRow(rowData);
+  }
+
+  // 幹部意願通知處理
+  try {
+    var shouldNotifyOfficer = false;
+    if (data.intendOfficer === "我有意願成為社團幹部") {
+      if (!isUpdate) {
+        shouldNotifyOfficer = true;
+      } else if (oldValuesForCompare && String(oldValuesForCompare[intendOfficerIdx] || "").trim() !== "我有意願成為社團幹部") {
+        shouldNotifyOfficer = true;
+      }
+    }
+
+    if (shouldNotifyOfficer) {
+      var officerNotifyMsg = "📢 幹部意願新通知\n" +
+        "─────────────\n" +
+        "有社員表達擔任幹部意願！\n\n" +
+        "姓名：" + (data.name || "未填") + "\n" +
+        "性別：" + (data.gender || "未填") + "\n" +
+        "系所：" + (data.department || "未填") + "\n" +
+        "學號：" + (data.studentId || "未填") + "\n" +
+        "登山經驗：" + (data.exp || "未填") + "\n" +
+        "體能：" + (data.strength || "未填");
+      pushAdminMessage(officerNotifyMsg);
+    }
+  } catch (err) {
+    console.error("發送幹部群組意願通知失敗: " + err.toString());
   }
   
   // 主動推送 LINE 通知確認信 (動態欄位修改偵測)
@@ -4714,7 +4750,9 @@ function processSaveProfile(payload) {
       { label: "緊急聯絡人電話", value: data.emerPhone || "", oldVal: isUpdate ? oldValuesForCompare[emerPhoneIdx] : "" },
       { label: "登山/戶外經驗", value: data.exp || "", oldVal: isUpdate ? oldValuesForCompare[expIdx] : "" },
       { label: "體能證明描述", value: data.strength || "", oldVal: isUpdate ? oldValuesForCompare[strengthIdx] : "" },
-      { label: "個人特殊病史或過敏", value: data.medicalHistory || "", oldVal: isUpdate ? oldValuesForCompare[medIdx] : "" }
+      { label: "個人特殊病史或過敏", value: data.medicalHistory || "", oldVal: isUpdate ? oldValuesForCompare[medIdx] : "" },
+      { label: "加入社員意願", value: data.intendOfficial || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficialIdx] : "" },
+      { label: "擔任幹部意願", value: data.intendOfficer || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficerIdx] : "" }
     ];
 
     if (isUpdate) {

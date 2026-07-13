@@ -107,6 +107,7 @@ function Borrow({ userId }: { userId: string }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isOfficial, setIsOfficial] = useState<boolean>(false);
+  const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
 
   const [form, setForm] = useState<FormState>({
     pickupDate: '',
@@ -347,7 +348,7 @@ function Borrow({ userId }: { userId: string }) {
               const isOutOfStock = item.remainQty <= 0;
 
               return (
-                <div key={item.id} className={`product-card ${currentQty > 0 ? 'selected' : ''}`}>
+                <div key={item.id} className={`product-card ${currentQty > 0 ? 'selected' : ''}`} onClick={() => setSelectedEquipment(item)} style={{ cursor: 'pointer' }}>
                   <ProductImage name={item.name} imageUrl={item.imageUrl} />
 
                   <div className="product-info">
@@ -378,13 +379,16 @@ function Borrow({ userId }: { userId: string }) {
                       {currentQty === 0 ? (
                         <button
                           className="add-to-cart-btn"
-                          onClick={() => updateCart(item.id, 1, item.remainQty)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateCart(item.id, 1, item.remainQty);
+                          }}
                           disabled={isOutOfStock}
                         >
                           {isOutOfStock ? '無法租借' : '加入租借單'}
                         </button>
                       ) : (
-                        <div className="quantity-controller">
+                        <div className="quantity-controller" onClick={(e) => e.stopPropagation()}>
                           <button
                             className="qty-btn"
                             onClick={() => updateCart(item.id, -1, item.remainQty)}
@@ -616,6 +620,107 @@ function Borrow({ userId }: { userId: string }) {
           )}
         </div>
       </div>
+
+      {/* 裝備詳細資訊彈窗 */}
+      {selectedEquipment && (
+        <div className="detail-modal-overlay" onClick={() => setSelectedEquipment(null)}>
+          <div className="detail-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="detail-modal-header">
+              <h3>🎒 裝備詳細資訊</h3>
+              <button className="close-modal-btn" onClick={() => setSelectedEquipment(null)}>&times;</button>
+            </div>
+            
+            <div className="detail-modal-content">
+              <div className="detail-modal-image-wrapper">
+                <ProductImage name={selectedEquipment.name} imageUrl={selectedEquipment.imageUrl} />
+              </div>
+              
+              <div className="detail-modal-body">
+                <h2 className="detail-modal-title">{selectedEquipment.name}</h2>
+                
+                <div className="detail-modal-badges">
+                  {selectedEquipment.remainQty <= 0 ? (
+                    <span className="status-badge out-of-stock">已租完</span>
+                  ) : selectedEquipment.remainQty <= 2 ? (
+                    <span className="status-badge low-stock">僅剩 {selectedEquipment.remainQty} 件</span>
+                  ) : (
+                    <span className="status-badge in-stock">庫存充足 ({selectedEquipment.remainQty})</span>
+                  )}
+                  <span className="status-badge code-badge" style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}>代號: {selectedEquipment.id}</span>
+                </div>
+
+                <div className="detail-modal-section">
+                  <h4 style={{ margin: '14px 0 6px 0', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' }}>💰 租金費率 (Rental Price)</h4>
+                  <div className="detail-price-grid" style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0' }}>
+                    <div className="detail-price-item" style={{ textAlign: 'left' }}>
+                      <span className="price-label" style={{ fontSize: '12px', color: '#64748b', display: 'block' }}>基本租金 (2天)</span>
+                      <span className="price-val" style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>${selectedEquipment.price}</span>
+                    </div>
+                    <div className="detail-price-item" style={{ textAlign: 'right' }}>
+                      <span className="price-label" style={{ fontSize: '12px', color: '#64748b', display: 'block' }}>續租費用 (每加1天)</span>
+                      <span className="price-val" style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>+${selectedEquipment.priceExtra || 0}</span>
+                    </div>
+                  </div>
+                  <div className="detail-discount-tip" style={{ marginTop: '8px', fontSize: '12px', padding: '8px 10px', borderRadius: '6px', backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', textAlign: 'left' }}>
+                    💡 <strong>社籍優惠：</strong>
+                    {isOfficial ? (
+                      <span>您為正式社員，個人使用享 5 折優惠！</span>
+                    ) : (
+                      <span>正式社員個人使用享 5 折 (本單個人費用可打五折)。</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="detail-modal-section">
+                  <h4 style={{ margin: '18px 0 6px 0', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' }}>📝 裝備說明與規格</h4>
+                  <p className="detail-description" style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6', margin: '6px 0', textAlign: 'left', minHeight: '60px' }}>
+                    {selectedEquipment.description ? selectedEquipment.description : '目前無此裝備的詳細描述。若有疑問請洽社團幹部。'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="detail-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+              <div className="detail-qty-section" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>預約數量：</span>
+                {(() => {
+                  const currentQty = form.cart[selectedEquipment.id] || 0;
+                  return currentQty === 0 ? (
+                    <button
+                      className="add-to-cart-btn modal-add-btn"
+                      onClick={() => updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty)}
+                      disabled={selectedEquipment.remainQty <= 0}
+                      style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '8px', backgroundColor: 'var(--primary-color)', color: 'white', border: 'none', cursor: 'pointer' }}
+                    >
+                      {selectedEquipment.remainQty <= 0 ? '庫存不足' : '加入預訂'}
+                    </button>
+                  ) : (
+                    <div className="quantity-controller" style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden' }}>
+                      <button className="qty-btn" onClick={() => updateCart(selectedEquipment.id, -1, selectedEquipment.remainQty)} style={{ border: 'none', background: 'transparent', padding: '6px 10px', cursor: 'pointer', fontWeight: 'bold' }}>-</button>
+                      <span className="qty-number" style={{ padding: '0 8px', fontSize: '13px', minWidth: '20px', textAlign: 'center' }}>{currentQty}</span>
+                      <button
+                        className="qty-btn"
+                        onClick={() => updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty)}
+                        disabled={currentQty >= selectedEquipment.remainQty}
+                        style={{ border: 'none', background: 'transparent', padding: '6px 10px', cursor: 'pointer', fontWeight: 'bold' }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+              <button 
+                className="btn btn-secondary close-btn-bottom" 
+                onClick={() => setSelectedEquipment(null)}
+                style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', cursor: 'pointer', fontSize: '13px', color: '#475569' }}
+              >
+                關閉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

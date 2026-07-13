@@ -3,11 +3,23 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.59` (v0.0.59)
+- **當前版本**：`0.0.60` (v0.0.60)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 60. 新增裝備詳情彈窗與註冊意願幹部通知 (v0.0.60)
+- **裝備詳細資訊彈窗**：
+  - 更新 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx)。點擊裝備卡片時可彈出詳細資訊 Modal，顯示裝備大圖、細節規格/說明、庫存代碼，並在彈窗內直接增減預約數量。
+  - 後端 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `getEquipmentsListAPI` 新增擷取試算表中的「說明 / 規格」欄位資料傳送至前端。
+- **註冊新增意願調查選項**：
+  - 更新 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx)。在最後一步隱私同意書後方，新增「加入社員意願（`我有意願成為社員` / `我目前沒有意願成為社員`，二選一必填）」與「擔任社團幹部意願（`我有意願成為社團幹部`，選填）」欄位。
+  - 後端 `getMemberProfileAPI` 與 `processSaveProfile` 同步支援「加入社員意願」與「擔任幹部意願」的讀寫。
+- **擔任幹部意願 LINE 通知**：
+  - 新增幹部群組通知邏輯：若新註冊使用者勾選幹部意願，或者更新資料填寫者的幹部意願變更為「我有意願成為社團幹部」時，系統會自動向幹部群組推播包含 `姓名`、`性別`、`系所`、`學號`、`登山經驗` 與 `體能` 的詳細通知信。
+- **購物車回復浮動膠囊樣式**：
+  - 將 [App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css) 中的 `.floating-cart-bar` 復原為漂浮圓角膠囊樣式並包含 Hover 動效，容器 padding-bottom 還原為 `95px`。
 
 ### 59. 裝備租借頁面優化 (嵌入真實圖片、置底購物車與雙重費用顯示) (v0.0.59)
 - **支援讀取試算表圖片網址**：

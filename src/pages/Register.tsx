@@ -24,6 +24,8 @@ interface ProfileData {
   exp: string;
   strength: string;
   strengthProof: string;
+  intendOfficial: string;
+  intendOfficer: string;
 }
 
 interface UploadedFile {
@@ -56,6 +58,8 @@ function Register({ userId }: { userId: string }) {
     exp: '',
     strength: '',
     strengthProof: '',
+    intendOfficial: '',
+    intendOfficer: '',
   });
 
   // 上傳檔案狀態
@@ -117,6 +121,8 @@ function Register({ userId }: { userId: string }) {
               exp: p.exp ? String(p.exp) : '',
               strength: p.strength ? String(p.strength) : '',
               strengthProof: p.strengthProof ? String(p.strengthProof) : '',
+              intendOfficial: p.intendOfficial ? String(p.intendOfficial) : '',
+              intendOfficer: p.intendOfficer ? String(p.intendOfficer) : '',
             });
             setPrivacyAgreed(true);
           }
@@ -255,8 +261,8 @@ function Register({ userId }: { userId: string }) {
         // 緊急聯絡人資訊為選填
         return true;
       case 4:
-        // 隱私權同意書為必填
-        return privacyAgreed;
+        // 隱私權同意書與加入社員意願均為必填
+        return privacyAgreed && formData.intendOfficial.trim() !== '';
       default:
         return false;
     }
@@ -643,6 +649,57 @@ function Register({ userId }: { userId: string }) {
                   我同意將個人資料用於社團活動保險、入山申請及緊急聯繫使用。
                   <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>*</span>
                 </span>
+              </label>
+            </div>
+
+            {/* 意願調查 */}
+            <div className="willingness-box" style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', textAlign: 'left' }}>
+              <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>
+                加入社員意願 <span style={{ color: '#ef4444' }}>*</span>
+              </p>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                  <input
+                    type="radio"
+                    name="intendOfficial"
+                    value="我有意願成為社員"
+                    checked={formData.intendOfficial === '我有意願成為社員'}
+                    onChange={handleChange}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <span>我有意願成為社員 (享個人借裝 5 折)</span>
+                </label>
+                
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                  <input
+                    type="radio"
+                    name="intendOfficial"
+                    value="我目前沒有意願成為社員"
+                    checked={formData.intendOfficial === '我目前沒有意願成為社員'}
+                    onChange={handleChange}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <span>我目前沒有意願成為社員</span>
+                </label>
+              </div>
+
+              <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>
+                幹部意願調查 (選填)
+              </p>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  name="intendOfficer"
+                  value="我有意願成為社團幹部"
+                  checked={formData.intendOfficer === '我有意願成為社團幹部'}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData(prev => ({ ...prev, intendOfficer: checked ? '我有意願成為社團幹部' : '' }));
+                  }}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <span>我有意願成為社團幹部</span>
               </label>
             </div>
           </div>
