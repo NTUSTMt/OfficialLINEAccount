@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
+import { useTranslation } from 'react-i18next';
 import '../App.css';
 
 interface ProfileData {
@@ -35,11 +36,36 @@ interface DashboardData {
 }
 
 function Dashboard({ userId }: { userId: string }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
   const [lineProfile, setLineProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(null);
+
+  const getReviewStatusText = (status: string) => {
+    if (status.includes('正取')) return t('dashboard.status.confirmed');
+    if (status.includes('備取')) return t('dashboard.status.backup');
+    if (status.includes('審核')) return t('dashboard.status.reviewing');
+    if (status.includes('取消')) return t('dashboard.status.cancelled');
+    if (status.includes('已結束')) return t('dashboard.status.ended');
+    return status;
+  };
+
+  const getPayStatusText = (status: string) => {
+    if (!status) return t('dashboard.status.unreported');
+    if (status.includes('已繳') || status.includes('Paid')) return t('dashboard.status.paid');
+    if (status.includes('待確認') || status.includes('Checking')) return t('dashboard.status.checking');
+    if (status.includes('未繳') || status.includes('Unpaid')) return t('dashboard.status.unpaid');
+    return status;
+  };
+
+  const getEquipmentStatusText = (status: string) => {
+    if (status.includes('已歸還')) return t('dashboard.status.returned');
+    if (status.includes('使用中')) return t('dashboard.status.using');
+    if (status.includes('待領取') || status.includes('To Be Collected')) return t('dashboard.status.toBeCollected');
+    return status;
+  };
 
   // 取消預約相關狀態
   const [isCanceling, setIsCanceling] = useState(false);
@@ -75,11 +101,11 @@ function Dashboard({ userId }: { userId: string }) {
       if (result.status === 'success' && result.data) {
         setData(result.data);
       } else {
-        setError(result.message || '無法讀取個人資料');
+        setError(result.message || t('dashboard.error.loadProfileFailed'));
       }
     } catch (err) {
       console.error('載入儀表板失敗:', err);
-      setError('網路連線失敗，請稍後重試！');
+      setError(t('dashboard.error.networkError'));
     } finally {
       setLoading(false);
     }
@@ -87,7 +113,7 @@ function Dashboard({ userId }: { userId: string }) {
 
   // 取消裝備預約
   const handleCancelLoan = async (orderId: string) => {
-    const confirmed = window.confirm('確定要取消此筆裝備租借預約嗎？庫存將會自動回補，且此動作無法復原。');
+    const confirmed = window.confirm(t('dashboard.confirm.cancelLoan'));
     if (!confirmed) return;
 
     setIsCanceling(true);
@@ -106,14 +132,14 @@ function Dashboard({ userId }: { userId: string }) {
       const result = await res.json();
 
       if (result.status === 'success') {
-        alert('🎉 裝備預約取消成功！');
+        alert(t('dashboard.alert.cancelLoanSuccess'));
         fetchData();
       } else {
-        alert(`❌ 取消失敗: ${result.message || '請聯絡管理員'}`);
+        alert(t('dashboard.alert.cancelFailed', { message: result.message || t('dashboard.alert.contactAdmin') }));
       }
     } catch (err) {
       console.error('取消裝備預約失敗:', err);
-      alert('網路連線失敗，請稍後重試！');
+      alert(t('dashboard.error.networkError'));
     } finally {
       setIsCanceling(false);
     }
@@ -122,7 +148,7 @@ function Dashboard({ userId }: { userId: string }) {
   // 點擊取消活動報名按鈕
   const handleCancelActivityClick = (act: ActivityData) => {
     if (!act.code) {
-      alert('該活動無報名識別碼，無法取消，請聯繫社團管理員。');
+      alert(t('dashboard.alert.noEventCode'));
       return;
     }
 
@@ -135,7 +161,7 @@ function Dashboard({ userId }: { userId: string }) {
       setShowCancelReasonModal(true);
     } else {
       // 備取或審核中：直接二次確認取消
-      const confirmed = window.confirm(`確定要取消「${act.eventName}」的活動報名嗎？`);
+      const confirmed = window.confirm(t('dashboard.confirm.cancelActivity', { name: act.eventName }));
       if (!confirmed) return;
       submitActivityCancellationDirect(act.code);
     }
@@ -159,14 +185,14 @@ function Dashboard({ userId }: { userId: string }) {
       const result = await res.json();
 
       if (result.status === 'success') {
-        alert('🎉 活動報名已成功取消！');
+        alert(t('dashboard.alert.cancelActivitySuccess'));
         fetchData();
       } else {
-        alert(`❌ 取消失敗: ${result.message || '請聯絡管理員'}`);
+        alert(t('dashboard.alert.cancelFailed', { message: result.message || t('dashboard.alert.contactAdmin') }));
       }
     } catch (err) {
       console.error('取消活動報名失敗:', err);
-      alert('網路連線失敗，請稍後重試！');
+      alert(t('dashboard.error.networkError'));
     } finally {
       setIsCanceling(false);
     }
@@ -176,7 +202,7 @@ function Dashboard({ userId }: { userId: string }) {
   const submitActivityCancellationWithReason = async () => {
     if (!targetActivity) return;
     if (!cancelReason.trim()) {
-      alert('請填寫取消原因！');
+      alert(t('dashboard.alert.inputReason'));
       return;
     }
 
@@ -197,17 +223,17 @@ function Dashboard({ userId }: { userId: string }) {
       const result = await res.json();
 
       if (result.status === 'success') {
-        alert('🎉 正取資格與活動報名已成功取消！已通知幹部處理遞補。');
+        alert(t('dashboard.alert.cancelConfirmedSuccess'));
         setShowCancelReasonModal(false);
         setTargetActivity(null);
         setCancelReason('');
         fetchData();
       } else {
-        alert(`❌ 取消失敗: ${result.message || '請聯絡管理員'}`);
+        alert(t('dashboard.alert.cancelFailed', { message: result.message || t('dashboard.alert.contactAdmin') }));
       }
     } catch (err) {
       console.error('取消正取活動失敗:', err);
-      alert('網路連線失敗，請稍後重試！');
+      alert(t('dashboard.error.networkError'));
     } finally {
       setIsCanceling(false);
     }
@@ -230,7 +256,7 @@ function Dashboard({ userId }: { userId: string }) {
     return (
       <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
         <div className="spinner"></div>
-        <p>載入個人首頁中，請稍候...</p>
+        <p>{t('dashboard.loading')}</p>
       </div>
     );
   }
@@ -239,10 +265,10 @@ function Dashboard({ userId }: { userId: string }) {
     return (
       <div className="error-state-container" style={{ padding: '40px 20px', textAlign: 'center' }}>
         <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
-        <h3>資料載入失敗</h3>
+        <h3>{t('dashboard.error.title')}</h3>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{error}</p>
         <button className="btn btn-primary" onClick={fetchData} style={{ padding: '10px 24px' }}>
-          重新載入
+          {t('dashboard.error.retry')}
         </button>
       </div>
     );
@@ -317,17 +343,17 @@ function Dashboard({ userId }: { userId: string }) {
               border: '1px solid rgba(255,255,255,0.3)'
             }}
           >
-            {profile?.isOfficial ? '✅ 正式社員' : profile?.expireDate?.includes('尚未') ? '❌ 非社員' : '⚠️ 已過期'}
+            {profile?.isOfficial ? t('dashboard.card.official') : profile?.expireDate?.includes('尚未') ? t('dashboard.card.nonMember') : t('dashboard.card.expired')}
           </div>
         </div>
 
         {/* 卡片中部：真實姓名、系所學號 */}
         <div style={{ marginTop: '24px', zIndex: 1 }}>
           <div style={{ fontSize: '22px', fontWeight: 'bold', letterSpacing: '1px', marginBottom: '4px' }}>
-            {profile?.name || '未填寫真實姓名'}
+            {profile?.name || t('dashboard.card.noName')}
           </div>
           <div style={{ fontSize: '13px', opacity: 0.9 }}>
-            {profile?.department || '未填寫系所'} • {profile?.studentId || '學號'}
+            {profile?.department || t('dashboard.card.noDept')} • {profile?.studentId || t('dashboard.card.studentId')}
           </div>
         </div>
 
@@ -335,7 +361,7 @@ function Dashboard({ userId }: { userId: string }) {
         <div style={{ marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '12px' }}>
           <div>
             <span style={{ opacity: 0.7, display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Expiry Date</span>
-            <span style={{ fontWeight: '600' }}>{profile?.expireDate || '尚未啟用'}</span>
+            <span style={{ fontWeight: '600' }}>{profile?.expireDate || t('dashboard.card.notActivated')}</span>
           </div>
         </div>
       </div>
@@ -343,11 +369,11 @@ function Dashboard({ userId }: { userId: string }) {
       {/* 區塊二：活動報名追蹤 */}
       <div className="section-container" style={{ marginBottom: '28px' }}>
         <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '14px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          🏕️ 活動報名狀態 ({activities.length})
+          {t('dashboard.activity.title', { count: activities.length })}
         </h3>
         {activities.length === 0 ? (
           <div style={{ padding: '24px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center' }}>
-            目前沒有報名任何活動。
+            {t('dashboard.activity.empty')}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -371,7 +397,9 @@ function Dashboard({ userId }: { userId: string }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{act.eventName}</h4>
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>📅 活動日期：{act.date || '未排定'}</p>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {t('dashboard.activity.date', { date: act.date || t('dashboard.activity.unscheduled') })}
+                      </p>
                     </div>
                     
                     {/* 動態狀態標籤 */}
@@ -386,7 +414,7 @@ function Dashboard({ userId }: { userId: string }) {
                           backgroundColor: act.reviewStatus.indexOf('正取') > -1 ? '#d1fae5' : act.reviewStatus.indexOf('備取') > -1 ? '#fef3c7' : act.reviewStatus.indexOf('審核') > -1 ? '#dbeafe' : '#f1f5f9'
                         }}
                       >
-                        {act.reviewStatus}
+                        {getReviewStatusText(act.reviewStatus)}
                       </span>
                       <span 
                         style={{
@@ -394,7 +422,7 @@ function Dashboard({ userId }: { userId: string }) {
                           color: act.payStatus.includes('已繳') ? '#047857' : act.payStatus.includes('待確認') ? '#2563eb' : '#ef4444'
                         }}
                       >
-                        {act.payStatus || '未申報'}
+                        {getPayStatusText(act.payStatus)}
                       </span>
                     </div>
                   </div>
@@ -424,7 +452,7 @@ function Dashboard({ userId }: { userId: string }) {
                           e.currentTarget.style.backgroundColor = 'transparent';
                         }}
                       >
-                        取消報名 ❌
+                        {t('dashboard.activity.cancelBtn')}
                       </button>
                     )}
 
@@ -451,7 +479,7 @@ function Dashboard({ userId }: { userId: string }) {
                           e.currentTarget.style.backgroundColor = '#3b82f6';
                         }}
                       >
-                        前往「繳費系統」
+                        {t('dashboard.activity.payBtn')}
                       </button>
                     )}
                   </div>
@@ -465,11 +493,11 @@ function Dashboard({ userId }: { userId: string }) {
       {/* 區塊三：裝備租借清單 */}
       <div className="section-container">
         <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '14px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          🎒 裝備租借狀態 ({equipments.length})
+          {t('dashboard.equipment.title', { count: equipments.length })}
         </h3>
         {equipments.length === 0 ? (
           <div style={{ padding: '24px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center' }}>
-            目前沒有裝備租借記錄。
+            {t('dashboard.equipment.empty')}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -491,7 +519,9 @@ function Dashboard({ userId }: { userId: string }) {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>📝 預約編號：{eq.orderId}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {t('dashboard.equipment.orderId', { id: eq.orderId })}
+                    </span>
                     <span 
                       style={{
                         fontSize: '11px',
@@ -502,7 +532,7 @@ function Dashboard({ userId }: { userId: string }) {
                         backgroundColor: eq.status.indexOf('已歸還') > -1 ? '#d1fae5' : eq.status.indexOf('使用中') > -1 ? '#dbeafe' : '#fef3c7'
                       }}
                     >
-                      {eq.status}
+                      {getEquipmentStatusText(eq.status)}
                     </span>
                   </div>
 
@@ -511,9 +541,9 @@ function Dashboard({ userId }: { userId: string }) {
                   </h4>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px dashed var(--border-color)', paddingTop: '8px', marginTop: '4px' }}>
-                    <span>領取：{eq.pickupDate || '未排定'}</span>
+                    <span>{t('dashboard.equipment.pickup', { date: eq.pickupDate || t('dashboard.activity.unscheduled') })}</span>
                     <span style={{ color: isOverdue ? '#ef4444' : 'inherit', fontWeight: isOverdue ? 'bold' : 'normal' }}>
-                      歸還：{eq.returnDate || '未排定'} {isOverdue && '⚠️ 逾期'}
+                      {t('dashboard.equipment.return', { date: eq.returnDate || t('dashboard.activity.unscheduled') })} {isOverdue && t('dashboard.equipment.overdue')}
                     </span>
                   </div>
 
@@ -542,7 +572,7 @@ function Dashboard({ userId }: { userId: string }) {
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }}
                     >
-                      取消預約 ❌
+                      {t('dashboard.equipment.cancelBtn')}
                     </button>
                   )}
                 </div>
@@ -579,19 +609,19 @@ function Dashboard({ userId }: { userId: string }) {
             textAlign: 'left'
           }}>
             <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '12px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              ⚠️ 正取資格取消確認
+              {t('dashboard.modal.title')}
             </h3>
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '16px' }}>
-              您目前已錄取為<strong>【{targetActivity.eventName}】</strong>的正取名單。取消此資格後，名額將會釋出。
+              {t('dashboard.modal.description', { name: targetActivity.eventName })}
             </p>
             <div className="form-group" style={{ marginBottom: '20px' }}>
               <label className="required" style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-primary)' }}>
-                請輸入取消原因 (必填)
+                {t('dashboard.modal.reasonLabel')}
               </label>
               <textarea
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="例如：臨時有事、身體不適、交通困難等..."
+                placeholder={t('dashboard.modal.reasonPlaceholder')}
                 rows={3}
                 style={{
                   width: '100%',
@@ -622,7 +652,7 @@ function Dashboard({ userId }: { userId: string }) {
                   cursor: isCanceling ? 'not-allowed' : 'pointer'
                 }}
               >
-                保留正取資格
+                {t('dashboard.modal.keepBtn')}
               </button>
               <button
                 type="button"
@@ -640,7 +670,7 @@ function Dashboard({ userId }: { userId: string }) {
                   opacity: (isCanceling || !cancelReason.trim()) ? 0.6 : 1
                 }}
               >
-                {isCanceling ? '處理中...' : '確認取消報名'}
+                {isCanceling ? t('dashboard.modal.processing') : t('dashboard.modal.confirmBtn')}
               </button>
             </div>
           </div>

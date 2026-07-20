@@ -104,5 +104,167 @@
       "saving": "儲存中...",
       "submit": "確認送出"
     }
+  },
+  "dashboard": {
+    "loading": "載入個人首頁中，請稍候...",
+    "error": {
+      "title": "資料載入失敗",
+      "retry": "重新載入",
+      "loadProfileFailed": "無法讀取個人資料",
+      "networkError": "網路連線失敗，請稍後重試！"
+    },
+    "confirm": {
+      "cancelLoan": "確定要取消此筆裝備租借預約嗎？庫存將會自動回補，且此動作無法復原。",
+      "cancelActivity": "確定要取消「{{name}}」的活動報名嗎？"
+    },
+    "alert": {
+      "cancelLoanSuccess": "🎉 裝備預約取消成功！",
+      "cancelActivitySuccess": "🎉 活動報名已成功取消！",
+      "cancelConfirmedSuccess": "🎉 正取資格與活動報名已成功取消！已通知幹部處理遞補。",
+      "cancelFailed": "❌ 取消失敗: {{message}}",
+      "contactAdmin": "請在本官方帳號聯絡幹部",
+      "noEventCode": "該活動無報名識別碼，無法取消，請聯繫社團管理員。",
+      "inputReason": "請填寫取消原因！"
+    },
+    "card": {
+      "official": "✅ 正式社員",
+      "nonMember": "❌ 非社員",
+      "expired": "⚠️ 已過期",
+      "noName": "未填寫真實姓名",
+      "noDept": "未填寫系所",
+      "studentId": "學號",
+      "notActivated": "尚未啟用"
+    },
+    "status": {
+      "confirmed": "正取",
+      "backup": "備取",
+      "reviewing": "審核中",
+      "cancelled": "已取消",
+      "ended": "已結束",
+      "paid": "已繳費",
+      "checking": "待確認",
+      "unpaid": "未繳費",
+      "unreported": "未申報",
+      "returned": "已歸還",
+      "using": "使用中",
+      "toBeCollected": "待領取"
+    },
+    "activity": {
+      "title": "🏕️ 活動報名狀態 ({{count}})",
+      "empty": "目前沒有報名任何活動。",
+      "date": "📅 活動日期：{{date}}",
+      "unscheduled": "未排定",
+      "cancelBtn": "取消報名 ❌",
+      "payBtn": "前往「繳費系統」"
+    },
+    "equipment": {
+      "title": "🎒 裝備租借狀態 ({{count}})",
+      "empty": "目前沒有裝備租借記錄。",
+      "orderId": "📝 預約編號：{{id}}",
+      "pickup": "領取：{{date}}",
+      "return": "歸還：{{date}}",
+      "overdue": "⚠️ 逾期",
+      "cancelBtn": "取消預約 ❌"
+    },
+    "modal": {
+      "title": "⚠️ 正取資格取消確認",
+      "description": "您目前已錄取為【{{name}}】的正取名單。取消此資格後，名額將會釋出。",
+      "reasonLabel": "請輸入取消原因 (必填)",
+      "reasonPlaceholder": "例如：臨時有事、身體不適、交通困難等...",
+      "keepBtn": "保留正取資格",
+      "confirmBtn": "確認取消報名",
+      "processing": "處理中..."
+    }
+  },
+  "borrow": {
+    "alert": {
+      "emptyCart": "請至少選擇一項裝備！",
+      "noDates": "請選擇日期！",
+      "noOtherPurpose": "請輸入其他用途說明！",
+      "systemError": "系統發生錯誤：{{message}}",
+      "networkError": "連線失敗，請檢查網路狀態或通知幹部！",
+      "submitSuccess": "✅ 已成功送出 {{count}} 項裝備預約申請！\n系統處理中，請稍候...",
+      "submitSuccessBrowser": "訂單已送出"
+    },
+    "banner": {
+      "title": "費用試算說明",
+      "ruleOfficialActive": "社員用於社團活動",
+      "ruleNonOfficialActive": "非社員用於社團活動",
+      "ruleOfficialPersonal": "社員個人使用",
+      "ruleNonOfficialPersonal": "非社員個人使用",
+      "free": "免費",
+      "discount": "5 折租金",
+      "fullPrice": "全額租金",
+      "noteBasicUnit": "。租金試算以「2天」為基本單位",
+      "noteExtraDay": "。超過 2 天之部分按「每日加價」計算",
+      "noteConflict": "。若個人使用時碰上社團出團活動，可能會無法租借，租借前可以先查詢社團是否有活動，請見諒。"
+    },
+    "grid": {
+      "title": "裝備列表",
+      "count": "共 {{count}} 種裝備",
+      "loading": "正在為您準備最新裝備清單..."
+    },
+    "card": {
+      "outOfStock": "已租完",
+      "lowStock": "僅剩 {{count}} 件",
+      "inStock": "庫存充足 ({{count}})",
+      "rent2Days": "租金 (2天)",
+      "rentExtraDay": "續租 (加1天)",
+      "unavailable": "無法租借",
+      "addToCart": "加入租借單"
+    },
+    "floating": {
+      "basicLabel": "基本:",
+      "personalLabel": "個人使用:",
+      "memberTip": "(社員可享 5 折)",
+      "nextBtn": "下一步"
+    },
+    "drawer": {
+      "title": "📝 租借預訂單明細",
+      "selectedItems": "已選裝備",
+      "formulaLabel": "公式: ",
+      "daysUnit": "天",
+      "itemsUnit": "件",
+      "freeClub": " (社團出隊免費 $0)",
+      "discountMember": " (社員個人 5 折)",
+      "emptyText": "預訂單中目前沒有任何裝備喔！",
+      "startBrowsing": "去挑選裝備",
+      "detailsTitle": "📅 選擇預約詳情",
+      "pickupDate": "領取日期",
+      "returnDate": "歸還日期",
+      "purpose": "出隊目的 / 用途",
+      "purposeClub": "社團出隊",
+      "purposePersonal": "個人使用",
+      "purposeOther": "其他用途",
+      "otherPurposeLabel": "請說明其他用途",
+      "otherPurposePlaceholder": "請輸入用途說明...",
+      "rentalDays": "租用天數",
+      "totalItems": "商品總數",
+      "basePriceTotal": "基本費用總計 (原價)",
+      "personalPriceTotal": "個人使用費用",
+      "discountMemberApplied": " (已享社員 5 折)",
+      "fullPriceApplied": " (非社員全額)",
+      "estimatedTotal": "本單預估總租金 ({{purpose}})",
+      "trialLabel": "試算: ",
+      "summaryTip": "* 實際租金以取貨時，幹部依實際使用天數與規則核算為準",
+      "submitBtn": "確認送出預訂單 (${{price}})"
+    },
+    "formula": {
+      "daysUnit": "天",
+      "itemsUnit": "件",
+      "freeClub": "社團活動免費",
+      "discountMember": "社員個人 5 折"
+    },
+    "modal": {
+      "title": "🎒 裝備詳細資訊",
+      "codeLabel": "代號: ",
+      "basePrice": "基本租金 (2天)：",
+      "extraPrice": "續租費用 (每加一天)：",
+      "descTitle": "📝 裝備說明與規格",
+      "noDesc": "目前無此裝備的詳細描述。若有疑問請洽社團幹部。",
+      "qtyLabel": "預約數量：",
+      "outOfStock": "庫存不足",
+      "addToReservation": "加入預訂"
+    }
   }
 }

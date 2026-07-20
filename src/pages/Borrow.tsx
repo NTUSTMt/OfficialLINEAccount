@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
+import { useTranslation } from 'react-i18next';
 import '../App.css';
 
 // ==========================================
@@ -102,6 +103,7 @@ function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
 }
 
 function Borrow({ userId }: { userId: string }) {
+  const { t } = useTranslation();
   // ==========================================
   // 📌 2. 狀態管理 (State Management)
   // ==========================================
@@ -110,6 +112,13 @@ function Borrow({ userId }: { userId: string }) {
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isOfficial, setIsOfficial] = useState<boolean>(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+
+  const getPurposeText = (purpose: string) => {
+    if (purpose === '社團出隊') return t('borrow.drawer.purposeClub');
+    if (purpose === '個人使用') return t('borrow.drawer.purposePersonal');
+    if (purpose === '其他用途') return t('borrow.drawer.purposeOther');
+    return purpose;
+  };
 
   const [form, setForm] = useState<FormState>({
     pickupDate: '',
@@ -223,20 +232,20 @@ function Borrow({ userId }: { userId: string }) {
       const equip = equipments.find(item => item.id === id);
       if (!equip) return '';
       const extraDays = Math.max(0, rentalDays - 2);
-      return `($${equip.price} + $${equip.priceExtra || 0} × ${extraDays}天) × ${qty}件`;
+      return `($${equip.price} + $${equip.priceExtra || 0} × ${extraDays}${t('borrow.formula.daysUnit')}) × ${qty}${t('borrow.formula.itemsUnit')}`;
     }).filter(Boolean);
 
     if (parts.length === 0) return '';
 
     const baseFormula = parts.join(' + ');
     if (form.purpose === '社團出隊') {
-      return `(${baseFormula}) × 0 (社團活動免費)`;
+      return `(${baseFormula}) × 0 (${t('borrow.formula.freeClub')})`;
     }
     if (isOfficial) {
-      return `(${baseFormula}) × 0.5 (社員個人 5 折)`;
+      return `(${baseFormula}) × 0.5 (${t('borrow.formula.discountMember')})`;
     }
     return baseFormula;
-  }, [form.cart, equipments, rentalDays, form.purpose, isOfficial]);
+  }, [form.cart, equipments, rentalDays, form.purpose, isOfficial, t]);
 
   // 處理表單輸入
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -246,10 +255,10 @@ function Borrow({ userId }: { userId: string }) {
 
   // 送出表單
   const submitForm = async () => {
-    if (totalItems === 0) return alert('請至少選擇一項裝備！');
-    if (!form.pickupDate || !form.returnDate) return alert('請選擇日期！');
+    if (totalItems === 0) return alert(t('borrow.alert.emptyCart'));
+    if (!form.pickupDate || !form.returnDate) return alert(t('borrow.alert.noDates'));
     if (form.purpose === '其他用途' && !form.otherPurpose?.trim()) {
-      return alert('請輸入其他用途說明！');
+      return alert(t('borrow.alert.noOtherPurpose'));
     }
 
     const orderPayload = {
@@ -272,12 +281,12 @@ function Borrow({ userId }: { userId: string }) {
 
       const result = await response.json();
       if (result.status !== 'success') {
-        alert('系統發生錯誤：' + result.message);
+        alert(t('borrow.alert.systemError', { message: result.message }));
         return;
       }
     } catch (error) {
       console.error('API 請求失敗:', error);
-      alert('連線失敗，請檢查網路狀態或通知幹部！');
+      alert(t('borrow.alert.networkError'));
       return;
     }
 
@@ -285,11 +294,11 @@ function Borrow({ userId }: { userId: string }) {
     if (liff.isInClient()) {
       await liff.sendMessages([{
         type: 'text',
-        text: `✅ 已成功送出 ${totalItems} 項裝備預約申請！\n系統處理中，請稍候...`
+        text: t('borrow.alert.submitSuccess', { count: totalItems })
       }]);
       liff.closeWindow();
     } else {
-      alert('訂單已送出 (請在 LINE 內部測試關閉視窗功能)');
+      alert(t('borrow.alert.submitSuccessBrowser'));
     }
   };
 
@@ -303,31 +312,31 @@ function Borrow({ userId }: { userId: string }) {
       {/* 費用試算說明 Banner */}
       <div className="promo-banner pricing-banner">
         <div className="banner-content">
-          <h2 className="pricing-title">費用試算說明</h2>
+          <h2 className="pricing-title">{t('borrow.banner.title')}</h2>
 
           <div className="pricing-rules">
             <div className="pricing-rule-item">
-              <span className="rule-label">社員用於社團活動</span>
-              <span className="rule-value">免費</span>
+              <span className="rule-label">{t('borrow.banner.ruleOfficialActive')}</span>
+              <span className="rule-value">{t('borrow.banner.free')}</span>
             </div>
             <div className="pricing-rule-item">
-              <span className="rule-label">非社員用於社團活動</span>
-              <span className="rule-value">免費</span>
+              <span className="rule-label">{t('borrow.banner.ruleNonOfficialActive')}</span>
+              <span className="rule-value">{t('borrow.banner.free')}</span>
             </div>
             <div className="pricing-rule-item">
-              <span className="rule-label">社員個人使用</span>
-              <span className="rule-value"><span>5</span> 折租金</span>
+              <span className="rule-label">{t('borrow.banner.ruleOfficialPersonal')}</span>
+              <span className="rule-value"><span>{t('borrow.banner.discount')}</span></span>
             </div>
             <div className="pricing-rule-item">
-              <span className="rule-label">非社員個人使用</span>
-              <span className="rule-value">全額租金</span>
+              <span className="rule-label">{t('borrow.banner.ruleNonOfficialPersonal')}</span>
+              <span className="rule-value">{t('borrow.banner.fullPrice')}</span>
             </div>
           </div>
 
           <div className="pricing-notes">
-            <p>。租金試算以「2天」為基本單位</p>
-            <p>。超過 2 天之部分按「每日加價」計算</p>
-            <p>。若個人使用時碰上社團出團活動，可能會無法租借，租借前可以先查詢社團是否有活動，請見諒。</p>
+            <p>{t('borrow.banner.noteBasicUnit')}</p>
+            <p>{t('borrow.banner.noteExtraDay')}</p>
+            <p>{t('borrow.banner.noteConflict')}</p>
           </div>
         </div>
       </div>
@@ -335,14 +344,14 @@ function Borrow({ userId }: { userId: string }) {
       {/* 主要內容區 */}
       <main className="main-content">
         <div className="section-title">
-          <h2>裝備列表</h2>
-          <span className="products-count">共 {equipments.length} 種裝備</span>
+          <h2>{t('borrow.grid.title')}</h2>
+          <span className="products-count">{t('borrow.grid.count', { count: equipments.length })}</span>
         </div>
 
         {loading ? (
           <div className="loading-state">
             <div className="spinner"></div>
-            <p>正在為您準備最新裝備清單...</p>
+            <p>{t('borrow.grid.loading')}</p>
           </div>
         ) : (
           <div className="products-grid">
@@ -359,21 +368,21 @@ function Borrow({ userId }: { userId: string }) {
 
                     <div className="product-status">
                       {isOutOfStock ? (
-                        <span className="status-badge out-of-stock">已租完</span>
+                        <span className="status-badge out-of-stock">{t('borrow.card.outOfStock')}</span>
                       ) : item.remainQty <= 2 ? (
-                        <span className="status-badge low-stock">僅剩 {item.remainQty} 件</span>
+                        <span className="status-badge low-stock">{t('borrow.card.lowStock', { count: item.remainQty })}</span>
                       ) : (
-                        <span className="status-badge in-stock">庫存充足 ({item.remainQty})</span>
+                        <span className="status-badge in-stock">{t('borrow.card.inStock', { count: item.remainQty })}</span>
                       )}
                     </div>
 
                     <div className="product-price-row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px', width: '100%' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                        <span className="price-label" style={{ margin: 0 }}>租金 (2天)</span>
+                        <span className="price-label" style={{ margin: 0 }}>{t('borrow.card.rent2Days')}</span>
                         <span className="price-value" style={{ fontSize: '15px' }}>${item.price}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '11px', color: 'var(--text-muted)' }}>
-                        <span>續租 (加1天)</span>
+                        <span>{t('borrow.card.rentExtraDay')}</span>
                         <span>+${item.priceExtra || 0}</span>
                       </div>
                     </div>
@@ -388,7 +397,7 @@ function Borrow({ userId }: { userId: string }) {
                           }}
                           disabled={isOutOfStock}
                         >
-                          {isOutOfStock ? '無法租借' : '加入租借單'}
+                          {isOutOfStock ? t('borrow.card.unavailable') : t('borrow.card.addToCart')}
                         </button>
                       ) : (
                         <div className="quantity-controller" onClick={(e) => e.stopPropagation()}>
@@ -424,21 +433,21 @@ function Borrow({ userId }: { userId: string }) {
             <span className="floating-badge">{totalItems}</span>
             <div className="floating-price-desc" style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', color: 'white' }}>
-                <span className="floating-total-label" style={{ fontSize: '11px', opacity: 0.8 }}>基本:</span>
+                <span className="floating-total-label" style={{ fontSize: '11px', opacity: 0.8 }}>{t('borrow.floating.basicLabel')}</span>
                 <span className="floating-price" style={{ fontSize: '14px', fontWeight: 'bold' }}>${basePrice}</span>
                 <span style={{ opacity: 0.3, fontSize: '11px' }}>|</span>
-                <span className="floating-total-label" style={{ fontSize: '11px', opacity: 0.8 }}>個人使用:</span>
+                <span className="floating-total-label" style={{ fontSize: '11px', opacity: 0.8 }}>{t('borrow.floating.personalLabel')}</span>
                 <span className="floating-price" style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981' }}>${personalPrice}</span>
               </div>
               {!isOfficial && (
                 <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: 'normal' }}>
-                  (社員可享 5 折)
+                  {t('borrow.floating.memberTip')}
                 </span>
               )}
             </div>
           </div>
           <button className="floating-checkout-btn">
-            下一步 &rarr;
+            {t('borrow.floating.nextBtn')}
           </button>
         </div>
       )}
@@ -451,7 +460,7 @@ function Borrow({ userId }: { userId: string }) {
         {/* 抽屜主體 */}
         <div className="cart-drawer">
           <div className="drawer-header">
-            <h3>📝 租借預訂單明細</h3>
+            <h3>{t('borrow.drawer.title')}</h3>
             <button className="close-drawer-btn" onClick={() => setIsCartOpen(false)}>&times;</button>
           </div>
 
@@ -459,14 +468,14 @@ function Borrow({ userId }: { userId: string }) {
             {totalItems === 0 ? (
               <div className="empty-cart-state">
                 <span className="empty-icon">🛒</span>
-                <p>預訂單中目前沒有任何裝備喔！</p>
-                <button className="start-rent-btn" onClick={() => setIsCartOpen(false)}>去挑選裝備</button>
+                <p>{t('borrow.drawer.emptyText')}</p>
+                <button className="start-rent-btn" onClick={() => setIsCartOpen(false)}>{t('borrow.drawer.startBrowsing')}</button>
               </div>
             ) : (
               <>
                 {/* 預訂商品清單 */}
                 <div className="drawer-section">
-                  <h4 className="section-subtitle">已選裝備</h4>
+                  <h4 className="section-subtitle">{t('borrow.drawer.selectedItems')}</h4>
                   <div className="cart-items-list">
                     {Object.entries(form.cart).map(([id, qty]) => {
                       const item = equipments.find(e => e.id === id);
@@ -476,11 +485,11 @@ function Borrow({ userId }: { userId: string }) {
                           <div className="cart-item-desc">
                             <span className="cart-item-name">{item.name}</span>
                             <span className="cart-item-price" style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                              公式: (${item.price} + ${item.priceExtra || 0} × {Math.max(0, rentalDays - 2)}天) × {qty} =
+                              {t('borrow.drawer.formulaLabel')}(${item.price} + ${item.priceExtra || 0} × {Math.max(0, rentalDays - 2)}{t('borrow.drawer.daysUnit')}) × {qty}{t('borrow.drawer.itemsUnit')} =
                               <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>
                                 ${(item.price + Math.max(0, rentalDays - 2) * (item.priceExtra || 0)) * qty}
                               </strong>
-                              {form.purpose === '社團出隊' ? ' (社團出隊免費 $0)' : isOfficial ? ' (社員個人 5 折)' : ''}
+                              {form.purpose === '社團出隊' ? t('borrow.drawer.freeClub') : isOfficial ? t('borrow.drawer.discountMember') : ''}
                             </span>
                           </div>
                           <div className="cart-item-controls">
@@ -501,11 +510,11 @@ function Borrow({ userId }: { userId: string }) {
 
                 {/* 租期選擇 */}
                 <div className="drawer-section">
-                  <h4 className="section-subtitle">📅 選擇預約詳情</h4>
+                  <h4 className="section-subtitle">{t('borrow.drawer.detailsTitle')}</h4>
 
                   <div className="form-grid">
                     <div className="form-group">
-                      <label htmlFor="pickupDate">領取日期</label>
+                      <label htmlFor="pickupDate">{t('borrow.drawer.pickupDate')}</label>
                       <input
                         type="date"
                         id="pickupDate"
@@ -517,7 +526,7 @@ function Borrow({ userId }: { userId: string }) {
                     </div>
 
                     <div className="form-group">
-                      <label htmlFor="returnDate">歸還日期</label>
+                      <label htmlFor="returnDate">{t('borrow.drawer.returnDate')}</label>
                       <input
                         type="date"
                         id="returnDate"
@@ -529,7 +538,7 @@ function Borrow({ userId }: { userId: string }) {
                     </div>
 
                     <div className="form-group full-width">
-                      <label htmlFor="purpose">出隊目的 / 用途</label>
+                      <label htmlFor="purpose">{t('borrow.drawer.purpose')}</label>
                       <select
                         id="purpose"
                         name="purpose"
@@ -537,22 +546,22 @@ function Borrow({ userId }: { userId: string }) {
                         onChange={handleInputChange}
                         className="custom-select"
                       >
-                        <option value="社團出隊">社團出隊</option>
-                        <option value="個人使用">個人使用</option>
-                        <option value="其他用途">其他用途</option>
+                        <option value="社團出隊">{t('borrow.drawer.purposeClub')}</option>
+                        <option value="個人使用">{t('borrow.drawer.purposePersonal')}</option>
+                        <option value="其他用途">{t('borrow.drawer.purposeOther')}</option>
                       </select>
                     </div>
 
                     {form.purpose === '其他用途' && (
                       <div className="form-group full-width animate-fade-in">
-                        <label htmlFor="otherPurpose">請說明其他用途</label>
+                        <label htmlFor="otherPurpose">{t('borrow.drawer.otherPurposeLabel')}</label>
                         <input
                           type="text"
                           id="otherPurpose"
                           name="otherPurpose"
                           value={form.otherPurpose || ''}
                           onChange={handleInputChange}
-                          placeholder="請輸入用途說明..."
+                          placeholder={t('borrow.drawer.otherPurposePlaceholder')}
                           required
                           style={{
                             width: '100%',
@@ -572,39 +581,39 @@ function Borrow({ userId }: { userId: string }) {
                 {/* 費用總計 */}
                 <div className="checkout-summary">
                   <div className="summary-row">
-                    <span>租用天數</span>
-                    <span>{rentalDays} 天</span>
+                    <span>{t('borrow.drawer.rentalDays')}</span>
+                    <span>{rentalDays} {t('borrow.drawer.daysUnit')}</span>
                   </div>
                   <div className="summary-row">
-                    <span>商品總數</span>
-                    <span>共 {totalItems} 件</span>
+                    <span>{t('borrow.drawer.totalItems')}</span>
+                    <span>共 {totalItems} {t('borrow.drawer.itemsUnit')}</span>
                   </div>
                   <div className="summary-row">
-                    <span>基本費用總計 (原價)</span>
+                    <span>{t('borrow.drawer.basePriceTotal')}</span>
                     <span>${basePrice}</span>
                   </div>
                   <div className="summary-row">
-                    <span>個人使用費用</span>
+                    <span>{t('borrow.drawer.personalPriceTotal')}</span>
                     <span>
                       ${personalPrice}
-                      {isOfficial ? ' (已享社員 5 折)' : ' (非社員全額)'}
+                      {isOfficial ? t('borrow.drawer.discountMemberApplied') : t('borrow.drawer.fullPriceApplied')}
                     </span>
                   </div>
                   {!isOfficial && (
                     <div className="summary-row" style={{ fontSize: '11px', color: '#f59e0b', justifyContent: 'flex-end', marginTop: '-4px', fontWeight: 'bold' }}>
-                      <span>(社員可享 5 折)</span>
+                      <span>{t('borrow.floating.memberTip')}</span>
                     </div>
                   )}
                   <div className="summary-row total-row" style={{ borderBottom: formulaString ? 'none' : '1px solid var(--border-color)', paddingBottom: formulaString ? '0' : '8px', marginTop: '8px' }}>
-                    <span>本單預估總租金 ({form.purpose})</span>
+                    <span>{t('borrow.drawer.estimatedTotal', { purpose: getPurposeText(form.purpose) })}</span>
                     <span className="total-highlight">${totalPrice}</span>
                   </div>
                   {formulaString && (
                     <div className="summary-row" style={{ fontSize: '11px', color: 'var(--text-muted)', justifyContent: 'flex-end', marginTop: '2px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
-                      <span>試算: {formulaString} = ${totalPrice}</span>
+                      <span>{t('borrow.drawer.trialLabel')}{formulaString} = ${totalPrice}</span>
                     </div>
                   )}
-                  <p className="summary-tip">* 實際租金以取貨時，幹部依實際使用天數與規則核算為準</p>
+                  <p className="summary-tip">{t('borrow.drawer.summaryTip')}</p>
                 </div>
               </>
             )}
@@ -617,7 +626,7 @@ function Borrow({ userId }: { userId: string }) {
                 onClick={submitForm}
                 disabled={totalItems === 0 || !form.pickupDate || !form.returnDate}
               >
-                確認送出預訂單 (${totalPrice})
+                {t('borrow.drawer.submitBtn', { price: totalPrice })}
               </button>
             </div>
           )}
@@ -629,7 +638,7 @@ function Borrow({ userId }: { userId: string }) {
         <div className="detail-modal-overlay" onClick={() => setSelectedEquipment(null)}>
           <div className="detail-modal" onClick={(e) => e.stopPropagation()}>
             <div className="detail-modal-header">
-              <h3>🎒 裝備詳細資訊</h3>
+              <h3>{t('borrow.modal.title')}</h3>
               <button className="close-modal-btn" onClick={() => setSelectedEquipment(null)}>&times;</button>
             </div>
             
@@ -643,32 +652,32 @@ function Borrow({ userId }: { userId: string }) {
                 
                 <div className="detail-modal-badges">
                   {selectedEquipment.remainQty <= 0 ? (
-                    <span className="status-badge out-of-stock">已租完</span>
+                    <span className="status-badge out-of-stock">{t('borrow.card.outOfStock')}</span>
                   ) : selectedEquipment.remainQty <= 2 ? (
-                    <span className="status-badge low-stock">僅剩 {selectedEquipment.remainQty} 件</span>
+                    <span className="status-badge low-stock">{t('borrow.card.lowStock', { count: selectedEquipment.remainQty })}</span>
                   ) : (
-                    <span className="status-badge in-stock">庫存充足 ({selectedEquipment.remainQty})</span>
+                    <span className="status-badge in-stock">{t('borrow.card.inStock', { count: selectedEquipment.remainQty })}</span>
                   )}
-                  <span className="status-badge code-badge" style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}>代號: {selectedEquipment.id}</span>
+                  <span className="status-badge code-badge" style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}>{t('borrow.modal.codeLabel')}{selectedEquipment.id}</span>
                 </div>
 
                 <div className="detail-modal-section">
                   <div className="detail-price-list" style={{ display: 'flex', flexDirection: 'column', gap: '2px', margin: '12px 0 16px 0', alignItems: 'flex-end', width: '100%' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.2' }}>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>基本租金 (2天)：</span>
+                      <span style={{ fontSize: '13px', color: '#64748b' }}>{t('borrow.modal.basePrice')}</span>
                       <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a' }}>${selectedEquipment.price}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', lineHeight: '1.2' }}>
-                      <span style={{ fontSize: '12px', color: '#64748b' }}>續租費用 (每加一天)：</span>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>{t('borrow.modal.extraPrice')}</span>
                       <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#64748b' }}>+${selectedEquipment.priceExtra || 0}</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="detail-modal-section">
-                  <h4 style={{ margin: '18px 0 6px 0', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' }}>📝 裝備說明與規格</h4>
+                  <h4 style={{ margin: '18px 0 6px 0', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' }}>{t('borrow.modal.descTitle')}</h4>
                   <p className="detail-description" style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6', margin: '6px 0', textAlign: 'left', minHeight: '60px' }}>
-                    {selectedEquipment.description ? selectedEquipment.description : '目前無此裝備的詳細描述。若有疑問請洽社團幹部。'}
+                    {selectedEquipment.description ? selectedEquipment.description : t('borrow.modal.noDesc')}
                   </p>
                 </div>
               </div>
@@ -676,7 +685,7 @@ function Borrow({ userId }: { userId: string }) {
 
             <div className="detail-modal-footer" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
               <div className="detail-qty-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>預約數量：</span>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{t('borrow.modal.qtyLabel')}</span>
                 {(() => {
                   const currentQty = form.cart[selectedEquipment.id] || 0;
                   return currentQty === 0 ? (
@@ -686,7 +695,7 @@ function Borrow({ userId }: { userId: string }) {
                       disabled={selectedEquipment.remainQty <= 0}
                       style={{ padding: '8px 24px', fontSize: '13px', borderRadius: '8px', backgroundColor: 'var(--primary-color)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                     >
-                      {selectedEquipment.remainQty <= 0 ? '庫存不足' : '加入預訂'}
+                      {selectedEquipment.remainQty <= 0 ? t('borrow.modal.outOfStock') : t('borrow.modal.addToReservation')}
                     </button>
                   ) : (
                     <div className="quantity-controller" style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden' }}>

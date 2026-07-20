@@ -104,5 +104,167 @@
       "saving": "Saving...",
       "submit": "Submit"
     }
+  },
+  "dashboard": {
+    "loading": "Loading dashboard, please wait...",
+    "error": {
+      "title": "Failed to load data",
+      "retry": "Reload",
+      "loadProfileFailed": "Unable to read profile data",
+      "networkError": "Network connection failed, please try again later!"
+    },
+    "confirm": {
+      "cancelLoan": "Are you sure you want to cancel this equipment reservation? The stock will be auto-restored, and this action cannot be undone.",
+      "cancelActivity": "Are you sure you want to cancel your registration for \"{{name}}\"?"
+    },
+    "alert": {
+      "cancelLoanSuccess": "🎉 Equipment reservation cancelled successfully!",
+      "cancelActivitySuccess": "🎉 Event registration cancelled successfully!",
+      "cancelConfirmedSuccess": "🎉 Confirmed spot and event registration cancelled successfully! Officers have been notified.",
+      "cancelFailed": "❌ Cancellation failed: {{message}}",
+      "contactAdmin": "Please contact administrator in this LINE account.",
+      "noEventCode": "This event has no registration ID and cannot be cancelled. Please contact club officers.",
+      "inputReason": "Please input cancellation reason!"
+    },
+    "card": {
+      "official": "✅ Member",
+      "nonMember": "❌ Non-Member",
+      "expired": "⚠️ Expired",
+      "noName": "Name not provided",
+      "noDept": "Dept not provided",
+      "studentId": "Student ID",
+      "notActivated": "Not activated"
+    },
+    "status": {
+      "confirmed": "Confirmed",
+      "backup": "Waitlisted",
+      "reviewing": "Checking",
+      "cancelled": "Cancelled",
+      "ended": "Ended",
+      "paid": "Paid",
+      "checking": "Checking",
+      "unpaid": "Unpaid",
+      "unreported": "Unreported",
+      "returned": "Returned",
+      "using": "In Use",
+      "toBeCollected": "To Be Collected"
+    },
+    "activity": {
+      "title": "🏕️ Event Status ({{count}})",
+      "empty": "No registered events currently.",
+      "date": "📅 Event Date: {{date}}",
+      "unscheduled": "TBD",
+      "cancelBtn": "Cancel ❌",
+      "payBtn": "Go to Payment"
+    },
+    "equipment": {
+      "title": "🎒 Gear Rental Status ({{count}})",
+      "empty": "No gear rental records currently.",
+      "orderId": "📝 Order ID: {{id}}",
+      "pickup": "Pickup: {{date}}",
+      "return": "Return: {{date}}",
+      "overdue": "⚠️ Overdue",
+      "cancelBtn": "Cancel ❌"
+    },
+    "modal": {
+      "title": "⚠️ Confirm Spot Cancellation",
+      "description": "You are currently confirmed for 【{{name}}】. Cancelling this spot will release it to others.",
+      "reasonLabel": "Please enter cancellation reason (Required)",
+      "reasonPlaceholder": "e.g., scheduling conflict, feeling unwell, transport issue...",
+      "keepBtn": "Keep my spot",
+      "confirmBtn": "Confirm cancellation",
+      "processing": "Processing..."
+    }
+  },
+  "borrow": {
+    "alert": {
+      "emptyCart": "Please select at least one item!",
+      "noDates": "Please select dates!",
+      "noOtherPurpose": "Please enter other purpose description!",
+      "systemError": "System error: {{message}}",
+      "networkError": "Connection failed. Please check network or contact officers!",
+      "submitSuccess": "✅ Successfully submitted reservation for {{count}} items!\nProcessing, please wait...",
+      "submitSuccessBrowser": "Order submitted"
+    },
+    "banner": {
+      "title": "Pricing & Rules Info",
+      "ruleOfficialActive": "Member (for club events)",
+      "ruleNonOfficialActive": "Non-Member (for club events)",
+      "ruleOfficialPersonal": "Member (personal use)",
+      "ruleNonOfficialPersonal": "Non-Member (personal use)",
+      "free": "Free",
+      "discount": "50% Off",
+      "fullPrice": "Full Price",
+      "noteBasicUnit": "• Price estimation is based on a \"2-day\" unit.",
+      "noteExtraDay": "• Days exceeding 2 days are charged by \"daily extra fee\".",
+      "noteConflict": "• For personal rentals, please check if there are conflicting club trips beforehand as those take priority. Thanks for your understanding."
+    },
+    "grid": {
+      "title": "Gear List",
+      "count": "{{count}} types of gear in total",
+      "loading": "Preparing the latest gear list for you..."
+    },
+    "card": {
+      "outOfStock": "Out of Stock",
+      "lowStock": "Only {{count}} left",
+      "inStock": "In Stock ({{count}})",
+      "rent2Days": "Rent (2 Days)",
+      "rentExtraDay": "Extend (+1 Day)",
+      "unavailable": "Unavailable",
+      "addToCart": "Add to Rental"
+    },
+    "floating": {
+      "basicLabel": "Basic:",
+      "personalLabel": "Personal:",
+      "memberTip": "(50% off for Members)",
+      "nextBtn": "Next"
+    },
+    "drawer": {
+      "title": "📝 Reservation Details",
+      "selectedItems": "Selected Gear",
+      "formulaLabel": "Formula: ",
+      "daysUnit": "d",
+      "itemsUnit": "pcs",
+      "freeClub": " (Free for Club Events)",
+      "discountMember": " (50% Off for Member)",
+      "emptyText": "Your reservation cart is currently empty!",
+      "startBrowsing": "Browse Gear",
+      "detailsTitle": "📅 Select Rental Details",
+      "pickupDate": "Pickup Date",
+      "returnDate": "Return Date",
+      "purpose": "Trip Purpose / Usage",
+      "purposeClub": "Club Trip",
+      "purposePersonal": "Personal Use",
+      "purposeOther": "Other Purpose",
+      "otherPurposeLabel": "Explain other purpose",
+      "otherPurposePlaceholder": "Please enter purpose description...",
+      "rentalDays": "Rental Period",
+      "totalItems": "Total Items",
+      "basePriceTotal": "Subtotal (Original Price)",
+      "personalPriceTotal": "Personal Use Price",
+      "discountMemberApplied": " (50% Member Discount)",
+      "fullPriceApplied": " (Full Price)",
+      "estimatedTotal": "Estimated Total ({{purpose}})",
+      "trialLabel": "Calculation: ",
+      "summaryTip": "* Actual rental fee will be calculated by officers at pickup based on usage days and rules.",
+      "submitBtn": "Confirm Reservation (${{price}})"
+    },
+    "formula": {
+      "daysUnit": "d",
+      "itemsUnit": "pcs",
+      "freeClub": "Free for Club Events",
+      "discountMember": "50% Member Discount"
+    },
+    "modal": {
+      "title": "🎒 Gear Specification",
+      "codeLabel": "Code: ",
+      "basePrice": "Rent (2 Days): ",
+      "extraPrice": "Extend (+1 Day): ",
+      "descTitle": "📝 Specification & Description",
+      "noDesc": "No details descriptions for this gear yet. Contact officers if you have any questions.",
+      "qtyLabel": "Quantity: ",
+      "outOfStock": "Out of Stock",
+      "addToReservation": "Add to Reservation"
+    }
   }
 }

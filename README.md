@@ -3,11 +3,21 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.73` (v0.0.73)
+- **當前版本**：`0.0.75` (v0.0.75)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 75. 裝備租借頁面 (Borrow.tsx) 雙語化 (v0.0.75)
+- **裝備租借首頁雙語化**：
+  - 重構 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx)，利用 `t()` 替換費用試算說明的計費規則、裝備卡片狀態標籤、底部浮動購物車、租用對帳抽屜 (Cart Drawer) 以及裝備詳細規格彈窗 (Detail Modal) 的所有中文文字。
+  - 對公式試算文字與用途選項（社團出隊/個人使用/其他用途）進行動態雙語處理，讓多國語系切換時整體計算邏輯與 UI 文字保持完美一致。
+
+### 74. 個人主頁面 (Dashboard.tsx) 雙語化 (v0.0.74)
+- **個人首頁雙語化**：
+  - 重構 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx)，利用 `t()` 替換數位社員證、活動狀態追蹤、裝備預約狀態、取消確認 Modal 等寫死之中文。
+  - 對後端 GAS 傳回的中文狀態進行前端判斷並做對應的雙語翻譯處理，確保切換英文時各狀態標籤（如正取/備取/已繳費/待確認）皆能順暢顯示為英文。
 
 ### 73. 資料註冊頁面 (Register.tsx) 雙語化 (v0.0.73)
 - **多國語系獨立 JSON 檔管理 (方案 A)**：
