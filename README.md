@@ -3,11 +3,15 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.65` (v0.0.65)
+- **當前版本**：`0.0.66` (v0.0.66)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 66. 修復 UnpaidItem 介面屬性缺失錯誤 (v0.0.66)
+- **新增 `purpose` 欄位**：
+  - 更新 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx)。在 `UnpaidItem` 介面中新增選用屬性 `purpose?: string;`，解決測試假資料（包含 `purpose` 欄位）以及後續程式碼存取該屬性時發生的 TypeScript 編譯錯誤：`Object literal may only specify known properties, and 'purpose' does not exist in type 'UnpaidItem'`。
 
 ### 65. 繳費裝備明細與用途計費修正 (v0.0.65)
 - **區分個人使用與社團出隊**：
