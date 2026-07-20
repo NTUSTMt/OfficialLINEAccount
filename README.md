@@ -3,11 +3,25 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.75` (v0.0.75)
+- **當前版本**：`0.0.78` (v0.0.78)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 78. 出隊足跡/成就系統 (Achievements.tsx) 雙語化 (v0.0.78)
+- **活動成就頁面雙語化**：
+  - 重構 [Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx)，利用 `t()` 替換出隊統計看板（出隊次數/回憶篇數）、已參與活動清單、無資料提示狀態、心得查看按鈕標籤（查看我的回憶/留下回憶）。
+  - 將心得填寫與回顧 Modal 彈窗進行雙語化（包括路線難易度/風景推薦度/心得分享輸入框/合照網址欄位/取消與提交按鈕），全面支援繁中與英文雙語切換。
+
+### 77. 歷史紀錄頁面 (History.tsx) 雙語化 (v0.0.77)
+- **歷史繳費紀錄頁面雙語化**：
+  - 重構 [History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx)，利用 `t()` 替換累計花費金額、審核中筆數提示、分類切換按鈕標籤（全部/社費/活動/裝備）、無資料狀態、繳費狀態標籤（已確認無誤/對帳失敗/待幹部確認）以及展開明細中的說明文字與無備註提示。
+
+### 76. 繳費對帳系統 (Payment.tsx) 雙語化 (v0.0.76)
+- **繳費對帳頁面雙語化**：
+  - 重構 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx)，利用 `t()` 替換匯款銀行資訊、未繳費明細列表（社費方案選擇/活動報名費/裝備租用明細）、貼心提醒、申報資料輸入框以及繳費成功狀態畫面。
+  - 對發送至 LINE 聊天室的繳費明細對帳訊息（`msgText`）進行雙語翻譯處理，讓使用者在不同語系環境下申報時能看懂各項目的英文標示。
 
 ### 75. 裝備租借頁面 (Borrow.tsx) 雙語化 (v0.0.75)
 - **裝備租借首頁雙語化**：

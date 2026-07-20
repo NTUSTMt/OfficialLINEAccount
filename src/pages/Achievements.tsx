@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import '../App.css';
 
 interface Reflection {
@@ -24,6 +25,7 @@ interface AchievementData {
 }
 
 function Achievements({ userId }: { userId: string }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AchievementData | null>(null);
@@ -49,7 +51,7 @@ function Achievements({ userId }: { userId: string }) {
         if (result.status === 'success') {
           setData(result.data);
         } else {
-          setError(result.message || '無法取得歷史活動與成就');
+          setError(result.message || t('achievements.error.loadFailed'));
         }
       } else {
         // 測試假資料
@@ -91,7 +93,7 @@ function Achievements({ userId }: { userId: string }) {
       }
     } catch (err) {
       console.error('載入活動成就失敗:', err);
-      setError('連線失敗，請檢查網路狀態');
+      setError(t('achievements.error.networkError'));
     } finally {
       setLoading(false);
     }
@@ -124,7 +126,7 @@ function Achievements({ userId }: { userId: string }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedActivity) return;
-    if (content.trim().length < 10) return alert('心得內容請至少輸入 10 個字喔！');
+    if (content.trim().length < 10) return alert(t('achievements.alert.minContentLength'));
 
     setSubmitting(true);
     try {
@@ -148,15 +150,15 @@ function Achievements({ userId }: { userId: string }) {
         });
         const result = await res.json();
         if (result.status === 'success') {
-          alert('🎉 感謝您的心得回饋！已經為您寫入成就牆囉！');
+          alert(t('achievements.alert.submitSuccess'));
           closeForm();
           fetchData(); // 重新整理
         } else {
-          alert('⚠️ 提交失敗：' + result.message);
+          alert(t('achievements.alert.submitFailed', { message: result.message }));
         }
       } else {
         // 假資料本地模擬提交
-        alert('🎉 感謝您的心得回饋！(本地模擬寫入成功)');
+        alert(t('achievements.alert.submitSuccessMock'));
         closeForm();
         // 更新本地 state 模擬
         if (data) {
@@ -179,7 +181,7 @@ function Achievements({ userId }: { userId: string }) {
       }
     } catch (err) {
       console.error('送出心得失敗:', err);
-      alert('連線失敗，請稍後再試');
+      alert(t('achievements.error.networkError'));
     } finally {
       setSubmitting(false);
     }
@@ -189,7 +191,7 @@ function Achievements({ userId }: { userId: string }) {
     return (
       <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
         <div className="spinner"></div>
-        <p>正在載入您的登山足跡牆...</p>
+        <p>{t('achievements.loading')}</p>
       </div>
     );
   }
@@ -217,32 +219,32 @@ function Achievements({ userId }: { userId: string }) {
         justifyContent: 'space-between'
       }}>
         <div>
-          <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px', fontWeight: 'bold' }}>My Mountaineering Footprint</span>
-          <div style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0' }}>我的出隊成就</div>
-          <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>一步一腳印，記錄每一次出隊的回憶！</p>
+          <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px', fontWeight: 'bold' }}>{t('achievements.overview.badgeLabel')}</span>
+          <div style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0' }}>{t('achievements.overview.title')}</div>
+          <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>{t('achievements.overview.subtitle')}</p>
         </div>
         <div style={{ display: 'flex', gap: '16px', textAlign: 'center' }}>
           <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 8px', borderRadius: '12px', minWidth: '72px' }}>
             <div style={{ fontSize: '20px', fontWeight: '800' }}>{data?.totalAttended || 0}</div>
-            <div style={{ fontSize: '10px', opacity: 0.8, whiteSpace: 'nowrap' }}>出隊次數</div>
+            <div style={{ fontSize: '10px', opacity: 0.8, whiteSpace: 'nowrap' }}>{t('achievements.overview.attendedLabel')}</div>
           </div>
           <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 8px', borderRadius: '12px', minWidth: '72px' }}>
             <div style={{ fontSize: '20px', fontWeight: '800' }}>{data?.reflectionsCount || 0}</div>
-            <div style={{ fontSize: '10px', opacity: 0.8, whiteSpace: 'nowrap' }}>回憶篇數</div>
+            <div style={{ fontSize: '10px', opacity: 0.8, whiteSpace: 'nowrap' }}>{t('achievements.overview.reflectionsLabel')}</div>
           </div>
         </div>
       </div>
 
       {/* 區塊二：歷史活動相片牆 */}
       <div style={{ textAlign: 'left', marginBottom: '8px' }}>
-        <h3 style={{ fontSize: '16px', color: '#1e293b', fontWeight: 'bold', margin: '0 0 12px 0' }}>🏔️ 已參與活動清單</h3>
+        <h3 style={{ fontSize: '16px', color: '#1e293b', fontWeight: 'bold', margin: '0 0 12px 0' }}>{t('achievements.list.title')}</h3>
       </div>
 
       {data?.activities.length === 0 ? (
         <div className="empty-cart-state" style={{ padding: '60px 0', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
           <span className="empty-icon" style={{ fontSize: '48px' }}>🧗</span>
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '12px' }}>您目前還沒有已結束且正取的活動紀錄喔！</p>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>出隊成功後，即可解鎖心得撰寫功能。</p>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '12px' }}>{t('achievements.list.emptyTitle')}</p>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('achievements.list.emptyText')}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -281,7 +283,7 @@ function Achievements({ userId }: { userId: string }) {
                   }}>
                     {item.title}
                   </h4>
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>📅 出隊日期: {item.date}</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('achievements.list.dateLabel', { date: item.date })}</span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
@@ -299,7 +301,7 @@ function Achievements({ userId }: { userId: string }) {
                         cursor: 'pointer'
                       }}
                     >
-                      📖 查看我的回憶
+                      {t('achievements.list.viewBtn')}
                     </button>
                   ) : (
                     <button
@@ -316,7 +318,7 @@ function Achievements({ userId }: { userId: string }) {
                         boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
                       }}
                     >
-                      ✏️ 留下回憶
+                      {t('achievements.list.writeBtn')}
                     </button>
                   )}
                 </div>
@@ -354,7 +356,7 @@ function Achievements({ userId }: { userId: string }) {
             position: 'relative'
           }}>
             <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>
-              {isViewOnly ? '📖 路線出隊心得回顧' : '✏️ 填寫出隊心得回饋'}
+              {isViewOnly ? t('achievements.modal.viewTitle') : t('achievements.modal.writeTitle')}
             </h3>
             <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
               {selectedActivity.title}
@@ -366,7 +368,7 @@ function Achievements({ userId }: { userId: string }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '4px' }}>
-                    路線難易度 (1~5 星)
+                    {t('achievements.modal.difficultyLabel')}
                   </label>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -392,7 +394,7 @@ function Achievements({ userId }: { userId: string }) {
 
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '4px' }}>
-                    風景推薦度 (1~5 星)
+                    {t('achievements.modal.beautyLabel')}
                   </label>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -420,14 +422,14 @@ function Achievements({ userId }: { userId: string }) {
               {/* 心得內容 */}
               <div style={{ marginBottom: '16px' }}>
                 <label htmlFor="modalContent" style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>
-                  心得分享 (最少 10 字)
+                  {t('achievements.modal.contentLabel')}
                 </label>
                 <textarea
                   id="modalContent"
                   disabled={isViewOnly}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="跟大家分享一下這次的收穫、山上的趣事，或是想特別感謝哪位幹部/嚮導吧！🏕️"
+                  placeholder={t('achievements.modal.contentPlaceholder')}
                   style={{
                     width: '100%',
                     height: '110px',
@@ -446,7 +448,7 @@ function Achievements({ userId }: { userId: string }) {
               {/* 照片分享 (選填) */}
               <div style={{ marginBottom: '24px' }}>
                 <label htmlFor="modalImgUrl" style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>
-                  登頂照 / 團體合照網址 (選填)
+                  {t('achievements.modal.imageLabel')}
                 </label>
                 <input
                   id="modalImgUrl"
@@ -454,7 +456,7 @@ function Achievements({ userId }: { userId: string }) {
                   disabled={isViewOnly}
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://example.com/your-summit-photo.jpg"
+                  placeholder={t('achievements.modal.imagePlaceholder')}
                   style={{
                     width: '100%',
                     borderRadius: '8px',
@@ -492,7 +494,7 @@ function Achievements({ userId }: { userId: string }) {
                     cursor: 'pointer'
                   }}
                 >
-                  {isViewOnly ? '關閉視窗' : '取消'}
+                  {isViewOnly ? t('achievements.modal.closeBtn') : t('achievements.modal.cancelBtn')}
                 </button>
                 {!isViewOnly && (
                   <button
@@ -510,7 +512,7 @@ function Achievements({ userId }: { userId: string }) {
                       boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
                     }}
                   >
-                    {submitting ? '提交中...' : '送出心得'}
+                    {submitting ? t('achievements.modal.submittingBtn') : t('achievements.modal.submitBtn')}
                   </button>
                 )}
               </div>

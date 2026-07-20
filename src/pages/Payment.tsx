@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
+import { useTranslation } from 'react-i18next';
 import '../App.css';
 
 interface UnpaidItem {
@@ -16,6 +17,7 @@ interface UnpaidItem {
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
 
 function Payment({ userId }: { userId: string }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unpaidList, setUnpaidList] = useState<{ membership: UnpaidItem[], activities: UnpaidItem[], equipments: UnpaidItem[] }>({
@@ -127,11 +129,11 @@ function Payment({ userId }: { userId: string }) {
           ];
           setSelectedIds(allIds);
         } else {
-          setError(result.message || '無法取得未繳費資料');
+          setError(result.message || t('payment.error.loadFailed'));
         }
       } catch (err: any) {
         console.error('取得未繳費資料失敗:', err);
-        setError('連線失敗，請檢查網路狀態');
+        setError(t('payment.error.networkError'));
       } finally {
         setLoading(false);
       }
@@ -199,7 +201,7 @@ function Payment({ userId }: { userId: string }) {
         returnDate: group.returnDate,
         items: group.items,
         type: 'equipment',
-        typeLabel: '裝備租用'
+        typeLabel: t('payment.type.equipment')
       };
     });
 
@@ -209,7 +211,7 @@ function Payment({ userId }: { userId: string }) {
         name: membershipDetails.name,
         amount: membershipDetails.amount,
         type: 'membership',
-        typeLabel: '社籍與社費',
+        typeLabel: t('payment.type.membership'),
         orderId: undefined,
         pickupDate: undefined,
         returnDate: undefined,
@@ -219,7 +221,7 @@ function Payment({ userId }: { userId: string }) {
       ...unpaidList.activities.map(item => ({
         ...item,
         type: 'activity',
-        typeLabel: '活動報名',
+        typeLabel: t('payment.type.activity'),
         orderId: undefined,
         pickupDate: undefined,
         returnDate: undefined,
@@ -281,13 +283,13 @@ function Payment({ userId }: { userId: string }) {
             .filter(item => selectedIds.includes(item.id))
             .map(item => item.name);
             
-          const msgText = `💰 【繳費申報完成 / Payment Submitted】\n\n` +
-            `您好！已成功收到您的繳費申報資訊：\n` +
-            `💵 申報金額：$${totalAmount}\n` +
-            `🔢 帳號末5碼：${last5Digits.trim()}\n\n` +
-            `📋 申報項目：\n` +
+          const msgText = `💰 【${t('payment.msg.title')}】\n\n` +
+            `${t('payment.msg.success')}\n` +
+            `💵 ${t('payment.msg.amount')}：$${totalAmount}\n` +
+            `🔢 ${t('payment.msg.digits')}：${last5Digits.trim()}\n\n` +
+            `📋 ${t('payment.msg.items')}：\n` +
             selectedNames.map(n => `• ${n}`).join('\n') + `\n\n` +
-            `幹部會於核對款項後自動更新您的狀態。謝謝！`;
+            `${t('payment.msg.footer')}`;
 
           await liff.sendMessages([{
             type: 'text',
@@ -298,11 +300,11 @@ function Payment({ userId }: { userId: string }) {
           setSubmitted(true);
         }
       } else {
-        alert(result.message || '申報失敗，請聯繫管理員');
+        alert(t('payment.alert.submitFailed', { message: result.message || t('payment.alert.contactAdmin') }));
       }
     } catch (err) {
       console.error('申報異常:', err);
-      alert('網路連線錯誤，請稍後再試！');
+      alert(t('payment.error.networkError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -314,10 +316,9 @@ function Payment({ userId }: { userId: string }) {
       <div className="app-container" style={{ textAlign: 'center', padding: '40px 20px' }}>
         <div className="empty-cart-state">
           <span className="empty-icon">🎉</span>
-          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--success-color)' }}>繳費申報成功！</h3>
+          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--success-color)' }}>{t('payment.submitted.title')}</h3>
           <p style={{ marginTop: '12px', color: '#666', fontSize: '14px', lineHeight: '1.6' }}>
-            已順利將對帳單發送至幹部審核群組。<br />
-            款項確認無誤後，系統將自動以 LINE 訊息通知您。
+            {t('payment.submitted.description')}
           </p>
         </div>
       </div>
@@ -338,31 +339,31 @@ function Payment({ userId }: { userId: string }) {
 
         {/* 帳戶資訊卡 */}
         <div className="drawer-section" style={{ backgroundColor: 'white', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', marginTop: '16px' }}>
-          <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>🏦 社團指定匯款帳戶</h4>
+          <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>{t('payment.account.title')}</h4>
           <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.8' }}>
-            <p><strong>銀行名稱：</strong>連線商業銀行 (824)（LINE Bank）</p>
-            <p><strong>匯款帳號：</strong>111019636700</p>
-            <p><strong>戶名：</strong>曹洧祥（登山社財務）</p>
+            <p><strong>{t('payment.account.bankLabel')}</strong>{t('payment.account.bankName')}</p>
+            <p><strong>{t('payment.account.accountLabel')}</strong>111019636700</p>
+            <p><strong>{t('payment.account.nameLabel')}</strong>{t('payment.account.nameValue')}</p>
           </div>
           <div style={{ fontSize: '11px', color: '#b45309', backgroundColor: '#fef3c7', padding: '8px 12px', borderRadius: '8px', marginTop: '10px' }}>
-            * 請務必依照「已選項目總金額」進行匯款，切勿分開或多匯，以免無法對帳。
+            {t('payment.account.note')}
           </div>
         </div>
 
         {/* 未繳費清單 */}
         <div className="drawer-section" style={{ backgroundColor: 'white', marginTop: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '16px' }}>
-          <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>📋 您的未繳費項目</h4>
+          <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>{t('payment.list.title')}</h4>
           
           {loading ? (
             <div className="loading-state" style={{ padding: '24px 0' }}>
               <div className="spinner"></div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>取得待繳項目中，請稍候...</p>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>{t('payment.list.loading')}</p>
             </div>
           ) : allItemsFlat.length === 0 ? (
             <div className="empty-cart-state" style={{ padding: '24px 0' }}>
               <span className="empty-icon">👍</span>
-              <h5 style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--success-color)' }}>目前無待繳費用</h5>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>太棒了！您所有的費用均已結清。</p>
+              <h5 style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--success-color)' }}>{t('payment.list.emptyTitle')}</h5>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('payment.list.emptyText')}</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -398,7 +399,7 @@ function Payment({ userId }: { userId: string }) {
                       </div>
                       <p style={{ fontSize: '13px', marginTop: '4px', color: 'var(--text-primary)', fontWeight: '500' }}>
                         {item.type === 'equipment' 
-                          ? ((item.purpose === '社團出隊' || item.purpose === '社團出團') ? '裝備租用 (社團出隊)' : '裝備租用 (個人使用)')
+                          ? ((item.purpose === '社團出隊' || item.purpose === '社團出團') ? t('payment.list.equipClub') : t('payment.list.equipPersonal'))
                           : item.name}
                       </p>
                     </div>
@@ -416,15 +417,15 @@ function Payment({ userId }: { userId: string }) {
                       }}
                     >
                       <div style={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '8px', fontSize: '13px' }}>
-                        💡 社費說明 (Fee Details)：
+                        {t('payment.membership.title')}
                       </div>
                       <ul style={{ margin: '0 0 12px 16px', padding: 0, color: '#475569', lineHeight: '1.6', fontSize: '12px', listStyleType: 'disc' }}>
-                        <li>一學期 (per semester)：<strong>$200</strong></li>
-                        <li>直到畢業 (until graduation)：<strong>$800 (大學部 Undergraduate) / $400 (研究所 Master)</strong></li>
+                        <li>{t('payment.membership.semesterLabel')}<strong>$200</strong></li>
+                        <li>{t('payment.membership.graduationLabel')}<strong>{t('payment.membership.graduationValue')}</strong></li>
                       </ul>
                       
                       <label style={{ display: 'block', fontWeight: 'bold', color: '#475569', marginBottom: '6px', fontSize: '12px' }}>
-                        請選擇您的社費方案 (Select Scheme)：
+                        {t('payment.membership.selectLabel')}
                       </label>
                       <select 
                         value={membershipOption}
@@ -440,10 +441,10 @@ function Payment({ userId }: { userId: string }) {
                           outline: 'none'
                         }}
                       >
-                        <option value="thisSem">一學期 - 當前學期 {semesterInfo.thisSemStr} ($200，預計到期 {semesterInfo.thisSemEndDate})</option>
-                        <option value="nextSem">一學期 - 下一學期 {semesterInfo.nextSemStr} ($200，預計到期 {semesterInfo.nextSemEndDate})</option>
-                        <option value="undergrad">直到畢業 - 大學部 ($800，預計到期 {semesterInfo.undergradGradDate})</option>
-                        <option value="master">直到畢業 - 研究所 ($400，預計到期 {semesterInfo.masterGradDate})</option>
+                        <option value="thisSem">{t('payment.membership.optionThisSem', { sem: semesterInfo.thisSemStr, date: semesterInfo.thisSemEndDate })}</option>
+                        <option value="nextSem">{t('payment.membership.optionNextSem', { sem: semesterInfo.nextSemStr, date: semesterInfo.nextSemEndDate })}</option>
+                        <option value="undergrad">{t('payment.membership.optionUndergrad', { date: semesterInfo.undergradGradDate })}</option>
+                        <option value="master">{t('payment.membership.optionMaster', { date: semesterInfo.masterGradDate })}</option>
                       </select>
                     </div>
                   )}
@@ -461,26 +462,26 @@ function Payment({ userId }: { userId: string }) {
                       }}
                     >
                       <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '6px' }}>
-                        📅 租借日期 (Rental Period)：
+                        {t('payment.equip.dateLabel')}
                         <div style={{ color: 'var(--primary-color)', marginTop: '4px', fontWeight: 'bold' }}>
                           {item.pickupDate} ~ {item.returnDate}
                         </div>
                       </div>
                       
                       <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
-                        📦 租借項目明細：
+                        {t('payment.equip.itemsLabel')}
                       </div>
                       <ul style={{ margin: '0 0 10px 16px', padding: 0, lineHeight: '1.6', fontSize: '12.5px', listStyleType: 'disc' }}>
                         {item.items?.map((sub, idx) => (
                           <li key={idx} style={{ color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span><strong>{sub.name}</strong> × {sub.qty} 件</span>
+                            <span><strong>{sub.name}</strong> × {sub.qty} {t('payment.equip.qtyUnit')}</span>
                             <span style={{ color: '#64748b' }}>${sub.amount}</span>
                           </li>
                         ))}
                       </ul>
                       
                       <div style={{ fontSize: '11px', color: '#dc2626', backgroundColor: '#fef2f2', padding: '6px 10px', borderRadius: '6px', fontWeight: 'bold', display: 'inline-block', width: '100%', boxSizing: 'border-box' }}>
-                        💡 貼心提醒：需要修改訂單的話，請到個人頁面取消訂單再重新租借一次。
+                        {t('payment.equip.modifyTip')}
                       </div>
                     </div>
                   )}
@@ -493,10 +494,10 @@ function Payment({ userId }: { userId: string }) {
         {/* 匯款資料填寫與送出 */}
         {!loading && allItemsFlat.length > 0 && (
           <form onSubmit={handleFormSubmit} className="drawer-section" style={{ backgroundColor: 'white', marginTop: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '16px' }}>
-            <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>✍️ 填寫匯款資料</h4>
+            <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>{t('payment.form.title')}</h4>
             
             <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>結帳總金額 (已自動計算)</label>
+              <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>{t('payment.form.amountLabel')}</label>
               <input 
                 type="text" 
                 value={`$${totalAmount}`} 
@@ -506,17 +507,17 @@ function Payment({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group" style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>您的匯款帳號「末 5 碼」</label>
+              <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>{t('payment.form.digitsLabel')}</label>
               <input 
                 type="text" 
-                placeholder="例如 12345" 
+                placeholder={t('payment.form.digitsPlaceholder')} 
                 maxLength={5}
                 value={last5Digits}
                 onChange={(e) => setLast5Digits(e.target.value.replace(/\D/g, ''))} // 只允許數字
                 required
                 style={{ fontSize: '15px' }}
               />
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>請確實填寫網銀轉帳帳號或實體存摺的末 5 碼數字，否則幹部無法成功對帳。</p>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('payment.form.digitsTip')}</p>
             </div>
 
             <button 
@@ -536,7 +537,7 @@ function Payment({ userId }: { userId: string }) {
                 transition: 'background-color 0.2s'
               }}
             >
-              {isSubmitting ? '申報送出中...' : '確認申報繳費'}
+              {isSubmitting ? t('payment.form.submittingBtn') : t('payment.form.submitBtn')}
             </button>
           </form>
         )}

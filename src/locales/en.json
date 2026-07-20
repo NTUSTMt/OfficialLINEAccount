@@ -266,5 +266,152 @@
       "outOfStock": "Out of Stock",
       "addToReservation": "Add to Reservation"
     }
+  },
+  "payment": {
+    "error": {
+      "loadFailed": "Unable to get unpaid records",
+      "networkError": "Connection failed, please check network status",
+      "title": "Failed to load data"
+    },
+    "alert": {
+      "submitFailed": "Submission failed, please contact administrator",
+      "contactAdmin": "Please contact administrator"
+    },
+    "msg": {
+      "title": "Payment Submitted",
+      "success": "Hello! Your payment submission has been received successfully:",
+      "amount": "Amount",
+      "digits": "Last 5 Digits",
+      "items": "Items",
+      "footer": "Officers will update your status after verifying the transaction. Thank you!"
+    },
+    "submitted": {
+      "title": "Payment Submitted successfully!",
+      "description": "The declaration has been successfully sent to the officer verification group. The system will automatically notify you via LINE message after confirmation."
+    },
+    "account": {
+      "title": "🏦 Club Bank Account Details",
+      "bankLabel": "Bank Name: ",
+      "bankName": "LINE Bank (824)",
+      "accountLabel": "Account No: ",
+      "nameLabel": "Account Name: ",
+      "nameValue": "曹洧祥 (Club Treasurer)",
+      "note": "* Please transfer exactly the \"Total Amount\" for the selected items. Do not split or overpay, otherwise we cannot reconcile."
+    },
+    "list": {
+      "title": "📋 Your Unpaid Items",
+      "loading": "Getting unpaid items, please wait...",
+      "emptyTitle": "No Unpaid Fees",
+      "emptyText": "Awesome! All your dues have been cleared.",
+      "equipClub": "Gear Rental (Club Event)",
+      "equipPersonal": "Gear Rental (Personal Use)"
+    },
+    "type": {
+      "equipment": "Gear Rental",
+      "membership": "Membership Fee",
+      "activity": "Event Registration"
+    },
+    "membership": {
+      "title": "💡 Membership Fee Details:",
+      "semesterLabel": "Per semester: ",
+      "graduationLabel": "Until graduation: ",
+      "graduationValue": "Undergraduate $800 / Master $400",
+      "selectLabel": "Select your membership scheme:",
+      "optionThisSem": "1 Semester - Current {{sem}} ($200, Expiry date: {{date}})",
+      "optionNextSem": "1 Semester - Next {{sem}} ($200, Expiry date: {{date}})",
+      "optionUndergrad": "Until Graduation - Undergrad ($800, Expiry date: {{date}})",
+      "optionMaster": "Until Graduation - Master ($400, Expiry date: {{date}})"
+    },
+    "equip": {
+      "dateLabel": "📅 Rental Period:",
+      "itemsLabel": "📦 Itemized Details:",
+      "qtyUnit": "pcs",
+      "modifyTip": "💡 Tip: If you need to modify your order, please go to your Profile to cancel it and rent again."
+    },
+    "form": {
+      "title": "✍️ Enter Payment Info",
+      "amountLabel": "Total Amount (Auto-Calculated)",
+      "digitsLabel": "Last 5 digits of your bank account",
+      "digitsPlaceholder": "e.g., 12345",
+      "digitsTip": "Please double check and enter the last 5 digits of your transfer account, otherwise officers cannot verify it.",
+      "submittingBtn": "Submitting...",
+      "submitBtn": "Confirm Payment"
+    }
+  },
+  "history": {
+    "error": {
+      "loadFailed": "Unable to get payment history records",
+      "networkError": "Connection failed, please check network status"
+    },
+    "loading": "Retrieving payment history...",
+    "overview": {
+      "totalExpense": "Total Expense",
+      "accumulatedLabel": "Accumulated Expenses",
+      "pendingCount": "{{count}} payments checking",
+      "cleared": "All dues cleared"
+    },
+    "tab": {
+      "all": "All",
+      "membership": "Fee",
+      "activity": "Event",
+      "equipment": "Gear"
+    },
+    "list": {
+      "empty": "No payment history in this category!"
+    },
+    "status": {
+      "confirmed": "Confirmed",
+      "failed": "Failed",
+      "checking": "Checking"
+    },
+    "item": {
+      "dateLabel": "Submitted: ",
+      "digitsRemarkLabel": "Last 5 Digits / Notes: ",
+      "none": "None",
+      "descLabel": "Description: ",
+      "descText": "Status will automatically be updated to 'Confirmed' after officers verify the transaction. If you have any questions, please contact officers in this LINE account."
+    }
+  },
+  "achievements": {
+    "error": {
+      "loadFailed": "Unable to get past activities and achievements",
+      "networkError": "Connection failed, please check network status"
+    },
+    "alert": {
+      "minContentLength": "Reflection content must be at least 10 characters!",
+      "submitSuccess": "🎉 Thank you for your feedback! It has been added to your achievement wall!",
+      "submitFailed": "⚠️ Submission failed: {{message}}",
+      "submitSuccessMock": "🎉 Thank you for your feedback! (Local mock submission successful)"
+    },
+    "loading": "Loading your climbing footprint wall...",
+    "overview": {
+      "badgeLabel": "My Mountaineering Footprint",
+      "title": "My Achievements",
+      "subtitle": "Step by step, record the memories of every trip!",
+      "attendedLabel": "Attended",
+      "reflectionsLabel": "Reflections"
+    },
+    "list": {
+      "title": "🏔️ Attended Events List",
+      "emptyTitle": "You do not have any past or confirmed event records yet!",
+      "emptyText": "After successfully attending trips, reflection writing features will unlock.",
+      "dateLabel": "📅 Trip Date: {{date}}",
+      "viewBtn": "📖 View My Memory",
+      "writeBtn": "✏️ Write Reflection"
+    },
+    "modal": {
+      "viewTitle": "📖 Review Trip Reflection",
+      "writeTitle": "✏️ Write Trip Reflection",
+      "difficultyLabel": "Difficulty (1~5 Stars)",
+      "beautyLabel": "Scenic Recommendation (1~5 Stars)",
+      "contentLabel": "Reflection Share (Min 10 characters)",
+      "contentPlaceholder": "Share your gains, interesting stories on the mountain, or special thanks to officers/guides! Happy climbing! 🏕️",
+      "imageLabel": "Summit/Group Photo URL (Optional)",
+      "imagePlaceholder": "https://example.com/your-summit-photo.jpg",
+      "closeBtn": "Close",
+      "cancelBtn": "Cancel",
+      "submittingBtn": "Submitting...",
+      "submitBtn": "Submit"
+    }
   }
 }

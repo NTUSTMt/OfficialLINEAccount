@@ -266,5 +266,152 @@
       "outOfStock": "庫存不足",
       "addToReservation": "加入預訂"
     }
+  },
+  "payment": {
+    "error": {
+      "loadFailed": "無法取得未繳費資料",
+      "networkError": "連線失敗，請檢查網路狀態",
+      "title": "資料載入失敗"
+    },
+    "alert": {
+      "submitFailed": "申報失敗，請聯繫管理員",
+      "contactAdmin": "請聯繫管理員"
+    },
+    "msg": {
+      "title": "繳費申報完成",
+      "success": "您好！已成功收到您的繳費申報資訊：",
+      "amount": "申報金額",
+      "digits": "帳號末5碼",
+      "items": "申報項目",
+      "footer": "幹部會於核對款項後自動更新您的狀態。謝謝！"
+    },
+    "submitted": {
+      "title": "繳費申報成功！",
+      "description": "已順利將對帳單發送至幹部審核群組。款項確認無誤後，系統將自動以 LINE 訊息通知您。"
+    },
+    "account": {
+      "title": "🏦 社團指定匯款帳戶",
+      "bankLabel": "銀行名稱：",
+      "bankName": "連線商業銀行 (824)（LINE Bank）",
+      "accountLabel": "匯款帳號：",
+      "nameLabel": "戶名：",
+      "nameValue": "曹洧祥（登山社財務）",
+      "note": "* 請務必依照「已選項目總金額」進行匯款，切勿分開或多匯，以免無法對帳。"
+    },
+    "list": {
+      "title": "📋 您的未繳費項目",
+      "loading": "取得待繳項目中，請稍候...",
+      "emptyTitle": "目前無待繳費用",
+      "emptyText": "太棒了！您所有的費用均已結清。",
+      "equipClub": "裝備租用 (社團出隊)",
+      "equipPersonal": "裝備租用 (個人使用)"
+    },
+    "type": {
+      "equipment": "裝備租用",
+      "membership": "社籍與社費",
+      "activity": "活動報名"
+    },
+    "membership": {
+      "title": "💡 社費說明：",
+      "semesterLabel": "一學期：",
+      "graduationLabel": "直到畢業 (until graduation)：",
+      "graduationValue": "大學部 / 研究所",
+      "selectLabel": "請選擇您的社費方案：",
+      "optionThisSem": "一學期 - 當前學期 {{sem}} ($200，預計到期 {{date}})",
+      "optionNextSem": "一學期 - 下一學期 {{sem}} ($200，預計到期 {{date}})",
+      "optionUndergrad": "直到畢業 - 大學部 ($800，預計到期 {{date}})",
+      "optionMaster": "直到畢業 - 研究所 ($400，預計到期 {{date}})"
+    },
+    "equip": {
+      "dateLabel": "📅 租借日期：",
+      "itemsLabel": "📦 租借項目明細：",
+      "qtyUnit": "件",
+      "modifyTip": "💡 貼心提醒：需要修改訂單的話，請到個人頁面取消訂單再重新租借一次。"
+    },
+    "form": {
+      "title": "✍️ 填寫匯款資料",
+      "amountLabel": "結帳總金額 (已自動計算)",
+      "digitsLabel": "您的匯款帳號「末 5 碼」",
+      "digitsPlaceholder": "例如 12345",
+      "digitsTip": "請確實填寫網銀轉帳帳號或實體存摺的末 5 碼數字，否則幹部無法成功對帳。",
+      "submittingBtn": "申報送出中...",
+      "submitBtn": "確認申報繳費"
+    }
+  },
+  "history": {
+    "error": {
+      "loadFailed": "無法取得歷史繳費紀錄",
+      "networkError": "連線失敗，請檢查網路狀態"
+    },
+    "loading": "取得歷史帳單紀錄中...",
+    "overview": {
+      "totalExpense": "Total Expense",
+      "accumulatedLabel": "累計花費金額",
+      "pendingCount": "{{count}} 筆繳費審核中",
+      "cleared": "所有款項已結清"
+    },
+    "tab": {
+      "all": "全部",
+      "membership": "社費",
+      "activity": "活動",
+      "equipment": "裝備"
+    },
+    "list": {
+      "empty": "目前無該類別的繳費紀錄喔！"
+    },
+    "status": {
+      "confirmed": "已確認無誤",
+      "failed": "對帳失敗",
+      "checking": "待幹部確認"
+    },
+    "item": {
+      "dateLabel": "申報時間: ",
+      "digitsRemarkLabel": "申報帳號末 5 碼 / 備註：",
+      "none": "無",
+      "descLabel": "說明：",
+      "descText": "幹部對帳完成後，狀態會自動更新為「已確認無誤」。如有疑問，請在此帳號聯繫社團幹部。"
+    }
+  },
+  "achievements": {
+    "error": {
+      "loadFailed": "無法取得歷史活動與成就",
+      "networkError": "連線失敗，請檢查網路狀態"
+    },
+    "alert": {
+      "minContentLength": "心得內容請至少輸入 10 個字喔！",
+      "submitSuccess": "🎉 感謝您的心得回饋！已經為您寫入成就牆囉！",
+      "submitFailed": "⚠️ 提交失敗：{{message}}",
+      "submitSuccessMock": "🎉 感謝您的心得回饋！(本地模擬寫入成功)"
+    },
+    "loading": "正在載入您的登山足跡牆...",
+    "overview": {
+      "badgeLabel": "My Mountaineering Footprint",
+      "title": "我的出隊成就",
+      "subtitle": "一步一腳印，記錄每一次出隊的回憶！",
+      "attendedLabel": "出隊次數",
+      "reflectionsLabel": "回憶篇數"
+    },
+    "list": {
+      "title": "🏔️ 已參與活動清單",
+      "emptyTitle": "您目前還沒有已結束且正取的活動紀錄喔！",
+      "emptyText": "出隊成功後，即可解鎖心得撰寫功能。",
+      "dateLabel": "📅 出隊日期: {{date}}",
+      "viewBtn": "📖 查看我的回憶",
+      "writeBtn": "✏️ 留下回憶"
+    },
+    "modal": {
+      "viewTitle": "📖 路線出隊心得回顧",
+      "writeTitle": "✏️ 填寫出隊心得回饋",
+      "difficultyLabel": "路線難易度 (1~5 星)",
+      "beautyLabel": "風景推薦度 (1~5 星)",
+      "contentLabel": "心得分享 (最少 10 字)",
+      "contentPlaceholder": "跟大家分享一下這次的收穫、山上的趣事，或是想特別感謝哪位幹部/嚮導吧！居住/登山愉快！🏕️",
+      "imageLabel": "登頂照 / 團體合照網址 (選填)",
+      "imagePlaceholder": "https://example.com/your-summit-photo.jpg",
+      "closeBtn": "關閉視窗",
+      "cancelBtn": "取消",
+      "submittingBtn": "提交中...",
+      "submitBtn": "送出心得"
+    }
   }
 }

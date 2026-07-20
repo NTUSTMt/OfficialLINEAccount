@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import '../App.css';
 
 interface HistoryItem {
@@ -17,11 +18,21 @@ interface PaymentHistoryData {
 }
 
 function History({ userId }: { userId: string }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PaymentHistoryData | null>(null);
   const [activeTab, setActiveTab] = useState<'全部' | '社費' | '活動' | '裝備'>('全部');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const getTabLabel = (tab: '全部' | '社費' | '活動' | '裝備') => {
+    switch (tab) {
+      case '全部': return t('history.tab.all');
+      case '社費': return t('history.tab.membership');
+      case '活動': return t('history.tab.activity');
+      case '裝備': return t('history.tab.equipment');
+    }
+  };
 
   const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
 
@@ -35,7 +46,7 @@ function History({ userId }: { userId: string }) {
         if (result.status === 'success') {
           setData(result.data);
         } else {
-          setError(result.message || '無法取得歷史繳費紀錄');
+          setError(result.message || t('history.error.loadFailed'));
         }
       } else {
         // 測試假資料
@@ -83,7 +94,7 @@ function History({ userId }: { userId: string }) {
       }
     } catch (err) {
       console.error('取得歷史繳費紀錄失敗:', err);
-      setError('連線失敗，請檢查網路狀態');
+      setError(t('history.error.networkError'));
     } finally {
       setLoading(false);
     }
@@ -116,12 +127,12 @@ function History({ userId }: { userId: string }) {
 
   const getStatusStyle = (status: string) => {
     if (status.indexOf('確認') > -1 || status.indexOf('已繳') > -1 || status.indexOf('已確認') > -1) {
-      return { bg: '#dcfce7', color: '#15803d', label: '🟢 已確認無誤' };
+      return { bg: '#dcfce7', color: '#15803d', label: `🟢 ${t('history.status.confirmed')}` };
     }
     if (status.indexOf('失敗') > -1 || status.indexOf('退回') > -1 || status.indexOf('錯誤') > -1) {
-      return { bg: '#fee2e2', color: '#b91c1c', label: '🔴 對帳失敗' };
+      return { bg: '#fee2e2', color: '#b91c1c', label: `🔴 ${t('history.status.failed')}` };
     }
-    return { bg: '#fef3c7', color: '#b45309', label: '🟡 待幹部確認' };
+    return { bg: '#fef3c7', color: '#b45309', label: `🟡 ${t('history.status.checking')}` };
   };
 
   const getTypeEmoji = (type: string) => {
@@ -137,7 +148,7 @@ function History({ userId }: { userId: string }) {
     return (
       <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
         <div className="spinner"></div>
-        <p>取得歷史帳單紀錄中...</p>
+        <p>{t('history.loading')}</p>
       </div>
     );
   }
@@ -161,13 +172,13 @@ function History({ userId }: { userId: string }) {
         marginBottom: '24px',
         textAlign: 'left'
       }}>
-        <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px', fontWeight: 'bold' }}>Total Expense</span>
+        <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px', fontWeight: 'bold' }}>{t('history.overview.totalExpense')}</span>
         <div style={{ fontSize: '32px', fontWeight: '800', margin: '4px 0 12px 0' }}>
           ${data?.totalSpent.toLocaleString() || 0}
         </div>
         <div style={{ display: 'flex', gap: '16px', fontSize: '12px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '12px' }}>
           <div>
-            <span style={{ opacity: 0.8 }}>累計花費金額</span>
+            <span style={{ opacity: 0.8 }}>{t('history.overview.accumulatedLabel')}</span>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <span style={{
@@ -177,7 +188,7 @@ function History({ userId }: { userId: string }) {
               backgroundColor: pendingCount > 0 ? '#fbbf24' : '#34d399',
               display: 'inline-block'
             }}></span>
-            <span>{pendingCount > 0 ? `${pendingCount} 筆繳費審核中` : '所有款項已結清'}</span>
+            <span>{pendingCount > 0 ? t('history.overview.pendingCount', { count: pendingCount }) : t('history.overview.cleared')}</span>
           </div>
         </div>
       </div>
@@ -208,7 +219,7 @@ function History({ userId }: { userId: string }) {
               boxShadow: activeTab === tab ? '0 4px 6px -1px rgba(16, 185, 129, 0.2)' : 'none'
             }}
           >
-            {tab}
+            {getTabLabel(tab)}
           </button>
         ))}
       </div>
@@ -218,7 +229,7 @@ function History({ userId }: { userId: string }) {
         {filteredHistory.length === 0 ? (
           <div className="empty-cart-state" style={{ padding: '40px 0', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
             <span className="empty-icon" style={{ fontSize: '36px' }}>📝</span>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '8px' }}>目前無該類別的繳費紀錄喔！</p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '8px' }}>{t('history.list.empty')}</p>
           </div>
         ) : (
           filteredHistory.map((item) => {
@@ -284,7 +295,7 @@ function History({ userId }: { userId: string }) {
                     </p>
                     
                     <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                      申報時間: {item.date}
+                      {t('history.item.dateLabel')}{item.date}
                     </span>
                   </div>
                 </div>
@@ -301,9 +312,9 @@ function History({ userId }: { userId: string }) {
                     }}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div><strong>申報帳號末 5 碼 / 備註：</strong>{item.last5Digits || '無'}</div>
+                    <div><strong>{t('history.item.digitsRemarkLabel')}</strong>{item.last5Digits || t('history.item.none')}</div>
                     <div style={{ marginTop: '4px' }}>
-                      <strong>說明：</strong>幹部對帳完成後，狀態會自動更新為「已確認無誤」。如有疑問，請在此帳號聯繫社團幹部。
+                      <strong>{t('history.item.descLabel')}</strong>{t('history.item.descText')}
                     </div>
                   </div>
                 )}
