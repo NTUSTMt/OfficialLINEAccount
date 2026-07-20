@@ -3,11 +3,25 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.62` (v0.0.62)
+- **當前版本**：`0.0.64` (v0.0.64)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 64. 繳費申報裝備打包合併與 UI 增強 (v0.0.64)
+- **裝備打包合併與租期顯示**：
+  - 更新 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js)。增強 `getUnpaidListAPI`，使取得未繳費裝備項目時能額外回傳數量、預計領取與歸還日期。
+  - 更新 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx)。將同一筆預約（相同 `orderId`）的裝備在前端扁平化清單中打包為單一項目，繳費申報時以加總後的總金額送出。
+- **打包項目 UI 增強與修改警語**：
+  - 於 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx) 為裝備租用合併帳單新增專屬的大框框 UI 樣式（加粗主色邊框與陰影）。
+  - 大框框內顯示裝備的詳細借用日期區間、細項明細列表，並加入貼心提醒文字：「💡 貼心提醒：需要修改訂單的話，請到個人頁面取消訂單再重新租借一次。」
+
+### 63. 修正費用試算公式與更新注意事項 (v0.0.63)
+- **修正費用試算公式**：
+  - 更新 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx)。將「社團出隊」的試算公式改為 `(${baseFormula}) × 0 (社團活動免費)`，解決先前渲染時重複顯示 `= $0` 的問題。
+- **更新費用試算說明注意事項**：
+  - 更新 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx)。在費用試算說明的注意事項中新增說明：「若個人使用時碰上社團出團活動，可能會無法租借，租借前可以先查詢社團是否有活動，請見諒。」
 
 ### 62. 調整底部浮動購物條顯示位置 (v0.0.62)
 - 由於底部導覽列已移除，將 [App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css) 中的 `.floating-cart-bar` 底部定位從 `calc(76px + ...)` 修正為 `calc(20px + ...)`，將浮動購物條往下移動到適當位置，避免遮擋裝備卡片內容。

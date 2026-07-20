@@ -451,7 +451,7 @@ function Dashboard({ userId }: { userId: string }) {
                           e.currentTarget.style.backgroundColor = '#3b82f6';
                         }}
                       >
-                        前往申報繳費 💳
+                        前往「繳費系統」
                       </button>
                     )}
                   </div>

@@ -6,6 +6,10 @@ interface UnpaidItem {
   id: string;
   name: string;
   amount: number;
+  orderId?: string;
+  pickupDate?: string;
+  returnDate?: string;
+  qty?: number;
 }
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -143,27 +147,77 @@ function Payment({ userId }: { userId: string }) {
           { id: 'act_E02', name: '合歡群峰出隊費 (交通與入園保險)', amount: 1500 }
         ],
         equipments: [
-          { id: 'eq_L001', name: '雙人高山帳篷 (租期: 2天)', amount: 100 },
-          { id: 'eq_L002', name: '黑冰 Z400 羽絨睡袋 (租期: 2天)', amount: 120 }
+          { id: 'eq_R0720141530', name: '雙人高山帳篷', amount: 100, orderId: 'R0720141530', qty: 1, pickupDate: '2026-07-25', returnDate: '2026-07-27' },
+          { id: 'eq_R0720141530', name: '黑冰 Z400 羽絨睡袋', amount: 120, orderId: 'R0720141530', qty: 2, pickupDate: '2026-07-25', returnDate: '2026-07-27' }
         ]
       });
-      setSelectedIds(['fee_membership', 'act_E01', 'eq_L001']);
+      setSelectedIds(['fee_membership', 'act_E01', 'eq_R0720141530']);
       setLoading(false);
     }
   }, [userId]);
 
   // 所有項目的扁平化清單 (社費部分動態計算金額與名稱)
   const allItemsFlat = useMemo(() => {
+    // 依據 orderId 分組裝備
+    const equipGroups: { [orderId: string]: { id: string; orderId: string; amount: number; pickupDate: string; returnDate: string; items: { name: string; qty: number; amount: number }[] } } = {};
+    
+    unpaidList.equipments.forEach(item => {
+      const orderId = item.orderId || 'unknown';
+      if (!equipGroups[orderId]) {
+        equipGroups[orderId] = {
+          id: item.id, // eq_orderId
+          orderId: orderId,
+          amount: 0,
+          pickupDate: item.pickupDate || '',
+          returnDate: item.returnDate || '',
+          items: []
+        };
+      }
+      equipGroups[orderId].amount += item.amount;
+      equipGroups[orderId].items.push({
+        name: item.name,
+        qty: item.qty || 1,
+        amount: item.amount
+      });
+    });
+
+    const groupedEquips = Object.values(equipGroups).map(group => {
+      const namesList = group.items.map(it => `${it.name} x${it.qty}`).join(', ');
+      return {
+        id: group.id,
+        orderId: group.orderId,
+        name: namesList,
+        amount: group.amount,
+        pickupDate: group.pickupDate,
+        returnDate: group.returnDate,
+        items: group.items,
+        type: 'equipment',
+        typeLabel: '裝備租用'
+      };
+    });
+
     return [
       ...unpaidList.membership.map(item => ({
         ...item,
         name: membershipDetails.name,
         amount: membershipDetails.amount,
         type: 'membership',
-        typeLabel: '社籍與社費'
+        typeLabel: '社籍與社費',
+        orderId: undefined,
+        pickupDate: undefined,
+        returnDate: undefined,
+        items: undefined
       })),
-      ...unpaidList.activities.map(item => ({ ...item, type: 'activity', typeLabel: '活動報名' })),
-      ...unpaidList.equipments.map(item => ({ ...item, type: 'equipment', typeLabel: '裝備租用' }))
+      ...unpaidList.activities.map(item => ({
+        ...item,
+        type: 'activity',
+        typeLabel: '活動報名',
+        orderId: undefined,
+        pickupDate: undefined,
+        returnDate: undefined,
+        items: undefined
+      })),
+      ...groupedEquips
     ];
   }, [unpaidList, membershipDetails]);
 
@@ -277,9 +331,9 @@ function Payment({ userId }: { userId: string }) {
         <div className="drawer-section" style={{ backgroundColor: 'white', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', marginTop: '16px' }}>
           <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>🏦 社團指定匯款帳戶</h4>
           <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.8' }}>
-            <p><strong>銀行名稱：</strong>中華郵政 (700)</p>
-            <p><strong>匯款帳號：</strong>0001236-0489271</p>
-            <p><strong>戶名：</strong>國立台灣科技大學登山社</p>
+            <p><strong>銀行名稱：</strong>連線商業銀行 (824)（LINE Bank）</p>
+            <p><strong>匯款帳號：</strong>111019636700</p>
+            <p><strong>戶名：</strong>曹洧祥（登山社財務）</p>
           </div>
           <div style={{ fontSize: '11px', color: '#b45309', backgroundColor: '#fef3c7', padding: '8px 12px', borderRadius: '8px', marginTop: '10px' }}>
             * 請務必依照「已選項目總金額」進行匯款，切勿分開或多匯，以免無法對帳。
@@ -293,12 +347,12 @@ function Payment({ userId }: { userId: string }) {
           {loading ? (
             <div className="loading-state" style={{ padding: '24px 0' }}>
               <div className="spinner"></div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>撈取欠繳帳單中，請稍候...</p>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>取得待繳項目中，請稍候...</p>
             </div>
           ) : allItemsFlat.length === 0 ? (
             <div className="empty-cart-state" style={{ padding: '24px 0' }}>
               <span className="empty-icon">👍</span>
-              <h5 style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--success-color)' }}>目前無欠繳費用</h5>
+              <h5 style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--success-color)' }}>目前無待繳費用</h5>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>太棒了！您所有的費用均已結清。</p>
             </div>
           ) : (
@@ -309,10 +363,13 @@ function Payment({ userId }: { userId: string }) {
                   style={{ 
                     display: 'flex', 
                     flexDirection: 'column',
-                    padding: '12px', 
-                    borderRadius: '8px', 
-                    border: '1px solid var(--border-color)',
+                    padding: item.type === 'equipment' ? '16px' : '12px', 
+                    borderRadius: '12px', 
+                    border: item.type === 'equipment' 
+                      ? (selectedIds.includes(item.id) ? '2px solid var(--primary-color)' : '2px solid #cbd5e1')
+                      : '1px solid var(--border-color)',
                     backgroundColor: selectedIds.includes(item.id) ? '#f0fdf4' : 'white',
+                    boxShadow: item.type === 'equipment' ? '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' : 'none',
                     transition: 'all 0.2s'
                   }}
                 >
@@ -330,7 +387,9 @@ function Payment({ userId }: { userId: string }) {
                         </span>
                         <strong style={{ color: 'var(--primary-color)', fontSize: '14px' }}>${item.amount}</strong>
                       </div>
-                      <p style={{ fontSize: '13px', marginTop: '4px', color: 'var(--text-primary)', fontWeight: '500' }}>{item.name}</p>
+                      <p style={{ fontSize: '13px', marginTop: '4px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                        {item.type === 'equipment' ? `裝備租約合併帳單 (編號: ${item.orderId})` : item.name}
+                      </p>
                     </div>
                   </div>
 
@@ -375,6 +434,42 @@ function Payment({ userId }: { userId: string }) {
                         <option value="undergrad">直到畢業 - 大學部 ($800，預計到期 {semesterInfo.undergradGradDate})</option>
                         <option value="master">直到畢業 - 研究所 ($400，預計到期 {semesterInfo.masterGradDate})</option>
                       </select>
+                    </div>
+                  )}
+
+                  {item.type === 'equipment' && (
+                    <div 
+                      style={{
+                        marginTop: '10px',
+                        padding: '12px',
+                        backgroundColor: '#f8fafc',
+                        borderRadius: '8px',
+                        border: '1px dotted #cbd5e1',
+                        fontSize: '13px',
+                        color: '#475569'
+                      }}
+                    >
+                      <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '6px' }}>
+                        📅 租借日期 (Rental Period)：
+                        <span style={{ color: 'var(--primary-color)', marginLeft: '4px', fontWeight: 'bold' }}>
+                          {item.pickupDate} ~ {item.returnDate}
+                        </span>
+                      </div>
+                      
+                      <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
+                        📦 租借項目明細：
+                      </div>
+                      <ul style={{ margin: '0 0 10px 16px', padding: 0, lineHeight: '1.6', fontSize: '12.5px', listStyleType: 'disc' }}>
+                        {item.items?.map((sub, idx) => (
+                          <li key={idx} style={{ color: '#334155' }}>
+                            <strong>{sub.name}</strong> × {sub.qty} 件
+                          </li>
+                        ))}
+                      </ul>
+                      
+                      <div style={{ fontSize: '11px', color: '#dc2626', backgroundColor: '#fef2f2', padding: '6px 10px', borderRadius: '6px', fontWeight: 'bold', display: 'inline-block', width: '100%', boxSizing: 'border-box' }}>
+                        💡 貼心提醒：需要修改訂單的話，請到個人頁面取消訂單再重新租借一次。
+                      </div>
                     </div>
                   )}
                 </div>

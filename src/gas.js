@@ -3977,7 +3977,22 @@ function getUnpaidListAPI(ss, userId) {
     var lPayIdx = _fi(lData[0], "繳費狀態");
     var lOrderIdx = _fi(lData[0], "租借編號");
     var lNameIdx = _fi(lData[0], "裝備名稱");
+    var lQtyIdx = _fi(lData[0], "數量");
+    var lPickupIdx = _fi(lData[0], "預計領取");
+    var lReturnIdx = _fi(lData[0], "預計歸還");
     var lCostIdx = lData[0].findIndex(function(h) { return String(h).includes("應繳費用") || String(h).includes("費用"); });
+
+    var formatVal = function(val) {
+      if (val instanceof Date) {
+        return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      }
+      if (!val) return "";
+      var str = String(val).trim();
+      if (str.indexOf("T") > -1) {
+        return str.split("T")[0];
+      }
+      return str.split(" ")[0];
+    };
 
     for (var l = 1; l < lData.length; l++) {
       if (lSysIdx > -1 && lData[l][lSysIdx] === userId) {
@@ -3991,9 +4006,12 @@ function getUnpaidListAPI(ss, userId) {
           if (cost > 0) {
             responseData.equipments.push({
               id: "eq_" + orderId,
-              name: "裝備：" + (lNameIdx > -1 ? String(lData[l][lNameIdx]).trim() : "未知裝備"),
+              name: lNameIdx > -1 ? String(lData[l][lNameIdx]).trim() : "未知裝備",
               amount: cost,
-              orderId: orderId
+              orderId: orderId,
+              qty: lQtyIdx > -1 ? parseInt(lData[l][lQtyIdx], 10) || 1 : 1,
+              pickupDate: lPickupIdx > -1 ? formatVal(lData[l][lPickupIdx]) : "",
+              returnDate: lReturnIdx > -1 ? formatVal(lData[l][lReturnIdx]) : ""
             });
           }
         }

@@ -230,7 +230,7 @@ function Borrow({ userId }: { userId: string }) {
 
     const baseFormula = parts.join(' + ');
     if (form.purpose === '社團出隊') {
-      return `${baseFormula} = $0 (社團活動免費)`;
+      return `(${baseFormula}) × 0 (社團活動免費)`;
     }
     if (isOfficial) {
       return `(${baseFormula}) × 0.5 (社員個人 5 折)`;
@@ -327,6 +327,7 @@ function Borrow({ userId }: { userId: string }) {
           <div className="pricing-notes">
             <p>。租金試算以「2天」為基本單位</p>
             <p>。超過 2 天之部分按「每日加價」計算</p>
+            <p>。若個人使用時碰上社團出團活動，可能會無法租借，租借前可以先查詢社團是否有活動，請見諒。</p>
           </div>
         </div>
       </div>
