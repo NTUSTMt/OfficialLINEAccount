@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import liff from '@line/liff';
 import Borrow from './pages/Borrow';
 import Payment from './pages/Payment';
@@ -26,33 +27,39 @@ const getInitialRedirectPath = () => {
 
   return '/borrow';
 };
-
-// 全域導覽 Header & 頭貼選單組件 (統一全頁面頂部 Header 樣式)
 function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; displayName: string }) {
+  const { t, i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // 切換語言
+  const toggleLanguage = () => {
+    const nextLang = i18n.language === 'zh' ? 'en' : 'zh';
+    i18n.changeLanguage(nextLang);
+    localStorage.setItem('app_lang', nextLang);
+  };
 
   // 根據當前路由，動態決定左側的 Logo、標題與副標題
   const getHeaderDetails = () => {
     const path = location.pathname;
     if (path.includes('/register')) {
-      return { title: '資料填寫', subtitle: 'Register', icon: '📝' };
+      return { title: t('nav.register.title'), subtitle: t('nav.register.subtitle'), icon: '📝' };
     }
     if (path.includes('/payment')) {
-      return { title: '繳費系統', subtitle: 'Payment System', icon: '💳' };
+      return { title: t('nav.payment.title'), subtitle: t('nav.payment.subtitle'), icon: '💳' };
     }
     if (path.includes('/dashboard')) {
-      return { title: '個人主頁', subtitle: 'My Dashboard', icon: '👤' };
+      return { title: t('nav.dashboard.title'), subtitle: t('nav.dashboard.subtitle'), icon: '👤' };
     }
     if (path.includes('/history')) {
-      return { title: '歷史紀錄', subtitle: 'Payment History', icon: '📜' };
+      return { title: t('nav.history.title'), subtitle: t('nav.history.subtitle'), icon: '📜' };
     }
     if (path.includes('/achievements')) {
-      return { title: '出隊足跡', subtitle: 'Mountaineering Footprint', icon: '🏆' };
+      return { title: t('nav.achievements.title'), subtitle: t('nav.achievements.subtitle'), icon: '🏆' };
     }
     // 預設為裝備租借
-    return { title: '裝備租借', subtitle: 'Equipments Rental', icon: '🏕️' };
+    return { title: t('nav.borrow.title'), subtitle: t('nav.borrow.subtitle'), icon: '🏕️' };
   };
 
   const { title, subtitle, icon } = getHeaderDetails();
@@ -91,119 +98,128 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
         </div>
       </div>
 
-      <div className="avatar-dropdown-container" style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* 語言切換按鈕 */}
         <button
-          onClick={() => setIsOpen(!isOpen)}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 0,
-            display: 'flex',
-            alignItems: 'center',
-            outline: 'none'
-          }}
+          className="lang-switch-btn"
+          onClick={toggleLanguage}
+          title="Switch Language"
         >
-          {pictureUrl ? (
-            <img
-              src={pictureUrl}
-              alt="Avatar"
-              style={{
+          🌐 {i18n.language === 'zh' ? 'EN' : '中'}
+        </button>
+
+        <div className="avatar-dropdown-container" style={{ position: 'relative' }}>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              outline: 'none'
+            }}
+          >
+            {pictureUrl ? (
+              <img
+                src={pictureUrl}
+                alt="Avatar"
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  border: '2px solid #10b981',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  objectFit: 'cover'
+                }}
+              />
+            ) : (
+              <div style={{
                 width: '40px',
                 height: '40px',
                 borderRadius: '50%',
-                border: '2px solid #10b981',
+                backgroundColor: '#10b981',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                objectFit: 'cover'
-              }}
-            />
-          ) : (
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              backgroundColor: '#10b981',
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '16px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              fontWeight: 'bold'
-            }}>
-              {displayName ? displayName.charAt(0) : '山'}
-            </div>
+                fontWeight: 'bold'
+              }}>
+                {displayName ? displayName.charAt(0) : '山'}
+              </div>
+            )}
+          </button>
+
+          {isOpen && (
+            <>
+              <div className="dropdown-menu animate-fade-in" style={{
+                position: 'absolute',
+                top: '48px',
+                right: 0,
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+                border: '1px solid #e2e8f0',
+                padding: '6px 0',
+                width: '140px',
+                zIndex: 1000,
+                textAlign: 'left'
+              }}>
+                <div
+                  onClick={() => handleNav('/dashboard', 'https://liff.line.me/2009217429-jvj3ydDT')}
+                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  {t('nav.menuDashboard')}
+                </div>
+                <div
+                  onClick={() => handleNav('/register', 'https://liff.line.me/2009217429-AhPRqAHg')}
+                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  {t('nav.menuRegister')}
+                </div>
+                <div
+                  onClick={() => handleNav('/borrow', 'https://liff.line.me/2009217429-zXvGeSrI')}
+                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  {t('nav.menuBorrow')}
+                </div>
+                <div
+                  onClick={() => handleNav('/payment', 'https://liff.line.me/2009217429-u7OCkmQO')}
+                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  {t('nav.menuPayment')}
+                </div>
+                <div
+                  onClick={() => handleNav('/history', 'https://liff.line.me/2009217429-FRB6rjph')}
+                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  {t('nav.menuHistory')}
+                </div>
+                <div
+                  onClick={() => handleNav('/achievements', 'https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fachievements')}
+                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  {t('nav.menuAchievements')}
+                </div>
+              </div>
+            </>
           )}
-        </button>
-
-        {isOpen && (
-          <>
-
-
-            <div className="dropdown-menu animate-fade-in" style={{
-              position: 'absolute',
-              top: '48px',
-              right: 0,
-              backgroundColor: 'white',
-              borderRadius: '12px',
-              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
-              border: '1px solid #e2e8f0',
-              padding: '6px 0',
-              width: '140px',
-              zIndex: 1000,
-              textAlign: 'left'
-            }}>
-              <div
-                onClick={() => handleNav('/dashboard', 'https://liff.line.me/2009217429-jvj3ydDT')}
-                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                👤 個人主頁
-              </div>
-              <div
-                onClick={() => handleNav('/register', 'https://liff.line.me/2009217429-AhPRqAHg')}
-                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                📝 資料填寫
-              </div>
-              <div
-                onClick={() => handleNav('/borrow', 'https://liff.line.me/2009217429-zXvGeSrI')}
-                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                🎒 裝備租借
-              </div>
-              <div
-                onClick={() => handleNav('/payment', 'https://liff.line.me/2009217429-u7OCkmQO')}
-                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                💳 繳費系統
-              </div>
-              <div
-                onClick={() => handleNav('/history', 'https://liff.line.me/2009217429-FRB6rjph')}
-                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                📜 繳費紀錄
-              </div>
-              <div
-                onClick={() => handleNav('/achievements', 'https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fachievements')}
-                style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                🏆 出隊足跡
-              </div>
-            </div>
-          </>
-        )}
+        </div>
       </div>
     </header>
   );
