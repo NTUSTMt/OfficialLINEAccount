@@ -3,11 +3,17 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.81` (v0.0.81)
+- **當前版本**：`0.0.82` (v0.0.82)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 82. 支援 Google Drive 資料夾動態載入多篇社團規範 (v0.0.82)
+- **多文件動態知識庫讀取**：
+  - 重構後端 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 的 `getClubKnowledgeFromDoc`。
+  - 當設定了環境變數 `KNOWLEDGE_FOLDER_ID`（Google Drive 資料夾 ID）時，後端會自動掃描該資料夾內所有的 **Google Docs 文件** 與 **純文字 TXT 檔**，合併抓取內容（上限 15,000 字），並作為背景知識提供給 Gemini。
+  - 幹部未來只需在 Drive 資料夾內新增/編輯規範，AI 就會自動學習並回答最新條文。
 
 ### 81. LINE 聊天室預設提示訊息頻率限制 (v0.0.81)
 - **24小時只提示一次**：

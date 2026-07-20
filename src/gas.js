@@ -3739,12 +3739,44 @@ function getPublicEventsInfo() {
 // 並把它當作背景知識餵給 AI，讓 AI 能夠回答社團專屬的客製化問題，不再憑空捏造！
 function getClubKnowledgeFromDoc() {
   try {
-    var docId = "1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI";
-    var doc = DocumentApp.openById(docId);
-    var text = doc.getBody().getText();
-    return text.substring(0, 3000);
+    var folderId = PropertiesService.getScriptProperties().getProperty('KNOWLEDGE_FOLDER_ID');
+    if (!folderId) {
+      // 預設降級：若無設定，讀取原有的單一文件 ID
+      var docId = "1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI";
+      var doc = DocumentApp.openById(docId);
+      var text = doc.getBody().getText();
+      return text.substring(0, 4000);
+    }
+
+    var folder = DriveApp.getFolderById(folderId);
+    var files = folder.getFiles();
+    var allKnowledge = "";
+
+    while (files.hasNext()) {
+      var file = files.next();
+      var mimeType = file.getMimeType();
+
+      // 支援讀取 Google Docs 文件
+      if (mimeType === MimeType.GOOGLE_DOCS) {
+        var doc = DocumentApp.openById(file.getId());
+        allKnowledge += "【規章文件：" + file.getName() + "】\n" + doc.getBody().getText() + "\n\n";
+      } 
+      // 支援讀取純文字檔案 (TXT)
+      else if (mimeType === MimeType.PLAIN_TEXT) {
+        allKnowledge += "【規章文件：" + file.getName() + "】\n" + file.getAs("text/plain").getDataAsString() + "\n\n";
+      }
+    }
+
+    // 限制總長度 15000 字，避免提示詞過長
+    return allKnowledge.substring(0, 15000);
   } catch (e) {
-    return "";
+    console.error("讀取雲端硬碟規範資料夾失敗:", e.toString());
+    try {
+      var docId = "1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI";
+      return DocumentApp.openById(docId).getBody().getText().substring(0, 4000);
+    } catch (err) {
+      return "";
+    }
   }
 }
 
