@@ -3978,27 +3978,50 @@ function getUnpaidListAPI(ss, userId) {
     var lNameIdx = _fi(lData[0], "裝備名稱");
     var lQtyIdx = _fi(lData[0], "數量");
     var lPickupIdx = _fi(lData[0], "預計領取");
+    if (lPickupIdx === -1) lPickupIdx = _fi(lData[0], "pickup");
+    if (lPickupIdx === -1) lPickupIdx = _fi(lData[0], "領取");
+
     var lReturnIdx = _fi(lData[0], "預計歸還");
+    if (lReturnIdx === -1) lReturnIdx = _fi(lData[0], "return");
+    if (lReturnIdx === -1) lReturnIdx = _fi(lData[0], "歸還");
+
     var lPurposeIdx = _fi(lData[0], "用途");
     var lCostIdx = lData[0].findIndex(function(h) { return String(h).includes("應繳費用") || String(h).includes("費用"); });
 
     var formatVal = function(val) {
-      if (val && Object.prototype.toString.call(val) === '[object Date]') {
-        return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
-      }
       if (!val) return "";
+      
+      // 若為原生 Date 物件，直接格式化輸出
+      if (val instanceof Date) {
+        return Utilities.formatDate(val, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
+      }
+      
       var str = String(val).trim();
-      var match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-      if (match) {
-        var y = match[1];
-        var m = match[2].length === 1 ? "0" + match[2] : match[2];
-        var d = match[3].length === 1 ? "0" + match[3] : match[3];
+      
+      // 1. 匹配 YYYY-MM-DD 或 YYYY/MM/DD
+      var matchYMD = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (matchYMD) {
+        var y = matchYMD[1];
+        var m = matchYMD[2].length === 1 ? "0" + matchYMD[2] : matchYMD[2];
+        var d = matchYMD[3].length === 1 ? "0" + matchYMD[3] : matchYMD[3];
         return y + "-" + m + "-" + d;
       }
+      
+      // 2. 匹配 DD/MM/YYYY 或 DD-MM-YYYY (例如 24/03/2026)
+      var matchDMY = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+      if (matchDMY) {
+        var d = matchDMY[1].length === 1 ? "0" + matchDMY[1] : matchDMY[1];
+        var m = matchDMY[2].length === 1 ? "0" + matchDMY[2] : matchDMY[2];
+        var y = matchDMY[3];
+        return y + "-" + m + "-" + d;
+      }
+      
+      // 3. 回退至 JavaScript 日期物件解析
       var dObj = new Date(str);
       if (!isNaN(dObj.getTime())) {
-        return Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
+        return Utilities.formatDate(dObj, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
       }
+      
       if (str.indexOf("T") > -1) {
         return str.split("T")[0];
       }

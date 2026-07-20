@@ -3,11 +3,17 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.66` (v0.0.66)
+- **當前版本**：`0.0.67` (v0.0.67)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 67. 增強 GAS 日期格式解析與欄位對照備援 (v0.0.67)
+- **增強 `DD/MM/YYYY` 日期解析與 `instanceof Date` 檢查**：
+  - 更新 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js)。增強 `formatVal` 函式，新增對 `DD/MM/YYYY` 格式（如 `24/03/2026`）的正則表達式匹配，並自動轉換為 `YYYY-MM-DD` 標準格式以供前端順利渲染。同時，將不穩定的類型判定方法替換為 `val instanceof Date`。
+- **欄位查找對照備援機制**：
+  - 在 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的 `getUnpaidListAPI` 中，為預計領取與歸還日期欄位新增英文 `pickup`、`return` 等備援關鍵字尋找，確保即使 Google Sheets 的欄位標題微調也能正確讀取資料。
 
 ### 66. 修復 UnpaidItem 介面屬性缺失錯誤 (v0.0.66)
 - **新增 `purpose` 欄位**：
