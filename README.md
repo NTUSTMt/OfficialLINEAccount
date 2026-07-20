@@ -3,11 +3,20 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.69` (v0.0.69)
+- **當前版本**：`0.0.70` (v0.0.70)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 70. 敏感金鑰防護與並發寫入安全鎖優化 (v0.0.70)
+- **完全去金鑰化**：
+  - 更新 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js)。完全移除了全域變數中的硬編碼預設 Token 與 ID，完全依賴屬性服務 `PropertiesService.getScriptProperties().getProperty(...)` 來取得值。
+- **本機備份金鑰**：
+  - 新增 [secrets.local](file:///Users/brianhung/Documents/OfficialLINEAccount/secrets.local) 保存原金鑰備份。
+  - 更新 [.gitignore](file:///Users/brianhung/Documents/OfficialLINEAccount/.gitignore) 阻擋 `secrets.local`，使其不被上傳至 GitHub 倉庫，達到敏感資訊防洩漏。
+- **寫入並發防護**：
+  - 更新 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js)。在 `handleSignup` (活動報名)、`processSaveProfile` (儲存個人資料)、`processSubmitReflection` (心得回饋)、`processLiffCancelEvent` (取消活動報名)、`processLiffCancelLoan` (取消裝備預約) 全面導入 `LockService` 並發鎖防護（最大排隊超時 10 秒），保障在高流量與多人操作下資料表的原子性與庫存正確性。
 
 ### 69. 修正成就看板排版文字斷行 (v0.0.69)
 - **防止文字換行與微調統計框尺寸**：

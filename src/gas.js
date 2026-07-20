@@ -1,9 +1,10 @@
 // ⭐️ 1. 全域變數與環境設定
-var MEMBER_BOT_TOKEN = 'r5sUx1VkwED0wFUldkoU3EcM+xAnEI0f1eXRniml3BoR5hwqDlmvW7OxI3APqiKEmgTHi/Zykqg6TCFd0DCLNCOqwPWGVvTOtBWWp1IyOz+8+M4s+89iU1b0VqL8QQN1JJ8ke5vmjSEq65j8NAoAFwdB04t89/1O/w1cDnyilFU=';
-var ADMIN_BOT_TOKEN = 'N9qUaf5LTU8pWnc8DaKF5IcnPBNl7VriyfluY9fRSBxPjVezwNSDOosHHSY33y6V76PsCHIYQ9gTcIn5Y85tCCx/Uuj3LKD5THQkred03ICXtbPBiL69682smXKoul/R2QKcpaEUK0f75I6ZHDK89gdB04t89/1O/w1cDnyilFU=';
-var SPREADSHEET_ID = '14tVHqkx9TrhdPSNmsYYF2Cm5pdQMJWS2bot2dtsvcJM';
-var ADMIN_GROUP_ID = 'C9de5bb076802134f4131ca1c60a66073';
-var GEMINI_API_KEY = "AIzaSyDOp0xxtIZTWO4qoSx0UWrz39swakpzmeQ";
+var SPREADSHEET_ID = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+var ADMIN_GROUP_ID = PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID');
+
+var MEMBER_BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('MEMBER_BOT_TOKEN');
+var ADMIN_BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('ADMIN_BOT_TOKEN');
+var GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
 
 // ⭐️ 共用工具函式
 
@@ -1931,89 +1932,100 @@ function _checkProfileComplete(userId, ss, type) {
 // 如果發現缺少辦理保險所需的敏感資訊 (身分證、緊急聯絡人等)，
 // 系統會中斷報名，並貼心地列出「缺少的清單」，引導社員先去更新資料。
 function handleSignup(replyToken, userId, eventId, ss) {
-  var profileCheck = _checkProfileComplete(userId, ss, "signup");
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // 鎖定 10 秒防衝突
 
-  if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-    replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先完成「填寫資料」後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nplease click 'Register' in the menu to complete your profile first");
-    return;
-  }
+    var profileCheck = _checkProfileComplete(userId, ss, "signup");
 
-  if (profileCheck.missingFields.length > 0) {
-    replyMessage(replyToken, "⚠️ 報名失敗：您的個人資料尚不完整！\n\n為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n👉 " + profileCheck.missingFields.join("\n👉 ") + "\n\n完成資料更新後，再回來點擊一鍵報名喔！🏕️\n─────────────\n⚠️ Failed: Incomplete Profile!\nFor insurance and safety purposes, please click 'Register' in the menu to complete your profile. Once updated, you can sign up again!");
-    return;
-  }
+    if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
+      replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先完成「填寫資料」後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nplease click 'Register' in the menu to complete your profile first");
+      return;
+    }
 
-  var p = profileCheck.p;
+    if (profileCheck.missingFields.length > 0) {
+      replyMessage(replyToken, "⚠️ 報名失敗：您的個人資料尚不完整！\n\n為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n👉 " + profileCheck.missingFields.join("\n👉 ") + "\n\n完成資料更新後，再回來點擊一鍵報名喔！🏕️\n─────────────\n⚠️ Failed: Incomplete Profile!\nFor insurance and safety purposes, please click 'Register' in the menu to complete your profile. Once updated, you can sign up again!");
+      return;
+    }
 
-  // 寫入 Signups
-  var signupSheet = ss.getSheetByName("Signups");
-  if (!signupSheet) {
-    signupSheet = ss.insertSheet("Signups");
-    signupSheet.appendRow(["活動編號", "系統識別碼", "專屬碼", "活動名稱", "姓名", "性別", "LINE ID", "聯絡信箱 Email", "聯絡電話", "生日", "證件號碼", "緊急聯絡人姓名", "爬山經驗", "緊急聯絡人聯絡地址", "體能測驗", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "聯絡地址", "緊急聯絡人電話"]);
-  }
-  var sheetHeaders = signupSheet.getRange(1, 1, 1, signupSheet.getLastColumn()).getValues()[0];
+    var p = profileCheck.p;
 
-  // 防重複報名
-  var existingData = signupSheet.getDataRange().getValues();
-  if (existingData.length > 1) {
-    var eSysIdx = _fi(sheetHeaders, "系統識別碼"),
-      eEvtIdx = _fi(sheetHeaders, "活動編號"),
-      eStatIdx = _fi(sheetHeaders, "審核結果");
-    for (var s = 1; s < existingData.length; s++) {
-      if (eSysIdx > -1 && existingData[s][eSysIdx] === userId && existingData[s][eEvtIdx] === eventId) {
-        var currentStatus = existingData[s][eStatIdx] ? String(existingData[s][eStatIdx]) : "";
-        if (currentStatus.indexOf("取消") === -1) {
-          var cache = CacheService.getScriptCache();
-          if (!cache.get(userId + "_" + eventId)) {
-            cache.put(userId + "_" + eventId, 'locked', 10);
-            var eventName = _getEventName(ss, eventId);
-            replyMessage(replyToken, "⚠️ 您已經報名過【" + eventName + "】囉！\n請耐心等候幹部審核，或是點選選單「個人主頁」查詢進度。\n─────────────\n⚠️ You have already registered for [" + eventName + "]!\nPlease wait for officer review, or check 'My Status' for progress.");
+    // 寫入 Signups
+    var signupSheet = ss.getSheetByName("Signups");
+    if (!signupSheet) {
+      signupSheet = ss.insertSheet("Signups");
+      signupSheet.appendRow(["活動編號", "系統識別碼", "專屬碼", "活動名稱", "姓名", "性別", "LINE ID", "聯絡信箱 Email", "聯絡電話", "生日", "證件號碼", "緊急聯絡人姓名", "爬山經驗", "緊急聯絡人聯絡地址", "體能測驗", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "聯絡地址", "緊急聯絡人電話"]);
+    }
+    var sheetHeaders = signupSheet.getRange(1, 1, 1, signupSheet.getLastColumn()).getValues()[0];
+
+    // 防重複報名
+    var existingData = signupSheet.getDataRange().getValues();
+    if (existingData.length > 1) {
+      var eSysIdx = _fi(sheetHeaders, "系統識別碼"),
+        eEvtIdx = _fi(sheetHeaders, "活動編號"),
+        eStatIdx = _fi(sheetHeaders, "審核結果");
+      for (var s = 1; s < existingData.length; s++) {
+        if (eSysIdx > -1 && existingData[s][eSysIdx] === userId && existingData[s][eEvtIdx] === eventId) {
+          var currentStatus = existingData[s][eStatIdx] ? String(existingData[s][eStatIdx]) : "";
+          if (currentStatus.indexOf("取消") === -1) {
+            var cache = CacheService.getScriptCache();
+            if (!cache.get(userId + "_" + eventId)) {
+              cache.put(userId + "_" + eventId, 'locked', 10);
+              var eventName = _getEventName(ss, eventId);
+              replyMessage(replyToken, "⚠️ 您已經報名過【" + eventName + "】囉！\n請耐心等候幹部審核，或是點選選單「個人主頁」查詢進度。\n─────────────\n⚠️ You have already registered for [" + eventName + "]!\nPlease wait for officer review, or check 'My Status' for progress.");
+            }
+            return;
           }
-          return;
         }
       }
     }
+
+    // 寫入資料
+    var signupCode = "S" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMddHHmmss");
+    var rowData = new Array(sheetHeaders.length).fill("");
+    var eName = _getEventName(ss, eventId);
+
+    function placeData(keyword, value) {
+      var idx = _fi(sheetHeaders, keyword);
+      if (idx > -1) rowData[idx] = value;
+    }
+
+    placeData("活動編號", eventId);
+    placeData("系統識別碼", userId);
+    placeData("專屬碼", signupCode);
+    placeData("活動名稱", eName);
+    placeData("姓名", p.name);
+    placeData("性別", p.gender);
+    placeData("LINE", p.realLineId);
+    placeData("Email", p.email);
+    placeData("電話", p.phone);
+    placeData("生日", p.birthday);
+    placeData("證件", p.idNumber);
+    placeData("地址", p.studentAddr);
+    var emerNameIdx = sheetHeaders.findIndex(function (h) {
+      return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
+    });
+    if (emerNameIdx > -1) rowData[emerNameIdx] = p.emerName;
+    placeData("關係", p.emerRel);
+    placeData("緊急聯絡人聯絡地址", p.emerAddr);
+    placeData("緊急聯絡人電話", p.emerPhone);
+    placeData("經驗", p.exp);
+    placeData("體能", p.strength);
+    placeData("體能證明", p.strengthProof);
+    placeData("是否為社員", p.isOfficial);
+    placeData("審核結果", "審核中 Checking");
+    placeData("通知狀態", "");
+    placeData("繳費狀態", "未繳費 Unpaid");
+    signupSheet.appendRow(rowData);
+
+    replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n📍 活動 (Event)：\n" + eName + "\n🏷️ 代號 (Event ID)：" + eventId + "\n🎫 專屬碼 (Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的資料 (We have received your info)。\n\n⚠️ 【重要提醒 / Important】\n由於活動有人數限制及安全考量，此階段僅為「報名登記」。幹部將進行體能評估與篩選。最終是否錄取（正取/備取），將會透過本帳號個別推播通知您，請留意後續訊息！\n(This is only a registration. Final admission status will be notified to you individually through this account!)");
+
+  } catch (err) {
+    console.error("活動報名失敗:", err);
+    replyMessage(replyToken, "⚠️ 系統目前忙碌中，請稍後再試！");
+  } finally {
+    lock.releaseLock();
   }
-
-  // 寫入資料
-  var signupCode = "S" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMddHHmmss");
-  var rowData = new Array(sheetHeaders.length).fill("");
-  var eName = _getEventName(ss, eventId);
-
-  function placeData(keyword, value) {
-    var idx = _fi(sheetHeaders, keyword);
-    if (idx > -1) rowData[idx] = value;
-  }
-
-  placeData("活動編號", eventId);
-  placeData("系統識別碼", userId);
-  placeData("專屬碼", signupCode);
-  placeData("活動名稱", eName);
-  placeData("姓名", p.name);
-  placeData("性別", p.gender);
-  placeData("LINE", p.realLineId);
-  placeData("Email", p.email);
-  placeData("電話", p.phone);
-  placeData("生日", p.birthday);
-  placeData("證件", p.idNumber);
-  placeData("地址", p.studentAddr);
-  var emerNameIdx = sheetHeaders.findIndex(function (h) {
-    return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
-  });
-  if (emerNameIdx > -1) rowData[emerNameIdx] = p.emerName;
-  placeData("關係", p.emerRel);
-  placeData("緊急聯絡人聯絡地址", p.emerAddr);
-  placeData("緊急聯絡人電話", p.emerPhone);
-  placeData("經驗", p.exp);
-  placeData("體能", p.strength);
-  placeData("體能證明", p.strengthProof);
-  placeData("是否為社員", p.isOfficial);
-  placeData("審核結果", "審核中 Checking");
-  placeData("通知狀態", "");
-  placeData("繳費狀態", "未繳費 Unpaid");
-  signupSheet.appendRow(rowData);
-
-  replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n📍 活動 (Event)：\n" + eName + "\n🏷️ 代號 (Event ID)：" + eventId + "\n🎫 專屬碼 (Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的資料 (We have received your info)。\n\n⚠️ 【重要提醒 / Important】\n由於活動有人數限制及安全考量，此階段僅為「報名登記」。幹部將進行體能評估與篩選。最終是否錄取（正取/備取），將會透過本帳號個別推播通知您，請留意後續訊息！\n(This is only a registration. Final admission status will be notified to you individually through this account!)");
 }
 
 // ⭐️ 傳送專屬註冊/更新表單 (雙語排版版)
@@ -4613,258 +4625,269 @@ function getMyStatusAPI(ss, userId) {
 // 引擎 5：儲存社員基本資料 API (供 LIFF 前端註冊/更新送出)
 // ------------------------------------------------------------------
 function processSaveProfile(payload) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var memberSheet = ss.getSheetByName("Members");
-  if (!memberSheet) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Members 資料表" })).setMimeType(ContentService.MimeType.JSON);
-  }
-  
-  var userId = payload.userId;
-  if (!userId) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
-  }
-  
-  var data = payload.data || {};
-  var name = data.name || "未具名";
-  var studentId = data.studentId || "無學號";
-  
-  // 處理多張檔案上傳至 Google Drive，並用逗號區隔多個 URL
-  if (payload.strengthProofFiles && payload.strengthProofFiles.length > 0) {
-    var fileUrls = [];
-    for (var f = 0; f < payload.strengthProofFiles.length; f++) {
-      var fileObj = payload.strengthProofFiles[f];
-      if (fileObj && fileObj.base64 && fileObj.name) {
-        var ext = fileObj.name.split('.').pop();
-        var customFileName = name + "_體能證明_" + (f + 1) + "." + ext;
-        var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName);
-        if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
-          fileUrls.push(uploadedUrl);
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // 鎖定 10 秒防衝突
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var memberSheet = ss.getSheetByName("Members");
+    if (!memberSheet) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Members 資料表" })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var userId = payload.userId;
+    if (!userId) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var data = payload.data || {};
+    var name = data.name || "未具名";
+    var studentId = data.studentId || "無學號";
+    
+    // 處理多張檔案上傳至 Google Drive，並用逗號區隔多個 URL
+    if (payload.strengthProofFiles && payload.strengthProofFiles.length > 0) {
+      var fileUrls = [];
+      for (var f = 0; f < payload.strengthProofFiles.length; f++) {
+        var fileObj = payload.strengthProofFiles[f];
+        if (fileObj && fileObj.base64 && fileObj.name) {
+          var ext = fileObj.name.split('.').pop();
+          var customFileName = name + "_體能證明_" + (f + 1) + "." + ext;
+          var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName);
+          if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
+            fileUrls.push(uploadedUrl);
+          }
         }
       }
-    }
-    if (fileUrls.length > 0) {
-      data.strengthProof = fileUrls.join(",");
-    }
-  }
-  
-  var mData = memberSheet.getDataRange().getValues();
-  var headers = mData[0];
-  
-  // 確保或建立所有需要的欄位
-  var sysIdx = getOrCreateColIdx(memberSheet, headers, "系統識別碼");
-  var nameIdx = getOrCreateColIdx(memberSheet, headers, "姓名");
-  var genderIdx = getOrCreateColIdx(memberSheet, headers, "性別");
-  
-  var lineIdx = headers.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
-  if (lineIdx === -1) lineIdx = getOrCreateColIdx(memberSheet, headers, "真實 LINE ID");
-  
-  var emailIdx = headers.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); });
-  if (emailIdx === -1) emailIdx = getOrCreateColIdx(memberSheet, headers, "聯絡信箱 Email");
-  
-  var phoneIdx = headers.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); });
-  if (phoneIdx === -1) phoneIdx = getOrCreateColIdx(memberSheet, headers, "聯絡電話");
-  
-  var deptIdx = getOrCreateColIdx(memberSheet, headers, "系所");
-  var identityIdx = getOrCreateColIdx(memberSheet, headers, "身分狀態");
-  var studentIdIdx = getOrCreateColIdx(memberSheet, headers, "學號");
-  var birthdayIdx = getOrCreateColIdx(memberSheet, headers, "生日");
-  var idNumberIdx = getOrCreateColIdx(memberSheet, headers, "證件");
-  
-  var studentAddrIdx = headers.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
-  if (studentAddrIdx === -1) studentAddrIdx = getOrCreateColIdx(memberSheet, headers, "聯絡地址");
-  
-  var emerNameIdx = headers.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
-  if (emerNameIdx === -1) emerNameIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人姓名");
-  
-  var emerRelIdx = getOrCreateColIdx(memberSheet, headers, "關係");
-  
-  var emerAddrIdx = headers.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
-  if (emerAddrIdx === -1) emerAddrIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人地址");
-  
-  var emerPhoneIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人電話");
-  var expIdx = getOrCreateColIdx(memberSheet, headers, "經驗");
-  var strengthIdx = getOrCreateColIdx(memberSheet, headers, "體能");
-  var strengthProofIdx = getOrCreateColIdx(memberSheet, headers, "證明");
-  
-  var medIdx = headers.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
-  if (medIdx === -1) medIdx = getOrCreateColIdx(memberSheet, headers, "個人特殊病史或過敏");
-  
-  var payIdx = getOrCreateColIdx(memberSheet, headers, "繳費狀態");
-  var intendOfficialIdx = getOrCreateColIdx(memberSheet, headers, "加入社員意願");
-  var intendOfficerIdx = getOrCreateColIdx(memberSheet, headers, "擔任幹部意願");
-  
-  // 搜尋是否已存在該社員
-  var userRow = -1;
-  for (var i = 1; i < mData.length; i++) {
-    if (mData[i][sysIdx] === userId) {
-      userRow = i + 1;
-      break;
-    }
-  }
-  
-  var isUpdate = (userRow !== -1);
-  var rowData = new Array(headers.length).fill("");
-  
-  // 若為更新，預先複製原有整列的所有舊資料值，以防漏掉某些不在此程式寫入範圍內的欄位 (例如社籍到期日) 被覆蓋為空值！
-  if (isUpdate) {
-    var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
-    for (var col = 0; col < headers.length; col++) {
-      rowData[col] = oldValues[col];
-    }
-  }
-  
-  // 填入對應欄位資料
-  rowData[sysIdx] = userId;
-  rowData[nameIdx] = data.name || "";
-  rowData[genderIdx] = data.gender || "";
-  rowData[lineIdx] = data.realLineId || "";
-  rowData[emailIdx] = data.email || "";
-  rowData[phoneIdx] = data.phone ? "'" + String(data.phone) : "";
-  rowData[deptIdx] = data.department || "";
-  rowData[identityIdx] = data.identityStatus || "";
-  rowData[studentIdIdx] = data.studentId || "";
-  rowData[birthdayIdx] = data.birthday ? "'" + String(data.birthday).replace(/-/g, "/") : "";
-  rowData[idNumberIdx] = data.idNumber || "";
-  rowData[studentAddrIdx] = data.studentAddr || "";
-  rowData[emerNameIdx] = data.emerName || "";
-  rowData[emerRelIdx] = data.emerRel || "";
-  rowData[emerAddrIdx] = data.emerAddr || "";
-  rowData[emerPhoneIdx] = data.emerPhone ? "'" + String(data.emerPhone) : "";
-  rowData[expIdx] = data.exp || "";
-  rowData[strengthIdx] = data.strength || "";
-  
-  var oldValuesForCompare = null;
-  if (isUpdate) {
-    var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
-    oldValuesForCompare = JSON.parse(JSON.stringify(oldValues)); // 深拷貝一份舊值做比對
-    rowData[strengthProofIdx] = data.strengthProof || oldValues[strengthProofIdx] || "";
-    rowData[payIdx] = oldValues[payIdx] || "未繳費 Unpaid";
-  } else {
-    rowData[strengthProofIdx] = data.strengthProof || "";
-    rowData[payIdx] = "未繳費 Unpaid";
-  }
-  
-  rowData[medIdx] = data.medicalHistory || "";
-  rowData[intendOfficialIdx] = data.intendOfficial || "";
-  rowData[intendOfficerIdx] = data.intendOfficer || "";
-  
-  // 寫入/更新試算表
-  if (isUpdate) {
-    memberSheet.getRange(userRow, 1, 1, rowData.length).setValues([rowData]);
-  } else {
-    memberSheet.appendRow(rowData);
-  }
-
-  // 幹部意願通知處理
-  try {
-    var shouldNotifyOfficer = false;
-    if (data.intendOfficer === "我有意願成為社團幹部") {
-      if (!isUpdate) {
-        shouldNotifyOfficer = true;
-      } else if (oldValuesForCompare && String(oldValuesForCompare[intendOfficerIdx] || "").trim() !== "我有意願成為社團幹部") {
-        shouldNotifyOfficer = true;
+      if (fileUrls.length > 0) {
+        data.strengthProof = fileUrls.join(",");
       }
     }
-
-    if (shouldNotifyOfficer) {
-      var officerNotifyMsg = "📢 幹部意願新通知\n" +
-        "─────────────\n" +
-        "有社員表達擔任幹部意願！\n\n" +
-        "姓名：" + (data.name || "未填") + "\n" +
-        "性別：" + (data.gender || "未填") + "\n" +
-        "系所：" + (data.department || "未填") + "\n" +
-        "學號：" + (data.studentId || "未填") + "\n" +
-        "登山經驗：" + (data.exp || "未填") + "\n" +
-        "體能：" + (data.strength || "未填");
-      pushAdminMessage(officerNotifyMsg);
+    
+    var mData = memberSheet.getDataRange().getValues();
+    var headers = mData[0];
+    
+    // 確保或建立所有需要的欄位
+    var sysIdx = getOrCreateColIdx(memberSheet, headers, "系統識別碼");
+    var nameIdx = getOrCreateColIdx(memberSheet, headers, "姓名");
+    var genderIdx = getOrCreateColIdx(memberSheet, headers, "性別");
+    
+    var lineIdx = headers.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
+    if (lineIdx === -1) lineIdx = getOrCreateColIdx(memberSheet, headers, "真實 LINE ID");
+    
+    var emailIdx = headers.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); });
+    if (emailIdx === -1) emailIdx = getOrCreateColIdx(memberSheet, headers, "聯絡信箱 Email");
+    
+    var phoneIdx = headers.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); });
+    if (phoneIdx === -1) phoneIdx = getOrCreateColIdx(memberSheet, headers, "聯絡電話");
+    
+    var deptIdx = getOrCreateColIdx(memberSheet, headers, "系所");
+    var identityIdx = getOrCreateColIdx(memberSheet, headers, "身分狀態");
+    var studentIdIdx = getOrCreateColIdx(memberSheet, headers, "學號");
+    var birthdayIdx = getOrCreateColIdx(memberSheet, headers, "生日");
+    var idNumberIdx = getOrCreateColIdx(memberSheet, headers, "證件");
+    
+    var studentAddrIdx = headers.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
+    if (studentAddrIdx === -1) studentAddrIdx = getOrCreateColIdx(memberSheet, headers, "聯絡地址");
+    
+    var emerNameIdx = headers.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
+    if (emerNameIdx === -1) emerNameIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人姓名");
+    
+    var emerRelIdx = getOrCreateColIdx(memberSheet, headers, "關係");
+    
+    var emerAddrIdx = headers.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
+    if (emerAddrIdx === -1) emerAddrIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人地址");
+    
+    var emerPhoneIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人電話");
+    var expIdx = getOrCreateColIdx(memberSheet, headers, "經驗");
+    var strengthIdx = getOrCreateColIdx(memberSheet, headers, "體能");
+    var strengthProofIdx = getOrCreateColIdx(memberSheet, headers, "證明");
+    
+    var medIdx = headers.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
+    if (medIdx === -1) medIdx = getOrCreateColIdx(memberSheet, headers, "個人特殊病史或過敏");
+    
+    var payIdx = getOrCreateColIdx(memberSheet, headers, "繳費狀態");
+    var intendOfficialIdx = getOrCreateColIdx(memberSheet, headers, "加入社員意願");
+    var intendOfficerIdx = getOrCreateColIdx(memberSheet, headers, "擔任幹部意願");
+    
+    // 搜尋是否已存在該社員
+    var userRow = -1;
+    for (var i = 1; i < mData.length; i++) {
+      if (mData[i][sysIdx] === userId) {
+        userRow = i + 1;
+        break;
+      }
     }
-  } catch (err) {
-    console.error("發送幹部群組意願通知失敗: " + err.toString());
-  }
-  
-  // 主動推送 LINE 通知確認信 (動態欄位修改偵測)
-  try {
-    var pushMsg = "";
-    var fieldMappings = [
-      { label: "姓名", value: data.name || "", oldVal: isUpdate ? oldValuesForCompare[nameIdx] : "" },
-      { label: "性別", value: data.gender || "", oldVal: isUpdate ? oldValuesForCompare[genderIdx] : "" },
-      { label: "LINE ID", value: data.realLineId || "", oldVal: isUpdate ? oldValuesForCompare[lineIdx] : "" },
-      { label: "聯絡信箱", value: data.email || "", oldVal: isUpdate ? oldValuesForCompare[emailIdx] : "" },
-      { label: "聯絡電話", value: data.phone || "", oldVal: isUpdate ? oldValuesForCompare[phoneIdx] : "" },
-      { label: "在校系所/校外單位", value: data.department || "", oldVal: isUpdate ? oldValuesForCompare[deptIdx] : "" },
-      { label: "身分狀態", value: data.identityStatus || "", oldVal: isUpdate ? oldValuesForCompare[identityIdx] : "" },
-      { label: "學號", value: data.studentId || "", oldVal: isUpdate ? oldValuesForCompare[studentIdIdx] : "" },
-      { label: "生日", value: data.birthday ? String(data.birthday).split("T")[0] : "", oldVal: isUpdate ? (oldValuesForCompare[birthdayIdx] instanceof Date ? Utilities.formatDate(oldValuesForCompare[birthdayIdx], "GMT+8", "yyyy-MM-dd") : String(oldValuesForCompare[birthdayIdx])) : "" },
-      { label: "身份證字號/護照號碼", value: data.idNumber || "", oldVal: isUpdate ? oldValuesForCompare[idNumberIdx] : "" },
-      { label: "聯絡地址", value: data.studentAddr || "", oldVal: isUpdate ? oldValuesForCompare[studentAddrIdx] : "" },
-      { label: "緊急聯絡人姓名", value: data.emerName || "", oldVal: isUpdate ? oldValuesForCompare[emerNameIdx] : "" },
-      { label: "關係", value: data.emerRel || "", oldVal: isUpdate ? oldValuesForCompare[emerRelIdx] : "" },
-      { label: "緊急聯絡人地址", value: data.emerAddr || "", oldVal: isUpdate ? oldValuesForCompare[emerAddrIdx] : "" },
-      { label: "緊急聯絡人電話", value: data.emerPhone || "", oldVal: isUpdate ? oldValuesForCompare[emerPhoneIdx] : "" },
-      { label: "登山/戶外經驗", value: data.exp || "", oldVal: isUpdate ? oldValuesForCompare[expIdx] : "" },
-      { label: "體能證明描述", value: data.strength || "", oldVal: isUpdate ? oldValuesForCompare[strengthIdx] : "" },
-      { label: "個人特殊病史或過敏", value: data.medicalHistory || "", oldVal: isUpdate ? oldValuesForCompare[medIdx] : "" },
-      { label: "加入社員意願", value: data.intendOfficial || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficialIdx] : "" },
-      { label: "擔任幹部意願", value: data.intendOfficer || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficerIdx] : "" }
-    ];
-
+    
+    var isUpdate = (userRow !== -1);
+    var rowData = new Array(headers.length).fill("");
+    
+    // 若為更新，預先複製原有整列的所有舊資料值，以防漏掉某些不在此程式寫入範圍內的欄位 (例如社籍到期日) 被覆蓋為空值！
     if (isUpdate) {
-      var changes = [];
-      fieldMappings.forEach(function(item) {
-        var newValStr = String(item.value).trim();
-        var oldValStr = String(item.oldVal).trim();
-        
-        if (item.label === "生日") {
-          // 標準化：去掉時間部分，只保留日期（支援 ISO 8601 T 分隔或空格分隔格式）
-          newValStr = newValStr.split("T")[0].split(" ")[0].replace(/\//g, "-");
-          oldValStr = oldValStr.split("T")[0].split(" ")[0].replace(/\//g, "-");
-        }
-
-        if (newValStr !== oldValStr) {
-          changes.push("✏️ " + item.label + "：" + (oldValStr || "(空)") + " ➡️ " + (newValStr || "(空)"));
-        }
-      });
-
-      // 檢查是否上傳了新圖片證明
-      if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
-        var oldProofStr = isUpdate ? String(oldValuesForCompare[strengthProofIdx]).trim() : "";
-        if (data.strengthProof !== oldProofStr) {
-          changes.push("📷 體能證明截圖：已重新上傳新檔案");
-        }
+      var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
+      for (var col = 0; col < headers.length; col++) {
+        rowData[col] = oldValues[col];
       }
-
-      if (changes.length > 0) {
-        pushMsg = "✅ 您的社員資料已成功更新！\n\n" +
-                  "本次修改項目：\n" +
-                  changes.join("\n") + "\n\n" +
-                  "感謝您的填寫！";
-      } else {
-        pushMsg = "✅ 您的社員資料已成功更新（內容無變更）！";
-      }
-    } else {
-      var infoList = [];
-      fieldMappings.forEach(function(item) {
-        if (item.value && String(item.value).trim() !== "") {
-          infoList.push("📝 " + item.label + "：" + item.value);
-        }
-      });
-      if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
-        infoList.push("📷 體能證明截圖：已上傳證明檔案");
-      }
-      pushMsg = "🎉 歡迎加入野境戶外！您的個人資料已建立成功：\n\n" +
-                infoList.join("\n") + "\n\n" +
-                "感謝您的填寫！";
     }
-
-    pushMessage(userId, pushMsg);
-  } catch (err) {
-    console.error("發送 LINE 註冊成功通知失敗: " + err.toString());
-  }
+    
+    // 填入對應欄位資料
+    rowData[sysIdx] = userId;
+    rowData[nameIdx] = data.name || "";
+    rowData[genderIdx] = data.gender || "";
+    rowData[lineIdx] = data.realLineId || "";
+    rowData[emailIdx] = data.email || "";
+    rowData[phoneIdx] = data.phone ? "'" + String(data.phone) : "";
+    rowData[deptIdx] = data.department || "";
+    rowData[identityIdx] = data.identityStatus || "";
+    rowData[studentIdIdx] = data.studentId || "";
+    rowData[birthdayIdx] = data.birthday ? "'" + String(data.birthday).replace(/-/g, "/") : "";
+    rowData[idNumberIdx] = data.idNumber || "";
+    rowData[studentAddrIdx] = data.studentAddr || "";
+    rowData[emerNameIdx] = data.emerName || "";
+    rowData[emerRelIdx] = data.emerRel || "";
+    rowData[emerAddrIdx] = data.emerAddr || "";
+    rowData[emerPhoneIdx] = data.emerPhone ? "'" + String(data.emerPhone) : "";
+    rowData[expIdx] = data.exp || "";
+    rowData[strengthIdx] = data.strength || "";
+    
+    var oldValuesForCompare = null;
+    if (isUpdate) {
+      var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
+      oldValuesForCompare = JSON.parse(JSON.stringify(oldValues)); // 深拷貝一份舊值做比對
+      rowData[strengthProofIdx] = data.strengthProof || oldValues[strengthProofIdx] || "";
+      rowData[payIdx] = oldValues[payIdx] || "未繳費 Unpaid";
+    } else {
+      rowData[strengthProofIdx] = data.strengthProof || "";
+      rowData[payIdx] = "未繳費 Unpaid";
+    }
+    
+    rowData[medIdx] = data.medicalHistory || "";
+    rowData[intendOfficialIdx] = data.intendOfficial || "";
+    rowData[intendOfficerIdx] = data.intendOfficer || "";
+    
+    // 寫入/更新試算表
+    if (isUpdate) {
+      memberSheet.getRange(userRow, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      memberSheet.appendRow(rowData);
+    }
   
-  return ContentService.createTextOutput(JSON.stringify({ 
-    status: "success", 
-    message: isUpdate ? "資料已成功更新！" : "註冊成功！" 
-  })).setMimeType(ContentService.MimeType.JSON);
+    // 幹部意願通知處理
+    try {
+      var shouldNotifyOfficer = false;
+      if (data.intendOfficer === "我有意願成為社團幹部") {
+        if (!isUpdate) {
+          shouldNotifyOfficer = true;
+        } else if (oldValuesForCompare && String(oldValuesForCompare[intendOfficerIdx] || "").trim() !== "我有意願成為社團幹部") {
+          shouldNotifyOfficer = true;
+        }
+      }
+  
+      if (shouldNotifyOfficer) {
+        var officerNotifyMsg = "📢 幹部意願新通知\n" +
+          "─────────────\n" +
+          "有社員表達擔任幹部意願！\n\n" +
+          "姓名：" + (data.name || "未填") + "\n" +
+          "性別：" + (data.gender || "未填") + "\n" +
+          "系所：" + (data.department || "未填") + "\n" +
+          "學號：" + (data.studentId || "未填") + "\n" +
+          "登山經驗：" + (data.exp || "未填") + "\n" +
+          "體能：" + (data.strength || "未填");
+        pushAdminMessage(officerNotifyMsg);
+      }
+    } catch (err) {
+      console.error("發送幹部群組意願通知失敗: " + err.toString());
+    }
+    
+    // 主動推送 LINE 通知確認信 (動態欄位修改偵測)
+    try {
+      var pushMsg = "";
+      var fieldMappings = [
+        { label: "姓名", value: data.name || "", oldVal: isUpdate ? oldValuesForCompare[nameIdx] : "" },
+        { label: "性別", value: data.gender || "", oldVal: isUpdate ? oldValuesForCompare[genderIdx] : "" },
+        { label: "LINE ID", value: data.realLineId || "", oldVal: isUpdate ? oldValuesForCompare[lineIdx] : "" },
+        { label: "聯絡信箱", value: data.email || "", oldVal: isUpdate ? oldValuesForCompare[emailIdx] : "" },
+        { label: "聯絡電話", value: data.phone || "", oldVal: isUpdate ? oldValuesForCompare[phoneIdx] : "" },
+        { label: "在校系所/校外單位", value: data.department || "", oldVal: isUpdate ? oldValuesForCompare[deptIdx] : "" },
+        { label: "身分狀態", value: data.identityStatus || "", oldVal: isUpdate ? oldValuesForCompare[identityIdx] : "" },
+        { label: "學號", value: data.studentId || "", oldVal: isUpdate ? oldValuesForCompare[studentIdIdx] : "" },
+        { label: "生日", value: data.birthday ? String(data.birthday).split("T")[0] : "", oldVal: isUpdate ? (oldValuesForCompare[birthdayIdx] instanceof Date ? Utilities.formatDate(oldValuesForCompare[birthdayIdx], "GMT+8", "yyyy-MM-dd") : String(oldValuesForCompare[birthdayIdx])) : "" },
+        { label: "身份證字號/護照號碼", value: data.idNumber || "", oldVal: isUpdate ? oldValuesForCompare[idNumberIdx] : "" },
+        { label: "聯絡地址", value: data.studentAddr || "", oldVal: isUpdate ? oldValuesForCompare[studentAddrIdx] : "" },
+        { label: "緊急聯絡人姓名", value: data.emerName || "", oldVal: isUpdate ? oldValuesForCompare[emerNameIdx] : "" },
+        { label: "關係", value: data.emerRel || "", oldVal: isUpdate ? oldValuesForCompare[emerRelIdx] : "" },
+        { label: "緊急聯絡人地址", value: data.emerAddr || "", oldVal: isUpdate ? oldValuesForCompare[emerAddrIdx] : "" },
+        { label: "緊急聯絡人電話", value: data.emerPhone || "", oldVal: isUpdate ? oldValuesForCompare[emerPhoneIdx] : "" },
+        { label: "登山/戶外經驗", value: data.exp || "", oldVal: isUpdate ? oldValuesForCompare[expIdx] : "" },
+        { label: "體能證明描述", value: data.strength || "", oldVal: isUpdate ? oldValuesForCompare[strengthIdx] : "" },
+        { label: "個人特殊病史或過敏", value: data.medicalHistory || "", oldVal: isUpdate ? oldValuesForCompare[medIdx] : "" },
+        { label: "加入社員意願", value: data.intendOfficial || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficialIdx] : "" },
+        { label: "擔任幹部意願", value: data.intendOfficer || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficerIdx] : "" }
+      ];
+  
+      if (isUpdate) {
+        var changes = [];
+        fieldMappings.forEach(function(item) {
+          var newValStr = String(item.value).trim();
+          var oldValStr = String(item.oldVal).trim();
+          
+          if (item.label === "生日") {
+            // 標準化：去掉時間部分，只保留日期（支援 ISO 8601 T 分隔或空格分隔格式）
+            newValStr = newValStr.split("T")[0].split(" ")[0].replace(/\//g, "-");
+            oldValStr = oldValStr.split("T")[0].split(" ")[0].replace(/\//g, "-");
+          }
+  
+          if (newValStr !== oldValStr) {
+            changes.push("✏️ " + item.label + "：" + (oldValStr || "(空)") + " ➡️ " + (newValStr || "(空)"));
+          }
+        });
+  
+        // 檢查是否上傳了新圖片證明
+        if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
+          var oldProofStr = isUpdate ? String(oldValuesForCompare[strengthProofIdx]).trim() : "";
+          if (data.strengthProof !== oldProofStr) {
+            changes.push("📷 體能證明截圖：已重新上傳新檔案");
+          }
+        }
+  
+        if (changes.length > 0) {
+          pushMsg = "✅ 您的社員資料已成功更新！\n\n" +
+                    "本次修改項目：\n" +
+                    changes.join("\n") + "\n\n" +
+                    "感謝您的填寫！";
+        } else {
+          pushMsg = "✅ 您的社員資料已成功更新（內容無變更）！";
+        }
+      } else {
+        var infoList = [];
+        fieldMappings.forEach(function(item) {
+          if (item.value && String(item.value).trim() !== "") {
+            infoList.push("📝 " + item.label + "：" + item.value);
+          }
+        });
+        if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
+          infoList.push("📷 體能證明截圖：已上傳證明檔案");
+        }
+        pushMsg = "🎉 歡迎加入野境戶外！您的個人資料已建立成功：\n\n" +
+                  infoList.join("\n") + "\n\n" +
+                  "感謝您的填寫！";
+      }
+  
+      pushMessage(userId, pushMsg);
+    } catch (err) {
+      console.error("發送 LINE 註冊成功通知失敗: " + err.toString());
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "success", 
+      message: isUpdate ? "資料已成功更新！" : "註冊成功！" 
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    console.error("儲存個人資料失敗:", err);
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // 動態查找或建立試算表欄位，並擴展 headers 陣列
@@ -5133,183 +5156,205 @@ function getPastActivitiesAPI(ss, userId) {
 
 // 📜 全新功能：送出心得回饋 API
 function processSubmitReflection(payload) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var rSheet = ss.getSheetByName("Reflections");
-  if (!rSheet) {
-    rSheet = ss.insertSheet("Reflections");
-    rSheet.appendRow(["Timestamp", "系統識別碼", "姓名", "活動編號", "活動名稱", "難易度評分", "風景評分", "心得內容", "登頂照片網址"]);
-  }
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // 鎖定 10 秒防衝突
 
-  var userId = payload.userId;
-  var details = payload.details; // details: { eventId, eventName, difficulty, beauty, content, imageUrl }
-
-  // 取得姓名
-  var mSheet = ss.getSheetByName("Members");
-  var userName = "未知社員";
-  if (mSheet) {
-    var mData = mSheet.getDataRange().getValues();
-    var sysIdx = _fi(mData[0], "系統識別碼");
-    for (var i = 1; i < mData.length; i++) {
-      if (sysIdx > -1 && mData[i][sysIdx] === userId) {
-        userName = mData[i][_fi(mData[0], "姓名")] || "未知社員";
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var rSheet = ss.getSheetByName("Reflections");
+    if (!rSheet) {
+      rSheet = ss.insertSheet("Reflections");
+      rSheet.appendRow(["Timestamp", "系統識別碼", "姓名", "活動編號", "活動名稱", "難易度評分", "風景評分", "心得內容", "登頂照片網址"]);
+    }
+  
+    var userId = payload.userId;
+    var details = payload.details; // details: { eventId, eventName, difficulty, beauty, content, imageUrl }
+  
+    // 取得姓名
+    var mSheet = ss.getSheetByName("Members");
+    var userName = "未知社員";
+    if (mSheet) {
+      var mData = mSheet.getDataRange().getValues();
+      var sysIdx = _fi(mData[0], "系統識別碼");
+      for (var i = 1; i < mData.length; i++) {
+        if (sysIdx > -1 && mData[i][sysIdx] === userId) {
+          userName = mData[i][_fi(mData[0], "姓名")] || "未知社員";
+          break;
+        }
+      }
+    }
+  
+    // 檢查是否重複寫入
+    var rData = rSheet.getDataRange().getValues();
+    var rHeaders = rData[0];
+    var rSysIdx = _fi(rHeaders, "系統識別碼");
+    var rEidIdx = _fi(rHeaders, "活動編號");
+    var targetRow = -1;
+  
+    for (var k = 1; k < rData.length; k++) {
+      if (rSysIdx > -1 && String(rData[k][rSysIdx]).trim() === userId && rEidIdx > -1 && String(rData[k][rEidIdx]).trim() === details.eventId) {
+        targetRow = k + 1;
         break;
       }
     }
-  }
-
-  // 檢查是否重複寫入
-  var rData = rSheet.getDataRange().getValues();
-  var rHeaders = rData[0];
-  var rSysIdx = _fi(rHeaders, "系統識別碼");
-  var rEidIdx = _fi(rHeaders, "活動編號");
-  var targetRow = -1;
-
-  for (var k = 1; k < rData.length; k++) {
-    if (rSysIdx > -1 && String(rData[k][rSysIdx]).trim() === userId && rEidIdx > -1 && String(rData[k][rEidIdx]).trim() === details.eventId) {
-      targetRow = k + 1;
-      break;
+  
+    var now = new Date();
+    var rHeaders = rSheet.getRange(1, 1, 1, rSheet.getLastColumn()).getValues()[0];
+    var newRow = new Array(rHeaders.length).fill("");
+  
+    newRow[_fi(rHeaders, "Timestamp")] = now;
+    newRow[_fi(rHeaders, "系統識別碼")] = userId;
+    newRow[_fi(rHeaders, "姓名")] = userName;
+    newRow[_fi(rHeaders, "活動編號")] = details.eventId;
+    newRow[_fi(rHeaders, "活動名稱")] = details.eventName;
+    newRow[_fi(rHeaders, "難易度評分")] = details.difficulty;
+    newRow[_fi(rHeaders, "風景評分")] = details.beauty;
+    newRow[_fi(rHeaders, "心得內容")] = details.content;
+    newRow[_fi(rHeaders, "登頂照片網址")] = details.imageUrl || "";
+  
+    if (targetRow > -1) {
+      // 更新
+      for (var col = 0; col < newRow.length; col++) {
+        rSheet.getRange(targetRow, col + 1).setValue(newRow[col]);
+      }
+    } else {
+      // 新增
+      rSheet.appendRow(newRow);
     }
+  
+    // 推送給幹部群組 (通知有新心得)
+    var alertMsg = "🏕️ 【社員心得回饋通知】\n\n👤 社員：" + userName + "\n⛰️ 活動：" + details.eventName + "\n⭐ 路線難易：" + "★".repeat(details.difficulty) + "\n⭐ 風景推薦：" + "★".repeat(details.beauty) + "\n📝 心得內容：\n" + details.content;
+    pushAdminMessage(alertMsg);
+  
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      message: "心得已成功提交"
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    console.error("提交心得回饋失敗:", err);
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
-
-  var now = new Date();
-  var rHeaders = rSheet.getRange(1, 1, 1, rSheet.getLastColumn()).getValues()[0];
-  var newRow = new Array(rHeaders.length).fill("");
-
-  newRow[_fi(rHeaders, "Timestamp")] = now;
-  newRow[_fi(rHeaders, "系統識別碼")] = userId;
-  newRow[_fi(rHeaders, "姓名")] = userName;
-  newRow[_fi(rHeaders, "活動編號")] = details.eventId;
-  newRow[_fi(rHeaders, "活動名稱")] = details.eventName;
-  newRow[_fi(rHeaders, "難易度評分")] = details.difficulty;
-  newRow[_fi(rHeaders, "風景評分")] = details.beauty;
-  newRow[_fi(rHeaders, "心得內容")] = details.content;
-  newRow[_fi(rHeaders, "登頂照片網址")] = details.imageUrl || "";
-
-  if (targetRow > -1) {
-    // 更新
-    for (var col = 0; col < newRow.length; col++) {
-      rSheet.getRange(targetRow, col + 1).setValue(newRow[col]);
-    }
-  } else {
-    // 新增
-    rSheet.appendRow(newRow);
-  }
-
-  // 推送給幹部群組 (通知有新心得)
-  var alertMsg = "🏕️ 【社員心得回饋通知】\n\n👤 社員：" + userName + "\n⛰️ 活動：" + details.eventName + "\n⭐ 路線難易：" + "★".repeat(details.difficulty) + "\n⭐ 風景推薦：" + "★".repeat(details.beauty) + "\n📝 心得內容：\n" + details.content;
-  pushAdminMessage(alertMsg);
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    message: "心得已成功提交"
-  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 // ------------------------------------------------------------------
 // 引擎 11：LIFF 取消活動報名 API
 // ------------------------------------------------------------------
 function processLiffCancelEvent(payload) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var userId = payload.userId;
-  var targetId = payload.targetId; // code
-  var reason = payload.reason || "";
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // 鎖定 10 秒防衝突
 
-  if (!userId || !targetId) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少必要參數" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var signupSheet = ss.getSheetByName("Signups");
-  if (!signupSheet) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Signups 資料表" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var sData = signupSheet.getDataRange().getValues();
-  var sH = sData[0];
-  var sCodeIdx = _fi(sH, "專屬碼");
-  var sSysIdx = _fi(sH, "系統識別碼");
-  var sStatusIdx = _fi(sH, "審核結果");
-  var sEventIdIdx = _fi(sH, "活動編號");
-  var sNameIdx = _fi(sH, "姓名");
-  var sNoteIdx = _fi(sH, "備註");
-
-  for (var k = 1; k < sData.length; k++) {
-    if (sCodeIdx > -1 && sSysIdx > -1 && sData[k][sCodeIdx].toString() === targetId.toString() && sData[k][sSysIdx].toString() === userId.toString()) {
-      var eventName = _getEventName(ss, sEventIdIdx > -1 ? sData[k][sEventIdIdx] : "");
-      var userName = sNameIdx > -1 ? sData[k][sNameIdx] : "未知社員";
-      var currentStatus = sStatusIdx > -1 ? String(sData[k][sStatusIdx]) : "";
-
-      // 如果是正取，必須提供取消原因
-      if (currentStatus.indexOf("正取") > -1) {
-        if (!reason.trim()) {
-          return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "正取資格取消必須填寫取消原因" })).setMimeType(ContentService.MimeType.JSON);
-        }
-        
-        // 寫入已取消狀態與取消原因
-        if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
-        if (sNoteIdx > -1) {
-          var oldNote = sData[k][sNoteIdx] ? String(sData[k][sNoteIdx]) + " | " : "";
-          signupSheet.getRange(k + 1, sNoteIdx + 1).setValue(oldNote + "取消原因: " + reason);
-        }
-        
-        // 推送 LINE 給幹部
-        pushAdminMessage("🔔 【幹部通知：正取取消】\n申請人：" + userName + "\n活動：" + eventName + "\n原因：" + reason + "\n請幹部儘速進行備取遞補！");
-      } else {
-        // 備取或審核中直接取消
-        if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
-      }
-
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "活動報名已成功取消" })).setMimeType(ContentService.MimeType.JSON);
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var userId = payload.userId;
+    var targetId = payload.targetId; // code
+    var reason = payload.reason || "";
+  
+    if (!userId || !targetId) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少必要參數" })).setMimeType(ContentService.MimeType.JSON);
     }
-  }
+  
+    var signupSheet = ss.getSheetByName("Signups");
+    if (!signupSheet) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Signups 資料表" })).setMimeType(ContentService.MimeType.JSON);
+    }
+  
+    var sData = signupSheet.getDataRange().getValues();
+    var sH = sData[0];
+    var sCodeIdx = _fi(sH, "專屬碼");
+    var sSysIdx = _fi(sH, "系統識別碼");
+    var sStatusIdx = _fi(sH, "審核結果");
+    var sEventIdIdx = _fi(sH, "活動編號");
+    var sNameIdx = _fi(sH, "姓名");
+    var sNoteIdx = _fi(sH, "備註");
+  
+    for (var k = 1; k < sData.length; k++) {
+      if (sCodeIdx > -1 && sSysIdx > -1 && sData[k][sCodeIdx].toString() === targetId.toString() && sData[k][sSysIdx].toString() === userId.toString()) {
+        var eventName = _getEventName(ss, sEventIdIdx > -1 ? sData[k][sEventIdIdx] : "");
+        var userName = sNameIdx > -1 ? sData[k][sNameIdx] : "未知社員";
+        var currentStatus = sStatusIdx > -1 ? String(sData[k][sStatusIdx]) : "";
+  
+        // 如果是正取，必須提供取消原因
+        if (currentStatus.indexOf("正取") > -1) {
+          if (!reason.trim()) {
+            return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "正取資格取消必須填寫取消原因" })).setMimeType(ContentService.MimeType.JSON);
+          }
+          
+          // 寫入已取消狀態與取消原因
+          if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
+          if (sNoteIdx > -1) {
+            var oldNote = sData[k][sNoteIdx] ? String(sData[k][sNoteIdx]) + " | " : "";
+            signupSheet.getRange(k + 1, sNoteIdx + 1).setValue(oldNote + "取消原因: " + reason);
+          }
+          
+          // 推送 LINE 給幹部
+          pushAdminMessage("🔔 【幹部通知：正取取消】\n申請人：" + userName + "\n活動：" + eventName + "\n原因：" + reason + "\n請幹部儘速進行備取遞補！");
+        } else {
+          // 備取或審核中直接取消
+          if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
+        }
+  
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "活動報名已成功取消" })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+  
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆報名紀錄" })).setMimeType(ContentService.MimeType.JSON);
 
-  return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆報名紀錄" })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    console.error("取消活動報名失敗:", err);
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ------------------------------------------------------------------
 // 引擎 12：LIFF 取消裝備預約 API
 // ------------------------------------------------------------------
 function processLiffCancelLoan(payload) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var userId = payload.userId;
-  var targetId = payload.targetId; // orderId
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // 鎖定 10 秒防衝突
 
-  if (!userId || !targetId) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少必要參數" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var loanSheet = ss.getSheetByName("Loan_Records");
-  if (!loanSheet) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Loan_Records 資料表" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var lData = loanSheet.getDataRange().getValues();
-  var lH = lData[0];
-  var lOrderIdx = _fi(lH, "租借編號");
-  var lSysIdx = _fi(lH, "系統識別碼");
-  var lStatusIdx = _fi(lH, "領取/歸還");
-  var lEquipIdIdx = _fi(lH, "裝備代號");
-  var lQtyIdx = _fi(lH, "數量");
-  var lNameIdx = _fi(lH, "姓名");
-
-  var foundRecord = false;
-  for (var i = 1; i < lData.length; i++) {
-    var isTarget = (lOrderIdx > -1 && lData[i][lOrderIdx] === targetId) || (lEquipIdIdx > -1 && lData[i][lEquipIdIdx] === targetId);
-
-    if (isTarget && lSysIdx > -1 && lData[i][lSysIdx] === userId) {
-      foundRecord = true;
-      var currentStatus = lStatusIdx > -1 ? String(lData[i][lStatusIdx]) : "";
-      if (currentStatus === "待領取 To Be Collected") {
-        loanSheet.getRange(i + 1, lStatusIdx + 1).setValue("已取消 Cancelled");
-
-        var equipId = lEquipIdIdx > -1 ? lData[i][lEquipIdIdx] : "";
-        var qty = lQtyIdx > -1 ? Number(lData[i][lQtyIdx]) : 0;
-        var userName = lNameIdx > -1 ? lData[i][lNameIdx] : "未知社員";
-        var equipName = "未知裝備";
-
-        // 自動退還庫存 (加鎖保護防止並發寫入衝突)
-        var lock = LockService.getScriptLock();
-        try {
-          lock.waitLock(10000); // 最多等待 10 秒
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var userId = payload.userId;
+    var targetId = payload.targetId; // orderId
+  
+    if (!userId || !targetId) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少必要參數" })).setMimeType(ContentService.MimeType.JSON);
+    }
+  
+    var loanSheet = ss.getSheetByName("Loan_Records");
+    if (!loanSheet) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Loan_Records 資料表" })).setMimeType(ContentService.MimeType.JSON);
+    }
+  
+    var lData = loanSheet.getDataRange().getValues();
+    var lH = lData[0];
+    var lOrderIdx = _fi(lH, "租借編號");
+    var lSysIdx = _fi(lH, "系統識別碼");
+    var lStatusIdx = _fi(lH, "領取/歸還");
+    var lEquipIdIdx = _fi(lH, "裝備代號");
+    var lQtyIdx = _fi(lH, "數量");
+    var lNameIdx = _fi(lH, "姓名");
+  
+    var foundRecord = false;
+    for (var i = 1; i < lData.length; i++) {
+      var isTarget = (lOrderIdx > -1 && lData[i][lOrderIdx] === targetId) || (lEquipIdIdx > -1 && lData[i][lEquipIdIdx] === targetId);
+  
+      if (isTarget && lSysIdx > -1 && lData[i][lSysIdx] === userId) {
+        foundRecord = true;
+        var currentStatus = lStatusIdx > -1 ? String(lData[i][lStatusIdx]) : "";
+        if (currentStatus === "待領取 To Be Collected") {
+          loanSheet.getRange(i + 1, lStatusIdx + 1).setValue("已取消 Cancelled");
+  
+          var equipId = lEquipIdIdx > -1 ? lData[i][lEquipIdIdx] : "";
+          var qty = lQtyIdx > -1 ? Number(lData[i][lQtyIdx]) : 0;
+          var userName = lNameIdx > -1 ? lData[i][lNameIdx] : "未知社員";
+          var equipName = "未知裝備";
+  
           var equipSheet = ss.getSheetByName("Equipments");
           if (equipSheet && equipId) {
             var eData = equipSheet.getDataRange().getValues();
@@ -5328,22 +5373,24 @@ function processLiffCancelLoan(payload) {
               }
             }
           }
-        } catch (err) {
-          console.error("庫存回補失敗:", err);
-        } finally {
-          lock.releaseLock();
+  
+          // 推送幹部通知
+          pushAdminMessage("🔔 【幹部通知：裝備取消】\n申請人：" + userName + "\n裝備：" + equipName + "\n庫存已自動回補！");
+          return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "裝備預約已成功取消" })).setMimeType(ContentService.MimeType.JSON);
+        } else {
+          return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "該預約已非待領取狀態，無法取消" })).setMimeType(ContentService.MimeType.JSON);
         }
-
-        // 推送幹部通知
-        pushAdminMessage("🔔 【幹部通知：裝備取消】\n申請人：" + userName + "\n裝備：" + equipName + "\n庫存已自動回補！");
-        return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "裝備預約已成功取消" })).setMimeType(ContentService.MimeType.JSON);
-      } else {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "該預約已非待領取狀態，無法取消" })).setMimeType(ContentService.MimeType.JSON);
       }
     }
-  }
+  
+    if (!foundRecord) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆租借預約紀錄" })).setMimeType(ContentService.MimeType.JSON);
+    }
 
-  if (!foundRecord) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆租借預約紀錄" })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    console.error("取消裝備預約失敗:", err);
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
 }
