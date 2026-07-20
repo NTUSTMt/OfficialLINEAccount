@@ -5183,6 +5183,46 @@ function processSubmitReflection(payload) {
         }
       }
     }
+
+    // 處理登頂照片上傳至 Google Drive (最多5張，檔名格式：日期-活動名稱-姓名)
+    var photoUrls = [];
+    var formattedDate = String(details.eventDate || "").replace(/[\/\-]/g, "");
+    if (!formattedDate) {
+      var today = new Date();
+      var y = today.getFullYear();
+      var m = ("0" + (today.getMonth() + 1)).slice(-2);
+      var d = ("0" + today.getDate()).slice(-2);
+      formattedDate = y + m + d;
+    }
+
+    if (payload.reflectionPhotoFiles && payload.reflectionPhotoFiles.length > 0) {
+      for (var f = 0; f < payload.reflectionPhotoFiles.length; f++) {
+        var fileObj = payload.reflectionPhotoFiles[f];
+        if (fileObj && fileObj.base64 && fileObj.name) {
+          var ext = fileObj.name.split('.').pop();
+          var customFileName = formattedDate + "-" + details.eventName + "-" + userName;
+          if (payload.reflectionPhotoFiles.length > 1) {
+            customFileName += "_" + (f + 1);
+          }
+          customFileName += "." + ext;
+          var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName);
+          if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
+            photoUrls.push(uploadedUrl);
+          }
+        }
+      }
+    }
+
+    if (photoUrls.length === 0 && payload.reflectionPhotoFile && payload.reflectionPhotoFile.base64 && payload.reflectionPhotoFile.name) {
+      var ext = payload.reflectionPhotoFile.name.split('.').pop();
+      var customFileName = formattedDate + "-" + details.eventName + "-" + userName + "." + ext;
+      var uploadedUrl = uploadFileToDrive(payload.reflectionPhotoFile.base64, customFileName);
+      if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
+        photoUrls.push(uploadedUrl);
+      }
+    }
+
+    var finalPhotoUrl = photoUrls.length > 0 ? photoUrls.join(",") : (details.imageUrl || "");
   
     // 檢查是否重複寫入
     var rData = rSheet.getDataRange().getValues();
@@ -5210,7 +5250,7 @@ function processSubmitReflection(payload) {
     newRow[_fi(rHeaders, "難易度評分")] = details.difficulty;
     newRow[_fi(rHeaders, "風景評分")] = details.beauty;
     newRow[_fi(rHeaders, "心得內容")] = details.content;
-    newRow[_fi(rHeaders, "登頂照片網址")] = details.imageUrl || "";
+    newRow[_fi(rHeaders, "登頂照片網址")] = finalPhotoUrl;
   
     if (targetRow > -1) {
       // 更新

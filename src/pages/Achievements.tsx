@@ -36,6 +36,7 @@ function Achievements({ userId }: { userId: string }) {
   const [beauty, setBeauty] = useState(5);
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [photoFiles, setPhotoFiles] = useState<{ base64: string; name: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [isViewOnly, setIsViewOnly] = useState(false);
 
@@ -111,12 +112,104 @@ function Achievements({ userId }: { userId: string }) {
       setBeauty(activity.reflection.beauty);
       setContent(activity.reflection.content);
       setImageUrl(activity.reflection.imageUrl);
+      setPhotoFiles([]);
     } else {
       setDifficulty(5);
       setBeauty(5);
       setContent('');
       setImageUrl('');
+      setPhotoFiles([]);
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const remainingLimit = 5 - photoFiles.length;
+    if (files.length > remainingLimit) {
+      alert(t('register.alert.maxFiles', { limit: remainingLimit }) || `最多只能再上傳 ${remainingLimit} 張照片！`);
+      e.target.value = '';
+      return;
+    }
+
+    const fileList = Array.from(files);
+    const newFiles: { base64: string; name: string }[] = [];
+    let processedCount = 0;
+
+    fileList.forEach((file) => {
+      if (file.size > 10 * 1024 * 1024) {
+        alert(t('register.alert.fileTooLarge', { name: file.name }) || `檔案 ${file.name} 超過 10MB 限制！`);
+        processedCount++;
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxWidth = 1024;
+          const maxHeight = 1024;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            alert(t('register.alert.imageParseError') || '圖片解析失敗');
+            processedCount++;
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', 0.7);
+
+          const nameParts = file.name.split('.');
+          nameParts[nameParts.length - 1] = 'jpg';
+          const newName = nameParts.join('.');
+
+          newFiles.push({ base64, name: newName });
+          processedCount++;
+
+          if (processedCount === fileList.length) {
+            setPhotoFiles((prev) => [...prev, ...newFiles]);
+          }
+        };
+        img.onerror = () => {
+          alert(t('register.alert.imageLoadError', { name: file.name }) || '載入圖片失敗！');
+          processedCount++;
+          if (processedCount === fileList.length) {
+            setPhotoFiles((prev) => [...prev, ...newFiles]);
+          }
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = () => {
+        alert(t('register.alert.fileReadError', { name: file.name }) || '讀取檔案失敗！');
+        processedCount++;
+        if (processedCount === fileList.length) {
+          setPhotoFiles((prev) => [...prev, ...newFiles]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
   };
 
   const closeForm = () => {
@@ -136,11 +229,13 @@ function Achievements({ userId }: { userId: string }) {
         details: {
           eventId: selectedActivity.eventId,
           eventName: selectedActivity.title,
+          eventDate: selectedActivity.date,
           difficulty,
           beauty,
           content: content.trim(),
           imageUrl: imageUrl.trim()
-        }
+        },
+        reflectionPhotoFiles: photoFiles
       };
 
       if (userId && userId !== 'TEST_USER_ID') {
@@ -162,12 +257,13 @@ function Achievements({ userId }: { userId: string }) {
         closeForm();
         // 更新本地 state 模擬
         if (data) {
+          const mockImgUrl = photoFiles.length > 0 ? photoFiles.map(f => f.base64).join(',') : imageUrl;
           const updated = data.activities.map(act => {
             if (act.eventId === selectedActivity.eventId) {
               return {
                 ...act,
                 hasReflected: true,
-                reflection: { difficulty, beauty, content, imageUrl }
+                reflection: { difficulty, beauty, content, imageUrl: mockImgUrl }
               };
             }
             return act;
@@ -445,36 +541,89 @@ function Achievements({ userId }: { userId: string }) {
                 />
               </div>
 
-              {/* 照片分享 (選填) */}
+              {/* 照片分享 (最多上傳5張) */}
               <div style={{ marginBottom: '24px' }}>
-                <label htmlFor="modalImgUrl" style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>
-                  {t('achievements.modal.imageLabel')}
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>
+                  {t('achievements.modal.imageLabel') || '登頂照 / 團體合照 (選填，最多5張)'}
                 </label>
-                <input
-                  id="modalImgUrl"
-                  type="url"
-                  disabled={isViewOnly}
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder={t('achievements.modal.imagePlaceholder')}
-                  style={{
-                    width: '100%',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    padding: '8px 10px',
-                    fontSize: '13px',
-                    outline: 'none'
-                  }}
-                />
-                {imageUrl && (
-                  <div style={{ marginTop: '8px', borderRadius: '8px', overflow: 'hidden', height: '140px' }}>
-                    <img
-                      src={imageUrl}
-                      alt="Preview"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      onError={(e) => (e.currentTarget.style.display = 'none')}
+                {!isViewOnly ? (
+                  <>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleFileChange}
+                      disabled={photoFiles.length >= 5}
+                      style={{
+                        width: '100%',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        padding: '8px 10px',
+                        fontSize: '13px',
+                        outline: 'none',
+                        backgroundColor: photoFiles.length >= 5 ? '#e2e8f0' : 'white'
+                      }}
                     />
-                  </div>
+                    <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                      {t('register.step4.uploadTip') || '單檔最大 10MB。自動壓縮且轉換為 .jpg'}
+                    </p>
+                    {photoFiles.length > 0 && (
+                      <div className="selected-files-list" style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <p style={{ fontWeight: 'bold', fontSize: '12px', color: '#374151' }}>
+                          {t('register.step4.selectedFiles', { count: photoFiles.length }) || `已選取 ${photoFiles.length} 張圖片：`}
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
+                          {photoFiles.map((file, idx) => (
+                            <div key={idx} style={{ position: 'relative', height: '80px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                              <img
+                                src={file.base64}
+                                alt="Preview"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setPhotoFiles(prev => prev.filter((_, i) => i !== idx))}
+                                style={{
+                                  position: 'absolute',
+                                  top: '2px',
+                                  right: '2px',
+                                  width: '18px',
+                                  height: '18px',
+                                  borderRadius: '50%',
+                                  backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                                  color: 'white',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  fontSize: '10px',
+                                  lineHeight: '18px',
+                                  textAlign: 'center',
+                                  padding: 0,
+                                  fontWeight: 'bold'
+                                }}
+                              >
+                                &times;
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  imageUrl && (
+                    <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {imageUrl.split(',').map((url, idx) => (
+                        <div key={idx} style={{ borderRadius: '8px', overflow: 'hidden', height: '220px', border: '1px solid #e2e8f0' }}>
+                          <img
+                            src={url}
+                            alt={`Reflection photo ${idx + 1}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => (e.currentTarget.style.display = 'none')}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
 

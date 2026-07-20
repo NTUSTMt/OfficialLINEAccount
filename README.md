@@ -3,11 +3,23 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.78` (v0.0.78)
+- **當前版本**：`0.0.80` (v0.0.80)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 80. 心得支援最多 5 張相片上傳與指定檔名規則 (v0.0.80)
+- **支援最多 5 張相片上傳**：
+  - 重構 [Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx)，支援一次性選取並上傳最多 5 張本機照片，並在前端分別進行自動壓縮與縮圖 Grid 列表即時預覽與移除。
+  - 查看心得時，支援動態將逗號區隔的 URL 連結陣列拆分並呈現多張照片牆。
+- **後端自訂上傳檔名格式**：
+  - 重構 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的 `processSubmitReflection`，會將登頂照檔名修改為 `日期-活動名稱-姓名` 格式（如：`20260714-玉山前五峰-王小明.jpg` / `20260714-玉山前五峰-王小明_1.jpg` 等防重複序號檔名），並批次上傳 Google Drive。
+
+### 79. 心得登頂照片本機上傳與壓縮 (v0.0.79)
+- **心得相片本機上傳與前端自動壓縮**：
+  - 重構 [Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx) 中的登頂照/團體合照分享欄位，由原先的純網址輸入框改為「本機圖片上傳選擇器」，並套用與註冊頁面相同的 canvas 自動壓縮技術（限制最大 1024px、0.7 品質 JPEG、以及單張圖片 10MB 檔案大小限制），支援即時預覽與刪除功能。
+  - 重構 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的 `processSubmitReflection`，若收到 Base64 的登頂照片，會自動透過 `uploadFileToDrive` 上傳至 Google Drive `LINE_Uploads` 資料夾，並將雲端硬碟的檔案連結寫入 Google 試算表 `Reflections` 表格。
 
 ### 78. 出隊足跡/成就系統 (Achievements.tsx) 雙語化 (v0.0.78)
 - **活動成就頁面雙語化**：
