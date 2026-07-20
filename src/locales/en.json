@@ -1,0 +1,108 @@
+{
+  "nav": {
+    "borrow": { "title": "Equipment Rental", "subtitle": "Equipments Rental" },
+    "register": { "title": "Registration", "subtitle": "Register" },
+    "payment": { "title": "Payment System", "subtitle": "Payment System" },
+    "dashboard": { "title": "My Dashboard", "subtitle": "My Dashboard" },
+    "history": { "title": "Payment History", "subtitle": "Payment History" },
+    "achievements": { "title": "Footprints", "subtitle": "Mountaineering Footprint" },
+    "menuDashboard": "👤 Dashboard",
+    "menuRegister": "📝 Register",
+    "menuBorrow": "🎒 Rental",
+    "menuPayment": "💳 Payment",
+    "menuHistory": "📜 History",
+    "menuAchievements": "🏆 Footprint"
+  },
+  "register": {
+    "loading": "Loading profile, please wait...",
+    "submitting": "Uploading files and saving profile, please wait...",
+    "steps": {
+      "required": "Required",
+      "basic": "Basic",
+      "safety": "Safety",
+      "experience": "Experience"
+    },
+    "alert": {
+      "maxFiles": "You can upload up to 5 images! You can select {{limit}} more.",
+      "fileTooLarge": "File {{name}} cannot exceed 10MB!",
+      "imageParseError": "Failed to parse the image!",
+      "imageLoadError": "Failed to load image {{name}}, please try another file!",
+      "fileReadError": "Failed to read file {{name}}!",
+      "registerSuccess": "🎉 Registration successful! Data saved to club database.",
+      "updateSuccess": "✅ Profile updated successfully!",
+      "saveFailed": "Save failed: {{message}}",
+      "contactAdmin": "Please contact the club administrator",
+      "networkError": "Network connection failed, please check your network status!"
+    },
+    "step1": {
+      "title": "📍 Required Info",
+      "nameLabel": "Full Name",
+      "namePlaceholder": "Please enter name on national ID/passport",
+      "identityStatusLabel": "Status / Affiliation",
+      "identityStatusDefault": "Please select your status",
+      "identityStudent": "NTUST Student",
+      "identityAlumni": "NTUST Alumni",
+      "identityExternal": "External Person",
+      "departmentLabel": "Department / Organization",
+      "departmentPlaceholder": "e.g., Dept of EE 4B / NTU EE / Company Name",
+      "studentIdLabel": "Student ID (External: N/A)",
+      "studentIdPlaceholder": "Please enter Student ID",
+      "phoneLabel": "Phone Number",
+      "phonePlaceholder": "e.g., +886912345678",
+      "emailLabel": "Email Address",
+      "emailPlaceholder": "e.g., example@gmail.com",
+      "lineIdLabel": "Real LINE ID",
+      "lineIdPlaceholder": "For officers to create event contact groups"
+    },
+    "step2": {
+      "title": "📍 Basic Info (Optional)",
+      "genderLabel": "Gender",
+      "genderPlaceholder": "Please select gender (for cabin/bed arrangement)",
+      "genderMale": "Male",
+      "genderFemale": "Female",
+      "birthdayLabel": "Date of Birth",
+      "idNumberLabel": "ID Card / Passport Number",
+      "idNumberPlaceholder": "For mountain entry permits and travel insurance",
+      "addressLabel": "Correspondence Address",
+      "addressPlaceholder": "Please enter your contact or current address"
+    },
+    "step3": {
+      "title": "📍 Safety & Emergency Info (Optional)",
+      "emerNameLabel": "Emergency Contact Name",
+      "emerNamePlaceholder": "Name of family member or friend",
+      "emerRelLabel": "Relationship",
+      "emerRelPlaceholder": "e.g., Parents, Spouse, Siblings",
+      "emerPhoneLabel": "Emergency Contact Phone",
+      "emerPhonePlaceholder": "Contact phone number during trips",
+      "emerAddrLabel": "Emergency Contact Address",
+      "emerAddrPlaceholder": "Please enter emergency contact's address",
+      "medicalHistoryLabel": "Medical History / Allergies",
+      "medicalHistoryPlaceholder": "e.g., asthma, severe altitude sickness, allergies. Confidential & only for leader to ensure safety."
+    },
+    "step4": {
+      "title": "📍 Experience & Upload (Optional)",
+      "expLabel": "Mountaineering Experience",
+      "expPlaceholder": "e.g., Hehuanshan, Yushan Main Peak, Jiaming Lake...",
+      "strengthLabel": "Physical Fitness Proof",
+      "strengthPlaceholder": "e.g., 5000m run in 25 mins, hiking record, marathon...",
+      "uploadProofLabel": "Upload Physical Fitness Proof (Max 5)",
+      "uploadTip": "Tip: Re-uploading will overwrite old proof files. Max 5 images.",
+      "selectedFiles": "Selected files to upload ({{count}}/5):",
+      "remove": "Remove",
+      "uploadedFiles": "Uploaded proof files:",
+      "viewUploaded": "🔍 View Uploaded Proof #{{num}}",
+      "privacyConsent": "I agree to use my personal data for event insurance, entry permits, and emergency contact.",
+      "intendOfficialTitle": "Join Club Membership",
+      "intendOfficialYes": "I want to become a member (50% off gear rental)",
+      "intendOfficialNo": "I do not want to become a member at this moment",
+      "intendOfficerTitle": "Officer Interest (Optional)",
+      "intendOfficerCheckbox": "I am interested in becoming a club officer"
+    },
+    "nav": {
+      "prev": "Back",
+      "next": "Next",
+      "saving": "Saving...",
+      "submit": "Submit"
+    }
+  }
+}

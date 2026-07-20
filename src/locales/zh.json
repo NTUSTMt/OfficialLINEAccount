@@ -1,0 +1,108 @@
+{
+  "nav": {
+    "borrow": { "title": "裝備租借", "subtitle": "Equipments Rental" },
+    "register": { "title": "資料填寫", "subtitle": "Register" },
+    "payment": { "title": "繳費系統", "subtitle": "Payment System" },
+    "dashboard": { "title": "個人主頁", "subtitle": "My Dashboard" },
+    "history": { "title": "歷史紀錄", "subtitle": "Payment History" },
+    "achievements": { "title": "出隊足跡", "subtitle": "Mountaineering Footprint" },
+    "menuDashboard": "👤 個人主頁",
+    "menuRegister": "📝 資料填寫",
+    "menuBorrow": "🎒 裝備租借",
+    "menuPayment": "💳 繳費系統",
+    "menuHistory": "📜 繳費紀錄",
+    "menuAchievements": "🏆 出隊足跡"
+  },
+  "register": {
+    "loading": "載入個人資料中，請稍候...",
+    "submitting": "正在上傳檔案與儲存資料，請稍候...",
+    "steps": {
+      "required": "必填",
+      "basic": "基本",
+      "safety": "安全",
+      "experience": "經驗"
+    },
+    "alert": {
+      "maxFiles": "最多只能上傳 5 張圖片！您目前還可以選擇 {{limit}} 張。",
+      "fileTooLarge": "檔案 {{name}} 大小不能超過 10MB！",
+      "imageParseError": "圖片解析失敗！",
+      "imageLoadError": "載入圖片 {{name}} 失敗，請嘗試更換圖片檔案！",
+      "fileReadError": "讀取檔案 {{name}} 失敗！",
+      "registerSuccess": "🎉 註冊成功！資料已寫入社團資料庫。",
+      "updateSuccess": "✅ 資料已成功更新！",
+      "saveFailed": "儲存失敗: {{message}}",
+      "contactAdmin": "請聯絡社團管理員",
+      "networkError": "網路連線失敗，請檢查您的網路狀態！"
+    },
+    "step1": {
+      "title": "📍主要必填資料",
+      "nameLabel": "真實姓名",
+      "namePlaceholder": "請輸入身分證姓名",
+      "identityStatusLabel": "身分狀態",
+      "identityStatusDefault": "請選擇身分狀態",
+      "identityStudent": "臺科大在校學生",
+      "identityAlumni": "畢業校友",
+      "identityExternal": "校外人士",
+      "departmentLabel": "在校系所 / 校外單位",
+      "departmentPlaceholder": "例如：電機系四乙 / 臺大電機 / XX公司",
+      "studentIdLabel": "學號（校外填：無）",
+      "studentIdPlaceholder": "請輸入學號",
+      "phoneLabel": "手機號碼",
+      "phonePlaceholder": "例如：0912345678",
+      "emailLabel": "Email 信箱",
+      "emailPlaceholder": "例如：example@gmail.com",
+      "lineIdLabel": "真實 LINE ID",
+      "lineIdPlaceholder": "方便幹部建立出隊聯絡群組"
+    },
+    "step2": {
+      "title": "📍基本選填資料",
+      "genderLabel": "性別",
+      "genderPlaceholder": "請選擇性別 (山屋床位安排依據)",
+      "genderMale": "男 (Male)",
+      "genderFemale": "女 (Female)",
+      "birthdayLabel": "生日",
+      "idNumberLabel": "身分證字號 / 護照號碼",
+      "idNumberPlaceholder": "辦理入山與平安保險",
+      "addressLabel": "聯絡地址",
+      "addressPlaceholder": "請輸入聯絡或現居地址"
+    },
+    "step3": {
+      "title": "📍緊急聯絡人資訊",
+      "emerNameLabel": "緊急聯絡人姓名",
+      "emerNamePlaceholder": "家屬或親友姓名",
+      "emerRelLabel": "與緊急聯絡人關係",
+      "emerRelPlaceholder": "例如：父母、配偶、兄弟姊妹",
+      "emerPhoneLabel": "緊急聯絡人電話",
+      "emerPhonePlaceholder": "出隊期間留守聯絡電話",
+      "emerAddrLabel": "緊急聯絡人地址",
+      "emerAddrPlaceholder": "請輸入緊急聯絡人居住地址",
+      "medicalHistoryLabel": "個人特殊病史或過敏",
+      "medicalHistoryPlaceholder": "如氣喘、嚴重高山症病史、過敏藥物等。此資訊僅供嚮導掌握隊員安全狀況，完全保密。"
+    },
+    "step4": {
+      "title": "📍登山經驗與體能 (Experience & Upload)",
+      "expLabel": "過往登山經驗簡述",
+      "expPlaceholder": "例如：登頂合歡群峰、玉山主峰、嘉明湖，或百岳累積 5 座...等等",
+      "strengthLabel": "體能證明",
+      "strengthPlaceholder": "例如：5000公尺跑步26分鐘證明、登山證明、馬拉松...",
+      "uploadProofLabel": "上傳體能證明- 最多 5 張",
+      "uploadTip": "提示：重新上傳將會覆蓋舊的體能證明，可多選或分次選取，上限 5 張。",
+      "selectedFiles": "已選取待上傳檔案 ({{count}}/5)：",
+      "remove": "移除",
+      "uploadedFiles": "已上傳的舊體能證明：",
+      "viewUploaded": "🔍 查看已上傳證明 #{{num}}",
+      "privacyConsent": "我同意將個人資料用於社團活動保險、入山申請及緊急聯繫使用。",
+      "intendOfficialTitle": "加入社員意願",
+      "intendOfficialYes": "我有意願成為社員 (享個人借裝 5 折)",
+      "intendOfficialNo": "我目前沒有意願成為社員",
+      "intendOfficerTitle": "幹部意願調查 (選填)",
+      "intendOfficerCheckbox": "我有意願成為社團幹部"
+    },
+    "nav": {
+      "prev": "上一步",
+      "next": "下一步",
+      "saving": "儲存中...",
+      "submit": "確認送出"
+    }
+  }
+}

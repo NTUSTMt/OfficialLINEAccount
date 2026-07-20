@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
+import { useTranslation } from 'react-i18next';
 import '../App.css';
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -34,6 +35,7 @@ interface UploadedFile {
 }
 
 function Register({ userId }: { userId: string }) {
+  const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -154,7 +156,7 @@ function Register({ userId }: { userId: string }) {
 
     const remainingLimit = 5 - strengthProofFiles.length;
     if (files.length > remainingLimit) {
-      alert(`最多只能上傳 5 張圖片！您目前還可以選擇 ${remainingLimit} 張。`);
+      alert(t('register.alert.maxFiles', { limit: remainingLimit }));
       e.target.value = '';
       return;
     }
@@ -165,7 +167,7 @@ function Register({ userId }: { userId: string }) {
 
     fileList.forEach((file) => {
       if (file.size > 10 * 1024 * 1024) {
-        alert(`檔案 ${file.name} 大小不能超過 10MB！`);
+        alert(t('register.alert.fileTooLarge', { name: file.name }));
         processedCount++;
         return;
       }
@@ -197,7 +199,7 @@ function Register({ userId }: { userId: string }) {
 
           const ctx = canvas.getContext('2d');
           if (!ctx) {
-            alert('圖片解析失敗！');
+            alert(t('register.alert.imageParseError'));
             processedCount++;
             return;
           }
@@ -219,7 +221,7 @@ function Register({ userId }: { userId: string }) {
           }
         };
         img.onerror = () => {
-          alert(`載入圖片 ${file.name} 失敗，請嘗試更換圖片檔案！`);
+          alert(t('register.alert.imageLoadError', { name: file.name }));
           processedCount++;
           if (processedCount === fileList.length) {
             setStrengthProofFiles((prev) => [...prev, ...newFiles]);
@@ -228,7 +230,7 @@ function Register({ userId }: { userId: string }) {
         img.src = event.target?.result as string;
       };
       reader.onerror = () => {
-        alert(`讀取檔案 ${file.name} 失敗！`);
+        alert(t('register.alert.fileReadError', { name: file.name }));
         processedCount++;
         if (processedCount === fileList.length) {
           setStrengthProofFiles((prev) => [...prev, ...newFiles]);
@@ -298,16 +300,16 @@ function Register({ userId }: { userId: string }) {
       const result = await res.json();
 
       if (result.status === 'success') {
-        alert(isNewUser ? '🎉 註冊成功！資料已寫入社團資料庫。' : '✅ 資料已成功更新！');
+        alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
           liff.closeWindow();
         }
       } else {
-        alert(`儲存失敗: ${result.message || '請聯絡社團管理員'}`);
+        alert(t('register.alert.saveFailed', { message: result.message || t('register.alert.contactAdmin') }));
       }
     } catch (err) {
       console.error('提交表單失敗:', err);
-      alert('網路連線失敗，請檢查您的網路狀態！');
+      alert(t('register.alert.networkError'));
     } finally {
       setIsSubmitting(false);
     }
@@ -317,7 +319,7 @@ function Register({ userId }: { userId: string }) {
     return (
       <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
         <div className="spinner"></div>
-        <p>載入個人資料中，請稍候...</p>
+        <p>{t('register.loading')}</p>
       </div>
     );
   }
@@ -331,7 +333,7 @@ function Register({ userId }: { userId: string }) {
           <div key={s} className={`step-dot-wrapper ${step >= s ? 'active' : ''} ${step === s ? 'current' : ''}`}>
             <div className="step-dot">{s}</div>
             <span className="step-label">
-              {s === 1 ? '必填' : s === 2 ? '基本' : s === 3 ? '安全' : '經驗'}
+              {s === 1 ? t('register.steps.required') : s === 2 ? t('register.steps.basic') : s === 3 ? t('register.steps.safety') : t('register.steps.experience')}
             </span>
           </div>
         ))}
@@ -345,22 +347,22 @@ function Register({ userId }: { userId: string }) {
         {/* 步驟 1: 主要必填資料 */}
         {step === 1 && (
           <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍主要必填資料 (Required Info)</h2>
+            <h2 className="step-title">{t('register.step1.title')}</h2>
             
             <div className="form-group">
-              <label className="required">真實姓名</label>
+              <label className="required">{t('register.step1.nameLabel')}</label>
               <input
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                placeholder="請輸入身分證姓名"
+                placeholder={t('register.step1.namePlaceholder')}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">身分狀態</label>
+              <label className="required">{t('register.step1.identityStatusLabel')}</label>
               <select
                 name="identityStatus"
                 value={formData.identityStatus}
@@ -370,74 +372,74 @@ function Register({ userId }: { userId: string }) {
                     ...prev,
                     identityStatus: val,
                     // 切換身分時，若非在校生可預填無
-                    studentId: val === '臺科大在校學生' ? prev.studentId : '無',
+                    studentId: val === '臺科大在校學生' ? prev.studentId : '無 N/A',
                   }));
                 }}
                 required
               >
-                <option value="">請選擇身分狀態</option>
-                <option value="臺科大在校學生">臺科大在校學生</option>
-                <option value="畢業校友">畢業校友</option>
-                <option value="校外人士">校外人士</option>
+                <option value="">{t('register.step1.identityStatusDefault')}</option>
+                <option value="臺科大在校學生">{t('register.step1.identityStudent')}</option>
+                <option value="畢業校友">{t('register.step1.identityAlumni')}</option>
+                <option value="校外人士">{t('register.step1.identityExternal')}</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label className="required">在校系所 / 校外單位</label>
+              <label className="required">{t('register.step1.departmentLabel')}</label>
               <input
                 type="text"
                 name="department"
                 value={formData.department}
                 onChange={handleChange}
-                placeholder="例如：電機系四乙 / 臺大電機 / XX公司"
+                placeholder={t('register.step1.departmentPlaceholder')}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">學號（校外填：無）</label>
+              <label className="required">{t('register.step1.studentIdLabel')}</label>
               <input
                 type="text"
                 name="studentId"
                 value={formData.studentId}
                 onChange={handleChange}
-                placeholder="請輸入學號"
+                placeholder={t('register.step1.studentIdPlaceholder')}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">手機號碼</label>
+              <label className="required">{t('register.step1.phoneLabel')}</label>
               <input
                 type="tel"
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
-                placeholder="例如：0912345678"
+                placeholder={t('register.step1.phonePlaceholder')}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">Email 信箱</label>
+              <label className="required">{t('register.step1.emailLabel')}</label>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="例如：example@gmail.com"
+                placeholder={t('register.step1.emailPlaceholder')}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">真實 LINE ID</label>
+              <label className="required">{t('register.step1.lineIdLabel')}</label>
               <input
                 type="text"
                 name="realLineId"
                 value={formData.realLineId}
                 onChange={handleChange}
-                placeholder="方便幹部建立出隊聯絡群組"
+                placeholder={t('register.step1.lineIdPlaceholder')}
                 required
               />
             </div>
@@ -447,19 +449,19 @@ function Register({ userId }: { userId: string }) {
         {/* 步驟 2: 基本選填資料 */}
         {step === 2 && (
           <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍基本選填資料 (Basic Info)</h2>
+            <h2 className="step-title">{t('register.step2.title')}</h2>
 
             <div className="form-group">
-              <label>性別</label>
+              <label>{t('register.step2.genderLabel')}</label>
               <select name="gender" value={formData.gender} onChange={handleChange}>
-                <option value="">請選擇性別 (山屋床位安排依據)</option>
-                <option value="男">男 (Male)</option>
-                <option value="女">女 (Female)</option>
+                <option value="">{t('register.step2.genderPlaceholder')}</option>
+                <option value="男">{t('register.step2.genderMale')}</option>
+                <option value="女">{t('register.step2.genderFemale')}</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label>生日</label>
+              <label>{t('register.step2.birthdayLabel')}</label>
               <input
                 type="date"
                 name="birthday"
@@ -469,24 +471,24 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>身分證字號 / 護照號碼</label>
+              <label>{t('register.step2.idNumberLabel')}</label>
               <input
                 type="text"
                 name="idNumber"
                 value={formData.idNumber}
                 onChange={handleChange}
-                placeholder="辦理入山與平安保險"
+                placeholder={t('register.step2.idNumberPlaceholder')}
               />
             </div>
 
             <div className="form-group">
-              <label>聯絡地址 (Correspondence Address)</label>
+              <label>{t('register.step2.addressLabel')}</label>
               <input
                 type="text"
                 name="studentAddr"
                 value={formData.studentAddr}
                 onChange={handleChange}
-                placeholder="請輸入聯絡或現居地址"
+                placeholder={t('register.step2.addressPlaceholder')}
               />
             </div>
           </div>
@@ -495,59 +497,59 @@ function Register({ userId }: { userId: string }) {
         {/* 步驟 3: 留守與安全資訊 */}
         {step === 3 && (
           <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍緊急聯絡人資訊 (Safety & Emergency) ⚠️</h2>
+            <h2 className="step-title">{t('register.step3.title')}</h2>
 
             <div className="form-group">
-              <label>緊急聯絡人姓名</label>
+              <label>{t('register.step3.emerNameLabel')}</label>
               <input
                 type="text"
                 name="emerName"
                 value={formData.emerName}
                 onChange={handleChange}
-                placeholder="家屬或親友姓名"
+                placeholder={t('register.step3.emerNamePlaceholder')}
               />
             </div>
 
             <div className="form-group">
-              <label>與緊急聯絡人關係</label>
+              <label>{t('register.step3.emerRelLabel')}</label>
               <input
                 type="text"
                 name="emerRel"
                 value={formData.emerRel}
                 onChange={handleChange}
-                placeholder="例如：父母、配偶、兄弟姊妹"
+                placeholder={t('register.step3.emerRelPlaceholder')}
               />
             </div>
 
             <div className="form-group">
-              <label>緊急聯絡人電話</label>
+              <label>{t('register.step3.emerPhoneLabel')}</label>
               <input
                 type="tel"
                 name="emerPhone"
                 value={formData.emerPhone}
                 onChange={handleChange}
-                placeholder="出隊期間留守聯絡電話"
+                placeholder={t('register.step3.emerPhonePlaceholder')}
               />
             </div>
 
             <div className="form-group">
-              <label>緊急聯絡人地址 (Emergency Address)</label>
+              <label>{t('register.step3.emerAddrLabel')}</label>
               <input
                 type="text"
                 name="emerAddr"
                 value={formData.emerAddr}
                 onChange={handleChange}
-                placeholder="請輸入緊急聯絡人居住地址"
+                placeholder={t('register.step3.emerAddrPlaceholder')}
               />
             </div>
 
             <div className="form-group">
-              <label>個人特殊病史或過敏</label>
+              <label>{t('register.step3.medicalHistoryLabel')}</label>
               <textarea
                 name="medicalHistory"
                 value={formData.medicalHistory}
                 onChange={handleChange}
-                placeholder="如氣喘、嚴重高山症病史、過敏藥物等。此資訊僅供嚮導掌握隊員安全狀況，完全保密。"
+                placeholder={t('register.step3.medicalHistoryPlaceholder')}
                 rows={3}
               />
             </div>
@@ -557,33 +559,33 @@ function Register({ userId }: { userId: string }) {
         {/* 步驟 4: 登山經驗與體能證明 */}
         {step === 4 && (
           <div className="form-step-content animate-fade-in">
-            <h2 className="step-title">📍登山經驗與體能 (Experience & Upload)</h2>
+            <h2 className="step-title">{t('register.step4.title')}</h2>
 
             <div className="form-group">
-              <label>過往登山經驗簡述</label>
+              <label>{t('register.step4.expLabel')}</label>
               <textarea
                 name="exp"
                 value={formData.exp}
                 onChange={handleChange}
-                placeholder="例如：登頂合歡群峰、玉山主峰、嘉明湖，或百岳累積 5 座等。"
+                placeholder={t('register.step4.expPlaceholder')}
                 rows={3}
               />
             </div>
 
             <div className="form-group">
-              <label>體能證明 (Proof of Physical Fitness)</label>
+              <label>{t('register.step4.strengthLabel')}</label>
               <input
                 type="text"
                 name="strength"
                 value={formData.strength}
                 onChange={handleChange}
-                placeholder="例如：3000公尺跑步15分鐘證明、健身房紀錄或描述"
+                placeholder={t('register.step4.strengthPlaceholder')}
               />
             </div>
 
             {/* 上傳體能證明 */}
             <div className="form-group">
-              <label>上傳體能證明 (Upload Proof of Physical Fitness) - 最多 5 張</label>
+              <label>{t('register.step4.uploadProofLabel')}</label>
               <input
                 type="file"
                 accept="image/*"
@@ -593,13 +595,15 @@ function Register({ userId }: { userId: string }) {
                 disabled={strengthProofFiles.length >= 5}
               />
               <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                提示：重新上傳將會覆蓋舊的體能證明，可多選或分次選取，上限 5 張。
+                {t('register.step4.uploadTip')}
               </p>
 
               {/* 顯示目前選取的待上傳檔案 */}
               {strengthProofFiles.length > 0 && (
                 <div className="selected-files-list" style={{ marginTop: '8px' }}>
-                  <p style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>已選取待上傳檔案 ({strengthProofFiles.length}/5)：</p>
+                  <p style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>
+                    {t('register.step4.selectedFiles', { count: strengthProofFiles.length })}
+                  </p>
                   {strengthProofFiles.map((file, idx) => (
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f3f4f6', padding: '6px 12px', borderRadius: '4px', marginBottom: '4px' }}>
                       <span style={{ fontSize: '13px', color: '#374151', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '80%' }}>
@@ -610,7 +614,7 @@ function Register({ userId }: { userId: string }) {
                         onClick={() => setStrengthProofFiles(prev => prev.filter((_, i) => i !== idx))}
                         style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
                       >
-                        移除
+                        {t('register.step4.remove')}
                       </button>
                     </div>
                   ))}
@@ -620,14 +624,14 @@ function Register({ userId }: { userId: string }) {
               {/* 顯示已上傳的舊檔案連結 */}
               {formData.strengthProof && formData.strengthProof.trim() !== '' && (
                 <div className="existing-files-list" style={{ marginTop: '12px' }}>
-                  <p style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>已上傳的舊體能證明：</p>
+                  <p style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>{t('register.step4.uploadedFiles')}</p>
                   {formData.strengthProof.split(',').map((url, idx) => {
                     const cleanUrl = url.trim();
                     if (!cleanUrl.startsWith('http')) return null;
                     return (
                       <p key={idx} className="file-link" style={{ margin: '4px 0' }}>
                         <a href={cleanUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px' }}>
-                          🔍 查看已上傳證明 #{idx + 1}
+                          {t('register.step4.viewUploaded', { num: idx + 1 })}
                         </a>
                       </p>
                     );
@@ -646,7 +650,7 @@ function Register({ userId }: { userId: string }) {
                 />
                 <span className="checkmark"></span>
                 <span className="consent-text" style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                  我同意將個人資料用於社團活動保險、入山申請及緊急聯繫使用。
+                  {t('register.step4.privacyConsent')}
                   <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>*</span>
                 </span>
               </label>
@@ -655,7 +659,7 @@ function Register({ userId }: { userId: string }) {
             {/* 意願調查 */}
             <div className="willingness-box" style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', textAlign: 'left' }}>
               <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>
-                加入社員意願 <span style={{ color: '#ef4444' }}>*</span>
+                {t('register.step4.intendOfficialTitle')} <span style={{ color: '#ef4444' }}>*</span>
               </p>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
@@ -668,7 +672,7 @@ function Register({ userId }: { userId: string }) {
                     onChange={handleChange}
                     style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                   />
-                  <span>我有意願成為社員 (享個人借裝 5 折)</span>
+                  <span>{t('register.step4.intendOfficialYes')}</span>
                 </label>
                 
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-secondary)' }}>
@@ -680,12 +684,12 @@ function Register({ userId }: { userId: string }) {
                     onChange={handleChange}
                     style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                   />
-                  <span>我目前沒有意願成為社員</span>
+                  <span>{t('register.step4.intendOfficialNo')}</span>
                 </label>
               </div>
 
               <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>
-                幹部意願調查 (選填)
+                {t('register.step4.intendOfficerTitle')}
               </p>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-secondary)' }}>
                 <input
@@ -699,7 +703,7 @@ function Register({ userId }: { userId: string }) {
                   }}
                   style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                 />
-                <span>我有意願成為社團幹部</span>
+                <span>{t('register.step4.intendOfficerCheckbox')}</span>
               </label>
             </div>
           </div>
@@ -714,7 +718,7 @@ function Register({ userId }: { userId: string }) {
               onClick={() => setStep(step - 1)}
               style={{ width: '45%' }}
             >
-              上一步
+              {t('register.nav.prev')}
             </button>
           ) : (
             <div style={{ width: '45%' }}></div>
@@ -729,7 +733,7 @@ function Register({ userId }: { userId: string }) {
               disabled={!isStepValid}
               style={{ width: '45%' }}
             >
-              下一步
+              {t('register.nav.next')}
             </button>
           )}
           {step === 4 && (
@@ -740,7 +744,7 @@ function Register({ userId }: { userId: string }) {
               disabled={!isStepValid || isSubmitting}
               style={{ width: '45%', backgroundColor: '#10b981' }}
             >
-              {isSubmitting ? '儲存中...' : '確認送出'}
+              {isSubmitting ? t('register.nav.saving') : t('register.nav.submit')}
             </button>
           )}
         </div>
@@ -750,7 +754,7 @@ function Register({ userId }: { userId: string }) {
       {isSubmitting && (
         <div className="submitting-overlay animate-fade-in">
           <div className="spinner"></div>
-          <p>正在上傳檔案與儲存資料，請稍候...</p>
+          <p>{t('register.submitting')}</p>
         </div>
       )}
     </div>

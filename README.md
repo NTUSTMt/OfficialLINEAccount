@@ -3,11 +3,18 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.72` (v0.0.72)
+- **當前版本**：`0.0.73` (v0.0.73)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 73. 資料註冊頁面 (Register.tsx) 雙語化 (v0.0.73)
+- **多國語系獨立 JSON 檔管理 (方案 A)**：
+  - 將先前寫死在 [i18n.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/i18n.ts) 的導覽翻譯提取至 [zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json) 與 [en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json)。
+  - 在 `src/locales/` 下建立雙語詞條結構。
+- **資料註冊表單雙語化**：
+  - 重構 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx)，全面使用 `useTranslation` 的 `t()` 函式替換所有步驟的標籤、提示文字、警告彈跳視窗、按鈕及載入狀態等中文寫死字串。
 
 ### 72. 修復 GlobalHeader 元件語法錯誤 (v0.0.72)
 - **語法錯誤修正**：
