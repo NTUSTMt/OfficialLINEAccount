@@ -3,11 +3,20 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.64` (v0.0.64)
+- **當前版本**：`0.0.65` (v0.0.65)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 65. 繳費裝備明細與用途計費修正 (v0.0.65)
+- **區分個人使用與社團出隊**：
+  - 更新 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx)。裝備預訂卡片標題改為顯示「裝備租用 (個人使用)」或「裝備租用 (社團出隊)」。
+  - 於前端將「社團出隊/社團出團」用途之訂單租金總計與裝備細項金額強制設為 `$0`。
+  - 更新 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 使 `getUnpaidListAPI` 多回傳 `用途 (purpose)` 欄位。
+- **顯示裝備個別金額與增強日期格式化**：
+  - 於 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx) 打包清單中，為各裝備項目右側加上個別金額顯示。
+  - 在 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 中增強日期解析，新增正則表達式，若已為標準 `YYYY-MM-DD` 格式則直接正規化回傳，防止時區轉換偏差導致日期顯示空白或不正確。
 
 ### 64. 繳費申報裝備打包合併與 UI 增強 (v0.0.64)
 - **裝備打包合併與租期顯示**：

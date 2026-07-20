@@ -3967,7 +3967,6 @@ function getUnpaidListAPI(ss, userId) {
       }
     }
   }
-
   // 📌 3. 抓取裝備租借欠款
   var lSheet = ss.getSheetByName("Loan_Records");
   if (lSheet) {
@@ -3980,14 +3979,26 @@ function getUnpaidListAPI(ss, userId) {
     var lQtyIdx = _fi(lData[0], "數量");
     var lPickupIdx = _fi(lData[0], "預計領取");
     var lReturnIdx = _fi(lData[0], "預計歸還");
+    var lPurposeIdx = _fi(lData[0], "用途");
     var lCostIdx = lData[0].findIndex(function(h) { return String(h).includes("應繳費用") || String(h).includes("費用"); });
 
     var formatVal = function(val) {
-      if (val instanceof Date) {
+      if (val && Object.prototype.toString.call(val) === '[object Date]') {
         return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
       }
       if (!val) return "";
       var str = String(val).trim();
+      var match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (match) {
+        var y = match[1];
+        var m = match[2].length === 1 ? "0" + match[2] : match[2];
+        var d = match[3].length === 1 ? "0" + match[3] : match[3];
+        return y + "-" + m + "-" + d;
+      }
+      var dObj = new Date(str);
+      if (!isNaN(dObj.getTime())) {
+        return Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
+      }
       if (str.indexOf("T") > -1) {
         return str.split("T")[0];
       }
@@ -4011,7 +4022,8 @@ function getUnpaidListAPI(ss, userId) {
               orderId: orderId,
               qty: lQtyIdx > -1 ? parseInt(lData[l][lQtyIdx], 10) || 1 : 1,
               pickupDate: lPickupIdx > -1 ? formatVal(lData[l][lPickupIdx]) : "",
-              returnDate: lReturnIdx > -1 ? formatVal(lData[l][lReturnIdx]) : ""
+              returnDate: lReturnIdx > -1 ? formatVal(lData[l][lReturnIdx]) : "",
+              purpose: lPurposeIdx > -1 ? String(lData[l][lPurposeIdx]).trim() : ""
             });
           }
         }

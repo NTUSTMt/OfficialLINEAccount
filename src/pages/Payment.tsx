@@ -147,8 +147,8 @@ function Payment({ userId }: { userId: string }) {
           { id: 'act_E02', name: '合歡群峰出隊費 (交通與入園保險)', amount: 1500 }
         ],
         equipments: [
-          { id: 'eq_R0720141530', name: '雙人高山帳篷', amount: 100, orderId: 'R0720141530', qty: 1, pickupDate: '2026-07-25', returnDate: '2026-07-27' },
-          { id: 'eq_R0720141530', name: '黑冰 Z400 羽絨睡袋', amount: 120, orderId: 'R0720141530', qty: 2, pickupDate: '2026-07-25', returnDate: '2026-07-27' }
+          { id: 'eq_R0720141530', name: '雙人高山帳篷', amount: 100, orderId: 'R0720141530', qty: 1, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用' },
+          { id: 'eq_R0720141530', name: '黑冰 Z400 羽絨睡袋', amount: 120, orderId: 'R0720141530', qty: 2, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用' }
         ]
       });
       setSelectedIds(['fee_membership', 'act_E01', 'eq_R0720141530']);
@@ -159,25 +159,30 @@ function Payment({ userId }: { userId: string }) {
   // 所有項目的扁平化清單 (社費部分動態計算金額與名稱)
   const allItemsFlat = useMemo(() => {
     // 依據 orderId 分組裝備
-    const equipGroups: { [orderId: string]: { id: string; orderId: string; amount: number; pickupDate: string; returnDate: string; items: { name: string; qty: number; amount: number }[] } } = {};
+    const equipGroups: { [orderId: string]: { id: string; orderId: string; purpose: string; amount: number; pickupDate: string; returnDate: string; items: { name: string; qty: number; amount: number }[] } } = {};
     
     unpaidList.equipments.forEach(item => {
       const orderId = item.orderId || 'unknown';
+      const purpose = item.purpose || '個人使用';
+      const isClubOuting = purpose === '社團出隊' || purpose === '社團出團';
+      const amount = isClubOuting ? 0 : item.amount;
+
       if (!equipGroups[orderId]) {
         equipGroups[orderId] = {
           id: item.id, // eq_orderId
           orderId: orderId,
+          purpose: purpose,
           amount: 0,
           pickupDate: item.pickupDate || '',
           returnDate: item.returnDate || '',
           items: []
         };
       }
-      equipGroups[orderId].amount += item.amount;
+      equipGroups[orderId].amount += amount;
       equipGroups[orderId].items.push({
         name: item.name,
         qty: item.qty || 1,
-        amount: item.amount
+        amount: isClubOuting ? 0 : item.amount
       });
     });
 
@@ -186,6 +191,7 @@ function Payment({ userId }: { userId: string }) {
       return {
         id: group.id,
         orderId: group.orderId,
+        purpose: group.purpose,
         name: namesList,
         amount: group.amount,
         pickupDate: group.pickupDate,
@@ -206,7 +212,8 @@ function Payment({ userId }: { userId: string }) {
         orderId: undefined,
         pickupDate: undefined,
         returnDate: undefined,
-        items: undefined
+        items: undefined,
+        purpose: undefined
       })),
       ...unpaidList.activities.map(item => ({
         ...item,
@@ -215,7 +222,8 @@ function Payment({ userId }: { userId: string }) {
         orderId: undefined,
         pickupDate: undefined,
         returnDate: undefined,
-        items: undefined
+        items: undefined,
+        purpose: undefined
       })),
       ...groupedEquips
     ];
@@ -388,7 +396,9 @@ function Payment({ userId }: { userId: string }) {
                         <strong style={{ color: 'var(--primary-color)', fontSize: '14px' }}>${item.amount}</strong>
                       </div>
                       <p style={{ fontSize: '13px', marginTop: '4px', color: 'var(--text-primary)', fontWeight: '500' }}>
-                        {item.type === 'equipment' ? `裝備租約合併帳單 (編號: ${item.orderId})` : item.name}
+                        {item.type === 'equipment' 
+                          ? ((item.purpose === '社團出隊' || item.purpose === '社團出團') ? '裝備租用 (社團出隊)' : '裝備租用 (個人使用)')
+                          : item.name}
                       </p>
                     </div>
                   </div>
@@ -461,8 +471,9 @@ function Payment({ userId }: { userId: string }) {
                       </div>
                       <ul style={{ margin: '0 0 10px 16px', padding: 0, lineHeight: '1.6', fontSize: '12.5px', listStyleType: 'disc' }}>
                         {item.items?.map((sub, idx) => (
-                          <li key={idx} style={{ color: '#334155' }}>
-                            <strong>{sub.name}</strong> × {sub.qty} 件
+                          <li key={idx} style={{ color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span><strong>{sub.name}</strong> × {sub.qty} 件</span>
+                            <span style={{ color: '#64748b' }}>${sub.amount}</span>
                           </li>
                         ))}
                       </ul>
