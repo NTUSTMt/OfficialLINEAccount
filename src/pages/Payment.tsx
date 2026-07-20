@@ -462,9 +462,9 @@ function Payment({ userId }: { userId: string }) {
                     >
                       <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '6px' }}>
                         📅 租借日期 (Rental Period)：
-                        <span style={{ color: 'var(--primary-color)', marginLeft: '4px', fontWeight: 'bold' }}>
+                        <div style={{ color: 'var(--primary-color)', marginTop: '4px', fontWeight: 'bold' }}>
                           {item.pickupDate} ~ {item.returnDate}
-                        </span>
+                        </div>
                       </div>
                       
                       <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>

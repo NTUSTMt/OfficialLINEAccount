@@ -3,11 +3,15 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.67` (v0.0.67)
+- **當前版本**：`0.0.68` (v0.0.68)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 68. 調整繳費頁面租借日期排版 (v0.0.68)
+- **日期欄位換行顯示**：
+  - 更新 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx)。將「裝備租用」卡片內的「租借日期」標籤從並排的 `<span>` 改為區塊級的 `<div>`，並將間距從左側（`marginLeft`）調整為上方（`marginTop: '4px'`），使其換行顯示，提升行動端裝置之閱讀體驗。
 
 ### 67. 增強 GAS 日期格式解析與欄位對照備援 (v0.0.67)
 - **增強 `DD/MM/YYYY` 日期解析與 `instanceof Date` 檢查**：
