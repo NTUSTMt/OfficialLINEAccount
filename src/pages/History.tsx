@@ -137,7 +137,7 @@ function History({ userId }: { userId: string }) {
     return (
       <div className="loading-state" style={{ minHeight: '80vh', justifyContent: 'center' }}>
         <div className="spinner"></div>
-        <p>撈取歷史帳單紀錄中...</p>
+        <p>取得歷史帳單紀錄中...</p>
       </div>
     );
   }

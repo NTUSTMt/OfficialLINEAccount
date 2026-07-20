@@ -3,11 +3,15 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.68` (v0.0.68)
+- **當前版本**：`0.0.69` (v0.0.69)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 69. 修正成就看板排版文字斷行 (v0.0.69)
+- **防止文字換行與微調統計框尺寸**：
+  - 更新 [Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx)。將「我的出隊成就」看板右側統計框的「出隊次數」與「回憶篇數」標籤加上 `whiteSpace: 'nowrap'` 以防止文字換行，並將 `minWidth` 由 `60px` 增至 `72px`、`padding` 調整為 `10px 8px`，確保在各種螢幕尺寸下皆能呈現乾淨且完整的單行排版。
 
 ### 68. 調整繳費頁面租借日期排版 (v0.0.68)
 - **日期欄位換行顯示**：

@@ -222,13 +222,13 @@ function Achievements({ userId }: { userId: string }) {
           <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>一步一腳印，記錄每一次出隊的回憶！</p>
         </div>
         <div style={{ display: 'flex', gap: '16px', textAlign: 'center' }}>
-          <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 14px', borderRadius: '12px', minWidth: '60px' }}>
+          <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 8px', borderRadius: '12px', minWidth: '72px' }}>
             <div style={{ fontSize: '20px', fontWeight: '800' }}>{data?.totalAttended || 0}</div>
-            <div style={{ fontSize: '10px', opacity: 0.8 }}>出隊次數</div>
+            <div style={{ fontSize: '10px', opacity: 0.8, whiteSpace: 'nowrap' }}>出隊次數</div>
           </div>
-          <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 14px', borderRadius: '12px', minWidth: '60px' }}>
+          <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 8px', borderRadius: '12px', minWidth: '72px' }}>
             <div style={{ fontSize: '20px', fontWeight: '800' }}>{data?.reflectionsCount || 0}</div>
-            <div style={{ fontSize: '10px', opacity: 0.8 }}>回憶篇數</div>
+            <div style={{ fontSize: '10px', opacity: 0.8, whiteSpace: 'nowrap' }}>回憶篇數</div>
           </div>
         </div>
       </div>
