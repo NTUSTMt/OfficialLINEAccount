@@ -910,7 +910,23 @@ function handleTextCommand(replyToken, userId, text, sourceType) {
     // 阻擋群組內的無效指令，避免對話暴走洗版 (這也是之前引發「帯域幅の上限を超えています」流量耗盡的主因！)
     if (sourceType === "group" || sourceType === "room") return;
 
-    replyMessage(replyToken, "嗨！我是登山社助理小岳 ⛰️\n請點選下方圖文選單，來查看所有功能！\n\n💡 AI 助理隱藏玩法：\n如果有登山知識或社團規章的問題，在句首加上「小岳」就可以直接問我喔！\n(例如：小岳 新手該準備什麼裝備？)\n─────────────\nHi! I am Xiao Yue, the Mountaineering Club Assistant ⛰️\nPlease use the menu below for more features!\n\n💡 AI Chat Feature:\nHave questions about hiking or the club? Just start your message with \"Yue\" to ask me!\n(e.g., Yue What gear do beginners need?)");
+    var propKey = "prompt_time_" + userId;
+    var scriptProps = PropertiesService.getScriptProperties();
+    var lastPromptTime = scriptProps.getProperty(propKey);
+    var nowTime = new Date().getTime();
+    var shouldPrompt = true;
+
+    if (lastPromptTime) {
+      var diffHours = (nowTime - Number(lastPromptTime)) / (1000 * 60 * 60);
+      if (diffHours < 24) {
+        shouldPrompt = false;
+      }
+    }
+
+    if (shouldPrompt) {
+      scriptProps.setProperty(propKey, String(nowTime));
+      replyMessage(replyToken, "嗨！我是登山社助理小岳 ⛰️\n請點選下方圖文選單，來查看所有功能！\n\n💡 AI 助理隱藏玩法：\n如果有登山知識或社團規章的問題，在句首加上「小岳」就可以直接問我喔！\n(例如：小岳 新手該準備什麼裝備？)\n─────────────\nHi! I am Xiao Yue, the Mountaineering Club Assistant ⛰️\nPlease use the menu below for more features!\n\n💡 AI Chat Feature:\nHave questions about hiking or the club? Just start your message with \"Yue\" to ask me!\n(e.g., Yue What gear do beginners need?)");
+    }
   }
 }
 
@@ -3656,7 +3672,7 @@ function talkToGemini(question) {
     // ==========================================
     // 📦 階段三：打包資料送往 Google 伺服器
     // ==========================================
-    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=" + GEMINI_API_KEY;
 
     var payload = {
       // 放入剛剛寫好的最高指導原則 (System Instruction)
