@@ -3,11 +3,35 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.82` (v0.0.82)
+- **當前版本**：`0.0.86` (v0.0.86)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 86. 移除繳費中心 Flex 卡片改為直連網址 (v0.0.86)
+- **移除 LINE 繳費中心卡片推播**：
+  - 更新後端 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 的 `handleTextCommand`。
+  - 將「繳費中心」指令與「繳費系統」統一路由，不再發送 `sendPaymentCenterMenu` 的 Flex 卡片（包含「繳費中心」/「繳費系統」/「繳費紀錄」按鈕卡片），改為直接回傳純文字繳費表單網址。
+  - 建議在 LINE Official Account Manager 圖文選單中將「繳費系統」區塊動作設定為「連結 (URI)」，填入 `https://liff.line.me/2009217429-u7OCkmQO`，點擊後即可秒開網頁且對話框完全不產生任何卡片與多餘訊息。
+
+### 85. 優化出隊足跡成就看板標籤與副標題單行呈現 (v0.0.85)
+- **避免文字換行破壞版面**：
+  - 重構 [Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx) 中的「成就統計看板」。
+  - 為 `badgeLabel` (MY MOUNTAINEERING FOOTPRINT) 與 `subtitle` (一步一腳印，記錄每一次出隊的回憶！) 加入 `whiteSpace: 'nowrap'` 樣式，並設定左側文字容器為 `flex: '1 0 auto'`，保證標籤與副標題完整呈現於單一行不換行。
+  - 同步調整統計看板為 `flexWrap: 'wrap'`，在寬螢幕下保持並排兩側對齊，窄螢幕下能自動適配不擠壓文字或溢出外框。
+
+### 84. 修復出隊足跡與歷史紀錄之導覽列標題判定 (v0.0.84)
+- **子路由標題優先級判定修復**：
+  - 重構 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 中的 `getHeaderDetails` 標題判斷邏輯。
+  - 由於 LINE LIFF 透過端點跳轉子路徑時會形成 `/dashboard/achievements` 與 `/payment/history` 複合路徑，原先先比對 `/dashboard` 與 `/payment` 導致「出隊足跡」標題被誤判為「個人主頁」，「繳費紀錄」被誤判為「繳費系統」。
+  - 調整路徑判斷順序，將 `/achievements` 與 `/history` 提升至最優先判定，確保無論直接存取或由 LIFF 複合路徑進入皆能正確顯示「出隊足跡 (Mountaineering Footprint)」與「歷史紀錄 (Payment History)」。
+
+### 83. 更新註冊頁幹部意願選項文案 (v0.0.83)
+- **幹部意願福利說明增補**：
+  - 更新 [zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json) 與 [en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json) 中的幹部意願勾選框文案。
+  - 將中文標籤由「我有意願成為社團幹部」更新為「`我有意願成為社團幹部（免繳社費、決定活動內容等等福利）`」，提高社員參與幹部團隊的意願與福利透明度。
+  - 同步更新英文標籤為「`I am interested in becoming a club officer (No club fee, decide event content, and other benefits)`」。
 
 ### 82. 支援 Google Drive 資料夾動態載入多篇社團規範 (v0.0.82)
 - **多文件動態知識庫讀取**：

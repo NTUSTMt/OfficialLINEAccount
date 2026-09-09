@@ -40,9 +40,15 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
     localStorage.setItem('app_lang', nextLang);
   };
 
-  // 根據當前路由，動態決定左側的 Logo、標題與副標題
+  // 根據當前路由，動態決定左側的 Logo、標題與副標題（子路由如 /dashboard/achievements, /payment/history 需優先判斷）
   const getHeaderDetails = () => {
     const path = location.pathname;
+    if (path.includes('/achievements')) {
+      return { title: t('nav.achievements.title'), subtitle: t('nav.achievements.subtitle'), icon: '🏆' };
+    }
+    if (path.includes('/history')) {
+      return { title: t('nav.history.title'), subtitle: t('nav.history.subtitle'), icon: '📜' };
+    }
     if (path.includes('/register')) {
       return { title: t('nav.register.title'), subtitle: t('nav.register.subtitle'), icon: '📝' };
     }
@@ -51,12 +57,6 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
     }
     if (path.includes('/dashboard')) {
       return { title: t('nav.dashboard.title'), subtitle: t('nav.dashboard.subtitle'), icon: '👤' };
-    }
-    if (path.includes('/history')) {
-      return { title: t('nav.history.title'), subtitle: t('nav.history.subtitle'), icon: '📜' };
-    }
-    if (path.includes('/achievements')) {
-      return { title: t('nav.achievements.title'), subtitle: t('nav.achievements.subtitle'), icon: '🏆' };
     }
     // 預設為裝備租借
     return { title: t('nav.borrow.title'), subtitle: t('nav.borrow.subtitle'), icon: '🏕️' };

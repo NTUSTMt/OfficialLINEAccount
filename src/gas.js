@@ -896,11 +896,8 @@ function handleTextCommand(replyToken, userId, text, sourceType) {
     replyMessage(replyToken, "🏕️ 歡迎使用裝備租借系統！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI");
   }
   else if (text === "取消預約" || text === "取消預約 Cancel") sendCancelMenu(replyToken, userId, ss);
-  else if (text === "繳費系統" || text === "繳費系統 Payment System") {
+  else if (text === "繳費系統" || text === "繳費系統 Payment System" || text === "繳費中心" || text === "繳費中心 Payment Center") {
     replyMessage(replyToken, "💰 歡迎使用繳費與對帳系統！\n請點擊下方連結進入多選結帳表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
-  }
-  else if (text === "繳費中心" || text === "繳費中心 Payment Center") {
-    sendPaymentCenterMenu(replyToken);
   }
   else if (text === "繳費紀錄" || text === "繳費紀錄 Payment History" || text === "繳費紀錄 History") sendPaymentHistory(replyToken, userId, ss);
   else if (text === "意見與回饋" || text === "意見與回饋 Feedback") sendFeedbackLink(replyToken);

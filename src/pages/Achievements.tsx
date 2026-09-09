@@ -312,19 +312,27 @@ function Achievements({ userId }: { userId: string }) {
         textAlign: 'left',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between'
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px'
       }}>
-        <div>
-          <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px', fontWeight: 'bold' }}>{t('achievements.overview.badgeLabel')}</span>
-          <div style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0' }}>{t('achievements.overview.title')}</div>
-          <p style={{ margin: 0, fontSize: '13px', opacity: 0.9 }}>{t('achievements.overview.subtitle')}</p>
+        <div style={{ flex: '1 0 auto' }}>
+          <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8, letterSpacing: '1px', fontWeight: 'bold', whiteSpace: 'nowrap', display: 'block' }}>
+            {t('achievements.overview.badgeLabel')}
+          </span>
+          <div style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0', whiteSpace: 'nowrap' }}>
+            {t('achievements.overview.title')}
+          </div>
+          <p style={{ margin: 0, fontSize: '13px', opacity: 0.9, whiteSpace: 'nowrap' }}>
+            {t('achievements.overview.subtitle')}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: '16px', textAlign: 'center' }}>
-          <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 8px', borderRadius: '12px', minWidth: '72px' }}>
+        <div style={{ display: 'flex', gap: '12px', textAlign: 'center', marginLeft: 'auto' }}>
+          <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 12px', borderRadius: '12px', minWidth: '68px' }}>
             <div style={{ fontSize: '20px', fontWeight: '800' }}>{data?.totalAttended || 0}</div>
             <div style={{ fontSize: '10px', opacity: 0.8, whiteSpace: 'nowrap' }}>{t('achievements.overview.attendedLabel')}</div>
           </div>
-          <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 8px', borderRadius: '12px', minWidth: '72px' }}>
+          <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px 12px', borderRadius: '12px', minWidth: '68px' }}>
             <div style={{ fontSize: '20px', fontWeight: '800' }}>{data?.reflectionsCount || 0}</div>
             <div style={{ fontSize: '10px', opacity: 0.8, whiteSpace: 'nowrap' }}>{t('achievements.overview.reflectionsLabel')}</div>
           </div>
