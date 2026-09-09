@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import '../App.css';
@@ -70,10 +70,15 @@ function Register({ userId }: { userId: string }) {
   // 隱私權同意書勾選
   const [privacyAgreed, setPrivacyAgreed] = useState(false);
 
+  // 草稿暫存與還原狀態
+  const [hasDraftRestored, setHasDraftRestored] = useState(false);
+  const isInitialLoadDone = useRef(false);
+
   // 載入 LINE Profile 與 GAS 社員資料
   useEffect(() => {
     const fetchProfileData = async () => {
       setLoading(true);
+      let memberFound = false;
       try {
         // 1. 取得 LINE Profile
         if (liff.isLoggedIn()) {
@@ -87,6 +92,7 @@ function Register({ userId }: { userId: string }) {
           const res = await fetch(`${GAS_API_URL}?action=get_profile&userId=${userId}`);
           const result = await res.json();
           if (result.status === 'success' && result.isMember && result.profile) {
+            memberFound = true;
             setIsNewUser(false);
             const p = result.profile;
             
@@ -129,10 +135,31 @@ function Register({ userId }: { userId: string }) {
             setPrivacyAgreed(true);
           }
         }
+
+        // 3. 若為新註冊或尚未有線上會員紀錄，檢查是否有本機草稿可自動還原
+        if (!memberFound) {
+          const draftKey = 'register_draft_' + (userId || 'guest');
+          const savedDraft = localStorage.getItem(draftKey);
+          if (savedDraft) {
+            try {
+              const parsed = JSON.parse(savedDraft);
+              if (parsed && typeof parsed === 'object') {
+                const hasDraftData = Object.values(parsed).some(v => typeof v === 'string' && v.trim() !== '');
+                if (hasDraftData) {
+                  setFormData(prev => ({ ...prev, ...parsed }));
+                  setHasDraftRestored(true);
+                }
+              }
+            } catch (e) {
+              console.error('解析草稿失敗:', e);
+            }
+          }
+        }
       } catch (err) {
         console.error('載入個人資料失敗:', err);
       } finally {
         setLoading(false);
+        isInitialLoadDone.current = true;
       }
     };
 
@@ -143,6 +170,50 @@ function Register({ userId }: { userId: string }) {
 
     fetchProfileData();
   }, [userId]);
+
+  // 自動暫存表單草稿至 localStorage
+  useEffect(() => {
+    if (!isInitialLoadDone.current || loading || isSubmitting) return;
+    try {
+      const draftKey = 'register_draft_' + (userId || 'guest');
+      const hasContent = Object.values(formData).some(v => typeof v === 'string' && v.trim() !== '');
+      if (hasContent) {
+        localStorage.setItem(draftKey, JSON.stringify(formData));
+      }
+    } catch (e) {
+      console.warn('暫存草稿失敗:', e);
+    }
+  }, [formData, userId, loading, isSubmitting]);
+
+  // 清除草稿重設表單
+  const clearDraft = () => {
+    const draftKey = 'register_draft_' + (userId || 'guest');
+    localStorage.removeItem(draftKey);
+    setHasDraftRestored(false);
+    setFormData({
+      name: '',
+      gender: '',
+      birthday: '',
+      idNumber: '',
+      department: '',
+      identityStatus: '',
+      studentId: '',
+      phone: '',
+      email: '',
+      realLineId: '',
+      studentAddr: '',
+      emerName: '',
+      emerRel: '',
+      emerPhone: '',
+      emerAddr: '',
+      medicalHistory: '',
+      exp: '',
+      strength: '',
+      strengthProof: '',
+      intendOfficial: '',
+      intendOfficer: '',
+    });
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -300,6 +371,9 @@ function Register({ userId }: { userId: string }) {
       const result = await res.json();
 
       if (result.status === 'success') {
+        const draftKey = 'register_draft_' + (userId || 'guest');
+        localStorage.removeItem(draftKey);
+        setHasDraftRestored(false);
         alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
           liff.closeWindow();
@@ -344,6 +418,38 @@ function Register({ userId }: { userId: string }) {
 
       {/* 表單主體 */}
       <form onSubmit={handleSubmit} className="register-form-card">
+        {hasDraftRestored && (
+          <div style={{
+            backgroundColor: '#ecfdf5',
+            border: '1px solid #6ee7b7',
+            color: '#065f46',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            fontSize: '13px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span>{t('register.draftRestored')}</span>
+            <button
+              type="button"
+              onClick={clearDraft}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#047857',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                fontSize: '12px'
+              }}
+            >
+              {t('register.clearDraft')}
+            </button>
+          </div>
+        )}
+
         {/* 步驟 1: 主要必填資料 */}
         {step === 1 && (
           <div className="form-step-content animate-fade-in">

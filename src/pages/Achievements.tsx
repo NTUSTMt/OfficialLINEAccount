@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getDirectImageUrl } from '../utils/image';
 import '../App.css';
 
 interface Reflection {
@@ -623,8 +624,9 @@ function Achievements({ userId }: { userId: string }) {
                       {imageUrl.split(',').map((url, idx) => (
                         <div key={idx} style={{ borderRadius: '8px', overflow: 'hidden', height: '220px', border: '1px solid #e2e8f0' }}>
                           <img
-                            src={url}
+                            src={getDirectImageUrl(url, 1000) || url}
                             alt={`Reflection photo ${idx + 1}`}
+                            loading="lazy"
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             onError={(e) => (e.currentTarget.style.display = 'none')}
                           />

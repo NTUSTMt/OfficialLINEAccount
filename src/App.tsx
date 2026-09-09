@@ -1,14 +1,15 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, Suspense, lazy, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import liff from '@line/liff';
-import Borrow from './pages/Borrow';
-import Payment from './pages/Payment';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import History from './pages/History';
-import Achievements from './pages/Achievements';
 import './App.css';
+
+const Borrow = lazy(() => import('./pages/Borrow'));
+const Payment = lazy(() => import('./pages/Payment'));
+const Register = lazy(() => import('./pages/Register'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const History = lazy(() => import('./pages/History'));
+const Achievements = lazy(() => import('./pages/Achievements'));
 
 // 解析 LIFF 傳入的初始路徑 (解決 liff.state 傳參導致重定向遺失的問題)
 const getInitialRedirectPath = () => {
@@ -365,45 +366,52 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
         <GlobalHeader pictureUrl={liffInit.pictureUrl} displayName={liffInit.displayName} />
       )}
 
-      {/* 路由主體頁面 */}
-      <Routes>
-        <Route path="/" element={<Navigate to={redirectPath} replace />} />
-        <Route path="/index.html" element={<Navigate to={redirectPath} replace />} />
-        <Route path="/borrow" element={
-          <ProfileCheck userId={liffInit.userId}>
-            <Borrow userId={liffInit.userId} />
-          </ProfileCheck>
-        } />
-        <Route path="/payment" element={
-          <ProfileCheck userId={liffInit.userId}>
-            <Payment userId={liffInit.userId} />
-          </ProfileCheck>
-        } />
-        <Route path="/register" element={<Register userId={liffInit.userId} />} />
-        <Route path="/dashboard" element={<Dashboard userId={liffInit.userId} />} />
-        <Route path="/history" element={
-          <ProfileCheck userId={liffInit.userId}>
-            <History userId={liffInit.userId} />
-          </ProfileCheck>
-        } />
-        <Route path="/payment/history" element={
-          <ProfileCheck userId={liffInit.userId}>
-            <History userId={liffInit.userId} />
-          </ProfileCheck>
-        } />
-        <Route path="/achievements" element={
-          <ProfileCheck userId={liffInit.userId}>
-            <Achievements userId={liffInit.userId} />
-          </ProfileCheck>
-        } />
-        <Route path="/dashboard/achievements" element={
-          <ProfileCheck userId={liffInit.userId}>
-            <Achievements userId={liffInit.userId} />
-          </ProfileCheck>
-        } />
-        {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
-        <Route path="*" element={<Navigate to="/borrow" replace />} />
-      </Routes>
+      {/* 路由主體頁面 (以 Suspense 支援動態程式碼分割非同步載入) */}
+      <Suspense fallback={
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+          <div className="loading-spinner" />
+          <p style={{ marginTop: '16px', fontSize: '13px', color: 'var(--text-muted, #64748b)' }}>載入頁面中 Loading...</p>
+        </div>
+      }>
+        <Routes>
+          <Route path="/" element={<Navigate to={redirectPath} replace />} />
+          <Route path="/index.html" element={<Navigate to={redirectPath} replace />} />
+          <Route path="/borrow" element={
+            <ProfileCheck userId={liffInit.userId}>
+              <Borrow userId={liffInit.userId} />
+            </ProfileCheck>
+          } />
+          <Route path="/payment" element={
+            <ProfileCheck userId={liffInit.userId}>
+              <Payment userId={liffInit.userId} />
+            </ProfileCheck>
+          } />
+          <Route path="/register" element={<Register userId={liffInit.userId} />} />
+          <Route path="/dashboard" element={<Dashboard userId={liffInit.userId} />} />
+          <Route path="/history" element={
+            <ProfileCheck userId={liffInit.userId}>
+              <History userId={liffInit.userId} />
+            </ProfileCheck>
+          } />
+          <Route path="/payment/history" element={
+            <ProfileCheck userId={liffInit.userId}>
+              <History userId={liffInit.userId} />
+            </ProfileCheck>
+          } />
+          <Route path="/achievements" element={
+            <ProfileCheck userId={liffInit.userId}>
+              <Achievements userId={liffInit.userId} />
+            </ProfileCheck>
+          } />
+          <Route path="/dashboard/achievements" element={
+            <ProfileCheck userId={liffInit.userId}>
+              <Achievements userId={liffInit.userId} />
+            </ProfileCheck>
+          } />
+          {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
+          <Route path="*" element={<Navigate to="/borrow" replace />} />
+        </Routes>
+      </Suspense>
     </div>
   );
 }

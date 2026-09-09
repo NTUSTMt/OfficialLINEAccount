@@ -22,6 +22,8 @@
       "safety": "Safety",
       "experience": "Experience"
     },
+    "draftRestored": "✨ Restored your previously saved draft",
+    "clearDraft": "Clear Draft",
     "alert": {
       "maxFiles": "You can upload up to 5 images! You can select {{limit}} more.",
       "fileTooLarge": "File {{name}} cannot exceed 10MB!",
@@ -232,6 +234,8 @@
       "detailsTitle": "📅 Select Rental Details",
       "pickupDate": "Pickup Date",
       "returnDate": "Return Date",
+      "durationBadge": "Duration: {{days}} days (2 base + {{extra}} extra)",
+      "durationBaseOnly": "Duration: {{days}} days (Standard 2 days)",
       "purpose": "Trip Purpose / Usage",
       "purposeClub": "Club Trip",
       "purposePersonal": "Personal Use",

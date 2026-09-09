@@ -3,11 +3,29 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.86` (v0.0.86)
+- **當前版本**：`0.0.88` (v0.0.88)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 88. 第二梯次優化：註冊草稿自動暫存與租借日期聯動防呆 (v0.0.88)
+- **註冊資料草稿自動暫存與還原 (Draft Auto-Save & Restore)**：
+  - 重構 [Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx)。在使用者填寫註冊資料時，自動將資料儲存至 `localStorage`（Key: `register_draft_{userId}`），避免填寫途中被通話、訊息或不慎關閉視窗而遺失內容。
+  - 當新用戶重新進入時自動還原草稿，並於表單頂部呈現提示列與一鍵「清除草稿」按鈕；表單提交成功後自動清除暫存。
+  - 同步於 [zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json) 與 [en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json) 補充雙語提示詞條。
+- **租借日期選取聯動防呆與出隊天數分析標籤**：
+  - 重構 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx)。為預計領取日加入當日（`min={todayStr}`）限制，歸還日加入領取日（`min={pickupDate}`）限制；當領取日變更且晚於現有歸還日時自動同步校正。
+  - 於日期欄位下方新增即時渲染的「出隊天數標籤」（如：`出隊天數：4 天 (2 天基本 + 2 天加成)`），讓社員在確認送出前對出隊天數與計費公式一目了然。
+
+### 87. 第一梯次優化：Google Drive CDN 縮圖直連與路由 Code Splitting (v0.0.87)
+- **Google Drive 圖片直連 CDN 解析升級**：
+  - 新增共用圖片解析工具模組 [image.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/image.ts) 中的 `getDirectImageUrl`。
+  - 將 Google Drive 圖片解析由舊有的 `docs.google.com/uc?export=view` 升級為 Google 官方高速縮圖 CDN 格式 `https://lh3.googleusercontent.com/d/{FILE_ID}=w{SIZE}`，徹底消除 Drive 原生直連容易引發的 403 限流、429 超額以及病毒掃描下載提示頁面等問題。
+  - 在 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) (裝備租借) 與 [Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx) (心得回憶登頂照) 同步導入，確保跨頁面圖片載入速度提升並杜絕破圖。
+- **Vite 路由程式碼分割 (Code Splitting / Dynamic Import)**：
+  - 重構 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx)，將 6 個核心頁面（`Borrow`, `Payment`, `Register`, `Dashboard`, `History`, `Achievements`）改為 `React.lazy()` 動態匯入，並於路由外層包覆 `<Suspense>` 提供統一品牌色載入動態。
+  - 主 JS Bundle 體積由原本的 528KB 大幅降低至 444KB (Gzip 僅 138KB)，其餘各子頁面均成功拆分為獨立小體積 Chunk（約 6KB ~ 19KB），解決了 Vite 打包大於 500KB 的警示，顯著加快 LINE 內嵌瀏覽器的首屏冷啟動載入速度。
 
 ### 86. 移除繳費中心 Flex 卡片改為直連網址 (v0.0.86)
 - **移除 LINE 繳費中心卡片推播**：

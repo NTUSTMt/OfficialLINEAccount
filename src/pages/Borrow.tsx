@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
+import { getDirectImageUrl } from '../utils/image';
 import '../App.css';
 
 // ==========================================
@@ -30,17 +31,6 @@ interface ApiResponse {
   message?: string;
 }
 
-// 轉換 Google Drive 分享連結為直接嵌入圖片的網址
-function getDirectImageUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  const cleanUrl = url.trim();
-  const driveRegex = /(?:https?:\/\/)?(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?id=)([^/\?]+)/;
-  const match = cleanUrl.match(driveRegex);
-  if (match && match[1]) {
-    return `https://docs.google.com/uc?export=view&id=${match[1]}`;
-  }
-  return cleanUrl;
-}
 
 // 根據商品名稱或傳入的圖片網址渲染對應的真實圖片或對應的裝備 Emoji 圖示
 function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
@@ -192,14 +182,24 @@ function Borrow({ userId }: { userId: string }) {
     return Object.values(form.cart).reduce((sum, qty) => sum + qty, 0);
   }, [form.cart]);
 
-  // 計算天數的輔助函式
+  // 計算今日日期字串 YYYY-MM-DD
+  const todayStr = useMemo(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  // 計算天數的輔助函式 (防呆：若歸還日早於領取日則至少回傳 1 天)
   const rentalDays = useMemo(() => {
     if (!form.pickupDate || !form.returnDate) return 2;
     const start = new Date(form.pickupDate);
     const end = new Date(form.returnDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
+    if (end < start) return 1;
+    const diffTime = end.getTime() - start.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays || 1; // 至少為 1 天
+    return diffDays || 1; // 同日借還算 1 天
   }, [form.pickupDate, form.returnDate]);
 
   // 計算基本費用 (原價總計)
@@ -247,10 +247,16 @@ function Borrow({ userId }: { userId: string }) {
     return baseFormula;
   }, [form.cart, equipments, rentalDays, form.purpose, isOfficial, t]);
 
-  // 處理表單輸入
+  // 處理表單輸入 (防呆：若新領取日晚於現有歸還日，自動將歸還日同步)
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    setForm(prev => {
+      const updated = { ...prev, [name]: value };
+      if (name === 'pickupDate' && prev.returnDate && prev.returnDate < value) {
+        updated.returnDate = value;
+      }
+      return updated;
+    });
   };
 
   // 送出表單
@@ -520,6 +526,7 @@ function Borrow({ userId }: { userId: string }) {
                         id="pickupDate"
                         name="pickupDate"
                         value={form.pickupDate}
+                        min={todayStr}
                         onChange={handleInputChange}
                         required
                       />
@@ -532,10 +539,34 @@ function Borrow({ userId }: { userId: string }) {
                         id="returnDate"
                         name="returnDate"
                         value={form.returnDate}
+                        min={form.pickupDate || todayStr}
                         onChange={handleInputChange}
                         required
                       />
                     </div>
+
+                    {form.pickupDate && form.returnDate && (
+                      <div className="form-group full-width animate-fade-in" style={{ marginTop: '-4px' }}>
+                        <div style={{
+                          padding: '8px 12px',
+                          backgroundColor: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: '8px',
+                          color: '#1d4ed8',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <span>
+                            {rentalDays > 2
+                              ? t('borrow.drawer.durationBadge', { days: rentalDays, extra: rentalDays - 2 })
+                              : t('borrow.drawer.durationBaseOnly', { days: rentalDays })}
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="form-group full-width">
                       <label htmlFor="purpose">{t('borrow.drawer.purpose')}</label>
