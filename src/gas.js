@@ -159,6 +159,18 @@ function replyAdminMessage(replyToken, text) {
   });
 }
 
+// 傳送「精美排版卡片 (Flex Message)」給幹部群組
+function replyAdminFlexMessage(replyToken, altText, contents) {
+  _lineAPI('reply', ADMIN_BOT_TOKEN, {
+    'replyToken': replyToken,
+    'messages': [{
+      'type': 'flex',
+      'altText': altText,
+      'contents': contents
+    }]
+  });
+}
+
 // ⭐️ 總機大廳 (Webhook 接收端 / 解除快取陷阱防護版)
 // 【函式說明】
 // 這是 LINE Bot 的「大門口」。當使用者在 LINE 傳送任何訊息、點擊按鈕或傳送照片時，
@@ -215,25 +227,7 @@ function doPost(e) {
     for (var i = 0; i < msg.events.length; i++) {
       var event = msg.events[i];
 
-      if (event.type === 'message' && event.message.type === 'text') {
-        var tempMessage = event.message.text;
-        var replyToken = event.replyToken;
-
-        if (tempMessage === "抓取群組ID") {
-          var sourceType = event.source.type;
-          if (sourceType === "group") {
-            var groupId = event.source.groupId;
-            // 因為是幹部機器人被加進群組，所以必須用 ADMIN_BOT_TOKEN 來回覆，否則 LINE 會報錯
-            replyAdminMessage(replyToken, "✅ 抓到了！這個幹部群組的 ID 是：\n\n" + groupId + "\n\n⚠️ 請複製這串 C 開頭的亂碼，貼到 SCRIPT 的 ADMIN_GROUP_ID 變數中，並記得把這個隱藏指令刪掉或註解起來喔！");
-          } else if (sourceType === "user") {
-            var userId = event.source.userId;
-            // 如果是一對一對話，同時嘗試用兩個 Token 回覆 (因為不知道社員是對哪一隻幹部還是社員機器人輸入)
-            replyAdminMessage(replyToken, "❌ 這裡不是群組喔！這是我們一對一的聊天室。\n順帶一提，您的個人 User ID 是：\n" + userId);
-            replyMessage(replyToken, "❌ 這裡不是群組喔！這是我們一對一的聊天室。\n順帶一提，您的個人 User ID 是：\n" + userId);
-          }
-          return;
-        }
-      }
+      // 注意：文字訊息分流與呼叫「小岳」皆由下方統一處理
 
       var replyToken = event.replyToken;
       var userId = event.source.userId;
@@ -257,7 +251,7 @@ function doPost(e) {
           if (menuCommands.indexOf(userText) > -1) {
             cache.remove(userId + "_canceling_event");
             cache.remove(userId + "_payment_type");
-            handleTextCommand(replyToken, userId, userText, event.source.type);
+            handleTextCommand(replyToken, userId, userText, event.source.type, event);
             continue;
           }
 
@@ -283,7 +277,7 @@ function doPost(e) {
             continue;
           }
 
-          handleTextCommand(replyToken, userId, userText, event.source.type);
+          handleTextCommand(replyToken, userId, userText, event.source.type, event);
         }
         // 分流 3：圖片
         else if (event.type === 'message' && event.message.type === 'image') {
@@ -317,6 +311,23 @@ function handlePostback(replyToken, userId, postbackData) {
   var action = params[0].split("=")[1];
   var targetId = params.length > 1 ? params[1].split("=")[1] : "";
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  // 📌 動作：確認綁定此群組為唯一幹部通知群組
+  if (action === "confirm_bind_admin_group") {
+    var newGroupId = targetId;
+    if (newGroupId) {
+      PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', newGroupId);
+      ADMIN_GROUP_ID = newGroupId;
+      var bindSuccessMsg = "✅ 【幹部通知群組綁定完成】\n\n" +
+        "已成功將本群組（" + newGroupId + "）設定為【唯一的官方幹部通知群組】！\n\n" +
+        "🔒 系統安全保證：\n" +
+        "1. 先前的舊幹部群組已完全解除綁定，不再接收任何系統訊息。\n" +
+        "2. 今後所有社員報名、裝備租借預約、活動棄權遞補，以及匯款回報審核卡片，皆會第一時間發送至此群組！\n" +
+        "3. 系統後端已自動更新持久化設定，不需手動打開 GAS 編輯。";
+      replyAdminMessage(replyToken, bindSuccessMsg);
+    }
+    return;
+  }
 
   // 📌 動作：借用裝備
   if (action === "borrow_form") {
@@ -885,23 +896,216 @@ function handlePostback(replyToken, userId, postbackData) {
   }
 }
 
+// ⭐️ 產生幹部群組綁定確認卡片 (防誤觸單一群組綁定)
+function sendAdminGroupBindConfirm(replyToken, currentGroupId) {
+  var isAlreadyBound = (ADMIN_GROUP_ID === currentGroupId);
+
+  var confirmFlex = {
+    "type": "bubble",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "backgroundColor": isAlreadyBound ? "#059669" : "#ea580c",
+      "paddingAll": "16px",
+      "contents": [
+        {
+          "type": "text",
+          "text": isAlreadyBound ? "幹部群組綁定狀態" : "幹部群組綁定確認",
+          "weight": "bold",
+          "size": "lg",
+          "color": "#ffffff"
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "md",
+      "contents": [
+        {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#f8fafc",
+          "paddingAll": "12px",
+          "cornerRadius": "8px",
+          "contents": [
+            {
+              "type": "text",
+              "text": "本群組識別碼 (Group ID):",
+              "size": "xs",
+              "color": "#64748b",
+              "weight": "bold"
+            },
+            {
+              "type": "text",
+              "text": currentGroupId,
+              "size": "sm",
+              "color": "#0f172a",
+              "weight": "bold",
+              "wrap": true
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": isAlreadyBound
+            ? "此群組目前【已是唯一的官方幹部通知群組】。所有社員報名、借用、取消與查帳對帳卡片，皆會自動即時發送至此。"
+            : "重要安全提示：系統僅能維持【單一】幹部通知群組！若點擊下方確認綁定，原先綁定的舊群組將【立即失效並停止接收訊息】！",
+          "size": "xs",
+          "color": isAlreadyBound ? "#047857" : "#b91c1c",
+          "wrap": true
+        }
+      ]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "sm",
+      "contents": isAlreadyBound ? [
+        {
+          "type": "text",
+          "text": "已處於綁定運作狀態，無需重複綁定",
+          "size": "xs",
+          "color": "#64748b",
+          "align": "center"
+        }
+      ] : [
+        {
+          "type": "button",
+          "style": "primary",
+          "color": "#ea580c",
+          "height": "sm",
+          "action": {
+            "type": "postback",
+            "label": "確認綁定為唯一通知群組",
+            "data": "action=confirm_bind_admin_group&groupId=" + currentGroupId,
+            "displayText": "確認綁定為唯一幹部通知群組"
+          }
+        }
+      ]
+    }
+  };
+
+  replyAdminFlexMessage(replyToken, "幹部群組綁定確認", confirmFlex);
+}
+
 // ⭐️ 文字指令分流 (Text Command Router)
 // 【函式說明】
 // 當使用者在 LINE 對話框輸入純文字（而不是按按鈕）時，會進入這個函式。
 // 這裡就像是總機的「分機轉接表」，會根據使用者輸入的關鍵字，
 // 決定要呼叫哪個對應的功能模組。
 // 這裡也包含了呼叫 AI 助理「小岳」的專屬通道。
-function handleTextCommand(replyToken, userId, text, sourceType) {
+function handleTextCommand(replyToken, userId, text, sourceType, event) {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var isGroup = (sourceType === "group" || sourceType === "room");
 
-  // AI 聊天觸發
-  if (text.startsWith("小岳") || text.startsWith("Yue") || text.startsWith("yue")) {
-    var question = text.substring(2).trim();
-    if (question === "") {
+  // ============================================================
+  // 🤖 呼叫助理判斷（雙軌支援：LINE 原生 @Mention 與免 @ 純文字「小岳」）
+  // ============================================================
+  var isCalled = false;
+  var question = "";
+
+  // 1. 檢查 LINE 原生 @Mention（即使在 LINE 後台改名稱，只要被 Tag 就保證精準觸發！）
+  var isNativeMention = false;
+  if (event && event.message && event.message.mention && Array.isArray(event.message.mention.mentionees)) {
+    for (var m = 0; m < event.message.mention.mentionees.length; m++) {
+      if (event.message.mention.mentionees[m] && event.message.mention.mentionees[m].isSelf === true) {
+        isNativeMention = true;
+        break;
+      }
+    }
+  }
+
+  if (isNativeMention) {
+    isCalled = true;
+    // 移除被 @ 的機器人標籤（LINE 格式為 @Display_Name 加空格）
+    question = text.replace(/^@\S+\s*/, "").trim();
+    question = question.replace(/^@\S+\s*/, "").trim();
+  }
+
+  // 2. 檢查純文字前綴（小岳、Yue、yue，或使用者手動輸入的 @小岳）
+  if (!isCalled) {
+    var prefixMatch = text.match(/^@?(小岳|Yue|yue)\s*(.*)/i);
+    if (prefixMatch) {
+      isCalled = true;
+      question = prefixMatch[2].trim();
+    }
+  }
+
+  // 3. 被呼叫時的指令分流
+  if (isCalled) {
+    // 指令 A：抓取群組 ID（例如：小岳 抓取群組ID / @小岳 抓取群組ID）-> 彈出防誤觸確認卡片
+    if (question === "抓取群組ID" || question === "抓取群組id" || question === "群組ID" || question === "群組id" || question === "綁定群組") {
+      if (isGroup) {
+        var groupId = (event && event.source) ? (event.source.groupId || event.source.roomId || "") : "";
+        if (!groupId) {
+          replyAdminMessage(replyToken, "❌ 無法取得此環境之群組 ID，請確認是否在群組中呼叫。");
+          return;
+        }
+        sendAdminGroupBindConfirm(replyToken, groupId);
+      } else {
+        replyMessage(replyToken, "❌ 這裡不是群組喔！這是我們一對一的聊天室。\n順帶一提，您的個人 User ID 是：\n" + userId);
+      }
+      return;
+    }
+
+    // 指令 B：幹部系統後台連結（例如：小岳 幹部系統 / @小岳 幹部系統）
+    if (question === "幹部系統" || question === "活動管理" || question === "審核後台" || question === "審核名單") {
+      var adminLinkMsg = "🛠️ 幹部專屬管理中心：\n👉 https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents\n\n在此可快速切換活動開放狀態、編輯活動內容與即時審核報名名冊！";
+      if (isGroup) replyAdminMessage(replyToken, adminLinkMsg);
+      else replyMessage(replyToken, adminLinkMsg);
+      return;
+    }
+
+    // 指令 C：在幹部群組中只有呼叫，但「沒有附帶任何問題或指令」-> 自動輸出幹部群組功能指引
+    if (isGroup && question === "") {
+      var cadreGuide = "🌲 幹部專屬助理小岳在此！\n" +
+        "─────────────\n" +
+        "目前在幹部群組中支援以下功能與指令：\n\n" +
+        "🛠️ 【幹部系統】\n" +
+        "• 輸入「小岳 幹部系統」或點擊下方連結進入後台：\n" +
+        "👉 https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents\n\n" +
+        "🆔 【抓取群組ID】\n" +
+        "• 輸入「小岳 抓取群組ID」或 @ 我並輸入「抓取群組ID」，即可查詢本群組識別碼。\n\n" +
+        "🤖 【諮詢 AI 助理】\n" +
+        "• 呼叫我並加上問題，即可解答登山專業知識或社規：\n" +
+        "👉 例：「小岳 新手登山該注意什麼？」\n" +
+        "👉 例：「@小岳 合歡北峰需要申請入山證嗎？」\n\n" +
+        "🔔 【業務自動推播】\n" +
+        "• 社員報名活動、借還裝備、取消報名或回報繳費時，我會自動在群發送通知與一鍵審核卡片！";
+      replyAdminMessage(replyToken, cadreGuide);
+      return;
+    }
+
+    // 指令 D：在一對一對話中只有呼叫，沒有附帶問題
+    if (!isGroup && question === "") {
       replyMessage(replyToken, "找小岳嗎？有什麼我可以幫忙的？⛰️\n(請輸入：小岳 加上你的問題，例如：小岳 新手需要準備什麼裝備？)\n─────────────\nLooking for Yue? How can I help you? ⛰️\n(Type 'Yue' followed by your question, e.g., Yue What gear do beginners need?)");
       return;
     }
-    replyMessage(replyToken, talkToGemini(question));
+
+    // 指令 E：具體問題，送交 Google Gemini 2.5 AI 模型回答
+    // 關鍵防打架隔離：群組嚴格使用 replyAdminMessage (ADMIN_BOT_TOKEN)，一對一使用 replyMessage (MEMBER_BOT_TOKEN)
+    var aiAnswer = talkToGemini(question);
+    if (isGroup) {
+      replyAdminMessage(replyToken, aiAnswer);
+    } else {
+      replyMessage(replyToken, aiAnswer);
+    }
+    return;
+  }
+
+  // 舊版獨立指令相容：單純輸入「抓取群組ID」
+  if (text === "抓取群組ID") {
+    if (isGroup) {
+      var gId = (event && event.source) ? (event.source.groupId || event.source.roomId || "") : "";
+      if (gId) {
+        sendAdminGroupBindConfirm(replyToken, gId);
+      } else {
+        replyAdminMessage(replyToken, "❌ 無法取得此環境之群組 ID。");
+      }
+    } else {
+      replyMessage(replyToken, "❌ 這裡不是群組喔！這是我們一對一的聊天室。\n順帶一提，您的個人 User ID 是：\n" + userId);
+    }
     return;
   }
 

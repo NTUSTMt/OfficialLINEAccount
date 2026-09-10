@@ -122,18 +122,18 @@
       "cancelActivity": "Are you sure you want to cancel your registration for \"{{name}}\"?"
     },
     "alert": {
-      "cancelLoanSuccess": "🎉 Equipment reservation cancelled successfully!",
-      "cancelActivitySuccess": "🎉 Event registration cancelled successfully!",
-      "cancelConfirmedSuccess": "🎉 Confirmed spot and event registration cancelled successfully! Officers have been notified.",
-      "cancelFailed": "❌ Cancellation failed: {{message}}",
+      "cancelLoanSuccess": "Equipment reservation cancelled successfully!",
+      "cancelActivitySuccess": "Event registration cancelled successfully!",
+      "cancelConfirmedSuccess": "Confirmed spot and event registration cancelled successfully! Officers have been notified.",
+      "cancelFailed": "Cancellation failed: {{message}}",
       "contactAdmin": "Please contact administrator in this LINE account.",
       "noEventCode": "This event has no registration ID and cannot be cancelled. Please contact club officers.",
       "inputReason": "Please input cancellation reason!"
     },
     "card": {
-      "official": "✅ Member",
-      "nonMember": "❌ Non-Member",
-      "expired": "⚠️ Expired",
+      "official": "Member",
+      "nonMember": "Non-Member",
+      "expired": "Expired",
       "noName": "Name not provided",
       "noDept": "Dept not provided",
       "studentId": "Student ID",
@@ -154,24 +154,24 @@
       "toBeCollected": "To Be Collected"
     },
     "activity": {
-      "title": "🏕️ Event Status ({{count}})",
+      "title": "Event Status ({{count}})",
       "empty": "No registered events currently.",
-      "date": "📅 Event Date: {{date}}",
+      "date": "Event Date: {{date}}",
       "unscheduled": "TBD",
-      "cancelBtn": "Cancel ❌",
+      "cancelBtn": "Cancel",
       "payBtn": "Go to Payment"
     },
     "equipment": {
-      "title": "🎒 Gear Rental Status ({{count}})",
+      "title": "Gear Rental Status ({{count}})",
       "empty": "No gear rental records currently.",
-      "orderId": "📝 Order ID: {{id}}",
+      "orderId": "Order ID: {{id}}",
       "pickup": "Pickup: {{date}}",
       "return": "Return: {{date}}",
-      "overdue": "⚠️ Overdue",
-      "cancelBtn": "Cancel ❌"
+      "overdue": "Overdue",
+      "cancelBtn": "Cancel"
     },
     "modal": {
-      "title": "⚠️ Confirm Spot Cancellation",
+      "title": "Confirm Spot Cancellation",
       "description": "You are currently confirmed for 【{{name}}】. Cancelling this spot will release it to others.",
       "reasonLabel": "Please enter cancellation reason (Required)",
       "reasonPlaceholder": "e.g., scheduling conflict, feeling unwell, transport issue...",

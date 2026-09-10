@@ -3,11 +3,48 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.95` (v0.0.95)
+- **當前版本**：`0.0.97` (v0.0.97)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 97. 幹部群組單一綁定保護機制、防誤觸二次確認 Flex Card 與個人主頁全面去 Emoji 化 (v0.0.97)
+- **嚴格單一群組綁定原則（Single Cadre Group Binding）**：
+  - 在 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 實作 `PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', newGroupId)` 自動持久化儲存機制。
+  - 保證系統永遠「僅存在單一幹部通知群組」。一旦更換綁定至新群組，舊群組之 ID 立即被覆蓋失效，舊群組即刻停止接收任何活動報名、請假審核與裝備租借推播訊息。
+- **防誤按互動式確認卡片（Anti-Accidental-Trigger Flex Card）**：
+  - 幹部在群組輸入「`小岳 抓取群組ID`」或以原生 `@助理 抓取群組ID` 呼叫時，系統不再自動直接覆蓋綁定，而是回傳具備安全警示的 LINE 互動式 Flex 卡片：
+    - 明確顯示目前群組 ID。
+    - 提示若目前已為綁定群組（顯示「此群組已是目前唯一綁定的幹部群組」），或提示綁定後將轉移接收所有幹部通知。
+    - 明確以警示文字說明：「此操作將取代舊群組，舊群組將無法再接收到通知」。
+    - 提供「確認綁定此群組為唯一通知群組」的專屬 Postback 按鈕（傳遞 `action=confirm_bind_admin_group&groupId=...`）。
+- **Postback 安全確認處理解決方案**：
+  - 在 `handlePostback` 新增 `action === "confirm_bind_admin_group"` 處理器，唯有幹部在群組中主動點擊確認按鈕時，系統才會正式寫入 `PropertiesService` 並立即同步記憶體變數，隨後回傳綁定成功訊息，徹底避免誤觸。
+- **個人主頁（Dashboard）全面去 Emoji 化與向量圖示升級**：
+  - 更新 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx)：
+    - 會員卡狀態文字 Emoji（`✅`、`❌`、`⚠️`）升級為 Lucide `<CheckCircle2 size={13} />`、`<XCircle size={13} />`、`<AlertTriangle size={13} />`。
+    - 活動與裝備區塊標題（`🏕️`、`🎒`）替換為 `<CalendarCheck size={18} color="#059669" />` 與 `<Package size={18} color="#059669" />`。
+    - 欄位資訊小標（`📅` 日期、`📝` 訂單編號、`⚠️` 逾期提示）轉為標準文字搭配 `<Calendar size={13} />`、`<FileText size={12} />`、`<AlertTriangle size={12} />`。
+    - 錯誤畫面與彈窗標題（`❌`、`⚠️`）分別替換為 `<AlertCircle size={48} color="#ef4444" />` 與 `<AlertTriangle size={20} color="#ef4444" />`。
+    - 預設使用者頭像由 `👤` 替換為 `<User size={24} />`。
+  - 更新 [zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json) 與 [en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json)：
+    - 全面清除 `dashboard.alert`、`dashboard.card`、`dashboard.activity`、`dashboard.equipment`、`dashboard.modal` 內部殘餘之 Emoji，提供整齊俐落且國際化的質感介面。
+
+### 96. 幹部群組助理升級：支援 LINE 原生 @Mention、幹部指令指南與防衝突機制 (v0.0.96)
+- **支援 LINE 原生 `@` 標註呼叫 (Native Mention)**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `doPost` 與 `handleTextCommand`。
+  - 解析 LINE Webhook 之 `event.message.mention.mentionees` 陣列，只要偵測到 `isSelf === true`（即標註機器人本身），不論幹部在 LINE 後台將機器人設定為「小岳」、「幹部秘書」或任何自訂名稱，均能 100% 精準觸發。
+  - 自動剔除開頭的 `@名稱` 標籤，將乾淨的問題內容傳送至 Gemini AI。
+- **維持免 `@` 純文字前綴雙軌相容**：
+  - 維持原本輸入「`小岳`」或「`Yue`」開頭即可直接對話的習慣，手動輸入 `@小岳` 亦可自動相容解析。
+- **呼叫式「抓取群組ID」與「幹部系統」捷徑**：
+  - 將原先獨立的指令升級為呼叫式互動，支援在群組輸入「`小岳 抓取群組ID`」或以 `@助理 抓取群組ID` 查詢群組代號。
+  - 新增「`小岳 幹部系統`」快捷指令，直接回傳活動管理與名單審核之專屬 LIFF 入口連結。
+- **群組空呼叫自動傳送「幹部專屬指令指南」**：
+  - 當幹部在群組中僅標註 `@助理` 或輸入「`小岳`」但**未附帶任何問題**時，助理會自動在群組傳送結構化之「幹部專屬助理功能指南」，列出幹部系統連結、群組 ID 查詢、AI 提問範例與即時推播說明。
+- **雙機器人 Token 嚴格隔離防衝突 (Token Routing)**：
+  - 在群組環境（`sourceType === "group" || "room"`）一律調用 `replyAdminMessage`（使用 `ADMIN_BOT_TOKEN`）；在個人一對一對話一律調用 `replyMessage`（使用 `MEMBER_BOT_TOKEN`），徹底根除兩隻機器人共用後端時可能產生的 `Invalid reply token` 衝突問題。
 
 ### 95. 幹部系統全面「去 Emoji 化」與現代向量圖示重構 (Complete De-emojification) (v0.0.95)
 - **活動看板狀態標籤微型化與純淨化**：

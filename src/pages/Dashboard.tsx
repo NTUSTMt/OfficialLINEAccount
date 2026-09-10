@@ -2,7 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { ShieldCheck, ChevronRight } from 'lucide-react';
+import {
+  ShieldCheck,
+  ChevronRight,
+  AlertCircle,
+  User,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  CalendarCheck,
+  Package,
+  Calendar,
+  FileText
+} from 'lucide-react';
 import '../App.css';
 
 interface ProfileData {
@@ -267,7 +279,7 @@ function Dashboard({ userId }: { userId: string }) {
   if (error) {
     return (
       <div className="error-state-container" style={{ padding: '40px 20px', textAlign: 'center' }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
+        <AlertCircle size={48} color="#ef4444" style={{ margin: '0 auto 16px', display: 'block' }} />
         <h3>{t('dashboard.error.title')}</h3>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{error}</p>
         <button className="btn btn-primary" onClick={fetchData} style={{ padding: '10px 24px' }}>
@@ -327,8 +339,8 @@ function Dashboard({ userId }: { userId: string }) {
                 style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.6)' }} 
               />
             ) : (
-              <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
-                👤
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <User size={24} color="rgba(255,255,255,0.9)" />
               </div>
             )}
             <div style={{ textAlign: 'left' }}>
@@ -343,10 +355,28 @@ function Dashboard({ userId }: { userId: string }) {
               fontSize: '12px',
               fontWeight: 'bold',
               backgroundColor: profile?.isOfficial ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.3)',
-              border: '1px solid rgba(255,255,255,0.3)'
+              border: '1px solid rgba(255,255,255,0.3)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px'
             }}
           >
-            {profile?.isOfficial ? t('dashboard.card.official') : profile?.expireDate?.includes('尚未') ? t('dashboard.card.nonMember') : t('dashboard.card.expired')}
+            {profile?.isOfficial ? (
+              <>
+                <CheckCircle2 size={13} color="#ffffff" />
+                <span>{t('dashboard.card.official')}</span>
+              </>
+            ) : profile?.expireDate?.includes('尚未') ? (
+              <>
+                <XCircle size={13} color="#ffffff" />
+                <span>{t('dashboard.card.nonMember')}</span>
+              </>
+            ) : (
+              <>
+                <AlertTriangle size={13} color="#ffffff" />
+                <span>{t('dashboard.card.expired')}</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -424,7 +454,8 @@ function Dashboard({ userId }: { userId: string }) {
       {/* 區塊二：活動報名追蹤 */}
       <div className="section-container" style={{ marginBottom: '28px' }}>
         <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '14px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {t('dashboard.activity.title', { count: activities.length })}
+          <CalendarCheck size={18} color="#059669" />
+          <span>{t('dashboard.activity.title', { count: activities.length })}</span>
         </h3>
         {activities.length === 0 ? (
           <div style={{ padding: '24px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center' }}>
@@ -452,8 +483,9 @@ function Dashboard({ userId }: { userId: string }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{act.eventName}</h4>
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {t('dashboard.activity.date', { date: act.date || t('dashboard.activity.unscheduled') })}
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Calendar size={13} color="#64748b" />
+                        <span>{t('dashboard.activity.date', { date: act.date || t('dashboard.activity.unscheduled') })}</span>
                       </p>
                     </div>
                     
@@ -548,7 +580,8 @@ function Dashboard({ userId }: { userId: string }) {
       {/* 區塊三：裝備租借清單 */}
       <div className="section-container">
         <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '14px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {t('dashboard.equipment.title', { count: equipments.length })}
+          <Package size={18} color="#059669" />
+          <span>{t('dashboard.equipment.title', { count: equipments.length })}</span>
         </h3>
         {equipments.length === 0 ? (
           <div style={{ padding: '24px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center' }}>
@@ -574,8 +607,9 @@ function Dashboard({ userId }: { userId: string }) {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {t('dashboard.equipment.orderId', { id: eq.orderId })}
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <FileText size={12} color="#64748b" />
+                      <span>{t('dashboard.equipment.orderId', { id: eq.orderId })}</span>
                     </span>
                     <span 
                       style={{
@@ -597,8 +631,9 @@ function Dashboard({ userId }: { userId: string }) {
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px dashed var(--border-color)', paddingTop: '8px', marginTop: '4px' }}>
                     <span>{t('dashboard.equipment.pickup', { date: eq.pickupDate || t('dashboard.activity.unscheduled') })}</span>
-                    <span style={{ color: isOverdue ? '#ef4444' : 'inherit', fontWeight: isOverdue ? 'bold' : 'normal' }}>
-                      {t('dashboard.equipment.return', { date: eq.returnDate || t('dashboard.activity.unscheduled') })} {isOverdue && t('dashboard.equipment.overdue')}
+                    <span style={{ color: isOverdue ? '#ef4444' : 'inherit', fontWeight: isOverdue ? 'bold' : 'normal', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      {isOverdue && <AlertTriangle size={12} color="#ef4444" />}
+                      <span>{t('dashboard.equipment.return', { date: eq.returnDate || t('dashboard.activity.unscheduled') })} {isOverdue && t('dashboard.equipment.overdue')}</span>
                     </span>
                   </div>
 
@@ -664,7 +699,8 @@ function Dashboard({ userId }: { userId: string }) {
             textAlign: 'left'
           }}>
             <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '12px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {t('dashboard.modal.title')}
+              <AlertTriangle size={20} color="#ef4444" />
+              <span>{t('dashboard.modal.title')}</span>
             </h3>
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '16px' }}>
               {t('dashboard.modal.description', { name: targetActivity.eventName })}

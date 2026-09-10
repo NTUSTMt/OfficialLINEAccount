@@ -122,18 +122,18 @@
       "cancelActivity": "確定要取消「{{name}}」的活動報名嗎？"
     },
     "alert": {
-      "cancelLoanSuccess": "🎉 裝備預約取消成功！",
-      "cancelActivitySuccess": "🎉 活動報名已成功取消！",
-      "cancelConfirmedSuccess": "🎉 正取資格與活動報名已成功取消！已通知幹部處理遞補。",
-      "cancelFailed": "❌ 取消失敗: {{message}}",
+      "cancelLoanSuccess": "裝備預約取消成功！",
+      "cancelActivitySuccess": "活動報名已成功取消！",
+      "cancelConfirmedSuccess": "正取資格與活動報名已成功取消！已通知幹部處理遞補。",
+      "cancelFailed": "取消失敗: {{message}}",
       "contactAdmin": "請在本官方帳號聯絡幹部",
       "noEventCode": "該活動無報名識別碼，無法取消，請聯繫社團管理員。",
       "inputReason": "請填寫取消原因！"
     },
     "card": {
-      "official": "✅ 正式社員",
-      "nonMember": "❌ 非社員",
-      "expired": "⚠️ 已過期",
+      "official": "正式社員",
+      "nonMember": "非社員",
+      "expired": "已過期",
       "noName": "未填寫真實姓名",
       "noDept": "未填寫系所",
       "studentId": "學號",
@@ -154,24 +154,24 @@
       "toBeCollected": "待領取"
     },
     "activity": {
-      "title": "🏕️ 活動報名狀態 ({{count}})",
+      "title": "活動報名狀態 ({{count}})",
       "empty": "目前沒有報名任何活動。",
-      "date": "📅 活動日期：{{date}}",
+      "date": "活動日期：{{date}}",
       "unscheduled": "未排定",
-      "cancelBtn": "取消報名 ❌",
+      "cancelBtn": "取消報名",
       "payBtn": "前往「繳費系統」"
     },
     "equipment": {
-      "title": "🎒 裝備租借狀態 ({{count}})",
+      "title": "裝備租借狀態 ({{count}})",
       "empty": "目前沒有裝備租借記錄。",
-      "orderId": "📝 預約編號：{{id}}",
+      "orderId": "預約編號：{{id}}",
       "pickup": "領取：{{date}}",
       "return": "歸還：{{date}}",
-      "overdue": "⚠️ 逾期",
-      "cancelBtn": "取消預約 ❌"
+      "overdue": "逾期",
+      "cancelBtn": "取消預約"
     },
     "modal": {
-      "title": "⚠️ 正取資格取消確認",
+      "title": "正取資格取消確認",
       "description": "您目前已錄取為【{{name}}】的正取名單。取消此資格後，名額將會釋出。",
       "reasonLabel": "請輸入取消原因 (必填)",
       "reasonPlaceholder": "例如：臨時有事、身體不適、交通困難等...",
