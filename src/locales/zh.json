@@ -13,7 +13,7 @@
     "menuHistory": "📜 繳費紀錄",
     "menuAchievements": "🏆 出隊足跡",
     "adminEvents": { "title": "活動管理", "subtitle": "Events Management" },
-    "menuAdminEvents": "🛠️ 幹部活動管理"
+    "menuAdminEvents": "🛠️ 幹部系統"
   },
   "register": {
     "loading": "載入個人資料中，請稍候...",

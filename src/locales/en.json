@@ -13,7 +13,7 @@
     "menuHistory": "📜 History",
     "menuAchievements": "🏆 Footprint",
     "adminEvents": { "title": "Events Admin", "subtitle": "Events Management" },
-    "menuAdminEvents": "🛠️ Officer Events"
+    "menuAdminEvents": "🛠️ Officer"
   },
   "register": {
     "loading": "Loading profile, please wait...",
