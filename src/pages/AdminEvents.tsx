@@ -520,84 +520,67 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   return (
     <div className="admin-events-container animate-fade-in" style={{ maxWidth: '900px', margin: '0 auto', padding: '16px' }}>
       
-      {/* 頂部身分 Banner */}
+      {/* 頁籤切換與幹部在線指示 */}
       <div style={{
-        backgroundColor: '#064e3b',
-        color: 'white',
-        borderRadius: '16px',
-        padding: '16px 20px',
-        marginBottom: '20px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        boxShadow: '0 4px 12px rgba(6, 78, 59, 0.15)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '28px' }}>🏕️</span>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 'bold' }}>{t('adminEvents.title')}</h2>
-            <p style={{ margin: '2px 0 0', fontSize: '12px', opacity: 0.85 }}>
-              {officerRole ? `${officerRole} · ` : ''}{officerName || '幹部'} 在線管理
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => navigate('/dashboard')}
-          style={{
-            background: 'rgba(255,255,255,0.15)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            color: 'white',
-            borderRadius: '8px',
-            padding: '6px 12px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          {t('adminEvents.backHome')}
-        </button>
-      </div>
-
-      {/* 頁籤切換 */}
-      <div style={{
-        display: 'flex',
+        flexWrap: 'wrap',
         gap: '8px',
-        marginBottom: '24px',
+        marginBottom: '20px',
         borderBottom: '2px solid #e2e8f0',
         paddingBottom: '8px'
       }}>
-        <button
-          onClick={() => { setActiveTab('list'); setIsEditing(false); }}
-          style={{
-            background: activeTab === 'list' ? '#059669' : 'transparent',
-            color: activeTab === 'list' ? 'white' : '#475569',
-            border: 'none',
-            borderRadius: '10px',
-            padding: '10px 18px',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-        >
-          {t('adminEvents.tabList')} ({events.length})
-        </button>
-        <button
-          onClick={resetFormForCreate}
-          style={{
-            background: activeTab === 'create' ? '#059669' : 'transparent',
-            color: activeTab === 'create' ? 'white' : '#475569',
-            border: 'none',
-            borderRadius: '10px',
-            padding: '10px 18px',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-        >
-          {isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => { setActiveTab('list'); setIsEditing(false); }}
+            style={{
+              background: activeTab === 'list' ? '#059669' : 'transparent',
+              color: activeTab === 'list' ? 'white' : '#475569',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '10px 18px',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            {t('adminEvents.tabList')} ({events.length})
+          </button>
+          <button
+            onClick={resetFormForCreate}
+            style={{
+              background: activeTab === 'create' ? '#059669' : 'transparent',
+              color: activeTab === 'create' ? 'white' : '#475569',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '10px 18px',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            {isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}
+          </button>
+        </div>
+
+        {officerName && (
+          <span style={{
+            fontSize: '12px',
+            color: '#64748b',
+            fontWeight: '500',
+            backgroundColor: '#f1f5f9',
+            padding: '4px 10px',
+            borderRadius: '20px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}>
+            🏕️ {officerRole ? `${officerRole} · ` : ''}{officerName}
+          </span>
+        )}
       </div>
 
       {/* ============================================================ */}
@@ -666,6 +649,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {filteredEvents.map((evt) => {
                 const imgDirect = evt.imageUrl ? (getDirectImageUrl(evt.imageUrl, 400) || evt.imageUrl) : '';
+                const hasPending = evt.stats.pending > 0;
+
                 return (
                   <div
                     key={evt.id}
@@ -674,94 +659,64 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                       borderRadius: '16px',
                       border: '1px solid #e2e8f0',
                       padding: '16px',
-                      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.04)',
+                      boxShadow: '0 4px 12px -2px rgba(0, 0, 0, 0.05)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '14px',
-                      transition: 'transform 0.2s'
+                      transition: 'transform 0.2s, box-shadow 0.2s'
                     }}
                   >
-                    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                      {/* 封面縮圖 */}
-                      <div
-                        style={{
-                          width: '100px',
-                          height: '80px',
-                          borderRadius: '10px',
-                          backgroundColor: '#f1f5f9',
-                          overflow: 'hidden',
-                          flexShrink: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        {imgDirect ? (
-                          <img src={imgDirect} alt={evt.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          <span style={{ fontSize: '28px', opacity: 0.6 }}>⛰️</span>
-                        )}
-                      </div>
-
-                      {/* 主要資訊 */}
-                      <div style={{ flex: 1, minWidth: '220px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <span style={{
-                            fontSize: '11px',
-                            fontWeight: 'bold',
-                            padding: '2px 8px',
-                            borderRadius: '6px',
-                            backgroundColor: evt.status === '開放' ? '#dcfce7' : evt.status === '未來開放' ? '#ffedd5' : '#f1f5f9',
-                            color: evt.status === '開放' ? '#15803d' : evt.status === '未來開放' ? '#c2410c' : '#64748b'
-                          }}>
-                            {evt.status === '開放' ? '🟢 開放報名' : evt.status === '未來開放' ? '🟠 未來開放' : '⚪ 已關閉'}
-                          </span>
-                          <span style={{ fontSize: '12px', color: '#94a3b8', fontFamily: 'monospace' }}>#{evt.id}</span>
-                        </div>
-
-                        <h3 style={{ margin: '0 0 6px', fontSize: '17px', fontWeight: 'bold', color: '#0f172a' }}>{evt.name}</h3>
-
-                        <div style={{ fontSize: '13px', color: '#475569', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                          <span>📅 日期：{evt.startDate} ~ {evt.endDate}</span>
-                          <span>⏰ 截止：{evt.deadline}</span>
-                          <span>💰 費用：{evt.cost}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 報名人數統計徽章 */}
+                    {/* 1. 卡片頂部列：狀態標籤 + ID + 狀態快速切換 */}
                     <div style={{
-                      backgroundColor: '#f8fafc',
-                      borderRadius: '10px',
-                      padding: '10px 14px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       flexWrap: 'wrap',
                       gap: '8px',
-                      border: '1px solid #f1f5f9'
+                      borderBottom: '1px solid #f1f5f9',
+                      paddingBottom: '10px'
                     }}>
-                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '13px', fontWeight: 'bold' }}>
-                        <span style={{ color: '#0f172a' }}>👥 總報名：{evt.stats.total} 人</span>
-                        <span style={{ color: '#16a34a' }}>✅ 正取：{evt.stats.accepted}</span>
-                        <span style={{ color: '#ea580c' }}>⏳ 備取：{evt.stats.waitlisted}</span>
-                        <span style={{ color: '#64748b' }}>🔍 待審核：{evt.stats.pending}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          padding: '3px 10px',
+                          borderRadius: '20px',
+                          backgroundColor: evt.status === '開放' ? '#dcfce7' : evt.status === '未來開放' ? '#ffedd5' : '#f1f5f9',
+                          color: evt.status === '開放' ? '#15803d' : evt.status === '未來開放' ? '#c2410c' : '#64748b',
+                          border: `1px solid ${evt.status === '開放' ? '#bbf7d0' : evt.status === '未來開放' ? '#fed7aa' : '#e2e8f0'}`
+                        }}>
+                          {evt.status === '開放' ? '🟢 開放報名' : evt.status === '未來開放' ? '🟠 未來開放' : '⚪ 已關閉'}
+                        </span>
+                        <span style={{
+                          fontSize: '12px',
+                          color: '#64748b',
+                          fontFamily: 'monospace',
+                          backgroundColor: '#f8fafc',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #e2e8f0'
+                        }}>
+                          #{evt.id}
+                        </span>
                       </div>
 
                       {/* 快速切換狀態選單 */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>狀態：</span>
+                        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>狀態:</span>
                         <select
                           value={evt.status}
                           onChange={(e) => handleQuickStatusChange(evt.id, e.target.value)}
                           style={{
-                            padding: '4px 8px',
-                            borderRadius: '6px',
+                            padding: '4px 10px',
+                            borderRadius: '8px',
                             border: '1px solid #cbd5e1',
                             fontSize: '12px',
                             fontWeight: 'bold',
-                            backgroundColor: 'white',
-                            cursor: 'pointer'
+                            backgroundColor: '#f8fafc',
+                            color: '#1e293b',
+                            cursor: 'pointer',
+                            outline: 'none'
                           }}
                         >
                           <option value="開放">開放</option>
@@ -771,28 +726,220 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                       </div>
                     </div>
 
-                    {/* 卡片底部操作按鈕 */}
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                    {/* 2. 主視覺縮圖與活動標題 */}
+                    <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                      <div
+                        style={{
+                          width: '96px',
+                          height: '76px',
+                          borderRadius: '12px',
+                          backgroundColor: '#f1f5f9',
+                          overflow: 'hidden',
+                          flexShrink: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '1px solid #e2e8f0'
+                        }}
+                      >
+                        {imgDirect ? (
+                          <img src={imgDirect} alt={evt.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <span style={{ fontSize: '28px', opacity: 0.6 }}>⛰️</span>
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h3 style={{
+                          margin: 0,
+                          fontSize: '17px',
+                          fontWeight: 'bold',
+                          color: '#0f172a',
+                          lineHeight: '1.4',
+                          wordBreak: 'break-word'
+                        }}>
+                          {evt.name}
+                        </h3>
+                        {evt.shortDesc && (
+                          <p style={{
+                            margin: '4px 0 0',
+                            fontSize: '12px',
+                            color: '#64748b',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 1,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}>
+                            {evt.shortDesc}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 3. 核心時程與費用資訊格 (Info Chips) */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                      gap: '8px'
+                    }}>
+                      <div style={{
+                        backgroundColor: '#f8fafc',
+                        padding: '8px 10px',
+                        borderRadius: '10px',
+                        border: '1px solid #f1f5f9',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px'
+                      }}>
+                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>📅 出隊日程</span>
+                        <span style={{ fontSize: '12px', color: '#1e293b', fontWeight: 'bold' }}>
+                          {evt.startDate} ~ {evt.endDate}
+                        </span>
+                      </div>
+
+                      <div style={{
+                        backgroundColor: '#f8fafc',
+                        padding: '8px 10px',
+                        borderRadius: '10px',
+                        border: '1px solid #f1f5f9',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px'
+                      }}>
+                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>⏰ 報名截止</span>
+                        <span style={{ fontSize: '12px', color: '#1e293b', fontWeight: 'bold' }}>
+                          {evt.deadline}
+                        </span>
+                      </div>
+
+                      <div style={{
+                        backgroundColor: '#f8fafc',
+                        padding: '8px 10px',
+                        borderRadius: '10px',
+                        border: '1px solid #f1f5f9',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px'
+                      }}>
+                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>💰 活動費用</span>
+                        <span style={{ fontSize: '12px', color: '#059669', fontWeight: 'bold' }}>
+                          NT$ {evt.cost}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 4. 報名數據指標看板 (4 色獨立膠囊卡片) */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(4, 1fr)',
+                      gap: '8px'
+                    }}>
+                      {/* 總報名 */}
+                      <div style={{
+                        backgroundColor: '#eff6ff',
+                        borderRadius: '10px',
+                        padding: '8px 4px',
+                        textAlign: 'center',
+                        border: '1px solid #dbeafe'
+                      }}>
+                        <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: '500' }}>總報名</div>
+                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#1d4ed8', marginTop: '2px' }}>
+                          {evt.stats.total}
+                        </div>
+                      </div>
+
+                      {/* 正取 */}
+                      <div style={{
+                        backgroundColor: '#ecfdf5',
+                        borderRadius: '10px',
+                        padding: '8px 4px',
+                        textAlign: 'center',
+                        border: '1px solid #a7f3d0'
+                      }}>
+                        <div style={{ fontSize: '11px', color: '#059669', fontWeight: '500' }}>正取</div>
+                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#047857', marginTop: '2px' }}>
+                          {evt.stats.accepted}
+                        </div>
+                      </div>
+
+                      {/* 備取 */}
+                      <div style={{
+                        backgroundColor: '#fff7ed',
+                        borderRadius: '10px',
+                        padding: '8px 4px',
+                        textAlign: 'center',
+                        border: '1px solid #fed7aa'
+                      }}>
+                        <div style={{ fontSize: '11px', color: '#ea580c', fontWeight: '500' }}>備取</div>
+                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#c2410c', marginTop: '2px' }}>
+                          {evt.stats.waitlisted}
+                        </div>
+                      </div>
+
+                      {/* 待審核 */}
+                      <div style={{
+                        backgroundColor: hasPending ? '#fef2f2' : '#f8fafc',
+                        borderRadius: '10px',
+                        padding: '8px 4px',
+                        textAlign: 'center',
+                        border: `1px solid ${hasPending ? '#fecaca' : '#e2e8f0'}`,
+                        position: 'relative'
+                      }}>
+                        {hasPending && (
+                          <span style={{
+                            position: 'absolute',
+                            top: '4px',
+                            right: '6px',
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: '#ef4444'
+                          }} />
+                        )}
+                        <div style={{ fontSize: '11px', color: hasPending ? '#dc2626' : '#64748b', fontWeight: 'bold' }}>
+                          待審核
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: hasPending ? '#b91c1c' : '#64748b', marginTop: '2px' }}>
+                          {evt.stats.pending}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 5. 卡片底部操作按鈕組 */}
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      borderTop: '1px solid #f1f5f9',
+                      paddingTop: '12px'
+                    }}>
                       <button
                         onClick={() => handleStartEdit(evt)}
                         style={{
-                          padding: '8px 14px',
-                          borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
+                          flex: 1,
+                          padding: '9px 14px',
+                          borderRadius: '10px',
+                          border: '1.5px solid #cbd5e1',
                           backgroundColor: 'white',
                           color: '#334155',
                           fontSize: '13px',
                           fontWeight: 'bold',
-                          cursor: 'pointer'
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s'
                         }}
                       >
                         ✏️ {t('adminEvents.btnEdit')}
                       </button>
+
                       <button
                         onClick={() => handleOpenSignupsModal(evt)}
                         style={{
-                          padding: '8px 16px',
-                          borderRadius: '8px',
+                          flex: 1.3,
+                          padding: '9px 16px',
+                          borderRadius: '10px',
                           border: 'none',
                           backgroundColor: '#059669',
                           color: 'white',
@@ -801,10 +948,27 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '6px'
+                          justifyContent: 'center',
+                          gap: '6px',
+                          boxShadow: '0 2px 4px rgba(5, 150, 105, 0.2)',
+                          transition: 'all 0.2s'
                         }}
                       >
-                        📋 {t('adminEvents.btnSignups')} ({evt.stats.total})
+                        <span>📋 {t('adminEvents.btnSignups')}</span>
+                        {hasPending ? (
+                          <span style={{
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            fontSize: '10px',
+                            padding: '1px 6px',
+                            borderRadius: '999px',
+                            fontWeight: 'bold'
+                          }}>
+                            {evt.stats.pending} 待審
+                          </span>
+                        ) : (
+                          <span style={{ opacity: 0.85, fontSize: '12px' }}>({evt.stats.total})</span>
+                        )}
                       </button>
                     </div>
                   </div>
