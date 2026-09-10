@@ -10,6 +10,7 @@ const Register = lazy(() => import('./pages/Register'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const History = lazy(() => import('./pages/History'));
 const Achievements = lazy(() => import('./pages/Achievements'));
+const AdminEvents = lazy(() => import('./pages/AdminEvents'));
 
 // 解析 LIFF 傳入的初始路徑 (解決 liff.state 傳參導致重定向遺失的問題)
 const getInitialRedirectPath = () => {
@@ -22,13 +23,13 @@ const getInitialRedirectPath = () => {
   }
 
   // 確保路徑為合法子路徑且不重複導向
-  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history') || statePath.startsWith('/achievements'))) {
+  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history') || statePath.startsWith('/achievements') || statePath.startsWith('/admin'))) {
     return statePath;
   }
 
   return '/borrow';
 };
-function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; displayName: string }) {
+function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: string; displayName: string; isOfficer?: boolean }) {
   const { t, i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
@@ -44,6 +45,9 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
   // 根據當前路由，動態決定左側的 Logo、標題與副標題（子路由如 /dashboard/achievements, /payment/history 需優先判斷）
   const getHeaderDetails = () => {
     const path = location.pathname;
+    if (path.includes('/admin')) {
+      return { title: t('nav.adminEvents.title'), subtitle: t('nav.adminEvents.subtitle'), icon: '🛠️' };
+    }
     if (path.includes('/achievements')) {
       return { title: t('nav.achievements.title'), subtitle: t('nav.achievements.subtitle'), icon: '🏆' };
     }
@@ -217,6 +221,27 @@ function GlobalHeader({ pictureUrl, displayName }: { pictureUrl: string; display
                 >
                   {t('nav.menuAchievements')}
                 </div>
+                {isOfficer && (
+                  <div
+                    onClick={() => {
+                      setIsOpen(false);
+                      navigate('/admin/events');
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: '#059669',
+                      fontWeight: 'bold',
+                      borderTop: '1px solid #e2e8f0',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    {t('nav.menuAdminEvents')}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -349,6 +374,23 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
   // ⚠️ 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，
   // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
   const [redirectPath] = useState(() => getInitialRedirectPath());
+  const [isOfficer, setIsOfficer] = useState(false);
+
+  useEffect(() => {
+    if (!liffInit.userId || liffInit.userId === 'TEST_USER_ID') {
+      setIsOfficer(true);
+      return;
+    }
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
+    fetch(`${GAS_API_URL}?action=check_officer_status&userId=${liffInit.userId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === 'success' && data.isOfficer) {
+          setIsOfficer(true);
+        }
+      })
+      .catch((err) => console.error('幹部權限初檢出錯:', err));
+  }, [liffInit.userId]);
 
   if (liffInit.loading) {
     return (
@@ -363,7 +405,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
     <div className="router-wrapper" style={{ position: 'relative' }}>
       {/* 載入完成後渲染全域導航頭貼選單 */}
       {liffInit.userId && (
-        <GlobalHeader pictureUrl={liffInit.pictureUrl} displayName={liffInit.displayName} />
+        <GlobalHeader pictureUrl={liffInit.pictureUrl} displayName={liffInit.displayName} isOfficer={isOfficer} />
       )}
 
       {/* 路由主體頁面 (以 Suspense 支援動態程式碼分割非同步載入) */}
@@ -408,6 +450,8 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
               <Achievements userId={liffInit.userId} />
             </ProfileCheck>
           } />
+          <Route path="/admin/events" element={<AdminEvents userId={liffInit.userId} />} />
+          <Route path="/admin" element={<Navigate to="/admin/events" replace />} />
           {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
           <Route path="*" element={<Navigate to="/borrow" replace />} />
         </Routes>

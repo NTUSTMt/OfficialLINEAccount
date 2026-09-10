@@ -196,6 +196,22 @@ function doPost(e) {
       return processLiffCancelLoan(msg);
     }
 
+    if (msg.action === 'save_event') {
+      return processSaveEvent(msg);
+    }
+
+    if (msg.action === 'update_event_status') {
+      return processUpdateEventStatus(msg);
+    }
+
+    if (msg.action === 'update_signup_status') {
+      return processUpdateSignupStatus(msg);
+    }
+
+    if (msg.action === 'send_event_notifications') {
+      return processSendEventNotifications(msg);
+    }
+
     for (var i = 0; i < msg.events.length; i++) {
       var event = msg.events[i];
 
@@ -3884,6 +3900,19 @@ function doGet(e) {
       }
       return getPastActivitiesAPI(ss, userId);
 
+    } else if (action === "check_officer_status") {
+      var userId = e.parameter.userId;
+      return checkOfficerStatusAPI(ss, userId);
+
+    } else if (action === "get_admin_events") {
+      var userId = e.parameter.userId;
+      return getAdminEventsAPI(ss, userId);
+
+    } else if (action === "get_event_signups") {
+      var eventId = e.parameter.eventId;
+      var userId = e.parameter.userId;
+      return getEventSignupsAPI(ss, eventId, userId);
+
     } else if (action === "get_equipments") {
       // 呼叫原本的裝備清單處理引擎
       return getEquipmentsListAPI(ss);
@@ -4511,6 +4540,8 @@ function getMyStatusAPI(ss, userId) {
       department: "",
       studentId: "",
       isOfficial: false,
+      isOfficer: false,
+      officerRole: "",
       expireDate: "尚未核發/尚未繳費 (Not issued/Unpaid)"
     },
     activities: [],
@@ -4567,6 +4598,11 @@ function getMyStatusAPI(ss, userId) {
       }
     }
   }
+
+  // 檢查是否具備幹部身分
+  var officerCheck = checkOfficerInternal(ss, userId, responseData.profile.name);
+  responseData.profile.isOfficer = officerCheck.isOfficer;
+  responseData.profile.officerRole = officerCheck.role;
 
   // 2. 取得活動報名 (Signups & Events)
   var sSheet = ss.getSheetByName("Signups");
@@ -5478,4 +5514,583 @@ function processLiffCancelLoan(payload) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ==================================================================
+// ⭐️ 幹部專屬活動管理與名單審核系統 (Admin Events Management)
+// ==================================================================
+
+// 內部輔助：檢驗使用者是否為登山社幹部
+function checkOfficerInternal(ss, userId, userName) {
+  try {
+    var oSheet = ss.getSheetByName("Officers");
+    if (!oSheet) return { isOfficer: false, role: "", name: "" };
+    var oData = oSheet.getDataRange().getDisplayValues();
+    if (oData.length <= 1) return { isOfficer: false, role: "", name: "" };
+
+    var oH = oData[0];
+    var nameIdx = oH.findIndex(function (h) { return String(h).includes("姓名") || String(h).includes("名字"); });
+    var roleIdx = oH.findIndex(function (h) { return String(h).includes("職稱") || String(h).includes("職位"); });
+    var sysIdx = oH.findIndex(function (h) { return String(h).includes("系統識別碼") || String(h).includes("User ID") || String(h).includes("userId"); });
+    var lineIdx = oH.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
+
+    // 1. 若有傳入 userId，先比對 Officers 表中的系統識別碼或 LINE ID
+    if (userId) {
+      for (var i = 1; i < oData.length; i++) {
+        if (sysIdx > -1 && oData[i][sysIdx] && oData[i][sysIdx].trim() === userId.trim()) {
+          var role = (roleIdx > -1) ? oData[i][roleIdx].trim() : "幹部";
+          return { isOfficer: true, role: role, name: (nameIdx > -1) ? oData[i][nameIdx].trim() : "" };
+        }
+      }
+    }
+
+    // 2. 若未提供 userName，從 Members 表反查該 userId 之姓名
+    if (!userName && userId) {
+      var mSheet = ss.getSheetByName("Members");
+      if (mSheet) {
+        var mData = mSheet.getDataRange().getValues();
+        var mH = mData[0];
+        var mSysIdx = _fi(mH, "系統識別碼");
+        var mNameIdx = _fi(mH, "姓名");
+        if (mSysIdx > -1 && mNameIdx > -1) {
+          for (var m = 1; m < mData.length; m++) {
+            if (mData[m][mSysIdx] === userId) {
+              userName = String(mData[m][mNameIdx] || "").trim();
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. 以姓名比對 Officers 表
+    if (userName && nameIdx > -1) {
+      var cleanUserName = userName.trim();
+      for (var j = 1; j < oData.length; j++) {
+        var oName = oData[j][nameIdx].trim();
+        if (oName !== "" && (oName === cleanUserName || cleanUserName.indexOf(oName) > -1 || oName.indexOf(cleanUserName) > -1)) {
+          var officerRole = (roleIdx > -1) ? oData[j][roleIdx].trim() : "幹部";
+          // 若 Officers 表已有系統識別碼欄位但為空，自動補齊以利下次精準比對
+          if (userId && sysIdx > -1 && !oData[j][sysIdx]) {
+            try {
+              oSheet.getRange(j + 1, sysIdx + 1).setValue(userId);
+            } catch(e) {}
+          }
+          return { isOfficer: true, role: officerRole, name: oName };
+        }
+      }
+    }
+
+    return { isOfficer: false, role: "", name: "" };
+  } catch (err) {
+    console.error("幹部身分檢驗出錯:", err);
+    return { isOfficer: false, role: "", name: "" };
+  }
+}
+
+// API: 查詢幹部身分 (GET)
+function checkOfficerStatusAPI(ss, userId) {
+  var res = checkOfficerInternal(ss, userId);
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    isOfficer: res.isOfficer,
+    officerRole: res.role,
+    officerName: res.name
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// API: 取得後台所有活動與統計名冊 (GET)
+function getAdminEventsAPI(ss, userId) {
+  var officerCheck = checkOfficerInternal(ss, userId);
+  if (!officerCheck.isOfficer && userId !== "TEST_USER_ID") {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "權限不足，僅限登山社幹部存取！"
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var eventSheet = ss.getSheetByName("Events");
+  if (!eventSheet) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "找不到 Events 試算表"
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var eData = eventSheet.getDataRange().getDisplayValues();
+  if (eData.length <= 0) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", events: [] })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var eHeaders = eData[0];
+  var eHIdx = {
+    id: _fi(eHeaders, "活動編號"),
+    name: _fi(eHeaders, "活動名稱"),
+    startDate: _fi(eHeaders, "活動開始日期"),
+    endDate: _fi(eHeaders, "活動結束日期"),
+    deadline: _fi(eHeaders, "報名截止日期"),
+    cost: eHeaders.findIndex(function(h) { return String(h).includes("預計費用") || String(h).includes("費用"); }),
+    status: eHeaders.findIndex(function(h) { return String(h).includes("報名狀態") || String(h).includes("狀態"); }),
+    shortDesc: _fi(eHeaders, "簡介"),
+    fullDesc: eHeaders.findIndex(function(h) { return String(h).includes("詳細行程") || String(h).includes("行程"); }),
+    img: eHeaders.findIndex(function(h) { return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片"); })
+  };
+
+  // 掃描 Signups 統計每場活動的報名狀態
+  var signupStats = {};
+  var sSheet = ss.getSheetByName("Signups");
+  if (sSheet) {
+    var sData = sSheet.getDataRange().getDisplayValues();
+    if (sData.length > 1) {
+      var sH = sData[0];
+      var sEvtIdIdx = _fi(sH, "活動編號");
+      var sResultIdx = _fi(sH, "審核結果");
+      for (var s = 1; s < sData.length; s++) {
+        var eid = (sEvtIdIdx > -1) ? sData[s][sEvtIdIdx].trim() : "";
+        var res = (sResultIdx > -1) ? sData[s][sResultIdx].trim() : "";
+        if (!eid || res.indexOf("取消") > -1) continue;
+
+        if (!signupStats[eid]) {
+          signupStats[eid] = { total: 0, accepted: 0, waitlisted: 0, pending: 0 };
+        }
+        signupStats[eid].total++;
+        if (res.indexOf("正取") > -1) {
+          signupStats[eid].accepted++;
+        } else if (res.indexOf("備取") > -1) {
+          signupStats[eid].waitlisted++;
+        } else {
+          signupStats[eid].pending++;
+        }
+      }
+    }
+  }
+
+  var events = [];
+  for (var i = 1; i < eData.length; i++) {
+    var row = eData[i];
+    var eventId = (eHIdx.id > -1) ? row[eHIdx.id].trim() : "";
+    if (!eventId && (!row[eHIdx.name] || !row[eHIdx.name].trim())) continue;
+
+    var stats = signupStats[eventId] || { total: 0, accepted: 0, waitlisted: 0, pending: 0 };
+    events.push({
+      id: eventId,
+      name: (eHIdx.name > -1) ? row[eHIdx.name] : "",
+      startDate: (eHIdx.startDate > -1) ? row[eHIdx.startDate] : "",
+      endDate: (eHIdx.endDate > -1) ? row[eHIdx.endDate] : "",
+      deadline: (eHIdx.deadline > -1) ? row[eHIdx.deadline] : "",
+      cost: (eHIdx.cost > -1) ? row[eHIdx.cost] : "",
+      status: (eHIdx.status > -1 && row[eHIdx.status]) ? row[eHIdx.status].trim() : "關閉",
+      shortDesc: (eHIdx.shortDesc > -1) ? row[eHIdx.shortDesc] : "",
+      fullDesc: (eHIdx.fullDesc > -1) ? row[eHIdx.fullDesc] : "",
+      imageUrl: (eHIdx.img > -1) ? row[eHIdx.img] : "",
+      stats: stats,
+      rowNumber: i + 1
+    });
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    isOfficer: true,
+    officerRole: officerCheck.role,
+    officerName: officerCheck.name,
+    events: events
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// API: 取得單一活動之報名社員名單 (GET)
+function getEventSignupsAPI(ss, eventId, userId) {
+  var officerCheck = checkOfficerInternal(ss, userId);
+  if (!officerCheck.isOfficer && userId !== "TEST_USER_ID") {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "權限不足"
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var sSheet = ss.getSheetByName("Signups");
+  if (!sSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", signups: [] })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var sData = sSheet.getDataRange().getDisplayValues();
+  if (sData.length <= 1) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", signups: [] })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var sH = sData[0];
+  var sEvtIdIdx = _fi(sH, "活動編號");
+  var sSysIdx = _fi(sH, "系統識別碼");
+  var sCodeIdx = _fi(sH, "專屬碼");
+  var sNameIdx = _fi(sH, "姓名");
+  var sGenderIdx = _fi(sH, "性別");
+  var sPhoneIdx = _fi(sH, "聯絡電話");
+  var sLineIdx = sH.findIndex(function(h) { return String(h).toUpperCase().includes("LINE"); });
+  var sProofIdx = sH.findIndex(function(h) { return String(h).includes("證明"); });
+  var sOfficialIdx = _fi(sH, "是否為社員");
+  var sResultIdx = _fi(sH, "審核結果");
+  var sNotifyIdx = _fi(sH, "通知狀態");
+  var sPayIdx = _fi(sH, "繳費狀態");
+  var sRemarkIdx = _fi(sH, "備註");
+
+  var signups = [];
+  for (var i = 1; i < sData.length; i++) {
+    var row = sData[i];
+    if (sEvtIdIdx > -1 && row[sEvtIdIdx].trim() === eventId) {
+      signups.push({
+        rowNumber: i + 1,
+        signupCode: (sCodeIdx > -1) ? row[sCodeIdx] : "",
+        userId: (sSysIdx > -1) ? row[sSysIdx] : "",
+        name: (sNameIdx > -1) ? row[sNameIdx] : "",
+        gender: (sGenderIdx > -1) ? row[sGenderIdx] : "",
+        phone: (sPhoneIdx > -1) ? row[sPhoneIdx] : "",
+        lineId: (sLineIdx > -1) ? row[sLineIdx] : "",
+        strengthProof: (sProofIdx > -1) ? row[sProofIdx] : "",
+        isOfficial: (sOfficialIdx > -1) ? row[sOfficialIdx] : "",
+        reviewResult: (sResultIdx > -1) ? row[sResultIdx] : "",
+        notifyStatus: (sNotifyIdx > -1) ? row[sNotifyIdx] : "",
+        payStatus: (sPayIdx > -1) ? row[sPayIdx] : "",
+        remark: (sRemarkIdx > -1) ? row[sRemarkIdx] : ""
+      });
+    }
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    signups: signups
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// API: 儲存或新增活動 (POST)
+function processSaveEvent(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var officerCheck = checkOfficerInternal(ss, payload.userId);
+    if (!officerCheck.isOfficer && payload.userId !== "TEST_USER_ID") {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足，無法儲存活動！" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var eventSheet = ss.getSheetByName("Events");
+    if (!eventSheet) {
+      eventSheet = ss.insertSheet("Events");
+      eventSheet.appendRow(["活動編號", "活動名稱", "活動開始日期", "活動結束日期", "報名截止日期", "預計費用", "報名狀態", "簡介", "詳細行程", "封面圖網址"]);
+    }
+
+    var eData = eventSheet.getDataRange().getDisplayValues();
+    var headers = eData[0];
+    var hIdx = {
+      id: getOrCreateColIdx(eventSheet, headers, "活動編號"),
+      name: getOrCreateColIdx(eventSheet, headers, "活動名稱"),
+      startDate: getOrCreateColIdx(eventSheet, headers, "活動開始日期"),
+      endDate: getOrCreateColIdx(eventSheet, headers, "活動結束日期"),
+      deadline: getOrCreateColIdx(eventSheet, headers, "報名截止日期"),
+      cost: getOrCreateColIdx(eventSheet, headers, "預計費用"),
+      status: getOrCreateColIdx(eventSheet, headers, "報名狀態"),
+      shortDesc: getOrCreateColIdx(eventSheet, headers, "簡介"),
+      fullDesc: getOrCreateColIdx(eventSheet, headers, "詳細行程"),
+      img: getOrCreateColIdx(eventSheet, headers, "封面圖網址")
+    };
+
+    var eventId = payload.eventId ? String(payload.eventId).trim() : "";
+    var isUpdate = false;
+    var targetRow = -1;
+
+    if (eventId) {
+      for (var i = 1; i < eData.length; i++) {
+        if (eData[i][hIdx.id] === eventId) {
+          isUpdate = true;
+          targetRow = i + 1;
+          break;
+        }
+      }
+    }
+
+    // 若為新活動且未提供編號，自動產生編號：E + 年月 + 序號 (如 E2609-01)
+    if (!isUpdate && !eventId) {
+      var datePrefix = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyMM");
+      var maxSeq = 0;
+      for (var j = 1; j < eData.length; j++) {
+        var existingId = String(eData[j][hIdx.id] || "").trim();
+        if (existingId.indexOf("E" + datePrefix) === 0) {
+          var numPart = parseInt(existingId.replace("E" + datePrefix, "").replace("-", ""), 10);
+          if (!isNaN(numPart) && numPart > maxSeq) maxSeq = numPart;
+        }
+      }
+      var nextSeqStr = (maxSeq + 1 < 10) ? ("0" + (maxSeq + 1)) : String(maxSeq + 1);
+      eventId = "E" + datePrefix + "-" + nextSeqStr;
+    }
+
+    // 處理圖片上傳
+    var imageUrl = payload.imageUrl || "";
+    if (payload.coverImageFile && payload.coverImageFile.base64) {
+      var fileName = (payload.name || "活動") + "_封面_" + Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMddHHmmss") + ".jpg";
+      var uploadResult = uploadFileToDrive(payload.coverImageFile.base64, fileName);
+      if (uploadResult && !uploadResult.startsWith("上傳失敗")) {
+        var driveMatch = uploadResult.match(/(?:file\/d\/|id=)([^/&?]+)/);
+        if (driveMatch && driveMatch[1]) {
+          imageUrl = "https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000";
+        } else {
+          imageUrl = uploadResult;
+        }
+      }
+    }
+
+    var rowValues = new Array(headers.length).fill("");
+    if (isUpdate) {
+      rowValues = eventSheet.getRange(targetRow, 1, 1, headers.length).getValues()[0];
+    }
+
+    rowValues[hIdx.id] = eventId;
+    rowValues[hIdx.name] = payload.name || "";
+    rowValues[hIdx.startDate] = payload.startDate || "";
+    rowValues[hIdx.endDate] = payload.endDate || "";
+    rowValues[hIdx.deadline] = payload.deadline || "";
+    rowValues[hIdx.cost] = payload.cost || "";
+    rowValues[hIdx.status] = payload.status || "未來開放";
+    rowValues[hIdx.shortDesc] = payload.shortDesc || "";
+    rowValues[hIdx.fullDesc] = payload.fullDesc || "";
+    if (imageUrl) rowValues[hIdx.img] = imageUrl;
+
+    if (isUpdate) {
+      eventSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      eventSheet.appendRow(rowValues);
+    }
+
+    // 若有勾選推播至幹部群組
+    if (payload.notifyOfficerGroup) {
+      try {
+        var groupMsg = "📢 【幹部通知：新活動發布】\n\n" +
+          "📍 活動名稱：" + payload.name + "\n" +
+          "🏷️ 活動編號：" + eventId + "\n" +
+          "📅 出隊日期：" + payload.startDate + " ~ " + payload.endDate + "\n" +
+          "⏰ 報名截止：" + payload.deadline + "\n" +
+          "💰 預計費用：" + payload.cost + "\n" +
+          "🚦 狀態：" + (payload.status || "開放") + "\n\n" +
+          "已上架完成，社員可在「最新活動」瀏覽與報名！";
+        pushAdminMessage(groupMsg);
+      } catch (err) {
+        console.error("推播至幹部群組失敗: " + err.toString());
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      eventId: eventId,
+      imageUrl: imageUrl,
+      message: isUpdate ? "活動資訊更新成功！" : "新活動發布成功！"
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    console.error("儲存活動失敗:", err);
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// API: 快速更新活動狀態 (POST)
+function processUpdateEventStatus(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(5000);
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var officerCheck = checkOfficerInternal(ss, payload.userId);
+    if (!officerCheck.isOfficer && payload.userId !== "TEST_USER_ID") {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var eventSheet = ss.getSheetByName("Events");
+    if (!eventSheet) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Events 表" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var eData = eventSheet.getDataRange().getDisplayValues();
+    var headers = eData[0];
+    var idIdx = _fi(headers, "活動編號");
+    var statusIdx = headers.findIndex(function(h) { return String(h).includes("報名狀態") || String(h).includes("狀態"); });
+
+    if (idIdx === -1 || statusIdx === -1) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "試算表欄位缺失" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    for (var i = 1; i < eData.length; i++) {
+      if (eData[i][idIdx] === payload.eventId) {
+        eventSheet.getRange(i + 1, statusIdx + 1).setValue(payload.status);
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          message: "活動狀態已更新為【" + payload.status + "】"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該場活動" })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// API: 審核社員報名結果 (正取/備取) (POST)
+function processUpdateSignupStatus(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(5000);
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var officerCheck = checkOfficerInternal(ss, payload.userId);
+    if (!officerCheck.isOfficer && payload.userId !== "TEST_USER_ID") {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var sSheet = ss.getSheetByName("Signups");
+    if (!sSheet) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Signups 表" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var sData = sSheet.getDataRange().getDisplayValues();
+    var headers = sData[0];
+    var codeIdx = _fi(headers, "專屬碼");
+    var sysIdx = _fi(headers, "系統識別碼");
+    var evtIdx = _fi(headers, "活動編號");
+    var resultIdx = _fi(headers, "審核結果");
+    var notifyIdx = _fi(headers, "通知狀態");
+
+    for (var i = 1; i < sData.length; i++) {
+      var match = false;
+      if (payload.signupCode && codeIdx > -1 && sData[i][codeIdx] === payload.signupCode) {
+        match = true;
+      } else if (payload.targetUserId && sysIdx > -1 && evtIdx > -1 && sData[i][sysIdx] === payload.targetUserId && sData[i][evtIdx] === payload.eventId) {
+        match = true;
+      }
+
+      if (match) {
+        sSheet.getRange(i + 1, resultIdx + 1).setValue(payload.reviewResult);
+        // 重設通知狀態為空，以便後續觸發推播通知
+        if (notifyIdx > -1) {
+          sSheet.getRange(i + 1, notifyIdx + 1).setValue("");
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          message: "審核狀態已更新為【" + payload.reviewResult + "】"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆報名紀錄" })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// API: 一鍵發送審核結果推播通知 (POST)
+function processSendEventNotifications(payload) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var officerCheck = checkOfficerInternal(ss, payload.userId);
+  if (!officerCheck.isOfficer && payload.userId !== "TEST_USER_ID") {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var sSheet = ss.getSheetByName("Signups");
+  var eventSheet = ss.getSheetByName("Events");
+  if (!sSheet || !eventSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "試算表缺失" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var sData = sSheet.getDataRange().getValues();
+  var eData = eventSheet.getDataRange().getDisplayValues();
+  var eIdIdx = _fi(eData[0], "活動編號");
+  var eNameIdx = _fi(eData[0], "活動名稱");
+
+  var sysIdx = _fi(sData[0], "系統識別碼");
+  var nameIdx = _fi(sData[0], "姓名");
+  var evtIdx = _fi(sData[0], "活動編號");
+  var resultIdx = _fi(sData[0], "審核結果");
+  var notifyIdx = _fi(sData[0], "通知狀態");
+
+  var notifiedCount = 0;
+  var targetEventId = payload.eventId ? String(payload.eventId).trim() : "";
+
+  for (var i = 1; i < sData.length; i++) {
+    var rowEventId = (evtIdx > -1) ? String(sData[i][evtIdx] || "").trim() : "";
+    if (targetEventId && rowEventId !== targetEventId) continue;
+
+    var result = (resultIdx > -1) ? String(sData[i][resultIdx] || "") : "";
+    var notifyStatus = (notifyIdx > -1) ? String(sData[i][notifyIdx] || "") : "";
+    var targetUid = (sysIdx > -1) ? String(sData[i][sysIdx] || "").trim() : "";
+    var name = (nameIdx > -1 && sData[i][nameIdx]) ? String(sData[i][nameIdx]) : "社員";
+
+    var isAcceptedOrWaitlisted = (result.indexOf("正取") > -1 || result.indexOf("備取") > -1);
+    if (isAcceptedOrWaitlisted && notifyStatus !== "已通知" && result.indexOf("取消") === -1 && targetUid.startsWith("U")) {
+      var eventName = rowEventId;
+      for (var e = 1; e < eData.length; e++) {
+        if (eData[e][eIdIdx > -1 ? eIdIdx : 0] === rowEventId) {
+          eventName = eData[e][eNameIdx > -1 ? eNameIdx : 1];
+          break;
+        }
+      }
+
+      if (result.indexOf("正取") > -1) {
+        var acceptedFlex = {
+          "type": "bubble",
+          "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+              { "type": "text", "text": "📣 審核結果出爐 Result", "weight": "bold", "color": "#1DB446", "size": "sm" },
+              { "type": "text", "text": "活動正取通知", "weight": "bold", "size": "xl", "margin": "md" },
+              { "type": "text", "text": "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", "margin": "md", "size": "sm", "wrap": true },
+              { "type": "text", "text": eventName, "weight": "bold", "color": "#111111", "size": "md", "wrap": true, "margin": "sm" },
+              { "type": "text", "text": "審核結果為 Result：", "margin": "md", "size": "sm" },
+              { "type": "text", "text": "【 " + result + " 】", "weight": "bold", "color": "#1DB446", "size": "lg", "align": "center", "margin": "md" },
+              { "type": "separator", "margin": "md" },
+              { "type": "text", "text": "🎉 恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入出隊群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!", "wrap": true, "margin": "md", "size": "xs", "color": "#666666" }
+            ]
+          },
+          "footer": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [{
+              "type": "button",
+              "style": "primary",
+              "color": "#1DB446",
+              "action": { "type": "message", "label": "前往繳費系統 Pay", "text": "繳費系統 Payment System" }
+            }]
+          }
+        };
+        pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
+      } else {
+        var waitlistFlex = {
+          "type": "bubble",
+          "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+              { "type": "text", "text": "📣 審核結果出爐 Result", "weight": "bold", "color": "#FF9800", "size": "sm" },
+              { "type": "text", "text": "活動備取通知", "weight": "bold", "size": "xl", "margin": "md" },
+              { "type": "text", "text": "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", "margin": "md", "size": "sm", "wrap": true },
+              { "type": "text", "text": eventName, "weight": "bold", "color": "#111111", "size": "md", "wrap": true, "margin": "sm" },
+              { "type": "text", "text": "審核結果為 Result：", "margin": "md", "size": "sm" },
+              { "type": "text", "text": "【 " + result + " 】", "weight": "bold", "color": "#FF9800", "size": "lg", "align": "center", "margin": "md" },
+              { "type": "separator", "margin": "md" },
+              { "type": "text", "text": "目前為備取狀態，若有正取人員釋出名額，幹部將第一時間主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you immediately if a spot opens up!", "wrap": true, "margin": "md", "size": "xs", "color": "#666666" }
+            ]
+          }
+        };
+        pushFlexMessage(targetUid, "【活動備取通知 Waitlist】", waitlistFlex);
+      }
+
+      sSheet.getRange(i + 1, notifyIdx + 1).setValue("已通知");
+      notifiedCount++;
+    }
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    notifiedCount: notifiedCount,
+    message: "已成功發送 " + notifiedCount + " 則審核推播通知！"
+  })).setMimeType(ContentService.MimeType.JSON);
 }

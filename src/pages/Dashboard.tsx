@@ -9,6 +9,8 @@ interface ProfileData {
   department: string;
   studentId: string;
   isOfficial: boolean;
+  isOfficer?: boolean;
+  officerRole?: string;
   expireDate: string;
 }
 
@@ -365,6 +367,52 @@ function Dashboard({ userId }: { userId: string }) {
           </div>
         </div>
       </div>
+
+      {/* 幹部專屬功能入口 (僅幹部可見) */}
+      {profile?.isOfficer && (
+        <div
+          style={{
+            marginBottom: '28px',
+            padding: '16px 20px',
+            backgroundColor: '#f0fdf4',
+            border: '1.5px solid #86efac',
+            borderRadius: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.08)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '28px' }}>🛠️</span>
+            <div style={{ textAlign: 'left' }}>
+              <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#065f46' }}>
+                幹部專屬管理中心
+              </h4>
+              <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#047857' }}>
+                {profile.officerRole ? `${profile.officerRole} · ` : ''}活動發布、編輯與名單審核
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/admin/events')}
+            className="btn btn-primary"
+            style={{
+              padding: '8px 16px',
+              fontSize: '13px',
+              borderRadius: '10px',
+              backgroundColor: '#059669',
+              border: 'none',
+              color: 'white',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            進入管理 ➔
+          </button>
+        </div>
+      )}
 
       {/* 區塊二：活動報名追蹤 */}
       <div className="section-container" style={{ marginBottom: '28px' }}>

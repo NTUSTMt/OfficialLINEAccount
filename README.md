@@ -3,11 +3,36 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.88` (v0.0.88)
+- **當前版本**：`0.0.89` (v0.0.89)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 89. 幹部專屬活動管理與名單審核後台 (Admin Events Management) (v0.0.89)
+- **幹部身份自動辨識與動態後台入口**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js)。實作 `checkOfficerInternal` 與 `action=check_officer_status`，比對試算表 `Officers` 分頁中登記之 `系統識別碼`（LINE User ID）或社員姓名；若符合即自動賦予幹部管理權限。
+  - 在 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 數位社員證下方新增「🛠️ 幹部專屬管理中心」綠色快捷卡片（僅幹部可見）。
+  - 在 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 全域右上角頭像下拉選單中，若檢驗具備幹部身分，動態顯示「🛠️ 幹部活動管理」入口。
+- **全功能活動管理與審核主頁面 (AdminEvents.tsx)**：
+  - 新增 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)，採雙頁籤架構：
+    - **Tab 1: 活動總覽與審核**：
+      - 條列所有活動卡片，呈現即時報名統計徽章（總報名人數、正取人數、備取人數、待審核人數）。
+      - 支援即時下拉切換活動狀態（開放報名 / 未來開放 / 已關閉），並提供活動內容編輯與名單審核按鈕。
+    - **Tab 2: 發布新活動 / 編輯活動**：
+      - 完整表單支援填寫活動名稱、出隊起訖日期、報名截止日、預計費用、精簡簡介與長篇詳細行程。
+      - 活動編號支援手動輸入或由系統依序自動編號（格式：`E` + 年月 + 序號，如 `E2609-01`）。
+      - 支援直接從手機相簿或電腦選取封面照片，前端自動以 Canvas 壓縮轉 Base64 上傳 Google Drive `LINE_Uploads` 資料夾，並即時轉換為官方高速 CDN 直連格式（`lh3.googleusercontent.com/d/{id}=w1000`），免手動找圖床。
+      - 提供 **LINE Carousel Flex 卡片即時所見即所得 (Live Preview)**，幹部在送出前可即時檢視卡片標籤顏色、字數排版與封面裁切。
+      - 支援勾選「📢 上架完成後即時推播通知至幹部群組」。
+- **報名社員名單查閱、即時正備取審核與一鍵發送推播通知**：
+  - 於活動卡片點擊「名單審核」彈出專屬 Modal，提供「全部 / 正取 / 備取 / 待審核」分頁標籤與報名人數篩選。
+  - 名冊中清晰條列社員姓名、性別、電話、LINE ID、正式社員/非社員徽章、體能證明連結與通知狀態標籤。
+  - 幹部可直接點擊「設為正取」、「設為備取」或「設為待審」，後端自動更新 `Signups` 試算表之審核結果並重置通知狀態。
+  - 底部提供「🚀 一鍵發送審核結果推播通知」按鈕，點擊後系統自動過濾尚未通知的正取與備取社員，透過 LINE Messaging API 批次發送專屬錄取/備取 Flex 卡片，並自動回寫試算表通知狀態為「已通知」，徹底告別開試算表手動操作的繁瑣流程。
+- **全站中英雙語國際化與路由整合**：
+  - 更新 [zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json) 與 [en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json)，加入 `adminEvents` 命名空間共 40+ 項中英雙語對應字詞。
+  - 在 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 註冊 `/admin/events` 與 `/admin` 路由（支援 React.lazy 程式碼分割非同步載入）。
 
 ### 88. 第二梯次優化：註冊草稿自動暫存與租借日期聯動防呆 (v0.0.88)
 - **註冊資料草稿自動暫存與還原 (Draft Auto-Save & Restore)**：
