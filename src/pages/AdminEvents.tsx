@@ -52,8 +52,6 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   // 權限與初始化狀態
   const [authLoading, setAuthLoading] = useState(true);
   const [isOfficer, setIsOfficer] = useState(false);
-  const [officerRole, setOfficerRole] = useState('');
-  const [officerName, setOfficerName] = useState('');
 
   // 分頁狀態: 'list' | 'create'
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
@@ -73,7 +71,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     endDate: '',
     deadline: '',
     cost: '',
-    status: '開放',
+    status: '未來開放',
     shortDesc: '',
     fullDesc: '',
     imageUrl: '',
@@ -90,6 +88,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const [signupFilter, setSignupFilter] = useState<'all' | 'accepted' | 'waitlisted' | 'pending'>('all');
   const [updatingSignupCode, setUpdatingSignupCode] = useState<string | null>(null);
   const [sendingNotifications, setSendingNotifications] = useState(false);
+  const [expandedSignupCode, setExpandedSignupCode] = useState<string | null>(null);
+  const [copiedLineId, setCopiedLineId] = useState<string | null>(null);
 
   // 1. 驗證幹部身分
   useEffect(() => {
@@ -98,8 +98,6 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       if (!userId || userId === 'TEST_USER_ID') {
         // 本地開發與測試環境預設賦予幹部權限
         setIsOfficer(true);
-        setOfficerRole('系統管理員');
-        setOfficerName('測試幹部');
         setAuthLoading(false);
         fetchEvents();
         return;
@@ -110,8 +108,6 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         const data = await res.json();
         if (data.status === 'success' && data.isOfficer) {
           setIsOfficer(true);
-          setOfficerRole(data.officerRole || '幹部');
-          setOfficerName(data.officerName || '');
           fetchEvents();
         } else {
           setIsOfficer(false);
@@ -202,7 +198,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       endDate: '',
       deadline: '',
       cost: '',
-      status: '開放',
+      status: '未來開放',
       shortDesc: '',
       fullDesc: '',
       imageUrl: '',
@@ -518,69 +514,48 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   }
 
   return (
-    <div className="admin-events-container animate-fade-in" style={{ maxWidth: '900px', margin: '0 auto', padding: '16px' }}>
+    <div className="admin-events-container animate-fade-in" style={{ maxWidth: '900px', margin: '0 auto', padding: '16px', textAlign: 'left' }}>
       
-      {/* 頁籤切換與幹部在線指示 */}
+      {/* 頁籤切換 */}
       <div style={{
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
         gap: '8px',
         marginBottom: '20px',
         borderBottom: '2px solid #e2e8f0',
         paddingBottom: '8px'
       }}>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => { setActiveTab('list'); setIsEditing(false); }}
-            style={{
-              background: activeTab === 'list' ? '#059669' : 'transparent',
-              color: activeTab === 'list' ? 'white' : '#475569',
-              border: 'none',
-              borderRadius: '10px',
-              padding: '10px 18px',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-          >
-            {t('adminEvents.tabList')} ({events.length})
-          </button>
-          <button
-            onClick={resetFormForCreate}
-            style={{
-              background: activeTab === 'create' ? '#059669' : 'transparent',
-              color: activeTab === 'create' ? 'white' : '#475569',
-              border: 'none',
-              borderRadius: '10px',
-              padding: '10px 18px',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-          >
-            {isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}
-          </button>
-        </div>
-
-        {officerName && (
-          <span style={{
-            fontSize: '12px',
-            color: '#64748b',
-            fontWeight: '500',
-            backgroundColor: '#f1f5f9',
-            padding: '4px 10px',
-            borderRadius: '20px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}>
-            🏕️ {officerRole ? `${officerRole} · ` : ''}{officerName}
-          </span>
-        )}
+        <button
+          onClick={() => { setActiveTab('list'); setIsEditing(false); }}
+          style={{
+            background: activeTab === 'list' ? '#059669' : 'transparent',
+            color: activeTab === 'list' ? 'white' : '#475569',
+            border: 'none',
+            borderRadius: '10px',
+            padding: '10px 18px',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+        >
+          {t('adminEvents.tabList')} ({events.length})
+        </button>
+        <button
+          onClick={resetFormForCreate}
+          style={{
+            background: activeTab === 'create' ? '#059669' : 'transparent',
+            color: activeTab === 'create' ? 'white' : '#475569',
+            border: 'none',
+            borderRadius: '10px',
+            padding: '10px 18px',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+        >
+          {isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}
+        </button>
       </div>
 
       {/* ============================================================ */}
@@ -996,11 +971,12 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               boxShadow: '0 4px 6px -1px rgba(0,0,0,0.04)',
               display: 'flex',
               flexDirection: 'column',
-              gap: '16px'
+              gap: '16px',
+              textAlign: 'left'
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#0f172a', textAlign: 'left' }}>
                 {isEditing ? t('adminEvents.editTitle') : t('adminEvents.createTitle')}
               </h3>
               {isEditing && (
@@ -1016,7 +992,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
             {/* 活動名稱 */}
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
                 {t('adminEvents.nameLabel')}
               </label>
               <input
@@ -1025,13 +1001,13 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 value={formData.name}
                 placeholder={t('adminEvents.namePlaceholder')}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', textAlign: 'left' }}
               />
             </div>
 
             {/* 活動代號 (選填或顯示) */}
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '4px', textAlign: 'left' }}>
                 {t('adminEvents.eventIdLabel')}
               </label>
               <input
@@ -1048,15 +1024,57 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   fontSize: '13px',
                   boxSizing: 'border-box',
                   backgroundColor: isEditing ? '#f8fafc' : 'white',
-                  fontFamily: 'monospace'
+                  fontFamily: 'monospace',
+                  textAlign: 'left'
                 }}
               />
             </div>
 
+            {/* 活動狀態 (發布設定高亮選單) */}
+            <div style={{
+              backgroundColor: '#f8fafc',
+              padding: '14px 16px',
+              borderRadius: '12px',
+              border: '1.5px solid #e2e8f0',
+              textAlign: 'left'
+            }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', marginBottom: '6px', textAlign: 'left' }}>
+                📌 {t('adminEvents.statusLabel')}
+              </label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1.5px solid #cbd5e1',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  boxSizing: 'border-box',
+                  fontWeight: 'bold',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  color: formData.status === '開放' ? '#15803d' : formData.status === '未來開放' ? '#c2410c' : '#64748b'
+                }}
+              >
+                <option value="未來開放">🟠 未來開放 (預設預告，暫不開放社員報名填寫)</option>
+                <option value="開放">🟢 開放報名 (發布後社員即可開始報名填表)</option>
+                <option value="關閉">⚪ 關閉活動 (僅幹部可見，暫不對外開放)</option>
+              </select>
+              <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#64748b', textAlign: 'left', lineHeight: '1.4' }}>
+                {formData.status === '未來開放'
+                  ? '💡 目前設定為「未來開放」，社員可見活動資訊預告，但無法點擊報名。'
+                  : formData.status === '開放'
+                  ? '💡 目前設定為「開放報名」，發布後社員即可立即開始報名。'
+                  : '💡 目前設定為「關閉活動」，活動不對外公開。'}
+              </p>
+            </div>
+
             {/* 日期區間與截止日 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', textAlign: 'left' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
                   {t('adminEvents.startDateLabel')}
                 </label>
                 <input
@@ -1064,11 +1082,11 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   required
                   value={formData.startDate}
                   onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', textAlign: 'left' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
                   {t('adminEvents.endDateLabel')}
                 </label>
                 <input
@@ -1076,15 +1094,15 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   required
                   value={formData.endDate}
                   onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', textAlign: 'left' }}
                 />
               </div>
             </div>
 
             {/* 報名截止日與費用 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', textAlign: 'left' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
                   {t('adminEvents.deadlineLabel')}
                 </label>
                 <input
@@ -1092,11 +1110,11 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   required
                   value={formData.deadline}
                   onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', textAlign: 'left' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
                   {t('adminEvents.costLabel')}
                 </label>
                 <input
@@ -1105,25 +1123,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   value={formData.cost}
                   placeholder={t('adminEvents.costPlaceholder')}
                   onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', textAlign: 'left' }}
                 />
               </div>
-            </div>
-
-            {/* 活動狀態 */}
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>
-                {t('adminEvents.statusLabel')}
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '14px', backgroundColor: 'white', boxSizing: 'border-box' }}
-              >
-                <option value="開放">開放報名 (Open)</option>
-                <option value="未來開放">未來開放 (Coming Soon)</option>
-                <option value="關閉">關閉活動 (Closed)</option>
-              </select>
             </div>
 
             {/* 封面照片直接上傳 */}
@@ -1422,28 +1424,40 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 </div>
               ) : (
                 filteredSignups.map((s) => {
+                  const cardId = s.signupCode || String(s.rowNumber);
+                  const isExpanded = expandedSignupCode === cardId;
                   const isAccepted = s.reviewResult.indexOf('正取') > -1;
                   const isWaitlisted = s.reviewResult.indexOf('備取') > -1;
 
                   return (
                     <div
-                      key={s.signupCode || s.rowNumber}
+                      key={cardId}
+                      onClick={() => setExpandedSignupCode(isExpanded ? null : cardId)}
                       style={{
-                        padding: '14px 16px',
+                        padding: '12px 14px',
                         borderRadius: '12px',
-                        border: '1px solid #e2e8f0',
+                        border: `1.5px solid ${isExpanded ? '#059669' : isAccepted ? '#bbf7d0' : isWaitlisted ? '#fed7aa' : '#e2e8f0'}`,
                         backgroundColor: isAccepted ? '#f0fdf4' : isWaitlisted ? '#fff7ed' : '#ffffff',
+                        boxShadow: isExpanded ? '0 4px 12px rgba(5, 150, 105, 0.08)' : '0 1px 3px rgba(0,0,0,0.03)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: isExpanded ? '12px' : '0',
+                        textAlign: 'left'
+                      }}
+                    >
+                      {/* 收合態 / 頂部摘要列 (永遠可見) */}
+                      <div style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: '12px',
-                        flexWrap: 'wrap'
-                      }}
-                    >
-                      {/* 社員基本資料 */}
-                      <div style={{ minWidth: '180px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>{s.name}</h4>
+                        gap: '8px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                          <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#0f172a', whiteSpace: 'nowrap' }}>
+                            {s.name}
+                          </h4>
                           <span style={{ fontSize: '11px', color: '#64748b' }}>({s.gender || '未填'})</span>
                           <span style={{
                             fontSize: '10px',
@@ -1451,98 +1465,220 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                             borderRadius: '4px',
                             backgroundColor: s.isOfficial === '是' ? '#dcfce7' : '#f1f5f9',
                             color: s.isOfficial === '是' ? '#15803d' : '#64748b',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
+                            whiteSpace: 'nowrap'
                           }}>
                             {s.isOfficial === '是' ? '正式社員' : '非社員'}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                          <span>📞 {s.phone || '無電話'}</span>
-                          <span>💬 LINE: {s.lineId || '未留'}</span>
-                        </div>
-                      </div>
 
-                      {/* 體能與證明 */}
-                      <div style={{ fontSize: '12px', color: '#475569' }}>
-                        {s.strengthProof ? (
-                          <a
-                            href={s.strengthProof.split(',')[0]}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: '#2563eb', fontWeight: 'bold', textDecoration: 'underline' }}
-                          >
-                            📷 {t('adminEvents.viewProof')}
-                          </a>
-                        ) : (
-                          <span style={{ color: '#94a3b8' }}>無證明檔案</span>
-                        )}
-                        <div style={{ marginTop: '2px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                          {/* 審核狀態膠囊 */}
                           <span style={{
                             fontSize: '11px',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontWeight: 'bold',
+                            backgroundColor: isAccepted ? '#dcfce7' : isWaitlisted ? '#ffedd5' : '#f1f5f9',
+                            color: isAccepted ? '#15803d' : isWaitlisted ? '#c2410c' : '#64748b',
+                            border: `1px solid ${isAccepted ? '#bbf7d0' : isWaitlisted ? '#fed7aa' : '#cbd5e1'}`
+                          }}>
+                            {isAccepted ? '正取' : isWaitlisted ? '備取' : '待審'}
+                          </span>
+
+                          {/* 通知狀態 */}
+                          <span style={{
+                            fontSize: '10px',
                             padding: '2px 6px',
                             borderRadius: '4px',
-                            backgroundColor: s.notifyStatus === '已通知' ? '#dcfce7' : '#fef2f2',
+                            backgroundColor: s.notifyStatus === '已通知' ? '#dcfce7' : '#fee2e2',
                             color: s.notifyStatus === '已通知' ? '#15803d' : '#b91c1c',
                             fontWeight: 'bold'
                           }}>
                             {s.notifyStatus === '已通知' ? t('adminEvents.notifiedBadge') : t('adminEvents.unnotifiedBadge')}
                           </span>
+
+                          {/* 展開指示圖示 */}
+                          <span style={{
+                            fontSize: '10px',
+                            color: '#94a3b8',
+                            display: 'inline-block',
+                            transform: isExpanded ? 'rotate(180deg)' : 'none',
+                            transition: 'transform 0.2s'
+                          }}>
+                            ▼
+                          </span>
                         </div>
                       </div>
 
-                      {/* 審核操作按鈕 */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {updatingSignupCode === s.signupCode ? (
-                          <div className="spinner" style={{ width: '16px', height: '16px' }}></div>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => handleUpdateApplicantResult(s.signupCode, '正取')}
+                      {/* 展開態內容：聯絡方式與審核操作 */}
+                      {isExpanded && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            borderTop: '1px solid #e2e8f0',
+                            paddingTop: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px'
+                          }}
+                        >
+                          {/* 聯絡資訊 Chips */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '13px' }}>
+                            {/* LINE ID 一鍵複製 */}
+                            <div
+                              onClick={() => {
+                                if (s.lineId) {
+                                  navigator.clipboard.writeText(s.lineId);
+                                  setCopiedLineId(cardId);
+                                  setTimeout(() => setCopiedLineId(null), 1800);
+                                }
+                              }}
+                              title="點擊複製 LINE ID"
                               style={{
-                                padding: '6px 12px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                backgroundColor: copiedLineId === cardId ? '#dcfce7' : '#f1f5f9',
+                                border: `1px solid ${copiedLineId === cardId ? '#86efac' : '#cbd5e1'}`,
+                                padding: '5px 10px',
                                 borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: 'bold',
-                                border: 'none',
-                                cursor: 'pointer',
-                                backgroundColor: isAccepted ? '#16a34a' : '#e2e8f0',
-                                color: isAccepted ? 'white' : '#475569'
+                                cursor: s.lineId ? 'pointer' : 'default',
+                                color: copiedLineId === cardId ? '#15803d' : '#334155',
+                                fontWeight: '500',
+                                transition: 'all 0.2s'
                               }}
                             >
-                              {t('adminEvents.btnAccept')}
-                            </button>
-                            <button
-                              onClick={() => handleUpdateApplicantResult(s.signupCode, '備取')}
-                              style={{
-                                padding: '6px 12px',
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: 'bold',
-                                border: 'none',
-                                cursor: 'pointer',
-                                backgroundColor: isWaitlisted ? '#ea580c' : '#e2e8f0',
-                                color: isWaitlisted ? 'white' : '#475569'
-                              }}
-                            >
-                              {t('adminEvents.btnWaitlist')}
-                            </button>
-                            <button
-                              onClick={() => handleUpdateApplicantResult(s.signupCode, '審核中 Checking')}
-                              style={{
-                                padding: '6px 8px',
-                                borderRadius: '6px',
-                                fontSize: '11px',
-                                border: '1px solid #cbd5e1',
-                                backgroundColor: 'white',
-                                color: '#64748b',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              {t('adminEvents.btnReset')}
-                            </button>
-                          </>
-                        )}
-                      </div>
+                              <span>💬 LINE:</span>
+                              <span style={{ fontWeight: 'bold' }}>{s.lineId || '未留'}</span>
+                              {s.lineId && (
+                                <span style={{ fontSize: '11px', color: copiedLineId === cardId ? '#15803d' : '#059669', fontWeight: 'bold' }}>
+                                  {copiedLineId === cardId ? '✅ 已複製！' : '📋 點擊複製'}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* 電話 (點擊撥號) */}
+                            {s.phone ? (
+                              <a
+                                href={`tel:${s.phone}`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  backgroundColor: '#f1f5f9',
+                                  border: '1px solid #cbd5e1',
+                                  padding: '5px 10px',
+                                  borderRadius: '6px',
+                                  color: '#2563eb',
+                                  textDecoration: 'none',
+                                  fontWeight: '500'
+                                }}
+                              >
+                                📞 {s.phone}
+                              </a>
+                            ) : (
+                              <span style={{ color: '#94a3b8', padding: '5px 8px' }}>📞 無電話</span>
+                            )}
+
+                            {/* 體能證明連結 */}
+                            {s.strengthProof ? (
+                              <a
+                                href={s.strengthProof.split(',')[0]}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  backgroundColor: '#eff6ff',
+                                  border: '1px solid #bfdbfe',
+                                  padding: '5px 10px',
+                                  borderRadius: '6px',
+                                  color: '#1d4ed8',
+                                  textDecoration: 'underline',
+                                  fontWeight: 'bold'
+                                }}
+                              >
+                                📷 {t('adminEvents.viewProof')}
+                              </a>
+                            ) : (
+                              <span style={{ color: '#94a3b8', padding: '5px 8px' }}>📷 無證明照片</span>
+                            )}
+                          </div>
+
+                          {/* 審核操作按鈕組 */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginTop: '2px',
+                            borderTop: '1px dashed #e2e8f0',
+                            paddingTop: '10px'
+                          }}>
+                            {updatingSignupCode === s.signupCode ? (
+                              <div className="spinner" style={{ width: '20px', height: '20px', margin: '4px auto' }}></div>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateApplicantResult(s.signupCode, '正取')}
+                                  style={{
+                                    flex: 1,
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: 'bold',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    backgroundColor: isAccepted ? '#16a34a' : '#e2e8f0',
+                                    color: isAccepted ? 'white' : '#475569',
+                                    transition: 'all 0.2s',
+                                    boxShadow: isAccepted ? '0 2px 4px rgba(22, 163, 74, 0.25)' : 'none'
+                                  }}
+                                >
+                                  ✅ {t('adminEvents.btnAccept')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateApplicantResult(s.signupCode, '備取')}
+                                  style={{
+                                    flex: 1,
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: 'bold',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    backgroundColor: isWaitlisted ? '#ea580c' : '#e2e8f0',
+                                    color: isWaitlisted ? 'white' : '#475569',
+                                    transition: 'all 0.2s',
+                                    boxShadow: isWaitlisted ? '0 2px 4px rgba(234, 88, 12, 0.25)' : 'none'
+                                  }}
+                                >
+                                  ⏳ {t('adminEvents.btnWaitlist')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateApplicantResult(s.signupCode, '審核中 Checking')}
+                                  style={{
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '12px',
+                                    border: '1px solid #cbd5e1',
+                                    backgroundColor: 'white',
+                                    color: '#64748b',
+                                    cursor: 'pointer',
+                                    fontWeight: '500'
+                                  }}
+                                >
+                                  🔄 {t('adminEvents.btnReset')}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })
