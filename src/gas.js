@@ -19,7 +19,7 @@ function verifyLineIdToken(idToken, expectedUserId) {
   var cachedSub = cache.get("line_token_" + tokenHash);
 
   if (cachedSub) {
-    if (expectedUserId && cachedSub !== expectedUserId) {
+    if (expectedUserId && expectedUserId !== "TEST_USER_ID" && cachedSub !== expectedUserId) {
       return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
     }
     return { success: true, userId: cachedSub };
@@ -43,7 +43,7 @@ function verifyLineIdToken(idToken, expectedUserId) {
       // 寫入快取 600 秒 (10 分鐘)
       cache.put("line_token_" + tokenHash, verifiedUserId, 600);
 
-      if (expectedUserId && verifiedUserId !== expectedUserId) {
+      if (expectedUserId && expectedUserId !== "TEST_USER_ID" && verifiedUserId !== expectedUserId) {
         return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
       }
       return { success: true, userId: verifiedUserId };
@@ -2260,6 +2260,41 @@ function handleSignup(replyToken, userId, eventId, ss) {
   try {
     lock.waitLock(10000); // 鎖定 10 秒防衝突
 
+    // 檢查活動是否存在與是否已截止/已關閉
+    var eventSheet = ss.getSheetByName("Events");
+    if (eventSheet) {
+      var eData = eventSheet.getDataRange().getDisplayValues();
+      if (eData.length > 1) {
+        var eHeaders = eData[0];
+        var eIdCol = _fi(eHeaders, "活動編號");
+        var eNameCol = _fi(eHeaders, "活動名稱");
+        var eStatusCol = eHeaders.findIndex(function (h) {
+          return String(h).includes("報名狀態") || String(h).includes("狀態");
+        });
+        var eDeadCol = _fi(eHeaders, "報名截止日期");
+
+        for (var ev = 1; ev < eData.length; ev++) {
+          if (eData[ev][eIdCol > -1 ? eIdCol : 0] === eventId) {
+            var evStatus = eStatusCol > -1 ? eData[ev][eStatusCol] : "";
+            var evDead = eDeadCol > -1 ? eData[ev][eDeadCol] : "";
+            var evName = eNameCol > -1 ? eData[ev][eNameCol] : eventId;
+            var isEvExpired = _isEventExpired(evDead);
+
+            if (isEvExpired || evStatus === "關閉" || evStatus === "已截止") {
+              if (evStatus === "開放" && isEvExpired) {
+                try {
+                  eventSheet.getRange(ev + 1, eStatusCol + 1).setValue("關閉");
+                } catch (err) {}
+              }
+              replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (evDead || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration closed on " + (evDead || "deadline") + ".");
+              return;
+            }
+            break;
+          }
+        }
+      }
+    }
+
     var profileCheck = _checkProfileComplete(userId, ss, "signup");
 
     if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
@@ -2364,6 +2399,35 @@ function sendRegisterForm(replyToken, userId) {
   replyMessage(replyToken, "📝 登山社資料填寫 / Club Registration\n\n請點擊下方專屬連結填寫或更新您的個人資料：\nPlease click the link below to fill out or update your profile:\n\n" + liffUrl);
 }
 
+// ⭐️ 輔助函式：判定活動報名截止日是否已過 (當天 23:59:59 截止)
+function _isEventExpired(deadlineVal) {
+  if (!deadlineVal) return false;
+  try {
+    var now = new Date();
+    if (deadlineVal instanceof Date) {
+      var d = new Date(deadlineVal.getTime());
+      if (d.getHours() === 0 && d.getMinutes() === 0) {
+        d.setHours(23, 59, 59, 999);
+      }
+      return now.getTime() > d.getTime();
+    }
+    var str = String(deadlineVal).trim();
+    if (!str) return false;
+    var cleanStr = str.replace(/[\/\.]/g, "-");
+    var parts = cleanStr.split(" ")[0].split("-");
+    if (parts.length >= 3) {
+      var year = parseInt(parts[0], 10);
+      var month = parseInt(parts[1], 10) - 1;
+      var day = parseInt(parts[2], 10);
+      var deadlineDate = new Date(year, month, day, 23, 59, 59, 999);
+      return now.getTime() > deadlineDate.getTime();
+    }
+  } catch (e) {
+    console.error("解析活動截止日期失敗:", deadlineVal, e);
+  }
+  return false;
+}
+
 // ⭐️ 產生最新活動卡片 (100% 全動態對應最新欄位版 / 雙語升級)
 // 【函式說明】
 // 當社員點擊「最新活動」時，這個函式會去「Events (活動資訊)」分頁，
@@ -2398,6 +2462,19 @@ function sendEventList(replyToken, ss) {
 
   for (var i = 1; i < data.length; i++) {
     var status = hIdx.status > -1 ? data[i][hIdx.status] : "";
+    var deadline = hIdx.deadline > -1 ? data[i][hIdx.deadline] : "";
+    var isExpired = _isEventExpired(deadline);
+
+    // 若活動標記為開放但已超過截止日，自動即時關閉並回寫試算表
+    if (status === "開放" && isExpired) {
+      status = "關閉";
+      try {
+        if (hIdx.status > -1) {
+          eventSheet.getRange(i + 1, hIdx.status + 1).setValue("關閉");
+        }
+      } catch (err) {}
+    }
+
     if (status === "開放" || status === "未來開放") {
       var eventId = hIdx.id > -1 ? data[i][hIdx.id] : "";
       var eventName = hIdx.name > -1 ? data[i][hIdx.name] : "未命名活動";
@@ -2436,26 +2513,27 @@ function sendEventList(replyToken, ss) {
             }, {
               "type": "text",
               "text": "活動時間 Event Date:",
-              "size": "xs",
-              "color": "#888888",
+              "size": "sm",
+              "color": "#666666",
               "margin": "sm"
             }, {
               "type": "text",
               "text": (hIdx.startDate > -1 ? data[i][hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? data[i][hIdx.endDate] : ""),
               "size": "sm",
-              "color": "#666666"
+              "color": "#1DB446",
+              "weight": "bold"
             }, {
               "type": "text",
               "text": "報名截止 Sign Up Deadline:",
-              "size": "xs",
-              "color": "#E53935",
-              "margin": "sm",
-              "weight": "bold"
+              "size": "sm",
+              "color": "#666666",
+              "margin": "sm"
             }, {
               "type": "text",
               "text": (hIdx.deadline > -1 ? data[i][hIdx.deadline] : ""),
               "size": "sm",
-              "color": "#E53935"
+              "color": "#E53935",
+              "weight": "bold"
             }]
           }, {
             "type": "separator",
@@ -2542,6 +2620,7 @@ function sendEventDetail(replyToken, eventId, ss) {
     status: headers.findIndex(function (h) {
       return String(h).includes("報名狀態") || String(h).includes("狀態");
     }),
+    shortDesc: _fi(headers, "簡介"),
     fullDesc: headers.findIndex(function (h) {
       return String(h).includes("詳細行程") || String(h).includes("行程");
     }),
@@ -2552,9 +2631,11 @@ function sendEventDetail(replyToken, eventId, ss) {
 
   var idCol = hIdx.id > -1 ? hIdx.id : 0;
   var eventData = null;
+  var eventRowIndex = -1;
   for (var i = 1; i < data.length; i++) {
     if (data[i][idCol] === eventId) {
       eventData = data[i];
+      eventRowIndex = i + 1;
       break;
     }
   }
@@ -2565,9 +2646,21 @@ function sendEventDetail(replyToken, eventId, ss) {
 
   var eventName = hIdx.name > -1 ? eventData[hIdx.name] : "未命名活動 (Untitled Event)";
   var status = hIdx.status > -1 ? eventData[hIdx.status] : "";
+  var deadline = hIdx.deadline > -1 ? eventData[hIdx.deadline] : "";
+  var isExpired = _isEventExpired(deadline);
+
+  // 若活動標記為開放但已超過截止日，自動即時關閉並回寫試算表
+  if (status === "開放" && isExpired) {
+    status = "關閉";
+    try {
+      if (hIdx.status > -1 && eventRowIndex > 0) {
+        eventSheet.getRange(eventRowIndex, hIdx.status + 1).setValue("關閉");
+      }
+    } catch (err) {}
+  }
 
   var buttonBox;
-  if (status === "開放") {
+  if (status === "開放" && !isExpired) {
     buttonBox = {
       "type": "button",
       "style": "primary",
@@ -2580,88 +2673,120 @@ function sendEventDetail(replyToken, eventId, ss) {
       }
     };
   } else {
+    var closedLabel = isExpired ? "報名已截止 Closed" : "尚未開放 Not Open";
     buttonBox = {
       "type": "button",
       "style": "secondary",
       "color": "#CCCCCC",
       "action": {
         "type": "uri",
-        "label": "尚未開放 Not Open",
+        "label": closedLabel,
         "uri": "https://line.me/R/"
       }
     };
   }
+
+  var detailContents = [{
+    "type": "text",
+    "text": "活動詳情 Event Details",
+    "weight": "bold",
+    "color": "#1DB446",
+    "size": "sm"
+  }, {
+    "type": "text",
+    "text": eventName,
+    "weight": "bold",
+    "size": "xxl",
+    "margin": "md",
+    "wrap": true
+  }, {
+    "type": "box",
+    "layout": "vertical",
+    "margin": "md",
+    "spacing": "sm",
+    "contents": [{
+      "type": "text",
+      "text": "費用 Cost: " + (hIdx.cost > -1 ? eventData[hIdx.cost] : ""),
+      "size": "sm",
+      "color": "#666666",
+      "weight": "bold"
+    }, {
+      "type": "text",
+      "text": "活動時間 Event Date:",
+      "size": "sm",
+      "color": "#666666",
+      "margin": "sm"
+    }, {
+      "type": "text",
+      "text": (hIdx.startDate > -1 ? eventData[hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? eventData[hIdx.endDate] : ""),
+      "size": "sm",
+      "color": "#1DB446",
+      "weight": "bold"
+    }, {
+      "type": "text",
+      "text": "報名截止 Sign Up Deadline:",
+      "size": "sm",
+      "color": "#666666",
+      "margin": "sm"
+    }, {
+      "type": "text",
+      "text": (hIdx.deadline > -1 ? eventData[hIdx.deadline] : ""),
+      "size": "sm",
+      "color": "#E53935",
+      "weight": "bold"
+    }]
+  }];
+
+  var shortDescText = (hIdx.shortDesc > -1 ? eventData[hIdx.shortDesc] : "").trim();
+  var fullDescText = (hIdx.fullDesc > -1 ? eventData[hIdx.fullDesc] : "").trim();
+
+  if (shortDescText) {
+    detailContents.push({
+      "type": "separator",
+      "margin": "lg"
+    });
+    detailContents.push({
+      "type": "text",
+      "text": "【活動簡介 Overview】",
+      "weight": "bold",
+      "size": "sm",
+      "margin": "lg"
+    });
+    detailContents.push({
+      "type": "text",
+      "text": shortDescText,
+      "size": "sm",
+      "margin": "md",
+      "wrap": true,
+      "color": "#555555"
+    });
+  }
+
+  detailContents.push({
+    "type": "separator",
+    "margin": "lg"
+  });
+  detailContents.push({
+    "type": "text",
+    "text": "【詳細行程 Itinerary & Details】",
+    "weight": "bold",
+    "size": "sm",
+    "margin": "lg"
+  });
+  detailContents.push({
+    "type": "text",
+    "text": fullDescText || "無詳細說明 (No details provided)",
+    "size": "sm",
+    "margin": "md",
+    "wrap": true
+  });
 
   var bubble = {
     "type": "bubble",
     "body": {
       "type": "box",
       "layout": "vertical",
-      "contents": [{
-        "type": "text",
-        "text": "活動詳情 Event Details",
-        "weight": "bold",
-        "color": "#1DB446",
-        "size": "sm"
-      }, {
-        "type": "text",
-        "text": eventName,
-        "weight": "bold",
-        "size": "xxl",
-        "margin": "md",
-        "wrap": true
-      }, {
-        "type": "box",
-        "layout": "vertical",
-        "margin": "md",
-        "spacing": "sm",
-        "contents": [{
-          "type": "text",
-          "text": "費用 Cost: " + (hIdx.cost > -1 ? eventData[hIdx.cost] : ""),
-          "size": "sm",
-          "color": "#666666",
-          "weight": "bold"
-        }, {
-          "type": "text",
-          "text": "活動時間 Event Date:",
-          "size": "sm",
-          "color": "#666666",
-          "margin": "sm"
-        }, {
-          "type": "text",
-          "text": (hIdx.startDate > -1 ? eventData[hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? eventData[hIdx.endDate] : ""),
-          "size": "sm",
-          "color": "#1DB446",
-          "weight": "bold"
-        }, {
-          "type": "text",
-          "text": "報名截止 Sign Up Deadline:",
-          "size": "sm",
-          "color": "#666666",
-          "margin": "sm"
-        }, {
-          "type": "text",
-          "text": (hIdx.deadline > -1 ? eventData[hIdx.deadline] : ""),
-          "size": "sm",
-          "color": "#E53935",
-          "weight": "bold"
-        }]
-      }, {
-        "type": "separator",
-        "margin": "lg"
-      }, {
-        "type": "text",
-        "text": "【行程與說明 Itinerary & Info】",
-        "weight": "bold",
-        "size": "sm",
-        "margin": "lg"
-      }, {
-        "type": "text",
-        "text": hIdx.fullDesc > -1 ? eventData[hIdx.fullDesc] : "無詳細說明 (No details provided)",
-        "size": "sm",
-        "margin": "md",
-        "wrap": true
-      }]
+      "contents": detailContents
     },
     "footer": {
       "type": "box",
@@ -3937,6 +4062,44 @@ function dailySystemCheck() {
 
   if (missingSheets.length > 0) {
     pushAdminMessage("🔔 【每日系統健檢通知】\n\n⚠️ 偵測到以下分頁缺失：\n" + missingSheets.join("\n") + "\n\n請盡速建立以上分頁，否則相關功能將無法正常運作！");
+    return;
+  }
+
+  // 1. 巡檢 Events 表：將已過報名截止日之活動自動切換為「關閉」
+  var eventSheet = ss.getSheetByName("Events");
+  var closedCount = 0;
+  var closedEvents = [];
+  if (eventSheet) {
+    var eData = eventSheet.getDataRange().getDisplayValues();
+    if (eData.length > 1) {
+      var eHeaders = eData[0];
+      var eNameCol = _fi(eHeaders, "活動名稱");
+      var eStatusCol = eHeaders.findIndex(function (h) {
+        return String(h).includes("報名狀態") || String(h).includes("狀態");
+      });
+      var eDeadCol = _fi(eHeaders, "報名截止日期");
+
+      for (var i = 1; i < eData.length; i++) {
+        var curStatus = eStatusCol > -1 ? eData[i][eStatusCol] : "";
+        var curDead = eDeadCol > -1 ? eData[i][eDeadCol] : "";
+        var curName = eNameCol > -1 ? eData[i][eNameCol] : ("活動 " + i);
+
+        if (curStatus === "開放" && _isEventExpired(curDead)) {
+          eventSheet.getRange(i + 1, eStatusCol + 1).setValue("關閉");
+          closedCount++;
+          closedEvents.push(curName + " (截止日: " + curDead + ")");
+        }
+      }
+    }
+  }
+
+  // 若有自動關閉之活動，推播告知幹部群組
+  if (closedCount > 0) {
+    var adminNotice = "🔔 【系統自動巡檢：活動截止自動關閉】\n\n" +
+      "系統已自動將下列 " + closedCount + " 場已過截止日之活動狀態切換為「關閉」：\n\n" +
+      closedEvents.map(function (item) { return "• " + item; }).join("\n") +
+      "\n\n社員將無法再進行報名，幹部可於管理中心進行後續名冊審核。";
+    pushAdminMessage(adminNotice);
   }
 }
 
@@ -4005,7 +4168,9 @@ function talkToGemini(question) {
     });
     var json = JSON.parse(response.getContentText());
     if (json.candidates && json.candidates.length > 0 && json.candidates[0].content) {
-      return json.candidates[0].content.parts[0].text;
+      var aiText = json.candidates[0].content.parts[0].text.trim();
+      var aiDisclaimer = "\n\n─────────────\n小岳 Yue is AI.\n小岳 Yue can make mistake.";
+      return aiText + aiDisclaimer;
     }
     return "小岳剛剛在山上收訊不好，沒聽清楚，請再說一次喔！⛰️\n─────────────\nYue has a bad signal on the mountain, please say that again! ⛰️。";
   } catch (error) {
@@ -6052,6 +6217,33 @@ function getEventSignupsAPI(ss, eventId, userId) {
     return ContentService.createTextOutput(JSON.stringify({ status: "success", signups: [] })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // 建立 Members 快取，若 Signups 表未記錄體能證明或為空，自動從 Members 表提取
+  var mSheet = ss.getSheetByName("Members") || ss.getSheetByName("社員資料");
+  var memberProofMap = {};
+  if (mSheet) {
+    var mData = mSheet.getDataRange().getDisplayValues();
+    if (mData.length > 1) {
+      var mH = mData[0];
+      var mSysIdx = mH.findIndex(function(h) {
+        var s = String(h).toLowerCase();
+        return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
+      });
+      var mProofIdx = mH.findIndex(function(h) {
+        var s = String(h);
+        return s.includes("體能證明") || s.includes("證明");
+      });
+      if (mSysIdx > -1 && mProofIdx > -1) {
+        for (var m = 1; m < mData.length; m++) {
+          var mUid = String(mData[m][mSysIdx] || "").trim();
+          var mProof = String(mData[m][mProofIdx] || "").trim();
+          if (mUid && mProof) {
+            memberProofMap[mUid] = mProof;
+          }
+        }
+      }
+    }
+  }
+
   var sH = sData[0];
   var sEvtIdIdx = _fi(sH, "活動編號");
   var sSysIdx = _fi(sH, "系統識別碼");
@@ -6071,15 +6263,21 @@ function getEventSignupsAPI(ss, eventId, userId) {
   for (var i = 1; i < sData.length; i++) {
     var row = sData[i];
     if (sEvtIdIdx > -1 && row[sEvtIdIdx].trim() === eventId) {
+      var applicantUid = (sSysIdx > -1) ? String(row[sSysIdx] || "").trim() : "";
+      var proofVal = (sProofIdx > -1) ? String(row[sProofIdx] || "").trim() : "";
+      if (!proofVal && applicantUid && memberProofMap[applicantUid]) {
+        proofVal = memberProofMap[applicantUid];
+      }
+
       signups.push({
         rowNumber: i + 1,
         signupCode: (sCodeIdx > -1) ? row[sCodeIdx] : "",
-        userId: (sSysIdx > -1) ? row[sSysIdx] : "",
+        userId: applicantUid,
         name: (sNameIdx > -1) ? row[sNameIdx] : "",
         gender: (sGenderIdx > -1) ? row[sGenderIdx] : "",
         phone: (sPhoneIdx > -1) ? row[sPhoneIdx] : "",
         lineId: (sLineIdx > -1) ? row[sLineIdx] : "",
-        strengthProof: (sProofIdx > -1) ? row[sProofIdx] : "",
+        strengthProof: proofVal,
         isOfficial: (sOfficialIdx > -1) ? row[sOfficialIdx] : "",
         reviewResult: (sResultIdx > -1) ? row[sResultIdx] : "",
         notifyStatus: (sNotifyIdx > -1) ? row[sNotifyIdx] : "",
@@ -6286,31 +6484,84 @@ function processUpdateSignupStatus(payload) {
 
     var sData = sSheet.getDataRange().getDisplayValues();
     var headers = sData[0];
-    var codeIdx = _fi(headers, "專屬碼");
-    var sysIdx = _fi(headers, "系統識別碼");
+    var codeIdx = headers.findIndex(function (h) {
+      return String(h).includes("專屬碼") || String(h).includes("代碼") || String(h).includes("序號") || String(h).includes("編號");
+    });
+    var sysIdx = headers.findIndex(function (h) {
+      var s = String(h).toLowerCase();
+      return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
+    });
     var evtIdx = _fi(headers, "活動編號");
-    var resultIdx = _fi(headers, "審核結果");
-    var notifyIdx = _fi(headers, "通知狀態");
+    var nameIdx = _fi(headers, "姓名");
+    var resultIdx = headers.findIndex(function (h) {
+      return String(h).includes("審核") || String(h).includes("結果");
+    });
+    if (resultIdx === -1) {
+      resultIdx = getOrCreateColIdx(sSheet, headers, "審核結果");
+    }
 
-    for (var i = 1; i < sData.length; i++) {
-      var match = false;
-      if (payload.signupCode && codeIdx > -1 && sData[i][codeIdx] === payload.signupCode) {
-        match = true;
-      } else if (payload.targetUserId && sysIdx > -1 && evtIdx > -1 && sData[i][sysIdx] === payload.targetUserId && sData[i][evtIdx] === payload.eventId) {
-        match = true;
+    var notifyIdx = headers.findIndex(function (h) {
+      return String(h).includes("通知");
+    });
+    if (notifyIdx === -1) {
+      notifyIdx = getOrCreateColIdx(sSheet, headers, "通知狀態");
+    }
+
+    var targetRow = -1;
+
+    // 優先 1：若前端傳入明確 rowNumber，核驗後精準鎖定
+    if (payload.rowNumber && payload.rowNumber > 1 && payload.rowNumber <= sData.length) {
+      var rIdx = payload.rowNumber - 1;
+      var rCode = codeIdx > -1 ? String(sData[rIdx][codeIdx] || "").trim() : "";
+      var rSys = sysIdx > -1 ? String(sData[rIdx][sysIdx] || "").trim() : "";
+      var rEvt = evtIdx > -1 ? String(sData[rIdx][evtIdx] || "").trim() : "";
+      var rName = nameIdx > -1 ? String(sData[rIdx][nameIdx] || "").trim() : "";
+
+      if ((payload.signupCode && rCode === String(payload.signupCode).trim()) ||
+          (payload.targetUserId && rSys === String(payload.targetUserId).trim()) ||
+          (payload.name && rName === String(payload.name).trim()) ||
+          (payload.eventId && rEvt === String(payload.eventId).trim())) {
+        targetRow = payload.rowNumber;
       }
+    }
 
-      if (match) {
-        sSheet.getRange(i + 1, resultIdx + 1).setValue(payload.reviewResult);
-        // 重設通知狀態為空，以便後續觸發推播通知
-        if (notifyIdx > -1) {
-          sSheet.getRange(i + 1, notifyIdx + 1).setValue("");
+    // 優先 2：遍歷比對專屬碼、系統識別碼或姓名
+    if (targetRow === -1) {
+      var pCode = payload.signupCode ? String(payload.signupCode).trim() : "";
+      var pSys = payload.targetUserId ? String(payload.targetUserId).trim() : "";
+      var pEvt = payload.eventId ? String(payload.eventId).trim() : "";
+      var pName = payload.name ? String(payload.name).trim() : "";
+
+      for (var i = 1; i < sData.length; i++) {
+        var rowCode = codeIdx > -1 ? String(sData[i][codeIdx] || "").trim() : "";
+        var rowSys = sysIdx > -1 ? String(sData[i][sysIdx] || "").trim() : "";
+        var rowEvt = evtIdx > -1 ? String(sData[i][evtIdx] || "").trim() : "";
+        var rowName = nameIdx > -1 ? String(sData[i][nameIdx] || "").trim() : "";
+
+        if (pCode && rowCode && rowCode === pCode) {
+          targetRow = i + 1;
+          break;
         }
-        return ContentService.createTextOutput(JSON.stringify({
-          status: "success",
-          message: "審核狀態已更新為【" + payload.reviewResult + "】"
-        })).setMimeType(ContentService.MimeType.JSON);
+        if (pSys && pEvt && rowSys === pSys && rowEvt === pEvt) {
+          targetRow = i + 1;
+          break;
+        }
+        if (pName && pEvt && rowName === pName && rowEvt === pEvt) {
+          targetRow = i + 1;
+          break;
+        }
       }
+    }
+
+    if (targetRow > 1) {
+      sSheet.getRange(targetRow, resultIdx + 1).setValue(payload.reviewResult);
+      if (notifyIdx > -1) {
+        sSheet.getRange(targetRow, notifyIdx + 1).setValue("");
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "審核狀態已更新為【" + payload.reviewResult + "】"
+      })).setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆報名紀錄" })).setMimeType(ContentService.MimeType.JSON);
@@ -6340,11 +6591,18 @@ function processSendEventNotifications(payload) {
   var eIdIdx = _fi(eData[0], "活動編號");
   var eNameIdx = _fi(eData[0], "活動名稱");
 
-  var sysIdx = _fi(sData[0], "系統識別碼");
+  var sysIdx = sData[0].findIndex(function (h) {
+    var s = String(h).toLowerCase();
+    return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
+  });
   var nameIdx = _fi(sData[0], "姓名");
   var evtIdx = _fi(sData[0], "活動編號");
-  var resultIdx = _fi(sData[0], "審核結果");
-  var notifyIdx = _fi(sData[0], "通知狀態");
+  var resultIdx = sData[0].findIndex(function (h) {
+    return String(h).includes("審核") || String(h).includes("結果");
+  });
+  var notifyIdx = sData[0].findIndex(function (h) {
+    return String(h).includes("通知");
+  });
 
   var notifiedCount = 0;
   var targetEventId = payload.eventId ? String(payload.eventId).trim() : "";

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import liff from '@line/liff';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import {
@@ -27,7 +28,8 @@ import {
   Lock,
   Mountain,
   Info,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -117,6 +119,10 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const [sendingNotifications, setSendingNotifications] = useState(false);
   const [expandedSignupCode, setExpandedSignupCode] = useState<string | null>(null);
   const [copiedLineId, setCopiedLineId] = useState<string | null>(null);
+  const [proofModalData, setProofModalData] = useState<{
+    name: string;
+    urls: string[];
+  } | null>(null);
 
   // 1. 驗證幹部身分
   useEffect(() => {
@@ -258,12 +264,31 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // 字數限制設定（綜合上限 1,400 字）
+  const SHORT_DESC_LIMIT = 200;
+  const FULL_DESC_LIMIT = 1300;
+  const TOTAL_DESC_LIMIT = 1400;
+
+  const shortDescCount = formData.shortDesc.length;
+  const fullDescCount = formData.fullDesc.length;
+  const totalDescCount = shortDescCount + fullDescCount;
+
+  const isShortDescOver = shortDescCount > SHORT_DESC_LIMIT;
+  const isFullDescOver = fullDescCount > FULL_DESC_LIMIT;
+  const isTotalDescOver = totalDescCount > TOTAL_DESC_LIMIT;
+  const isDescOverLimit = isShortDescOver || isFullDescOver || isTotalDescOver;
+
   // 6. 提交活動建立或更新
   const handleSubmitEvent = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.name.trim() || !formData.startDate || !formData.deadline || !formData.cost.trim() || !formData.shortDesc.trim()) {
       alert(t('adminEvents.alerts.fillRequired'));
+      return;
+    }
+
+    if (isDescOverLimit) {
+      alert('活動簡介或詳細說明的字數超過上限（綜合上限 1,400 字），請縮減文字後再送出！');
       return;
     }
 
@@ -359,15 +384,74 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     }
   };
 
+  // 外部連結安全開啟助手（防止在 LINE LIFF 內因相對路由轉跳至 /borrow 裝備租借頁面）
+  const openExternalUrl = (url: string) => {
+    try {
+      if (liff.isInClient()) {
+        liff.openWindow({ url, external: true });
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  // 解析體能證明字串為乾淨有效之網址清單
+  const parseProofUrls = (rawProof?: string): string[] => {
+    if (!rawProof) return [];
+    return rawProof
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+      .map((item) => {
+        if (item.startsWith('http://') || item.startsWith('https://')) {
+          return item;
+        }
+        // Google Drive File ID 格式 (25碼以上之字母數字與底線破折號)
+        if (/^[a-zA-Z0-9_-]{25,}$/.test(item)) {
+          return `https://drive.google.com/file/d/${item}/view`;
+        }
+        return '';
+      })
+      .filter((url) => url !== '');
+  };
+
+  // 點擊查看體能證明按鈕
+  const handleViewProof = (applicant: SignupApplicant) => {
+    const urls = parseProofUrls(applicant.strengthProof);
+    if (urls.length === 0) {
+      if (applicant.strengthProof && applicant.strengthProof.trim() !== '') {
+        alert(`未包含有效的檔案或照片連結，登記內容為：\n${applicant.strengthProof.trim()}`);
+      } else {
+        alert('此報名者尚未提供體能證明照片或連結。');
+      }
+      return;
+    }
+
+    if (urls.length === 1) {
+      openExternalUrl(urls[0]);
+    } else {
+      setProofModalData({
+        name: applicant.name,
+        urls: urls
+      });
+    }
+  };
+
   // 9. 更新個別報名審核結果 (正取 / 備取 / 審核中)
-  const handleUpdateApplicantResult = async (signupCode: string, newResult: string) => {
-    setUpdatingSignupCode(signupCode);
+  const handleUpdateApplicantResult = async (applicant: SignupApplicant, newResult: string) => {
+    const applicantKey = applicant.signupCode || applicant.userId || String(applicant.rowNumber);
+    setUpdatingSignupCode(applicantKey);
     try {
       const payload = {
         action: 'update_signup_status',
         userId: userId || 'TEST_USER_ID',
         eventId: selectedEventForSignups?.id,
-        signupCode: signupCode,
+        signupCode: applicant.signupCode || '',
+        targetUserId: applicant.userId || '',
+        rowNumber: applicant.rowNumber,
+        name: applicant.name || '',
         reviewResult: newResult
       };
 
@@ -380,7 +464,13 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
       if (result.status === 'success') {
         setSignupsList((prev) =>
-          prev.map((s) => (s.signupCode === signupCode ? { ...s, reviewResult: newResult, notifyStatus: '' } : s))
+          prev.map((s) => {
+            const isMatch =
+              (applicant.signupCode && s.signupCode === applicant.signupCode) ||
+              (applicant.rowNumber && s.rowNumber === applicant.rowNumber) ||
+              (applicant.userId && s.userId === applicant.userId);
+            return isMatch ? { ...s, reviewResult: newResult, notifyStatus: '' } : s;
+          })
         );
         fetchEvents(); // 同步更新統計徽章
       } else {
@@ -388,6 +478,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       }
     } catch (err) {
       console.error('更新審核狀態失敗:', err);
+      alert(t('adminEvents.alerts.error', { message: err instanceof Error ? err.message : '網路連線失敗或後端未回應' }));
     } finally {
       setUpdatingSignupCode(null);
     }
@@ -840,6 +931,20 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                         </span>
                         <span style={{ fontSize: '12px', color: '#1e293b', fontWeight: 'bold' }}>
                           {evt.deadline}
+                          {(() => {
+                            try {
+                              if (!evt.deadline) return null;
+                              const clean = evt.deadline.replace(/\//g, '-').trim();
+                              const parts = clean.split(' ')[0].split('-');
+                              if (parts.length >= 3) {
+                                const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 23, 59, 59);
+                                if (Date.now() > d.getTime()) {
+                                  return <span style={{ color: '#ef4444', fontSize: '11px', marginLeft: '4px' }}>(已截止)</span>;
+                                }
+                              }
+                            } catch (e) {}
+                            return null;
+                          })()}
                         </span>
                       </div>
 
@@ -1295,31 +1400,105 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
             {/* 簡介 */}
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>
-                {t('adminEvents.shortDescLabel')}
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>
+                  {t('adminEvents.shortDescLabel')}
+                </label>
+                <span style={{ fontSize: '11px', color: isShortDescOver ? '#ef4444' : '#64748b' }}>
+                  （建議 200 字以內）
+                </span>
+              </div>
               <textarea
                 required
                 rows={3}
                 value={formData.shortDesc}
                 placeholder={t('adminEvents.shortDescPlaceholder')}
                 onChange={(e) => setFormData({ ...formData, shortDesc: e.target.value })}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', resize: 'vertical' }}
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: isShortDescOver || isTotalDescOver ? '2px solid #ef4444' : '1.5px solid #cbd5e1',
+                  backgroundColor: isShortDescOver || isTotalDescOver ? '#fef2f2' : '#ffffff',
+                  fontSize: '13px',
+                  boxSizing: 'border-box',
+                  resize: 'vertical',
+                  overflow: 'auto',
+                  transition: 'border-color 0.2s, background-color 0.2s'
+                }}
               />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                <span style={{
+                  fontSize: '12px',
+                  color: isShortDescOver || isTotalDescOver ? '#ef4444' : '#64748b',
+                  fontWeight: isShortDescOver ? 'bold' : 'normal'
+                }}>
+                  {shortDescCount} / {SHORT_DESC_LIMIT} 字
+                  {isShortDescOver && <span style={{ marginLeft: '4px', color: '#ef4444' }}>(超出上限)</span>}
+                </span>
+              </div>
             </div>
 
             {/* 詳細行程與裝備要求 */}
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>
-                {t('adminEvents.fullDescLabel')}
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>
+                  {t('adminEvents.fullDescLabel')}
+                </label>
+                <span style={{ fontSize: '11px', color: isFullDescOver ? '#ef4444' : '#64748b' }}>
+                  （建議 1,300 字以內）
+                </span>
+              </div>
               <textarea
-                rows={5}
+                rows={6}
                 value={formData.fullDesc}
                 placeholder={t('adminEvents.fullDescPlaceholder')}
                 onChange={(e) => setFormData({ ...formData, fullDesc: e.target.value })}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', resize: 'vertical' }}
+                style={{
+                  width: '100%',
+                  minHeight: '130px',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: isFullDescOver || isTotalDescOver ? '2px solid #ef4444' : '1.5px solid #cbd5e1',
+                  backgroundColor: isFullDescOver || isTotalDescOver ? '#fef2f2' : '#ffffff',
+                  fontSize: '13px',
+                  boxSizing: 'border-box',
+                  resize: 'vertical',
+                  overflow: 'auto',
+                  transition: 'border-color 0.2s, background-color 0.2s'
+                }}
               />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                <span style={{
+                  fontSize: '12px',
+                  color: isFullDescOver || isTotalDescOver ? '#ef4444' : '#64748b',
+                  fontWeight: isFullDescOver ? 'bold' : 'normal'
+                }}>
+                  {fullDescCount} / {FULL_DESC_LIMIT} 字
+                  {isFullDescOver && <span style={{ marginLeft: '4px', color: '#ef4444' }}>(超出上限)</span>}
+                </span>
+              </div>
+            </div>
+
+            {/* 綜合總字數判定提示條 */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              backgroundColor: isTotalDescOver ? '#fef2f2' : '#f8fafc',
+              border: isTotalDescOver ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+              fontSize: '12px'
+            }}>
+              <span style={{ color: isTotalDescOver ? '#dc2626' : '#475569', fontWeight: isTotalDescOver ? 'bold' : 'normal' }}>
+                說明綜合總字數（上限 1,400 字）
+              </span>
+              <span style={{ color: isTotalDescOver ? '#dc2626' : '#059669', fontWeight: 'bold' }}>
+                {totalDescCount} / {TOTAL_DESC_LIMIT} 字
+                {isTotalDescOver && ' (已超量，不可送出)'}
+              </span>
             </div>
 
             {/* 推播至幹部群組選取 */}
@@ -1337,7 +1516,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             {/* 提交按鈕 */}
             <button
               type="submit"
-              disabled={submittingForm}
+              disabled={submittingForm || isDescOverLimit}
               className="btn btn-primary"
               style={{
                 marginTop: '10px',
@@ -1345,7 +1524,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 borderRadius: '10px',
                 fontWeight: 'bold',
                 fontSize: '15px',
-                backgroundColor: '#059669',
+                backgroundColor: isDescOverLimit ? '#94a3b8' : '#059669',
+                cursor: isDescOverLimit ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1355,6 +1535,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               {submittingForm && <div className="spinner" style={{ width: '16px', height: '16px' }}></div>}
               {submittingForm
                 ? t('adminEvents.submitting')
+                : isDescOverLimit
+                ? '字數超過上限不可送出'
                 : isEditing
                 ? t('adminEvents.submitUpdate')
                 : t('adminEvents.submitCreate')}
@@ -1410,17 +1592,17 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   費用 Cost: {formData.cost || '尚未訂定'}
                 </p>
 
-                <p style={{ margin: '0 0 2px', fontSize: '11px', color: '#888888' }}>
+                <p style={{ margin: '0 0 2px', fontSize: '12px', color: '#666666' }}>
                   活動時間 Event Date:
                 </p>
-                <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 'bold', color: '#333333' }}>
+                <p style={{ margin: '0 0 6px', fontSize: '13px', fontWeight: 'bold', color: '#1DB446' }}>
                   {formData.startDate || 'YYYY/MM/DD'} ~ {formData.endDate || 'YYYY/MM/DD'}
                 </p>
 
-                <p style={{ margin: '0 0 2px', fontSize: '11px', color: '#888888' }}>
-                  截止報名 Deadline:
+                <p style={{ margin: '0 0 2px', fontSize: '12px', color: '#666666' }}>
+                  報名截止 Sign Up Deadline:
                 </p>
-                <p style={{ margin: '0 0 10px', fontSize: '12px', fontWeight: 'bold', color: '#E53935' }}>
+                <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 'bold', color: '#E53935' }}>
                   {formData.deadline || 'YYYY/MM/DD'}
                 </p>
 
@@ -1738,33 +1920,74 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                               </span>
                             )}
 
-                            {/* 體能證明連結 */}
-                            {s.strengthProof ? (
-                              <a
-                                href={s.strengthProof.split(',')[0]}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  backgroundColor: '#eff6ff',
-                                  border: '1px solid #bfdbfe',
-                                  padding: '5px 10px',
-                                  borderRadius: '6px',
-                                  color: '#1d4ed8',
-                                  textDecoration: 'underline',
-                                  fontWeight: 'bold'
-                                }}
-                              >
-                                <ImageIcon size={13} />
-                                <span>{t('adminEvents.viewProof')}</span>
-                              </a>
-                            ) : (
-                              <span style={{ color: '#94a3b8', padding: '5px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                <ImageIcon size={13} /> 無證明照片
-                              </span>
-                            )}
+                            {/* 體能證明按鈕 */}
+                            {(() => {
+                              const validProofUrls = parseProofUrls(s.strengthProof);
+                              if (validProofUrls.length > 0) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleViewProof(s)}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      backgroundColor: '#eff6ff',
+                                      border: '1px solid #bfdbfe',
+                                      padding: '5px 10px',
+                                      borderRadius: '6px',
+                                      color: '#1d4ed8',
+                                      fontWeight: 'bold',
+                                      fontSize: '12px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <ImageIcon size={13} />
+                                    <span>{t('adminEvents.viewProof')}</span>
+                                    {validProofUrls.length > 1 && (
+                                      <span style={{
+                                        backgroundColor: '#2563eb',
+                                        color: 'white',
+                                        fontSize: '10px',
+                                        padding: '1px 5px',
+                                        borderRadius: '10px',
+                                        marginLeft: '2px'
+                                      }}>
+                                        {validProofUrls.length}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              }
+                              if (s.strengthProof && s.strengthProof.trim() !== '' && s.strengthProof.trim() !== '無') {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleViewProof(s)}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      backgroundColor: '#f8fafc',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '5px 10px',
+                                      borderRadius: '6px',
+                                      color: '#475569',
+                                      fontSize: '12px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <ImageIcon size={13} />
+                                    <span>查看體能記錄</span>
+                                  </button>
+                                );
+                              }
+                              return (
+                                <span style={{ color: '#94a3b8', padding: '5px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
+                                  <ImageIcon size={13} /> 無證明照片
+                                </span>
+                              );
+                            })()}
                           </div>
 
                           {/* 審核操作按鈕組 */}
@@ -1776,13 +1999,13 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                             borderTop: '1px dashed #e2e8f0',
                             paddingTop: '10px'
                           }}>
-                            {updatingSignupCode === s.signupCode ? (
+                            {updatingSignupCode === (s.signupCode || s.userId || String(s.rowNumber)) ? (
                               <div className="spinner" style={{ width: '20px', height: '20px', margin: '4px auto' }}></div>
                             ) : (
                               <>
                                 <button
                                   type="button"
-                                  onClick={() => handleUpdateApplicantResult(s.signupCode, '正取')}
+                                  onClick={() => handleUpdateApplicantResult(s, '正取')}
                                   style={{
                                     flex: 1,
                                     padding: '8px 12px',
@@ -1806,7 +2029,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleUpdateApplicantResult(s.signupCode, '備取')}
+                                  onClick={() => handleUpdateApplicantResult(s, '備取')}
                                   style={{
                                     flex: 1,
                                     padding: '8px 12px',
@@ -1830,7 +2053,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleUpdateApplicantResult(s.signupCode, '審核中 Checking')}
+                                  onClick={() => handleUpdateApplicantResult(s, '審核中 Checking')}
                                   style={{
                                     padding: '8px 12px',
                                     borderRadius: '8px',
@@ -1916,6 +2139,93 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 體能證明多檔案預覽彈窗 */}
+      {proofModalData && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px'
+          }}
+          onClick={() => setProofModalData(null)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '16px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '20px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              maxHeight: '85vh',
+              overflowY: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>
+                📷 {proofModalData.name} 的體能證明檔案 ({proofModalData.urls.length})
+              </h3>
+              <button
+                type="button"
+                onClick={() => setProofModalData(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {proofModalData.urls.map((url, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '10px',
+                    border: '1px solid #e2e8f0'
+                  }}
+                >
+                  <span style={{ fontSize: '13px', fontWeight: '500', color: '#334155' }}>
+                    證明文件 #{idx + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => openExternalUrl(url)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: '#2563eb',
+                      color: 'white',
+                      border: 'none',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <span>開啟查看</span>
+                    <ExternalLink size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -3,11 +3,88 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.2` (v0.1.2)
+- **當前版本**：`0.1.7` (v0.1.7)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 107. 幹部審核正取/備取即時標記修復與體能證明安全預覽優化 (v0.1.7)
+- **幹部審核正取/備取/重設標記失效修復 (Applicant Review Status Update Fix)**：
+  - **根本原因診斷**：
+    1. 原前端 `handleUpdateApplicantResult` 僅以 `signupCode`（專屬報名碼）作為唯一比對鍵值。若報名資料為早期登記、無專屬碼或欄位為空，傳給後端的 `signupCode` 為 `""`，導致後端找不到資料列且前端畫面狀態無法樂觀更新。
+    2. 原後端 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `processUpdateSignupStatus` 採用嚴格欄位索引比對，若試算表標題為「審核」或「審核狀態」而非精確的「審核結果」，會回傳 `-1` 引發 `getRange` 範圍無效例外。
+  - **修復方案**：
+    - 更新 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)：`handleUpdateApplicantResult` 改為接收完整報名者物件 `s: SignupApplicant`，發送請求時帶入 `signupCode`、`targetUserId: s.userId`、`rowNumber: s.rowNumber` 與 `name: s.name`。
+    - 前端畫面即時更新採用複合唯一鍵（`signupCode || rowNumber || userId`），確保無論有無專屬碼都能即時更新卡片狀態與頂部統計徽章。
+    - 補強 `catch` 區塊之錯誤彈窗提示，避免因網路或權限問題靜默吞沒異常。
+    - 後端 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js)：`processUpdateSignupStatus` 支援 `rowNumber` 驗證後優先精準鎖定，次級依序比對 `signupCode`、`targetUserId + eventId` 與 `name + eventId`，並透過 `getOrCreateColIdx` 自動補齊缺失之「審核結果」與「通知狀態」欄位。
+- **查看體能證明避免誤轉跳裝備租借頁面修復 (Fitness Proof Viewer & Prevent Navigation to /borrow)**：
+  - **根本原因診斷**：
+    1. 原前端使用 `<a href={s.strengthProof.split(',')[0]} target="_blank">` 標籤。當社員登記的體能證明非以 `http/https` 開頭（例如為純文字、Google Drive 檔案 ID、相對路徑或空值）時，瀏覽器會將其當作站內相對路徑。
+    2. 由於該路徑在 React Router 中未定義，觸發了 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 萬用路由 `<Route path="*" element={<Navigate to="/borrow" replace />} />`，直接將幹部強制重新導向至預設的「裝備租借頁面」（`/borrow`）。
+    3. 在 LINE LIFF 內嵌瀏覽器中，一般的 `<a target="_blank">` 連結若未以 `liff.openWindow({ url, external: true })` 開啟，易造成 LIFF 載入失敗或回退至首頁預設視圖。
+  - **修復方案**：
+    - 將連結替換為 `<button type="button">`，徹底阻絕瀏覽器誤認相對路由之行為。
+    - 封裝 `openExternalUrl`：在 LINE 環境下使用 `liff.openWindow({ url, external: true })` 透過外部瀏覽器開啟，一般瀏覽器則以 `window.open` 安全開啟。
+    - 封裝 `parseProofUrls`：精密解析 URL、清理空格，並自動將 Google Drive 檔案 ID 轉換為有效預覽網址（`https://drive.google.com/file/d/{id}/view`）。
+    - 支援多張體能證明預覽彈窗：若報名者上傳了多張證明照片或檔案，點選「查看體能證明」將跳出專屬清單彈窗，讓幹部逐一開啟檢視。
+    - 後端補強：在 `processGetEventSignups` 中若 `Signups` 表無體能證明，自動交叉比對 `Members`（社員資料）表提取該社員最新體能證明檔案。
+
+### 106. 活動截止日自動判定、即時防呆阻擋與定時巡檢關閉機制實作 (v0.1.6)
+- **活動截止日期精密解析核心 (Deadline Parser & Validator)**：
+  - 在 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 新增 `_isEventExpired` 工具函式。
+  - 支援 Date 物件與 `YYYY/MM/DD`、`YYYY-MM-DD`、`YYYY.MM.DD` 等各類字串格式，精準判定至截止日當天 **23:59:59.999** 為止，維護社員於截止日當天的完整報名權益。
+- **LINE 最新活動列表與詳情卡片即時自動關閉 (Realtime Auto-Close on LINE Cards)**：
+  - 更新 `sendEventList`：若偵測到活動為開放但已過報名截止日，系統自動將試算表狀態即時改寫為「關閉」，並從開放活動輪播卡片中隱藏，防止社員被過期活動誤導。
+  - 更新 `sendEventDetail`：若社員查看已截止之活動，系統自動將報名按鈕轉為灰底無效之「報名已截止 Closed」，阻擋點擊報名。
+- **一鍵報名底層安全攔截 (Backend Signup Deadline Guard)**：
+  - 更新 `handleSignup`：在執行報名寫入前優先檢驗活動之截止日與狀態。若活動已截止或關閉，立即中斷報名並回傳提示訊息（例如：`⚠️ 報名失敗：【合歡山主東峰】已於 2026/04/12 截止報名！`），杜絕以過期訊息搶報名之漏洞。
+- **每日凌晨排程自動巡檢與幹部推播 (Daily System Check & Cadre Alert)**：
+  - 補完 `dailySystemCheck` 核心排程：定時遍歷 `Events` 資料表，將所有已過截止日之開放活動自動同步標記為「關閉」。
+  - 自動彙整過期關閉之活動清單，推播通知至幹部 LINE 群組，免除幹部每日手動檢查與維護活動狀態之負擔。
+- **幹部管理中心介面輔助標註 (Admin Events UI Indicator)**：
+  - 更新 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)：在活動列表的「報名截止」資訊旁，若已過截止日自動顯示紅色 `(已截止)` 標籤，讓幹部一目了然。
+
+### 105. AI 助理「小岳」Gemini 回覆結尾自動附帶免責聲明 (v0.1.5)
+- **AI 幻覺與資訊準確性提醒 (AI Disclaimer Suffix)**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `talkToGemini` 函式。
+  - 在每次小岳透過 Google Gemini 2.5 AI 模型產生回答文字時，在內容最末端自動加上清晰的分隔線與官方提醒：
+    ```text
+    ─────────────
+    小岳 Yue is AI. 小岳 Yue can make mistake.
+    ```
+  - 確保不論是在幹部群組（`replyAdminMessage`）或是個人一對一聊天室（`replyMessage`）向小岳提問，社員與幹部皆能明確知悉 AI 助理之特性，提醒重要行程或決策仍須以幹部公告為準。
+
+### 104. 幹部系統活動說明字數上限調升至 1,400 字 (v0.1.4)
+- **字數上限彈性提升 (Word Limit Adjustment)**：
+  - 更新 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)。
+  - 將幹部新增/編輯活動時的說明文字綜合總字數上限由 1,300 字調升至 **1,400 字**（`TOTAL_DESC_LIMIT = 1400`）。
+  - 詳細行程與裝備要求欄位建議上限同步由 1,200 字調整為 **1,300 字**（`FULL_DESC_LIMIT = 1300`），保留更充裕的篇幅撰寫完整活動登山行程。
+  - 同步更新即時字數統計條、超標紅框判定條件與防呆警告訊息。
+
+### 103. LINE 活動卡片樣式完全對齊、詳細卡片整合簡介與幹部後台字數限制彈性輸入框 (v0.1.3)
+- **LINE 最新活動列表卡片文字樣式對齊 (Activity List Styling Sync)**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `sendEventList`。
+  - 將「活動時間」與「報名截止」之標籤由 `xs`、灰色調提升為標準 `sm`、`#666666`。
+  - 將出隊日期數值改為主題綠色 `#1DB446` 粗體，報名截止數值加上粗體 `#E53935`，完全與「查看詳情」大卡片的精緻視覺排版保持一致。
+- **LINE 活動詳細卡片整合完整簡介 (Event Detail Card Overview Integration)**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `sendEventDetail`。
+  - 動態讀取 `簡介 (shortDesc)` 欄位。
+  - 突破原本輪播卡片中 3 行限制，在詳細資訊卡片中獨立展示「【活動簡介 Overview】」全文字段與「【詳細行程 Itinerary & Details】」，讓社員點擊詳情即可完整閱讀重點說明與完整行程。
+- **幹部管理中心新增/編輯活動字數限制與彈性輸入框 (Cadre System Character Limits & Resizable Inputs)**：
+  - 更新 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)。
+  - **字數判定與綜合上限控制**：
+    - 設定簡介上限 200 字、詳細行程上限 1,200 字、綜合總字數上限 1,300 字。
+    - 輸入框右下角即時計算並顯示字數（如 `0 / 200 字`、`0 / 1,200 字`）。
+    - 提供綜合總字數狀態列，即時提示當前文字量與上限比率。
+  - **超量紅框警示與阻擋機制**：
+    - 任一欄位或綜合字數超出上限時，輸入框立即轉為醒目紅色外框（`2px solid #ef4444`）與淺紅防呆底色。
+    - 表單提交按鈕即時變更為禁用狀態（灰色、禁止點擊標記），點擊時防呆阻擋，徹底防止文字量過大導致 LINE Flex Message 超過 10 KB 發送失敗。
+  - **輸入框彈性尺寸縮放 (Resizable Textarea)**：
+    - 為「簡介」與「詳細行程」文字區塊加入 `resize: 'vertical'`、`overflow: 'auto'` 與自適應最小高度，幹部在電腦或手機端可自由拖曳右下角調整輸入框高度，長文撰寫與檢視更順手。
+  - **即時預覽卡片排版同步 (Live Preview Sync)**：
+    - 同步更新管理後台右側的即時卡片預覽元件，讓幹部所見即所得。
 
 ### 102. LINE 官方帳號活動卡片全面去 Emoji 化與排版美化 (v0.1.2)
 - **活動列表輪播卡片 (Activity Carousel Cards)**：
