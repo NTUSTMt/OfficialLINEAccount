@@ -5531,15 +5531,23 @@ function checkOfficerInternal(ss, userId, userName) {
     var oH = oData[0];
     var nameIdx = oH.findIndex(function (h) { return String(h).includes("姓名") || String(h).includes("名字"); });
     var roleIdx = oH.findIndex(function (h) { return String(h).includes("職稱") || String(h).includes("職位"); });
-    var sysIdx = oH.findIndex(function (h) { return String(h).includes("系統識別碼") || String(h).includes("User ID") || String(h).includes("userId"); });
+    var sysIdx = oH.findIndex(function (h) { 
+      var s = String(h).toLowerCase();
+      return s.includes("識別碼") || s.includes("userid") || s.includes("user id") || s.includes("uid") || s.includes("幹部 id") || s.includes("幹部id"); 
+    });
     var lineIdx = oH.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
 
-    // 1. 若有傳入 userId，先比對 Officers 表中的系統識別碼或 LINE ID
+    // 1. 若有傳入 userId，先比對 Officers 表中的識別碼或 LINE ID
     if (userId) {
+      var cleanUserId = String(userId).trim();
       for (var i = 1; i < oData.length; i++) {
-        if (sysIdx > -1 && oData[i][sysIdx] && oData[i][sysIdx].trim() === userId.trim()) {
-          var role = (roleIdx > -1) ? oData[i][roleIdx].trim() : "幹部";
-          return { isOfficer: true, role: role, name: (nameIdx > -1) ? oData[i][nameIdx].trim() : "" };
+        var rowSysId = (sysIdx > -1 && oData[i][sysIdx]) ? String(oData[i][sysIdx]).trim() : "";
+        var rowLineId = (lineIdx > -1 && oData[i][lineIdx]) ? String(oData[i][lineIdx]).trim() : "";
+
+        if ((rowSysId && (rowSysId === cleanUserId || cleanUserId.indexOf(rowSysId) > -1 || rowSysId.indexOf(cleanUserId) > -1)) ||
+            (rowLineId && rowLineId === cleanUserId)) {
+          var role = (roleIdx > -1 && oData[i][roleIdx]) ? String(oData[i][roleIdx]).trim() : "幹部";
+          return { isOfficer: true, role: role, name: (nameIdx > -1) ? String(oData[i][nameIdx]).trim() : "" };
         }
       }
     }

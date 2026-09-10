@@ -3,11 +3,20 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.89` (v0.0.89)
+- **當前版本**：`0.0.90` (v0.0.90)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 90. 幹部識別碼彈性比對強化與除錯提示優化 (v0.0.90)
+- **幹部識別碼欄位模糊匹配擴充**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `checkOfficerInternal`。
+  - 將識別碼欄位搜尋條件由嚴格的「`系統識別碼`」大幅擴充為包含「`識別碼`」、「`幹部識別碼`」、「`User ID`」、「`userid`」、「`uid`」等多元名稱，即使幹部將試算表標題命名為「`幹部識別碼`」亦能百分之百正確匹配。
+  - 同時支援以真實 `LINE ID` 進行輔助比對，提升幹部身分判定之容錯率。
+- **權限不足畫面提供專屬 User ID 與一鍵複製**：
+  - 更新 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)。
+  - 若使用者開啟頁面被判定為權限不足時，畫面會貼心展示該使用者當前真實的 LINE 系統識別碼（`U...` 長字串），並附帶「一鍵複製」按鈕，方便幹部直接點擊複製後貼至試算表，避免手動輸入錯誤。
 
 ### 89. 幹部專屬活動管理與名單審核後台 (Admin Events Management) (v0.0.89)
 - **幹部身份自動辨識與動態後台入口**：

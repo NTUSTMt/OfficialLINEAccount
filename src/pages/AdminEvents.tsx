@@ -464,9 +464,48 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e293b', marginBottom: '12px' }}>
           {t('adminEvents.unauthorizedTitle')}
         </h2>
-        <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.6', marginBottom: '24px' }}>
+        <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.6', marginBottom: '20px' }}>
           {t('adminEvents.unauthorizedDesc')}
         </p>
+
+        {userId && (
+          <div style={{
+            margin: '0 auto 24px',
+            padding: '12px 16px',
+            backgroundColor: '#f1f5f9',
+            borderRadius: '10px',
+            border: '1px dashed #cbd5e1',
+            textAlign: 'left'
+          }}>
+            <p style={{ margin: '0 0 6px', fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>
+              您的 LINE 系統識別碼 (User ID)：
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <code style={{ fontSize: '12px', color: '#0f172a', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                {userId}
+              </code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(userId);
+                  alert('已成功複製您的 LINE 系統識別碼！請將此碼貼至試算表 Officers 的「幹部識別碼」欄位。');
+                }}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  backgroundColor: '#e2e8f0',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                複製
+              </button>
+            </div>
+          </div>
+        )}
+
         <button
           onClick={() => navigate('/dashboard')}
           className="btn btn-primary"
