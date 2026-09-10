@@ -3,11 +3,26 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.11` (v0.1.11)
+- **當前版本**：`0.1.12` (v0.1.12)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 112. Google 試算表「審核結果」資料驗證規則相容性修復與防呆機制 (v0.1.12)
+- **問題根因診斷 (Root Cause Analysis)**：
+  - **試算表儲存格下拉選單限制**：Google 試算表 `Signups` 表中的「審核結果」（T 欄）設定了「資料驗證規則 (Data Validation Rules)」，僅允許 `正取 Confirmed`、`正取(已繳費) Confirmed(Paid)`、`備取 Waitlisted`、`備取(有意願) Waitlisted (Interested)`、`審核中 Checking`、`已取消 Cancelled` 6 種完整選項。
+  - **純中文字串觸發試算表異常**：前端點擊審核按鈕時，送入的值為純中文 `'正取'` 或 `'備取'`，導致 GAS 呼叫 `setValue()` 時拋出違規例外（*The data you entered in cell T2 violates the data validation rules set on this cell...*）。
+  - **CORS 錯誤連鎖反應**：GAS 拋出 Google 試算表驗證例外中斷時，Google 伺服器會返回不帶 `Access-Control-Allow-Origin` 標頭的 HTML 錯誤頁面，導致 iPhone Safari / LINE LIFF 判定為連線錯誤，拋出 `TypeError: Load failed` 或 `XHR Network Error`。
+- **全方位雙重相容性修復 (Dual-Layer Compatibility Fix)**：
+  1. **前端按鈕標準化 ([AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx))**：
+     - 正取按鈕傳送值修正為 `'正取 Confirmed'`。
+     - 備取按鈕傳送值修正為 `'備取 Waitlisted'`。
+     - 審核中按鈕維持標準 `'審核中 Checking'`。
+  2. **GAS 後端字串規範化防呆 ([gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 在 `processUpdateSignupStatus` 寫入試算表前，增加字串規格化映射邏輯：若收到純中文 `'正取'` 自動轉為 `'正取 Confirmed'`，若收到 `'備取'` 自動轉為 `'備取 Waitlisted'`，若收到 `'審核中'` 自動轉為 `'審核中 Checking'`。徹底杜絕因傳入值未帶英文選項而觸發試算表拒絕寫入。
+  3. **網路層簡化與回歸標準 ([api.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/api.ts))**：
+     - 移除不必要的 `img` 降級 hack，`gasGet` 回歸標準的 `fetch` API，並提供明確的伺服器 HTTP 狀態碼與錯誤訊息提示。
 
 ### 111. iOS Safari/LINE LIFF 302 轉址 XHR 自動降級與 HTML 防快取機制 (v0.1.11)
 - **XHR 自動降級備援**：在 [api.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/api.ts) 新增 `gasGet()` 工具函式：以 `fetch` 為首選發送 GET 請求，若 Safari/WebKit 拋出 `TypeError: Load failed`（因 GAS 302 跨域轉址被阻斷），自動降級為 `XMLHttpRequest`（XHR 處理 302 跨域轉址的相容性更佳），確保在所有 iOS 環境下皆能完成請求。

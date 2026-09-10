@@ -6587,13 +6587,34 @@ function processUpdateSignupStatus(payload) {
     }
 
     if (targetRow > 1) {
-      sSheet.getRange(targetRow, resultIdx + 1).setValue(payload.reviewResult);
+      // 🛡️ 規範化審核結果，嚴格對齊試算表下拉選單之「資料驗證規則」
+      var rawResult = String(payload.reviewResult || "").trim();
+      var finalResult = rawResult;
+      if (rawResult.indexOf("正取") > -1) {
+        if (rawResult.indexOf("已繳費") > -1) {
+          finalResult = "正取(已繳費) Confirmed(Paid)";
+        } else {
+          finalResult = "正取 Confirmed";
+        }
+      } else if (rawResult.indexOf("備取") > -1) {
+        if (rawResult.indexOf("有意願") > -1) {
+          finalResult = "備取(有意願) Waitlisted (Interested)";
+        } else {
+          finalResult = "備取 Waitlisted";
+        }
+      } else if (rawResult.indexOf("審核中") > -1) {
+        finalResult = "審核中 Checking";
+      } else if (rawResult.indexOf("取消") > -1) {
+        finalResult = "已取消 Cancelled";
+      }
+
+      sSheet.getRange(targetRow, resultIdx + 1).setValue(finalResult);
       if (notifyIdx > -1) {
         sSheet.getRange(targetRow, notifyIdx + 1).setValue("");
       }
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
-        message: "審核狀態已更新為【" + payload.reviewResult + "】"
+        message: "審核狀態已更新為【" + finalResult + "】"
       })).setMimeType(ContentService.MimeType.JSON);
     }
 

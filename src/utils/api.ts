@@ -39,37 +39,17 @@ export const withAuthPayload = <T extends Record<string, any>>(payload: T): T & 
 };
 
 /**
- * 安全的 GAS GET 請求：先以 fetch 嘗試，若 Safari/WebKit 拋出 'Load failed'
- * 則自動降級為 XMLHttpRequest（XHR 處理 302 跨域轉址的相容性更佳）。
- * Safari 的 fetch API 在 GAS 302 → googleusercontent.com 跨域轉址時，
- * 部分情境會因 WebKit 安全策略直接阻斷並拋出 TypeError: Load failed，
- * 而 XHR 在相同場景下能正常跟隨轉址取回回應。
+ * 安全的 GAS GET 請求：透過標準 fetch 發送並解析 JSON 回應
  */
 export const gasGet = async (url: string): Promise<any> => {
   try {
     const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`伺服器回應異常 (HTTP ${res.status})`);
+    }
     return await res.json();
-  } catch (fetchErr) {
-    // fetch 失敗 (Safari Load failed)，降級為 XHR
-    console.warn('[gasGet] fetch 失敗，降級為 XHR:', fetchErr);
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', url, true);
-      xhr.timeout = 30000;
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText));
-          } catch (parseErr) {
-            reject(new Error('GAS 回應格式異常 (Invalid JSON)'));
-          }
-        } else {
-          reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`));
-        }
-      };
-      xhr.onerror = () => reject(new Error('網路連線失敗 (XHR Network Error)'));
-      xhr.ontimeout = () => reject(new Error('請求逾時 (XHR Timeout)'));
-      xhr.send();
-    });
+  } catch (err) {
+    console.error('[gasGet] 請求失敗:', err);
+    throw err;
   }
 };

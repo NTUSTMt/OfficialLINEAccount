@@ -356,14 +356,14 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
       const result = await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
 
-      if (result.status === 'success') {
+      if (result?.status === 'success') {
         setEvents((prev) => {
           const next = prev.map((e) => (e.id === eventId ? { ...e, status: newStatus } : e));
           setCache(CACHE_KEY_ADMIN_EVENTS, next, 180);
           return next;
         });
       } else {
-        alert(t('adminEvents.alerts.error', { message: result.message || '更新狀態失敗' }));
+        alert(t('adminEvents.alerts.error', { message: result?.message || '更新狀態失敗' }));
       }
     } catch (err) {
       console.error('更新活動狀態失敗:', err);
@@ -476,7 +476,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
       const result = await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
 
-      if (result.status === 'success') {
+      if (result?.status === 'success') {
         const oldResult = applicant.reviewResult || '';
         const getCategory = (res: string) => {
           if (res.indexOf('正取') > -1) return 'accepted';
@@ -486,7 +486,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         const oldCat = getCategory(oldResult);
         const newCat = getCategory(newResult);
 
-        // 1. 本地更新審核名冊與快取
+        // 1. 本地樂觀更新審核名冊與快取
         setSignupsList((prev) => {
           const updated = prev.map((s) => {
             const isMatch =
@@ -524,7 +524,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           });
         }
       } else {
-        alert(t('adminEvents.alerts.error', { message: result.message || '更新失敗' }));
+        alert(t('adminEvents.alerts.error', { message: result?.message || '更新失敗' }));
       }
     } catch (err) {
       console.error('更新審核狀態失敗:', err);
@@ -563,8 +563,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
       const result = await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
 
-      if (result.status === 'success') {
-        alert(t('adminEvents.alerts.notificationsSent', { count: result.notifiedCount || unnotifiedCount }));
+      if (result?.status === 'success') {
+        alert(t('adminEvents.alerts.notificationsSent', { count: result?.notifiedCount || unnotifiedCount }));
         // 更新本地名單之通知狀態並同步快取
         setSignupsList((prev) => {
           const updated = prev.map((s) =>
@@ -578,7 +578,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           return updated;
         });
       } else {
-        alert(t('adminEvents.alerts.error', { message: result.message || '推播通知失敗' }));
+        alert(t('adminEvents.alerts.error', { message: result?.message || '推播通知失敗' }));
       }
     } catch (err) {
       console.error('發送通知失敗:', err);
@@ -2111,7 +2111,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                               <>
                                 <button
                                   type="button"
-                                  onClick={() => handleUpdateApplicantResult(s, '正取')}
+                                  onClick={() => handleUpdateApplicantResult(s, '正取 Confirmed')}
                                   style={{
                                     flex: 1,
                                     padding: '8px 12px',
@@ -2135,7 +2135,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleUpdateApplicantResult(s, '備取')}
+                                  onClick={() => handleUpdateApplicantResult(s, '備取 Waitlisted')}
                                   style={{
                                     flex: 1,
                                     padding: '8px 12px',
