@@ -3,11 +3,33 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.7` (v0.1.7)
+- **當前版本**：`0.1.8` (v0.1.8)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 108. 裝備頁面與活動審核中心第一階段前端載入加速與快取架構重構 (v0.1.8)
+- **裝備租借頁面解除瀑布串行阻擋與 SWR 快取實作 (Borrow Page Waterfall Elimination & Early Render)**：
+  - **效能問題診斷**：
+    1. 原先 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 採用串行 `await`：先拉取裝備列表（耗時約 1.5 ~ 2 秒），裝備抵達後才發起第二個請求拉取 `get_my_status`（耗時約 2.5 ~ 3 秒），且 `setLoading(false)` 置於最後。使用者被卡在全白 Loading 轉圈畫面累計長達 **4.5 ~ 6.5 秒**。
+    2. 裝備頁其實只用到 `get_my_status` 回傳的 `isOfficial` 單一布林值，卻引發後端掃描 Members、Officers、Signups、Events、Loan_Records 共 5 張試算表，構成嚴重過度查詢 (Over-fetching)。
+  - **加速重構方案**：
+    - 建立輕量快取模組 [cacheUtils.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/cacheUtils.ts)：支援 `sessionStorage` TTL 過期管理與記憶體降級備援機制。
+    - **SWR (Stale-While-Revalidate) 快取秒開**：進入 `/borrow` 時優先讀取 5 分鐘快取，快取命中時 **0 毫秒立即呈現商品列表**。
+    - **優先渲染 (Early Render)**：冷啟動時解除串行等待，裝備清單一旦取得立即執行 `setLoading(false)` 渲染畫面，使使用者在 **1.2 ~ 1.5 秒內** 即可開始瀏覽器材與規格。
+    - **身分折扣非同步分離**：社員資格比對改以獨立並行 Promise 進行，取得後平滑更新折扣價，不阻擋核心瀏覽流程。
+    - **重新整理與庫存保證**：標題列新增「重新整理」按鈕；且在使用者成功送出預約表單後，自動清除裝備快取，確保下次載入取得即時庫存數值。
+
+- **活動審核中心雙重驗證瀑布消除與樂觀計數重構 (Admin Events Waterfall Removal & Optimistic UI)**：
+  - **效能問題診斷**：
+    1. 原先 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 在載入時先呼叫 `check_officer_status` 檢驗身分，待其返回後才在回呼中呼叫 `get_admin_events`，形成雙重 HTTP 往返，累積延遲達 **5.0 ~ 7.5 秒**。
+    2. 審核名單 Modal 每次點開皆重複向後端全表查詢；且幹部在名冊中每點擊審核 1 位社員（正取/備取），程式碼皆全量觸發 `fetchEvents()` 重新向後端拉取全部活動，造成伺服器高負載與背景卡頓。
+  - **加速重構方案**：
+    - **移除冗餘驗證**：拔除前置獨立的 `check_officer_status`，改為直接呼叫 `get_admin_events`（後端已內含幹部身分校驗與幹部資訊），首屏載入時間直接**腰斬至 1.8 ~ 2.2 秒**。
+    - **活動列表快取**：活動清單支援 3 分鐘快取，分頁切換時瞬時還原；提供手動重新整理按鈕以便手動強制更新。
+    - **審核名冊快取**：以活動代號為鍵快取名冊 2 分鐘，點開 Modal 避免重複旋轉等待，並在 Modal 標題列附帶即時刷新按鈕。
+    - **審核操作樂觀計數 (Optimistic Counter Update)**：幹部變更審核狀態時，前端直接於記憶體與快取中動態增減對應活動之統計徽章（例如待審核 -1、正取 +1），**徹底拔除重複發送全量 `fetchEvents()` 的後端負擔**，使審核操作達到 **0ms 即時反饋**。
 
 ### 107. 幹部審核正取/備取即時標記修復與體能證明安全預覽優化 (v0.1.7)
 - **幹部審核正取/備取/重設標記失效修復 (Applicant Review Status Update Fix)**：

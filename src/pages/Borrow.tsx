@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { Tent, Moon, Package, Compass, Flame, Shield, Mountain, ShoppingCart } from 'lucide-react';
+import { Tent, Moon, Package, Compass, Flame, Shield, Mountain, ShoppingCart, RotateCw } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
+import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import '../App.css';
 
 // ==========================================
@@ -101,9 +102,13 @@ function Borrow({ userId }: { userId: string }) {
   // ==========================================
   const [equipments, setEquipments] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isOfficial, setIsOfficial] = useState<boolean>(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+
+  const CACHE_KEY_EQUIPMENTS = 'borrow_equipments_list';
+  const CACHE_KEY_OFFICIAL = 'user_is_official_';
 
   const getPurposeText = (purpose: string) => {
     if (purpose === '社團出隊') return t('borrow.drawer.purposeClub');
@@ -124,38 +129,75 @@ function Borrow({ userId }: { userId: string }) {
   const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
 
   // ==========================================
-  // 3. 初始化與資料獲取 (Initialization)
+  // 3. 初始化與資料獲取 (Initialization & SWR Caching)
   // ==========================================
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // 呼叫 GAS API 取得裝備清單
-        const response = await fetch(GAS_API_URL, { redirect: 'follow' });
-        const resData: ApiResponse = await response.json();
-
-        if (resData.status === 'success') {
-          setEquipments(resData.data);
+  const fetchData = async (forceRefresh: boolean = false) => {
+    // 1. 若非強制重新整理，先讀取快取秒開呈現
+    if (!forceRefresh) {
+      const cachedEquips = getCache<Equipment[]>(CACHE_KEY_EQUIPMENTS);
+      if (cachedEquips && cachedEquips.length > 0) {
+        setEquipments(cachedEquips);
+        setLoading(false);
+      }
+      if (userId) {
+        const cachedOfficial = getCache<boolean>(CACHE_KEY_OFFICIAL + userId);
+        if (cachedOfficial !== null) {
+          setIsOfficial(cachedOfficial);
         }
+      }
+    } else {
+      setIsRefreshing(true);
+      removeCache(CACHE_KEY_EQUIPMENTS);
+    }
 
-        // 取得使用者社籍狀態以計算折扣
+    try {
+      // 2. 優先非同步發起裝備清單獲取（取得後立即渲染畫面，不阻擋使用者）
+      const equipPromise = fetch(GAS_API_URL, { redirect: 'follow' })
+        .then(async (response) => {
+          const resData: ApiResponse = await response.json();
+          if (resData.status === 'success' && Array.isArray(resData.data)) {
+            setEquipments(resData.data);
+            setCache(CACHE_KEY_EQUIPMENTS, resData.data, 300); // 快取 5 分鐘
+          }
+        })
+        .catch((err) => {
+          console.error('裝備清單載入失敗:', err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+
+      // 3. 同步背景非同步獲取社員折扣身分（不卡住主畫面展示）
+      const statusPromise = (async () => {
         if (userId && userId !== 'TEST_USER_ID') {
-          const myStatusRes = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${userId}`));
-          const myStatusData = await myStatusRes.json();
-          if (myStatusData.status === 'success' && myStatusData.data && myStatusData.data.profile) {
-            setIsOfficial(myStatusData.data.profile.isOfficial);
+          try {
+            const myStatusRes = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${userId}`));
+            const myStatusData = await myStatusRes.json();
+            if (myStatusData.status === 'success' && myStatusData.data && myStatusData.data.profile) {
+              const official = Boolean(myStatusData.data.profile.isOfficial);
+              setIsOfficial(official);
+              setCache(CACHE_KEY_OFFICIAL + userId, official, 600); // 快取 10 分鐘
+            }
+          } catch (err) {
+            console.error('社員身分載入失敗:', err);
           }
         } else {
           // 本地測試帳號預設為正式社員
           setIsOfficial(true);
         }
-      } catch (error) {
-        console.error('裝備清單或社員狀態載入失敗:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      })();
 
-    fetchData();
+      await Promise.allSettled([equipPromise, statusPromise]);
+    } catch (error) {
+      console.error('裝備清單或社員狀態載入失敗:', error);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData(false);
   }, [userId]);
 
   // ==========================================
@@ -292,6 +334,8 @@ function Borrow({ userId }: { userId: string }) {
         alert(t('borrow.alert.systemError', { message: result.message }));
         return;
       }
+      // 送出預約成功後清除裝備快取，以利下回重新載入最新庫存
+      removeCache(CACHE_KEY_EQUIPMENTS);
     } catch (error) {
       console.error('API 請求失敗:', error);
       alert(t('borrow.alert.networkError'));
@@ -351,9 +395,35 @@ function Borrow({ userId }: { userId: string }) {
 
       {/* 主要內容區 */}
       <main className="main-content">
-        <div className="section-title">
-          <h2>{t('borrow.grid.title')}</h2>
-          <span className="products-count">{t('borrow.grid.count', { count: equipments.length })}</span>
+        <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2>{t('borrow.grid.title')}</h2>
+            <span className="products-count">{t('borrow.grid.count', { count: equipments.length })}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchData(true)}
+            disabled={isRefreshing || loading}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              fontSize: '12px',
+              fontWeight: 600,
+              borderRadius: '20px',
+              border: '1px solid #e2e8f0',
+              background: '#ffffff',
+              color: '#475569',
+              cursor: (isRefreshing || loading) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+            }}
+            title={t('borrow.grid.refresh', '重新整理')}
+          >
+            <RotateCw size={13} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+            <span>{isRefreshing ? t('borrow.grid.refreshing', '更新中...') : t('borrow.grid.refresh', '重新整理')}</span>
+          </button>
         </div>
 
         {loading ? (

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
+import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import {
   Search,
   Calendar,
@@ -22,6 +23,7 @@ import {
   Phone,
   ImageIcon,
   RotateCcw,
+  RotateCw,
   Send,
   Sparkles,
   ChevronDown,
@@ -124,55 +126,61 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     urls: string[];
   } | null>(null);
 
-  // 1. 驗證幹部身分
-  useEffect(() => {
-    const verifyOfficer = async () => {
-      setAuthLoading(true);
-      if (!userId || userId === 'TEST_USER_ID') {
-        // 本地開發與測試環境預設賦予幹部權限
+  const [isRefreshingEvents, setIsRefreshingEvents] = useState(false);
+  const CACHE_KEY_ADMIN_EVENTS = 'admin_events_list';
+  const CACHE_KEY_SIGNUPS_PREFIX = 'admin_event_signups_';
+
+  // 1. 獲取後台所有活動清單與檢驗幹部身分（單次請求聚合，支援 SWR 快取）
+  const fetchEvents = async (forceRefresh: boolean = false) => {
+    // 若非強制重新整理，先讀取快取秒開呈現
+    if (!forceRefresh) {
+      const cachedEvents = getCache<AdminEvent[]>(CACHE_KEY_ADMIN_EVENTS);
+      if (cachedEvents && cachedEvents.length > 0) {
+        setEvents(cachedEvents);
         setIsOfficer(true);
         setAuthLoading(false);
-        fetchEvents();
-        return;
+        setLoadingEvents(false);
       }
+    } else {
+      setIsRefreshingEvents(true);
+      removeCache(CACHE_KEY_ADMIN_EVENTS);
+    }
 
-      try {
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=check_officer_status&userId=${userId}`));
-        const data = await res.json();
-        if (data.status === 'success' && data.isOfficer) {
-          setIsOfficer(true);
-          fetchEvents();
-        } else {
-          setIsOfficer(false);
-        }
-      } catch (err) {
-        console.error('幹部權限驗證失敗:', err);
-        setIsOfficer(false);
-      } finally {
-        setAuthLoading(false);
-      }
-    };
+    if (!events.length) {
+      setLoadingEvents(true);
+    }
 
-    verifyOfficer();
-  }, [userId]);
-
-  // 2. 獲取後台所有活動清單
-  const fetchEvents = async () => {
-    setLoadingEvents(true);
     try {
       const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
       const data = await res.json();
       if (data.status === 'success' && Array.isArray(data.events)) {
+        setIsOfficer(true);
         setEvents(data.events);
+        setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180); // 快取 3 分鐘
       } else {
+        if (data.status === 'error' && data.message && (data.message.includes('權限不足') || data.message.includes('幹部'))) {
+          setIsOfficer(false);
+        } else if (userId === 'TEST_USER_ID') {
+          setIsOfficer(true);
+        }
         setEvents([]);
       }
     } catch (err) {
       console.error('獲取後台活動失敗:', err);
+      if (userId === 'TEST_USER_ID') {
+        setIsOfficer(true);
+      }
     } finally {
+      setAuthLoading(false);
       setLoadingEvents(false);
+      setIsRefreshingEvents(false);
     }
   };
+
+  useEffect(() => {
+    setAuthLoading(true);
+    fetchEvents(false);
+  }, [userId]);
 
   // 3. 處理表單圖片選取與壓縮
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -322,7 +330,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         alert(t('adminEvents.alerts.saveSuccess'));
         resetFormForCreate();
         setActiveTab('list');
-        fetchEvents();
+        removeCache(CACHE_KEY_ADMIN_EVENTS);
+        fetchEvents(true);
       } else {
         alert(t('adminEvents.alerts.error', { message: result.message || '儲存失敗' }));
       }
@@ -352,9 +361,11 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const result = await res.json();
 
       if (result.status === 'success') {
-        setEvents((prev) =>
-          prev.map((e) => (e.id === eventId ? { ...e, status: newStatus } : e))
-        );
+        setEvents((prev) => {
+          const next = prev.map((e) => (e.id === eventId ? { ...e, status: newStatus } : e));
+          setCache(CACHE_KEY_ADMIN_EVENTS, next, 180);
+          return next;
+        });
       } else {
         alert(t('adminEvents.alerts.error', { message: result.message || '更新狀態失敗' }));
       }
@@ -363,16 +374,28 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     }
   };
 
-  // 8. 開啟審核名冊 Modal
-  const handleOpenSignupsModal = async (evt: AdminEvent) => {
+  // 8. 開啟審核名冊 Modal (支援 SWR 快取)
+  const handleOpenSignupsModal = async (evt: AdminEvent, forceRefresh: boolean = false) => {
     setSelectedEventForSignups(evt);
-    setLoadingSignups(true);
     setSignupFilter('all');
+
+    const cacheKey = CACHE_KEY_SIGNUPS_PREFIX + evt.id;
+    if (!forceRefresh) {
+      const cachedSignups = getCache<SignupApplicant[]>(cacheKey);
+      if (cachedSignups && cachedSignups.length > 0) {
+        setSignupsList(cachedSignups);
+        setLoadingSignups(false);
+        return;
+      }
+    }
+
+    setLoadingSignups(true);
     try {
       const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_event_signups&eventId=${evt.id}&userId=${userId || 'TEST_USER_ID'}`));
       const data = await res.json();
       if (data.status === 'success' && Array.isArray(data.signups)) {
         setSignupsList(data.signups);
+        setCache(cacheKey, data.signups, 120); // 快取 2 分鐘
       } else {
         setSignupsList([]);
       }
@@ -463,16 +486,52 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const result = await res.json();
 
       if (result.status === 'success') {
-        setSignupsList((prev) =>
-          prev.map((s) => {
+        const oldResult = applicant.reviewResult || '';
+        const getCategory = (res: string) => {
+          if (res.indexOf('正取') > -1) return 'accepted';
+          if (res.indexOf('備取') > -1) return 'waitlisted';
+          return 'pending';
+        };
+        const oldCat = getCategory(oldResult);
+        const newCat = getCategory(newResult);
+
+        // 1. 本地更新審核名冊與快取
+        setSignupsList((prev) => {
+          const updated = prev.map((s) => {
             const isMatch =
               (applicant.signupCode && s.signupCode === applicant.signupCode) ||
               (applicant.rowNumber && s.rowNumber === applicant.rowNumber) ||
               (applicant.userId && s.userId === applicant.userId);
             return isMatch ? { ...s, reviewResult: newResult, notifyStatus: '' } : s;
-          })
-        );
-        fetchEvents(); // 同步更新統計徽章
+          });
+          if (selectedEventForSignups?.id) {
+            setCache(CACHE_KEY_SIGNUPS_PREFIX + selectedEventForSignups.id, updated, 120);
+          }
+          return updated;
+        });
+
+        // 2. 本地樂觀更新 events 列表中該活動之統計計數，移除昂貴的 fetchEvents() 全量重讀
+        if (oldCat !== newCat && selectedEventForSignups?.id) {
+          setEvents((prevEvents) => {
+            const nextEvents = prevEvents.map((e) => {
+              if (e.id !== selectedEventForSignups.id) return e;
+              const nextStats = { ...e.stats };
+              if (nextStats[oldCat] > 0) nextStats[oldCat]--;
+              nextStats[newCat] = (nextStats[newCat] || 0) + 1;
+              return { ...e, stats: nextStats };
+            });
+            setCache(CACHE_KEY_ADMIN_EVENTS, nextEvents, 180);
+            return nextEvents;
+          });
+
+          setSelectedEventForSignups((prev) => {
+            if (!prev) return prev;
+            const nextStats = { ...prev.stats };
+            if (nextStats[oldCat] > 0) nextStats[oldCat]--;
+            nextStats[newCat] = (nextStats[newCat] || 0) + 1;
+            return { ...prev, stats: nextStats };
+          });
+        }
       } else {
         alert(t('adminEvents.alerts.error', { message: result.message || '更新失敗' }));
       }
@@ -520,14 +579,18 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
       if (result.status === 'success') {
         alert(t('adminEvents.alerts.notificationsSent', { count: result.notifiedCount || unnotifiedCount }));
-        // 更新本地名單之通知狀態
-        setSignupsList((prev) =>
-          prev.map((s) =>
+        // 更新本地名單之通知狀態並同步快取
+        setSignupsList((prev) => {
+          const updated = prev.map((s) =>
             s.reviewResult.indexOf('正取') > -1 || s.reviewResult.indexOf('備取') > -1
               ? { ...s, notifyStatus: '已通知' }
               : s
-          )
-        );
+          );
+          if (selectedEventForSignups?.id) {
+            setCache(CACHE_KEY_SIGNUPS_PREFIX + selectedEventForSignups.id, updated, 120);
+          }
+          return updated;
+        });
       } else {
         alert(t('adminEvents.alerts.error', { message: result.message || '推播通知失敗' }));
       }
@@ -641,51 +704,83 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       {/* 頁籤切換 */}
       <div style={{
         display: 'flex',
-        gap: '8px',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: '20px',
         borderBottom: '2px solid #e2e8f0',
-        paddingBottom: '8px'
+        paddingBottom: '8px',
+        flexWrap: 'wrap',
+        gap: '8px'
       }}>
-        <button
-          onClick={() => { setActiveTab('list'); setIsEditing(false); }}
-          style={{
-            background: activeTab === 'list' ? '#059669' : 'transparent',
-            color: activeTab === 'list' ? 'white' : '#475569',
-            border: 'none',
-            borderRadius: '10px',
-            padding: '10px 18px',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}
-        >
-          <ClipboardCheck size={16} />
-          <span>{t('adminEvents.tabList')} ({events.length})</span>
-        </button>
-        <button
-          onClick={resetFormForCreate}
-          style={{
-            background: activeTab === 'create' ? '#059669' : 'transparent',
-            color: activeTab === 'create' ? 'white' : '#475569',
-            border: 'none',
-            borderRadius: '10px',
-            padding: '10px 18px',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}
-        >
-          {isEditing ? <Pencil size={15} /> : <Plus size={16} />}
-          <span>{isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}</span>
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => { setActiveTab('list'); setIsEditing(false); }}
+            style={{
+              background: activeTab === 'list' ? '#059669' : 'transparent',
+              color: activeTab === 'list' ? 'white' : '#475569',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '10px 18px',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <ClipboardCheck size={16} />
+            <span>{t('adminEvents.tabList')} ({events.length})</span>
+          </button>
+          <button
+            onClick={resetFormForCreate}
+            style={{
+              background: activeTab === 'create' ? '#059669' : 'transparent',
+              color: activeTab === 'create' ? 'white' : '#475569',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '10px 18px',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            {isEditing ? <Pencil size={15} /> : <Plus size={16} />}
+            <span>{isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}</span>
+          </button>
+        </div>
+
+        {activeTab === 'list' && (
+          <button
+            type="button"
+            onClick={() => fetchEvents(true)}
+            disabled={isRefreshingEvents || loadingEvents}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              fontSize: '12px',
+              fontWeight: 600,
+              borderRadius: '20px',
+              border: '1px solid #e2e8f0',
+              background: '#ffffff',
+              color: '#475569',
+              cursor: (isRefreshingEvents || loadingEvents) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+            }}
+            title={t('adminEvents.refresh', '重新整理')}
+          >
+            <RotateCw size={13} style={{ animation: isRefreshingEvents ? 'spin 1s linear infinite' : 'none' }} />
+            <span>{isRefreshingEvents ? t('adminEvents.refreshing', '更新中...') : t('adminEvents.refresh', '重新整理')}</span>
+          </button>
+        )}
       </div>
 
       {/* ============================================================ */}
@@ -1681,23 +1776,48 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   {t('adminEvents.totalCount', { count: signupsList.length })} · 代號: {selectedEventForSignups.id}
                 </p>
               </div>
-              <button
-                onClick={() => setSelectedEventForSignups(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#64748b',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                aria-label="Close"
-              >
-                <X size={20} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => selectedEventForSignups && handleOpenSignupsModal(selectedEventForSignups, true)}
+                  disabled={loadingSignups}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    color: '#475569',
+                    cursor: loadingSignups ? 'not-allowed' : 'pointer',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                  title={t('adminEvents.refresh', '重新整理名冊')}
+                >
+                  <RotateCw size={13} style={{ animation: loadingSignups ? 'spin 1s linear infinite' : 'none' }} />
+                  <span>{loadingSignups ? t('adminEvents.refreshing', '更新中') : t('adminEvents.refresh', '刷新')}</span>
+                </button>
+                <button
+                  onClick={() => setSelectedEventForSignups(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  aria-label="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* 篩選標籤 */}

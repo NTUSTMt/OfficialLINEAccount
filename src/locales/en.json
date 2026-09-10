@@ -206,7 +206,9 @@
     "grid": {
       "title": "Gear List",
       "count": "{{count}} types of gear in total",
-      "loading": "Preparing the latest gear list for you..."
+      "loading": "Preparing the latest gear list for you...",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing..."
     },
     "card": {
       "outOfStock": "Out of Stock",
@@ -427,6 +429,8 @@
     "tabList": "Events & Signups",
     "tabCreate": "Create Event",
     "tabEdit": "Edit Event",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing...",
     "verifying": "Verifying officer permissions, please wait...",
     "unauthorizedTitle": "Access Restricted",
     "unauthorizedDesc": "This page is strictly reserved for club officers. If you are an officer, please ensure your name or LINE ID is listed in the Officers spreadsheet.",

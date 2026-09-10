@@ -206,7 +206,9 @@
     "grid": {
       "title": "裝備列表",
       "count": "共 {{count}} 種裝備",
-      "loading": "正在為您準備最新裝備清單..."
+      "loading": "正在為您準備最新裝備清單...",
+      "refresh": "重新整理",
+      "refreshing": "更新中..."
     },
     "card": {
       "outOfStock": "已租完",
@@ -427,6 +429,8 @@
     "tabList": "活動總覽與審核",
     "tabCreate": "發布新活動",
     "tabEdit": "編輯活動",
+    "refresh": "重新整理",
+    "refreshing": "更新中...",
     "verifying": "驗證幹部身分中，請稍候...",
     "unauthorizedTitle": "權限不足",
     "unauthorizedDesc": "此頁面僅限登山社現任幹部使用。如果您是幹部，請確認 Officers 試算表中已登記您的姓名或 LINE 識別碼。",
