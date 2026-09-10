@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import {
   Search,
@@ -130,7 +131,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       }
 
       try {
-        const res = await fetch(`${GAS_API_URL}?action=check_officer_status&userId=${userId}`);
+        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=check_officer_status&userId=${userId}`));
         const data = await res.json();
         if (data.status === 'success' && data.isOfficer) {
           setIsOfficer(true);
@@ -153,7 +154,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const fetchEvents = async () => {
     setLoadingEvents(true);
     try {
-      const res = await fetch(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`);
+      const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
       const data = await res.json();
       if (data.status === 'success' && Array.isArray(data.events)) {
         setEvents(data.events);
@@ -288,7 +289,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(withAuthPayload(payload))
       });
       const result = await res.json();
 
@@ -321,7 +322,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(withAuthPayload(payload))
       });
       const result = await res.json();
 
@@ -343,7 +344,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     setLoadingSignups(true);
     setSignupFilter('all');
     try {
-      const res = await fetch(`${GAS_API_URL}?action=get_event_signups&eventId=${evt.id}&userId=${userId || 'TEST_USER_ID'}`);
+      const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_event_signups&eventId=${evt.id}&userId=${userId || 'TEST_USER_ID'}`));
       const data = await res.json();
       if (data.status === 'success' && Array.isArray(data.signups)) {
         setSignupsList(data.signups);
@@ -373,7 +374,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(withAuthPayload(payload))
       });
       const result = await res.json();
 
@@ -422,7 +423,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(withAuthPayload(payload))
       });
       const result = await res.json();
 

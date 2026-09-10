@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
+import { appendAuthToken, withAuthPayload } from '../utils/api';
 import '../App.css';
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -90,7 +91,7 @@ function Register({ userId }: { userId: string }) {
 
         // 2. 向 GAS 查詢現有社員資料
         if (userId && userId !== 'TEST_USER_ID') {
-          const res = await fetch(`${GAS_API_URL}?action=get_profile&userId=${userId}`);
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`));
           const result = await res.json();
           if (result.status === 'success' && result.isMember && result.profile) {
             memberFound = true;
@@ -367,7 +368,7 @@ function Register({ userId }: { userId: string }) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(withAuthPayload(payload)),
       });
       const result = await res.json();
 

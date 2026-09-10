@@ -5,6 +5,76 @@ var ADMIN_GROUP_ID = PropertiesService.getScriptProperties().getProperty('ADMIN_
 var MEMBER_BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('MEMBER_BOT_TOKEN');
 var ADMIN_BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('ADMIN_BOT_TOKEN');
 var GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+var LIFF_CHANNEL_ID = PropertiesService.getScriptProperties().getProperty('LIFF_CHANNEL_ID') || '2009217429';
+
+// 🛡️ LINE ID Token (JWT) 數位簽章驗證核心
+function verifyLineIdToken(idToken, expectedUserId) {
+  if (!idToken) {
+    return { success: false, error: "缺少身分驗證 Token (Missing ID Token)" };
+  }
+
+  // 1. 先查 GAS 快取 (以 Token MD5 摘要為 Key，避免超過長度限制)
+  var cache = CacheService.getScriptCache();
+  var tokenHash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, idToken));
+  var cachedSub = cache.get("line_token_" + tokenHash);
+
+  if (cachedSub) {
+    if (expectedUserId && cachedSub !== expectedUserId) {
+      return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
+    }
+    return { success: true, userId: cachedSub };
+  }
+
+  // 2. 呼叫 LINE 官方端點校驗 Token
+  try {
+    var response = UrlFetchApp.fetch("https://api.line.me/oauth2/v2.1/verify", {
+      method: "post",
+      contentType: "application/x-www-form-urlencoded",
+      payload: "id_token=" + encodeURIComponent(idToken) + "&client_id=" + encodeURIComponent(LIFF_CHANNEL_ID),
+      muteHttpExceptions: true
+    });
+
+    var resCode = response.getResponseCode();
+    var resText = response.getContentText();
+    var data = JSON.parse(resText);
+
+    if (resCode === 200 && data && data.sub) {
+      var verifiedUserId = data.sub;
+      // 寫入快取 600 秒 (10 分鐘)
+      cache.put("line_token_" + tokenHash, verifiedUserId, 600);
+
+      if (expectedUserId && verifiedUserId !== expectedUserId) {
+        return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
+      }
+      return { success: true, userId: verifiedUserId };
+    } else {
+      console.warn("LINE Token 驗證未通過:", resText);
+      return { success: false, error: (data && data.error_description) ? data.error_description : "無效或過期的 Token" };
+    }
+  } catch (err) {
+    console.error("verifyLineIdToken 執行錯誤:", err);
+    return { success: false, error: "身分驗證系統異常: " + err.toString() };
+  }
+}
+
+/**
+ * 取得經認證之 User ID (整合 GET 與 POST 請求)
+ */
+function getAuthenticatedUserId(paramObj, fallbackUserId) {
+  var idToken = (paramObj && paramObj.idToken) ? paramObj.idToken : "";
+  if (idToken) {
+    var auth = verifyLineIdToken(idToken, fallbackUserId);
+    if (!auth.success) {
+      return { ok: false, error: auth.error };
+    }
+    return { ok: true, userId: auth.userId, verified: true };
+  }
+  // 向下相容過渡：若未帶 idToken 且有 fallbackUserId
+  if (fallbackUserId) {
+    return { ok: true, userId: fallbackUserId, verified: false };
+  }
+  return { ok: false, error: "未授權的請求：缺少使用者識別 (Missing User ID)" };
+}
 
 // ⭐️ 共用工具函式
 
@@ -183,6 +253,15 @@ function doPost(e) {
 
   try {
     var msg = JSON.parse(e.postData.contents);
+
+    if (msg.action) {
+      // 🛡️ 身分認證校驗：若附帶 idToken 則透過 LINE 官方端點檢驗真實性並鎖定 msg.userId
+      var authResult = getAuthenticatedUserId(msg, msg.userId);
+      if (!authResult.ok) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: authResult.error })).setMimeType(ContentService.MimeType.JSON);
+      }
+      msg.userId = authResult.userId;
+    }
 
     if (msg.action === 'submit_multi_loan') {
       return processMultiLoan(msg);
@@ -1062,7 +1141,7 @@ function handleTextCommand(replyToken, userId, text, sourceType, event) {
 
     // 指令 B：幹部系統後台連結（例如：小岳 幹部系統 / @小岳 幹部系統）
     if (question === "幹部系統" || question === "活動管理" || question === "審核後台" || question === "審核名單") {
-      var adminLinkMsg = "🛠️ 幹部專屬管理中心：\n👉 https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents\n\n在此可快速切換活動開放狀態、編輯活動內容與即時審核報名名冊！";
+      var adminLinkMsg = "🛠️ 幹部專屬管理中心：\n👉 https://liff.line.me/2009217429-DSYjXqNK\n\n在此可快速切換活動開放狀態、編輯活動內容與即時審核報名名冊！";
       if (isGroup) replyAdminMessage(replyToken, adminLinkMsg);
       else replyMessage(replyToken, adminLinkMsg);
       return;
@@ -1076,7 +1155,7 @@ function handleTextCommand(replyToken, userId, text, sourceType, event) {
         "目前在幹部群組中支援以下功能與指令：\n\n" +
         "🛠️ 【幹部系統】\n" +
         "• 輸入「小岳 幹部系統」或點擊下方連結進入後台：\n" +
-        "👉 https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents\n\n" +
+        "👉 https://liff.line.me/2009217429-DSYjXqNK\n\n" +
         "🆔 【抓取群組ID】\n" +
         "• 輸入「小岳 抓取群組ID」或 @ 我並輸入「抓取群組ID」，即可查詢本群組識別碼。\n\n" +
         "🤖 【諮詢 AI 助理】\n" +
@@ -2350,31 +2429,31 @@ function sendEventList(replyToken, ss) {
             "spacing": "xs",
             "contents": [{
               "type": "text",
-              "text": "💰 費用 Cost: " + (hIdx.cost > -1 ? data[i][hIdx.cost] : ""),
+              "text": "費用 Cost: " + (hIdx.cost > -1 ? data[i][hIdx.cost] : ""),
               "size": "sm",
               "color": "#666666",
               "weight": "bold"
             }, {
               "type": "text",
-              "text": "📅 活動時間 Event Date:",
+              "text": "活動時間 Event Date:",
               "size": "xs",
               "color": "#888888",
               "margin": "sm"
             }, {
               "type": "text",
-              "text": "   " + (hIdx.startDate > -1 ? data[i][hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? data[i][hIdx.endDate] : ""),
+              "text": (hIdx.startDate > -1 ? data[i][hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? data[i][hIdx.endDate] : ""),
               "size": "sm",
               "color": "#666666"
             }, {
               "type": "text",
-              "text": "⏰ 報名截止 Sign Up Deadline:",
+              "text": "報名截止 Sign Up Deadline:",
               "size": "xs",
               "color": "#E53935",
               "margin": "sm",
               "weight": "bold"
             }, {
               "type": "text",
-              "text": "   " + (hIdx.deadline > -1 ? data[i][hIdx.deadline] : ""),
+              "text": (hIdx.deadline > -1 ? data[i][hIdx.deadline] : ""),
               "size": "sm",
               "color": "#E53935"
             }]
@@ -2507,7 +2586,7 @@ function sendEventDetail(replyToken, eventId, ss) {
       "color": "#CCCCCC",
       "action": {
         "type": "uri",
-        "label": "⏳ 尚未開放 Not Open",
+        "label": "尚未開放 Not Open",
         "uri": "https://line.me/R/"
       }
     };
@@ -2520,7 +2599,7 @@ function sendEventDetail(replyToken, eventId, ss) {
       "layout": "vertical",
       "contents": [{
         "type": "text",
-        "text": "📝 活動詳情 Event Details",
+        "text": "活動詳情 Event Details",
         "weight": "bold",
         "color": "#1DB446",
         "size": "sm"
@@ -2538,31 +2617,31 @@ function sendEventDetail(replyToken, eventId, ss) {
         "spacing": "sm",
         "contents": [{
           "type": "text",
-          "text": "💰 費用 Cost: " + (hIdx.cost > -1 ? eventData[hIdx.cost] : ""),
+          "text": "費用 Cost: " + (hIdx.cost > -1 ? eventData[hIdx.cost] : ""),
           "size": "sm",
           "color": "#666666",
           "weight": "bold"
         }, {
           "type": "text",
-          "text": "📅 活動時間 Event Date:",
+          "text": "活動時間 Event Date:",
           "size": "sm",
           "color": "#666666",
           "margin": "sm"
         }, {
           "type": "text",
-          "text": "   " + (hIdx.startDate > -1 ? eventData[hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? eventData[hIdx.endDate] : ""),
+          "text": (hIdx.startDate > -1 ? eventData[hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? eventData[hIdx.endDate] : ""),
           "size": "sm",
           "color": "#1DB446",
           "weight": "bold"
         }, {
           "type": "text",
-          "text": "⏰ 報名截止 Sign Up Deadline:",
+          "text": "報名截止 Sign Up Deadline:",
           "size": "sm",
           "color": "#666666",
           "margin": "sm"
         }, {
           "type": "text",
-          "text": "   " + (hIdx.deadline > -1 ? eventData[hIdx.deadline] : ""),
+          "text": (hIdx.deadline > -1 ? eventData[hIdx.deadline] : ""),
           "size": "sm",
           "color": "#E53935",
           "weight": "bold"
@@ -2675,7 +2754,7 @@ function sendReviewNotifications() {
             "layout": "vertical",
             "contents": [{
               "type": "text",
-              "text": "📣 審核結果出爐 Result",
+              "text": "審核結果出爐 Result",
               "weight": "bold",
               "color": "#1DB446",
               "size": "sm"
@@ -2717,7 +2796,7 @@ function sendReviewNotifications() {
               "margin": "md"
             }, {
               "type": "text",
-              "text": "🎉 恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!",
+              "text": "恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!",
               "wrap": true,
               "margin": "md",
               "size": "xs",
@@ -2748,7 +2827,7 @@ function sendReviewNotifications() {
             "layout": "vertical",
             "contents": [{
               "type": "text",
-              "text": "📣 審核結果出爐 Result",
+              "text": "審核結果出爐 Result",
               "weight": "bold",
               "color": "#FF9800",
               "size": "sm"
@@ -4081,53 +4160,54 @@ function doGet(e) {
     // 檢查前端是否有傳入 action 參數，若無則預設為 "get_equipments"
     var action = (e.parameter && e.parameter.action) ? e.parameter.action : "get_equipments";
 
+    // 🛡️ 身分認證校驗：若存取非公開個資與後台資料，透過 Token 檢驗真實身分
+    var authUser = { ok: true, userId: (e.parameter && e.parameter.userId) ? e.parameter.userId : "" };
+    if (action !== "get_equipments") {
+      authUser = getAuthenticatedUserId(e.parameter, e.parameter ? e.parameter.userId : "");
+      if (!authUser.ok) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: authUser.error })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+    var userId = authUser.userId;
+
     if (action === "get_unpaid") {
-      var userId = e.parameter.userId;
       if (!userId) {
         return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
       }
-      // 呼叫未繳費清單處理引擎
       return getUnpaidListAPI(ss, userId);
       
     } else if (action === "get_profile") {
-      var userId = e.parameter.userId;
       if (!userId) {
         return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
       }
       return getMemberProfileAPI(ss, userId);
 
     } else if (action === "get_my_status") {
-      var userId = e.parameter.userId;
       if (!userId) {
         return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
       }
       return getMyStatusAPI(ss, userId);
 
     } else if (action === "get_payment_history") {
-      var userId = e.parameter.userId;
       if (!userId) {
         return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
       }
       return getPaymentHistoryAPI(ss, userId);
 
     } else if (action === "get_past_activities") {
-      var userId = e.parameter.userId;
       if (!userId) {
         return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
       }
       return getPastActivitiesAPI(ss, userId);
 
     } else if (action === "check_officer_status") {
-      var userId = e.parameter.userId;
       return checkOfficerStatusAPI(ss, userId);
 
     } else if (action === "get_admin_events") {
-      var userId = e.parameter.userId;
       return getAdminEventsAPI(ss, userId);
 
     } else if (action === "get_event_signups") {
       var eventId = e.parameter.eventId;
-      var userId = e.parameter.userId;
       return getEventSignupsAPI(ss, eventId, userId);
 
     } else if (action === "get_equipments") {
@@ -5857,7 +5937,7 @@ function checkOfficerStatusAPI(ss, userId) {
 // API: 取得後台所有活動與統計名冊 (GET)
 function getAdminEventsAPI(ss, userId) {
   var officerCheck = checkOfficerInternal(ss, userId);
-  if (!officerCheck.isOfficer && userId !== "TEST_USER_ID") {
+  if (!officerCheck.isOfficer) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "error",
       message: "權限不足，僅限登山社幹部存取！"
@@ -5955,7 +6035,7 @@ function getAdminEventsAPI(ss, userId) {
 // API: 取得單一活動之報名社員名單 (GET)
 function getEventSignupsAPI(ss, eventId, userId) {
   var officerCheck = checkOfficerInternal(ss, userId);
-  if (!officerCheck.isOfficer && userId !== "TEST_USER_ID") {
+  if (!officerCheck.isOfficer) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "error",
       message: "權限不足"
@@ -6022,7 +6102,7 @@ function processSaveEvent(payload) {
     lock.waitLock(10000);
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var officerCheck = checkOfficerInternal(ss, payload.userId);
-    if (!officerCheck.isOfficer && payload.userId !== "TEST_USER_ID") {
+    if (!officerCheck.isOfficer) {
       return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足，無法儲存活動！" })).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -6116,13 +6196,13 @@ function processSaveEvent(payload) {
     // 若有勾選推播至幹部群組
     if (payload.notifyOfficerGroup) {
       try {
-        var groupMsg = "📢 【幹部通知：新活動發布】\n\n" +
-          "📍 活動名稱：" + payload.name + "\n" +
-          "🏷️ 活動編號：" + eventId + "\n" +
-          "📅 出隊日期：" + payload.startDate + " ~ " + payload.endDate + "\n" +
-          "⏰ 報名截止：" + payload.deadline + "\n" +
-          "💰 預計費用：" + payload.cost + "\n" +
-          "🚦 狀態：" + (payload.status || "開放") + "\n\n" +
+        var groupMsg = "【幹部通知：新活動發布】\n\n" +
+          "活動名稱：" + payload.name + "\n" +
+          "活動編號：" + eventId + "\n" +
+          "出隊日期：" + payload.startDate + " ~ " + payload.endDate + "\n" +
+          "報名截止：" + payload.deadline + "\n" +
+          "預計費用：" + payload.cost + "\n" +
+          "狀態：" + (payload.status || "開放") + "\n\n" +
           "已上架完成，社員可在「最新活動」瀏覽與報名！";
         pushAdminMessage(groupMsg);
       } catch (err) {
@@ -6152,7 +6232,7 @@ function processUpdateEventStatus(payload) {
     lock.waitLock(5000);
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var officerCheck = checkOfficerInternal(ss, payload.userId);
-    if (!officerCheck.isOfficer && payload.userId !== "TEST_USER_ID") {
+    if (!officerCheck.isOfficer) {
       return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足" })).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -6195,7 +6275,7 @@ function processUpdateSignupStatus(payload) {
     lock.waitLock(5000);
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var officerCheck = checkOfficerInternal(ss, payload.userId);
-    if (!officerCheck.isOfficer && payload.userId !== "TEST_USER_ID") {
+    if (!officerCheck.isOfficer) {
       return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足" })).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -6245,7 +6325,7 @@ function processUpdateSignupStatus(payload) {
 function processSendEventNotifications(payload) {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var officerCheck = checkOfficerInternal(ss, payload.userId);
-  if (!officerCheck.isOfficer && payload.userId !== "TEST_USER_ID") {
+  if (!officerCheck.isOfficer) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足" })).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -6295,14 +6375,14 @@ function processSendEventNotifications(payload) {
             "type": "box",
             "layout": "vertical",
             "contents": [
-              { "type": "text", "text": "📣 審核結果出爐 Result", "weight": "bold", "color": "#1DB446", "size": "sm" },
+              { "type": "text", "text": "審核結果出爐 Result", "weight": "bold", "color": "#1DB446", "size": "sm" },
               { "type": "text", "text": "活動正取通知", "weight": "bold", "size": "xl", "margin": "md" },
               { "type": "text", "text": "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", "margin": "md", "size": "sm", "wrap": true },
               { "type": "text", "text": eventName, "weight": "bold", "color": "#111111", "size": "md", "wrap": true, "margin": "sm" },
               { "type": "text", "text": "審核結果為 Result：", "margin": "md", "size": "sm" },
               { "type": "text", "text": "【 " + result + " 】", "weight": "bold", "color": "#1DB446", "size": "lg", "align": "center", "margin": "md" },
               { "type": "separator", "margin": "md" },
-              { "type": "text", "text": "🎉 恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入出隊群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!", "wrap": true, "margin": "md", "size": "xs", "color": "#666666" }
+              { "type": "text", "text": "恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入出隊群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!", "wrap": true, "margin": "md", "size": "xs", "color": "#666666" }
             ]
           },
           "footer": {
@@ -6324,7 +6404,7 @@ function processSendEventNotifications(payload) {
             "type": "box",
             "layout": "vertical",
             "contents": [
-              { "type": "text", "text": "📣 審核結果出爐 Result", "weight": "bold", "color": "#FF9800", "size": "sm" },
+              { "type": "text", "text": "審核結果出爐 Result", "weight": "bold", "color": "#FF9800", "size": "sm" },
               { "type": "text", "text": "活動備取通知", "weight": "bold", "size": "xl", "margin": "md" },
               { "type": "text", "text": "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", "margin": "md", "size": "sm", "wrap": true },
               { "type": "text", "text": eventName, "weight": "bold", "color": "#111111", "size": "md", "wrap": true, "margin": "sm" },

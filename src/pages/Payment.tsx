@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, AlertCircle, Copy, Check, Building2 } from 'lucide-react';
+import { appendAuthToken, withAuthPayload } from '../utils/api';
 import '../App.css';
 
 interface UnpaidItem {
@@ -130,7 +131,7 @@ function Payment({ userId }: { userId: string }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${GAS_API_URL}?action=get_unpaid&userId=${userId}`);
+        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_unpaid&userId=${userId}`));
         const result = await res.json();
         if (result.status === 'success') {
           setUnpaidList(result.data);
@@ -286,7 +287,7 @@ function Payment({ userId }: { userId: string }) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(withAuthPayload(payload))
       });
       
       const result = await res.json();

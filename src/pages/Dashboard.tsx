@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
+import { appendAuthToken, withAuthPayload } from '../utils/api';
 import {
   ShieldCheck,
   ChevronRight,
@@ -110,7 +111,7 @@ function Dashboard({ userId }: { userId: string }) {
 
       // 2. 獲取個人總覽狀態
       const requestUserId = userId || 'TEST_USER_ID';
-      const res = await fetch(`${GAS_API_URL}?action=get_my_status&userId=${requestUserId}`);
+      const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${requestUserId}`));
       const result = await res.json();
 
       if (result.status === 'success' && result.data) {
@@ -142,7 +143,7 @@ function Dashboard({ userId }: { userId: string }) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(withAuthPayload(payload)),
       });
       const result = await res.json();
 
@@ -195,7 +196,7 @@ function Dashboard({ userId }: { userId: string }) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(withAuthPayload(payload)),
       });
       const result = await res.json();
 
@@ -233,7 +234,7 @@ function Dashboard({ userId }: { userId: string }) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(withAuthPayload(payload)),
       });
       const result = await res.json();
 

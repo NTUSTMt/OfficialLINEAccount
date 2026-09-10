@@ -3,11 +3,51 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.99` (v0.0.99)
+- **當前版本**：`0.1.2` (v0.1.2)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 102. LINE 官方帳號活動卡片全面去 Emoji 化與排版美化 (v0.1.2)
+- **活動列表輪播卡片 (Activity Carousel Cards)**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `sendEventList`。
+  - 移除「最新活動」輪播卡片中費用、活動時間、報名截止標籤前方的 Emoji 表情符號（`💰`、`📅`、`⏰`），統一採用乾淨俐落之雙語純文字標籤：
+    - `費用 Cost:`
+    - `活動時間 Event Date:`
+    - `報名截止 Sign Up Deadline:`
+  - 優化日期換行與間距縮排排版，避免手機端呈現多餘空白字元。
+- **活動詳情單卡與報名按鈕 (Activity Detail Card & Buttons)**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `sendEventDetail`。
+  - 標題與欄位去 Emoji：將「📝 活動詳情 Event Details」改為「活動詳情 Event Details」，並同步移除費用、活動時間與報名截止前方的 Emoji。
+  - 狀態按鈕文字優化：將「⏳ 尚未開放 Not Open」按鈕文字精簡為「尚未開放 Not Open」。
+- **活動審核結果推播卡片 (Event Signup Result Push Notifications)**：
+  - 更新 `sendEventResultNotifications` 與 `processSendEventNotifications`。
+  - 移除正取與備取通知卡片頂部的「📣 審核結果出爐 Result」中的 `📣`，以及恭喜錄取說明文字中的 `🎉`，呈現簡約沈穩的高質感介面。
+- **幹部群組新活動上架廣播通知 (Cadre Group New Event Announcement)**：
+  - 更新 `processSaveEvent`：移除通知訊息中的 Emoji 圖示（`📢`、`📍`、`🏷️`、`📅`、`⏰`、`💰`、`🚦`），維持幹部群組資訊的簡潔專業風格。
+
+### 101. LINE ID Token (JWT) 數位簽章驗證防冒充架構實作 (v0.1.1)
+- **前端自動加密驗證憑證傳遞 (Frontend Auto ID Token Attaching)**：
+  - 新增 [src/utils/api.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/api.ts) 共用通訊模組，提供 `getIdToken()`、`appendAuthToken()` 與 `withAuthPayload()` 工具函式。
+  - 全面更新前端所有資料存取與業務操作模組（[Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx)、[Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx)、[Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx)、[Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx)、[History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx)、[Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx)、[AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)、[App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx)）。
+  - 在發起任何查詢或異動之 GET / POST 請求時，自動由 `liff.getIDToken()` 提取當前登入者由 LINE 官方加密簽署之 JWT Token 並隨附發送。
+- **後端官方數位簽章校驗核心 (Backend LINE Signature Verification & Cache)**：
+  - 在 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 實作 `verifyLineIdToken` 與 `getAuthenticatedUserId` 驗證核心。
+  - 介接 LINE 官方驗證端點 `https://api.line.me/oauth2/v2.1/verify`（Channel ID: `2009217429`），驗證憑證之真偽、期限與發行者。
+  - 導入 `CacheService.getScriptCache()` 10 分鐘快取機制，以 Token 雜湊為鍵進行高效去重比對，兼顧極致資安防護與零延遲載入效能。
+  - 於 `doGet` 與 `doPost` 全面啟用認證檢核：凡未帶 Token 或 Token 遭竄改/過期之請求，將一律被拒絕存取個資；合法請求強制綁定官方驗證之 `sub`（真實 User ID），徹底杜絕任何外部有心人士透過明文 `userId` 冒充他人身分之嚴重資安風險。
+
+### 100. 幹部專屬管理中心獨立 LIFF ID (2009217429-DSYjXqNK) 串接與全端資安後門 (TEST_USER_ID) 全面拔除 (v0.1.0)
+- **幹部專屬管理中心獨立 LIFF 串聯 (Dedicated Cadre LIFF Integration)**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js)：將「幹部系統」指令回覆以及幹部功能指引卡片中的後台連結，全面換成使用者新建立之專屬獨立 LIFF 網址：`https://liff.line.me/2009217429-DSYjXqNK`。
+  - 更新 [App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx)：
+    - 在 `initializeLiff` 加入 `/admin` 專屬路由識別，確保透過該 LIFF 連結開啟時，正確以 `2009217429-DSYjXqNK` 進行 SDK 初始化，徹底終結先前因借用主頁 LIFF 轉址而跳回個人主頁或裝備租借的問題。
+    - 全域導航選單中點擊「幹部管理中心」時，於 LINE 客戶端環境以 `handleNav` 搭配 `2009217429-DSYjXqNK` 專屬 LIFF 開啟。
+- **全端資安防護加固：全面拔除 TEST_USER_ID 測試後門 (Elimination of Backdoor Vulnerabilities)**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js)：
+    - 徹底移除 `getAdminEventsAPI`、`getEventSignupsAPI`、`processSaveEvent`、`processUpdateEventStatus`、`processUpdateSignupStatus`、`processSendEventNotifications` 等所有管理 API 中的 `userId !== "TEST_USER_ID"` 豁免判斷。
+    - 嚴格落實身分權限檢核：任何存取或修改活動與報名名冊之請求，必須具備合法且確實登記於 `Officers` 試算表中的幹部 LINE User ID，任何人即便得知 GAS Web App 網址，亦無法再以 `TEST_USER_ID` 撈取報名者姓名、電話、學號等敏感個人資料。
 
 ### 99. LINE 原生 @Mention 精準裁切、群組招呼指令直通指南與 Gemini System Prompt 修正 (v0.0.99)
 - **LINE 原生 Mention 精準裁切演算法 (Precise Native Mention Stripping)**：

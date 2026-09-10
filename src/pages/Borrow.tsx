@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { Tent, Moon, Package, Compass, Flame, Shield, Mountain, ShoppingCart } from 'lucide-react';
+import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import '../App.css';
 
@@ -138,7 +139,7 @@ function Borrow({ userId }: { userId: string }) {
 
         // 取得使用者社籍狀態以計算折扣
         if (userId && userId !== 'TEST_USER_ID') {
-          const myStatusRes = await fetch(`${GAS_API_URL}?action=get_my_status&userId=${userId}`);
+          const myStatusRes = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${userId}`));
           const myStatusData = await myStatusRes.json();
           if (myStatusData.status === 'success' && myStatusData.data && myStatusData.data.profile) {
             setIsOfficial(myStatusData.data.profile.isOfficial);
@@ -283,7 +284,7 @@ function Borrow({ userId }: { userId: string }) {
         headers: {
           'Content-Type': 'text/plain;charset=utf-8',
         },
-        body: JSON.stringify(orderPayload)
+        body: JSON.stringify(withAuthPayload(orderPayload))
       });
 
       const result = await response.json();

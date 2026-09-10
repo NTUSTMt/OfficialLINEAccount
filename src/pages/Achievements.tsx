@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Award, Star } from 'lucide-react';
+import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import '../App.css';
 
@@ -49,7 +50,7 @@ function Achievements({ userId }: { userId: string }) {
     setError(null);
     try {
       if (userId && userId !== 'TEST_USER_ID') {
-        const res = await fetch(`${GAS_API_URL}?action=get_past_activities&userId=${userId}`);
+        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_past_activities&userId=${userId}`));
         const result = await res.json();
         if (result.status === 'success') {
           setData(result.data);
@@ -243,7 +244,7 @@ function Achievements({ userId }: { userId: string }) {
       if (userId && userId !== 'TEST_USER_ID') {
         const res = await fetch(GAS_API_URL, {
           method: 'POST',
-          body: JSON.stringify(payload)
+          body: JSON.stringify(withAuthPayload(payload))
         });
         const result = await res.json();
         if (result.status === 'success') {

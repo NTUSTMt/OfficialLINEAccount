@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, Calendar, Tent, CreditCard, FileText, AlertCircle } from 'lucide-react';
+import { appendAuthToken } from '../utils/api';
 import '../App.css';
 
 interface HistoryItem {
@@ -43,7 +44,7 @@ function History({ userId }: { userId: string }) {
     setError(null);
     try {
       if (userId && userId !== 'TEST_USER_ID') {
-        const res = await fetch(`${GAS_API_URL}?action=get_payment_history&userId=${userId}`);
+        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_payment_history&userId=${userId}`));
         const result = await res.json();
         if (result.status === 'success') {
           setData(result.data);

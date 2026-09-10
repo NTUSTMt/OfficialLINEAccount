@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from
 import { useTranslation } from 'react-i18next';
 import { ShieldCheck, Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle } from 'lucide-react';
 import liff from '@line/liff';
+import { appendAuthToken } from './utils/api';
 import './App.css';
 
 const Borrow = lazy(() => import('./pages/Borrow'));
@@ -226,10 +227,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 </div>
                 {isOfficer && (
                   <div
-                    onClick={() => {
-                      setIsOpen(false);
-                      navigate('/admin/events');
-                    }}
+                    onClick={() => handleNav('/admin/events', 'https://liff.line.me/2009217429-DSYjXqNK')}
                     style={{
                       padding: '10px 16px',
                       cursor: 'pointer',
@@ -270,7 +268,7 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
 
       try {
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
-        const res = await fetch(`${GAS_API_URL}?action=get_profile&userId=${userId}`);
+        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`));
         const result = await res.json();
 
         if (result.status === 'success' && result.isMember && result.profile) {
@@ -387,7 +385,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
       return;
     }
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
-    fetch(`${GAS_API_URL}?action=check_officer_status&userId=${liffInit.userId}`)
+    fetch(appendAuthToken(`${GAS_API_URL}?action=check_officer_status&userId=${liffInit.userId}`))
       .then((res) => res.json())
       .then((data) => {
         if (data.status === 'success' && data.isOfficer) {
@@ -493,6 +491,8 @@ function App() {
           liffId = '2009217429-u7OCkmQO';
         } else if (path.includes('/history') || statePath.includes('/history')) {
           liffId = '2009217429-FRB6rjph';
+        } else if (path.includes('/admin') || statePath.includes('/admin')) {
+          liffId = '2009217429-DSYjXqNK';
         } else if (path.includes('/dashboard') || statePath.includes('/dashboard') || path.includes('/achievements') || statePath.includes('/achievements')) {
           liffId = '2009217429-jvj3ydDT';
         }
