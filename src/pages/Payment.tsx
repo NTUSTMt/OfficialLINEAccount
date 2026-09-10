@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
+import { CheckCircle2, AlertCircle, Copy, Check, Building2 } from 'lucide-react';
 import '../App.css';
 
 interface UnpaidItem {
@@ -27,9 +28,21 @@ function Payment({ userId }: { userId: string }) {
   });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [last5Digits, setLast5Digits] = useState('');
+  const [note, setNote] = useState('');
+  const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [membershipOption, setMembershipOption] = useState<'thisSem' | 'nextSem' | 'undergrad' | 'master'>('thisSem');
+
+  const handleCopyAccount = async () => {
+    try {
+      await navigator.clipboard.writeText('111019636700');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('複製失敗:', err);
+    }
+  };
 
   // 取得現在日期推算當前學期與相關方案到期日
   const semesterInfo = useMemo(() => {
@@ -265,7 +278,8 @@ function Payment({ userId }: { userId: string }) {
         details: {
           selectedIds,
           last5Digits: last5Digits.trim(),
-          totalAmount
+          totalAmount,
+          note: note.trim()
         }
       };
 
@@ -283,11 +297,13 @@ function Payment({ userId }: { userId: string }) {
             .filter(item => selectedIds.includes(item.id))
             .map(item => item.name);
             
-          const msgText = `💰 【${t('payment.msg.title')}】\n\n` +
+          const msgText = `【${t('payment.msg.title')}】\n\n` +
             `${t('payment.msg.success')}\n` +
-            `💵 ${t('payment.msg.amount')}：$${totalAmount}\n` +
-            `🔢 ${t('payment.msg.digits')}：${last5Digits.trim()}\n\n` +
-            `📋 ${t('payment.msg.items')}：\n` +
+            `${t('payment.msg.amount')}：$${totalAmount}\n` +
+            `${t('payment.msg.digits')}：${last5Digits.trim()}\n` +
+            (note.trim() ? `備註：${note.trim()}\n` : '') +
+            `\n` +
+            `${t('payment.msg.items')}：\n` +
             selectedNames.map(n => `• ${n}`).join('\n') + `\n\n` +
             `${t('payment.msg.footer')}`;
 
@@ -314,8 +330,10 @@ function Payment({ userId }: { userId: string }) {
   if (submitted) {
     return (
       <div className="app-container" style={{ textAlign: 'center', padding: '40px 20px' }}>
-        <div className="empty-cart-state">
-          <span className="empty-icon">🎉</span>
+        <div className="empty-cart-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+            <CheckCircle2 size={40} color="#10b981" />
+          </div>
           <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--success-color)' }}>{t('payment.submitted.title')}</h3>
           <p style={{ marginTop: '12px', color: '#666', fontSize: '14px', lineHeight: '1.6' }}>
             {t('payment.submitted.description')}
@@ -332,36 +350,86 @@ function Payment({ userId }: { userId: string }) {
       <main className="main-content" style={{ paddingBottom: '90px' }}>
 
         {error && (
-          <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px', borderRadius: '8px', margin: '16px 0', fontSize: '13px' }}>
-            ⚠️ {error}
+          <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', margin: '16px 0', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+            <span>{error}</span>
           </div>
         )}
 
-        {/* 帳戶資訊卡 */}
-        <div className="drawer-section" style={{ backgroundColor: 'white', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', marginTop: '16px' }}>
-          <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>{t('payment.account.title')}</h4>
-          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.8' }}>
-            <p><strong>{t('payment.account.bankLabel')}</strong>{t('payment.account.bankName')}</p>
-            <p><strong>{t('payment.account.accountLabel')}</strong>111019636700</p>
-            <p><strong>{t('payment.account.nameLabel')}</strong>{t('payment.account.nameValue')}</p>
+        {/* 帳戶資訊卡 (靠左對齊，支援點擊複製) */}
+        <div className="drawer-section" style={{ backgroundColor: 'white', padding: '16px 18px', borderRadius: '12px', border: '1px solid var(--border-color)', marginTop: '16px', textAlign: 'left' }}>
+          <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '10px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', textAlign: 'left' }}>
+            <Building2 size={16} color="#059669" />
+            <span>{t('payment.account.title')}</span>
+          </h4>
+          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.9', textAlign: 'left' }}>
+            <div style={{ marginBottom: '4px' }}>
+              <strong>{t('payment.account.bankLabel')}</strong>{t('payment.account.bankName')}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '6px 0', flexWrap: 'wrap' }}>
+              <strong>{t('payment.account.accountLabel')}</strong>
+              <span 
+                onClick={handleCopyAccount}
+                style={{ 
+                  fontFamily: 'monospace', 
+                  fontSize: '15px', 
+                  fontWeight: 'bold', 
+                  color: '#0f172a',
+                  backgroundColor: '#f1f5f9',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  border: '1px solid #cbd5e1'
+                }}
+                title="點擊複製帳號"
+              >
+                111019636700
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyAccount}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '3px 8px',
+                  fontSize: '11px',
+                  borderRadius: '6px',
+                  border: '1px solid #10b981',
+                  backgroundColor: copied ? '#ecfdf5' : 'white',
+                  color: '#059669',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {copied ? <Check size={12} color="#059669" /> : <Copy size={12} color="#059669" />}
+                <span>{copied ? '已複製！' : '點擊複製'}</span>
+              </button>
+            </div>
+            <div>
+              <strong>{t('payment.account.nameLabel')}</strong>{t('payment.account.nameValue')}
+            </div>
           </div>
-          <div style={{ fontSize: '11px', color: '#b45309', backgroundColor: '#fef3c7', padding: '8px 12px', borderRadius: '8px', marginTop: '10px' }}>
+          <div style={{ fontSize: '11px', color: '#b45309', backgroundColor: '#fef3c7', padding: '8px 12px', borderRadius: '8px', marginTop: '10px', textAlign: 'left', lineHeight: '1.6' }}>
             {t('payment.account.note')}
           </div>
         </div>
 
         {/* 未繳費清單 */}
-        <div className="drawer-section" style={{ backgroundColor: 'white', marginTop: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '16px' }}>
-          <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>{t('payment.list.title')}</h4>
+        <div className="drawer-section" style={{ backgroundColor: 'white', marginTop: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '16px', textAlign: 'left' }}>
+          <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)', textAlign: 'left' }}>{t('payment.list.title')}</h4>
           
           {loading ? (
-            <div className="loading-state" style={{ padding: '24px 0' }}>
+            <div className="loading-state" style={{ padding: '24px 0', textAlign: 'center' }}>
               <div className="spinner"></div>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>{t('payment.list.loading')}</p>
             </div>
           ) : allItemsFlat.length === 0 ? (
-            <div className="empty-cart-state" style={{ padding: '24px 0' }}>
-              <span className="empty-icon">👍</span>
+            <div className="empty-cart-state" style={{ padding: '24px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                <CheckCircle2 size={28} color="#10b981" />
+              </div>
               <h5 style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--success-color)' }}>{t('payment.list.emptyTitle')}</h5>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('payment.list.emptyText')}</p>
             </div>
@@ -518,6 +586,23 @@ function Payment({ userId }: { userId: string }) {
                 style={{ fontSize: '15px' }}
               />
               <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('payment.form.digitsTip')}</p>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '20px', textAlign: 'left' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>
+                {t('payment.form.noteLabel', '匯款備註 (選填)')}
+              </label>
+              <input 
+                type="text" 
+                placeholder={t('payment.form.notePlaceholder', '例如：王小明轉帳、兩筆合併匯款等備註說明')} 
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={50}
+                style={{ fontSize: '14px' }}
+              />
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                {t('payment.form.noteTip', '此備註將同步顯示於幹部通知群組及繳費紀錄中。')}
+              </p>
             </div>
 
             <button 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
+import { Check } from 'lucide-react';
 import '../App.css';
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -712,8 +713,9 @@ function Register({ userId }: { userId: string }) {
                   </p>
                   {strengthProofFiles.map((file, idx) => (
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f3f4f6', padding: '6px 12px', borderRadius: '4px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '13px', color: '#374151', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '80%' }}>
-                        ✓ {file.name}
+                      <span style={{ fontSize: '13px', color: '#374151', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '80%', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Check size={14} color="#16a34a" />
+                        <span>{file.name}</span>
                       </span>
                       <button 
                         type="button" 

@@ -1007,20 +1007,31 @@ function handleTextCommand(replyToken, userId, text, sourceType, event) {
 
   // 1. 檢查 LINE 原生 @Mention（即使在 LINE 後台改名稱，只要被 Tag 就保證精準觸發！）
   var isNativeMention = false;
+  var selfMentionees = [];
   if (event && event.message && event.message.mention && Array.isArray(event.message.mention.mentionees)) {
     for (var m = 0; m < event.message.mention.mentionees.length; m++) {
-      if (event.message.mention.mentionees[m] && event.message.mention.mentionees[m].isSelf === true) {
+      var mItem = event.message.mention.mentionees[m];
+      if (mItem && mItem.isSelf === true) {
         isNativeMention = true;
-        break;
+        selfMentionees.push(mItem);
       }
     }
   }
 
   if (isNativeMention) {
     isCalled = true;
-    // 移除被 @ 的機器人標籤（LINE 格式為 @Display_Name 加空格）
-    question = text.replace(/^@\S+\s*/, "").trim();
-    question = question.replace(/^@\S+\s*/, "").trim();
+    // 優先使用 LINE 提供之精確 index 與 length 截除被 @ 的標籤字串
+    var strippedText = text;
+    selfMentionees.sort(function(a, b) { return b.index - a.index; });
+    for (var s = 0; s < selfMentionees.length; s++) {
+      var targetM = selfMentionees[s];
+      if (typeof targetM.index === "number" && typeof targetM.length === "number") {
+        strippedText = strippedText.slice(0, targetM.index) + strippedText.slice(targetM.index + targetM.length);
+      }
+    }
+    // 徹底清除開頭或結尾殘餘的 @標籤、Unicode 空格 (如 \u2005 四分之一空格、\u00A0、\u3000)
+    question = strippedText.replace(/^[@＠][^\s\u2000-\u200B\u00A0\u3000]+\s*/g, "");
+    question = question.replace(/^[\s\u2000-\u200B\u00A0\u3000]+|[\s\u2000-\u200B\u00A0\u3000]+$/g, "");
   }
 
   // 2. 檢查純文字前綴（小岳、Yue、yue，或使用者手動輸入的 @小岳）
@@ -1057,8 +1068,9 @@ function handleTextCommand(replyToken, userId, text, sourceType, event) {
       return;
     }
 
-    // 指令 C：在幹部群組中只有呼叫，但「沒有附帶任何問題或指令」-> 自動輸出幹部群組功能指引
-    if (isGroup && question === "") {
+    // 指令 C：在幹部群組中只有呼叫，或詢問基本打招呼/指令/功能說明 -> 自動輸出幹部群組功能指引
+    var isGreetingOrHelp = (question === "" || question === "你好" || question === "您好" || question === "嗨" || question === "哈囉" || question === "hello" || question === "hi" || question === "指令" || question === "功能" || question === "說明" || question === "幫助" || question === "在嗎");
+    if (isGroup && isGreetingOrHelp) {
       var cadreGuide = "🌲 幹部專屬助理小岳在此！\n" +
         "─────────────\n" +
         "目前在幹部群組中支援以下功能與指令：\n\n" +
@@ -3868,15 +3880,16 @@ function talkToGemini(question) {
     // 💡 這是賦予 AI 靈魂與規則的最高指導原則！
     // ==========================================
     var systemPrompt = `
-      你現在是台灣某大學登山社的專屬 AI 助理，名字叫「小山」、「Yue」。
-      你的個性活潑、熱心、幽默，回覆時喜歡加上 Emoji (如 ⛰️、🏕️、🎒) 和登山術語。
+      你現在是台灣某大學登山社的專屬 AI 助理，名字叫「小岳」、「Yue」。
+      你的個性專業、親切、熱心，回覆排版工整清晰。
       
       【你的最高原則】
       1. 你的職責是解答社員關於「登山基礎知識、裝備保養、體能訓練」、「社團最新活動」以及「社團各項規章」的問題。
-      2. 如果有人問你無關的問題，請幽默地拒絕。
-      3. 如果有人問「怎麼報名活動」、「怎麼借裝備」、「怎麼繳費」，請務必回答：「這個可以直接點擊 LINE 下方的『圖文選單』來操作喔！超級方便的啦！✨」。
-      4. ⚠️ 極度重要排版規則：絕對不要使用任何 Markdown 語法（例如不要用 **粗體**、不要用 # 標題）。請一律只使用「純文字」加上「適當的換行」與「Emoji」來排版！
-      5. 語言自動偵測：請嚴格根據社員發問的語言來回答。如果社員用英文問，你就用全英文回答；如果用印尼文，你就用印尼文回答。
+      2. 如果有人問你無關的問題，請幽默且有禮貌地拒絕。
+      3. 如果有人問「怎麼報名活動」、「怎麼借裝備」、「怎麼繳費」，請務必回答：「這個可以直接點擊 LINE 下方的『圖文選單』來操作喔！超級方便的啦！」。
+      4. 如果在幹部環境中詢問幹部管理相關事宜，請提醒可使用幹部專屬指令：「小岳 幹部系統」或「小岳 抓取群組ID」。
+      5. ⚠️ 極度重要排版規則：絕對不要使用任何 Markdown 語法（例如不要用 **粗體**、不要用 # 標題）。請一律只使用「純文字」加上「適當的換行」來排版！
+      6. 語言自動偵測：請嚴格根據發問者的語言來回答。如果用英文問，你就用全英文回答；如果用印尼文，你就用印尼文回答。
       
       👇👇👇 (這是系統剛剛從試算表抓取的【最新活動資料】) 👇👇👇
       ${eventsContext}
@@ -4472,7 +4485,8 @@ function processPaymentSubmit(payload) {
   var lSheet = ss.getSheetByName("Loan_Records");
   
   var userId = payload.userId;
-  var details = payload.details; // details: { selectedIds: string[], last5Digits: string, totalAmount: number }
+  var details = payload.details; // details: { selectedIds: string[], last5Digits: string, totalAmount: number, note?: string }
+  var paymentNote = details.note ? String(details.note).trim() : "";
   
   // 1. 取得姓名與社員狀態
   var mData = mSheet.getDataRange().getValues();
@@ -4551,6 +4565,13 @@ function processPaymentSubmit(payload) {
     // 3. 寫入 Payments 工作表
     if (paySheet) {
       var pHeaders = paySheet.getRange(1, 1, 1, paySheet.getLastColumn()).getValues()[0];
+      var noteIdx = _fi(pHeaders, "備註");
+      if (noteIdx === -1 && paymentNote) {
+        paySheet.getRange(1, paySheet.getLastColumn() + 1).setValue("備註");
+        pHeaders = paySheet.getRange(1, 1, 1, paySheet.getLastColumn()).getValues()[0];
+        noteIdx = _fi(pHeaders, "備註");
+      }
+
       var newRow = new Array(pHeaders.length).fill("");
       
       newRow[_fi(pHeaders, "時間")] = new Date();
@@ -4559,6 +4580,9 @@ function processPaymentSubmit(payload) {
       newRow[_fi(pHeaders, "繳費項目")] = confirmedItems.join(", ");
       newRow[_fi(pHeaders, "金額")] = details.totalAmount;
       newRow[_fi(pHeaders, "帳號末5碼")] = details.last5Digits;
+      if (noteIdx > -1) {
+        newRow[noteIdx] = paymentNote;
+      }
       newRow[_fi(pHeaders, "對帳狀態")] = "待核對";
       
       paySheet.appendRow(newRow);
@@ -4576,6 +4600,56 @@ function processPaymentSubmit(payload) {
   var altText = "🔔 收到一筆新對帳申報！";
   var postbackData = "action=admin_confirm&row=" + insertedRowIndex + "&userId=" + userId + "&type=combined";
   
+  var bodyContents = [
+    {
+      "type": "text",
+      "text": "👤 申報人：" + userName,
+      "weight": "bold",
+      "size": "md"
+    },
+    {
+      "type": "text",
+      "text": "💵 申報金額：$" + details.totalAmount,
+      "weight": "bold",
+      "size": "md",
+      "color": "#059669",
+      "margin": "sm"
+    },
+    {
+      "type": "text",
+      "text": "🔢 帳號末5碼：" + details.last5Digits,
+      "weight": "bold",
+      "size": "md",
+      "margin": "sm"
+    }
+  ];
+
+  if (paymentNote) {
+    bodyContents.push({
+      "type": "text",
+      "text": "📝 備註：" + paymentNote,
+      "wrap": true,
+      "size": "sm",
+      "color": "#d97706",
+      "margin": "sm"
+    });
+  }
+
+  bodyContents.push(
+    {
+      "type": "separator",
+      "margin": "md"
+    },
+    {
+      "type": "text",
+      "text": "📋 申報明細：\n" + confirmedItems.join("\n"),
+      "wrap": true,
+      "size": "sm",
+      "color": "#475569",
+      "margin": "md"
+    }
+  );
+
   var flexContent = {
     "type": "bubble",
     "header": {
@@ -4595,41 +4669,7 @@ function processPaymentSubmit(payload) {
     "body": {
       "type": "box",
       "layout": "vertical",
-      "contents": [
-        {
-          "type": "text",
-          "text": "👤 申報人：" + userName,
-          "weight": "bold",
-          "size": "md"
-        },
-        {
-          "type": "text",
-          "text": "💵 申報金額：$" + details.totalAmount,
-          "weight": "bold",
-          "size": "md",
-          "color": "#059669",
-          "margin": "sm"
-        },
-        {
-          "type": "text",
-          "text": "🔢 帳號末5碼：" + details.last5Digits,
-          "weight": "bold",
-          "size": "md",
-          "margin": "sm"
-        },
-        {
-          "type": "separator",
-          "margin": "md"
-        },
-        {
-          "type": "text",
-          "text": "📋 申報明細：\n" + confirmedItems.join("\n"),
-          "wrap": true,
-          "size": "sm",
-          "color": "#475569",
-          "margin": "md"
-        }
-      ]
+      "contents": bodyContents
     },
     "footer": {
       "type": "box",
@@ -5238,6 +5278,7 @@ function getPaymentHistoryAPI(ss, userId) {
   var itemIdx = _fi(headers, "繳費項目");
   var amountIdx = _fi(headers, "金額");
   var proofIdx = _fi(headers, "帳號末5碼") > -1 ? _fi(headers, "帳號末5碼") : _fi(headers, "帳號末5碼/備註");
+  var noteIdx = _fi(headers, "備註");
   var statusIdx = _fi(headers, "對帳狀態");
 
   var historyList = [];
@@ -5258,6 +5299,7 @@ function getPaymentHistoryAPI(ss, userId) {
       var title = itemIdx > -1 ? String(data[i][itemIdx]).trim() : "未命名項目";
       var status = statusIdx > -1 ? String(data[i][statusIdx]).trim() : "待確認";
       var last5Digits = proofIdx > -1 ? String(data[i][proofIdx]).trim() : "";
+      var note = noteIdx > -1 ? String(data[i][noteIdx]).trim() : "";
 
       // 判斷類型 (社費、活動、裝備)
       var type = "全部";
@@ -5276,6 +5318,7 @@ function getPaymentHistoryAPI(ss, userId) {
         title: title,
         amount: amount,
         last5Digits: last5Digits,
+        note: note,
         status: status
       });
 

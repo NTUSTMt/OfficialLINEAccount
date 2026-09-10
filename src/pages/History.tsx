@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { User, Calendar, Tent, CreditCard, FileText, AlertCircle } from 'lucide-react';
 import '../App.css';
 
 interface HistoryItem {
@@ -9,6 +10,7 @@ interface HistoryItem {
   title: string;
   amount: number;
   last5Digits: string;
+  note?: string;
   status: string; // '已確認無誤' | '已確認' | '待確認' | '待核對' | '對帳失敗' | etc.
 }
 
@@ -60,6 +62,7 @@ function History({ userId }: { userId: string }) {
               title: '初級攀岩訓練營 (攀岩基礎與確保實作)',
               amount: 350,
               last5Digits: '12345',
+              note: '活動與保險費',
               status: '已確認無誤'
             },
             {
@@ -78,6 +81,7 @@ function History({ userId }: { userId: string }) {
               title: '黑冰 Z400 羽絨睡袋 (租期: 2天)',
               amount: 150,
               last5Digits: '55667',
+              note: '王小明睡袋租借',
               status: '待確認 Checking'
             },
             {
@@ -127,20 +131,20 @@ function History({ userId }: { userId: string }) {
 
   const getStatusStyle = (status: string) => {
     if (status.indexOf('確認') > -1 || status.indexOf('已繳') > -1 || status.indexOf('已確認') > -1) {
-      return { bg: '#dcfce7', color: '#15803d', label: `🟢 ${t('history.status.confirmed')}` };
+      return { bg: '#dcfce7', color: '#15803d', dot: '#16a34a', label: t('history.status.confirmed') };
     }
     if (status.indexOf('失敗') > -1 || status.indexOf('退回') > -1 || status.indexOf('錯誤') > -1) {
-      return { bg: '#fee2e2', color: '#b91c1c', label: `🔴 ${t('history.status.failed')}` };
+      return { bg: '#fee2e2', color: '#b91c1c', dot: '#ef4444', label: t('history.status.failed') };
     }
-    return { bg: '#fef3c7', color: '#b45309', label: `🟡 ${t('history.status.checking')}` };
+    return { bg: '#fef3c7', color: '#b45309', dot: '#f59e0b', label: t('history.status.checking') };
   };
 
-  const getTypeEmoji = (type: string) => {
+  const getTypeIcon = (type: string) => {
     switch (type) {
-      case '社費': return '👤';
-      case '活動': return '📅';
-      case '裝備': return '🏕️';
-      default: return '💰';
+      case '社費': return <User size={18} color="#059669" />;
+      case '活動': return <Calendar size={18} color="#2563eb" />;
+      case '裝備': return <Tent size={18} color="#d97706" />;
+      default: return <CreditCard size={18} color="#64748b" />;
     }
   };
 
@@ -157,8 +161,9 @@ function History({ userId }: { userId: string }) {
     <div className="app-container animate-fade-in" style={{ padding: '16px', maxWidth: '600px', margin: '0 auto' }}>
       
       {error && (
-        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
-          ⚠️ {error}
+        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -227,8 +232,10 @@ function History({ userId }: { userId: string }) {
       {/* 區塊三：歷史明細列表 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {filteredHistory.length === 0 ? (
-          <div className="empty-cart-state" style={{ padding: '40px 0', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-            <span className="empty-icon" style={{ fontSize: '36px' }}>📝</span>
+          <div className="empty-cart-state" style={{ padding: '40px 0', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+              <FileText size={28} color="#94a3b8" />
+            </div>
             <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '8px' }}>{t('history.list.empty')}</p>
           </div>
         ) : (
@@ -261,23 +268,27 @@ function History({ userId }: { userId: string }) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '18px'
+                    flexShrink: 0
                   }}>
-                    {getTypeEmoji(item.type)}
+                    {getTypeIcon(item.type)}
                   </div>
                   
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                       <span style={{
                         fontSize: '11px',
-                        padding: '2px 6px',
+                        padding: '2px 8px',
                         borderRadius: '4px',
                         backgroundColor: statusConfig.bg,
                         color: statusConfig.color,
                         fontWeight: 'bold',
-                        whiteSpace: 'nowrap'
+                        whiteSpace: 'nowrap',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
                       }}>
-                        {statusConfig.label}
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: statusConfig.dot }}></span>
+                        <span>{statusConfig.label}</span>
                       </span>
                       <strong style={{ color: '#0f172a', fontSize: '16px' }}>+${item.amount}</strong>
                     </div>
@@ -313,6 +324,11 @@ function History({ userId }: { userId: string }) {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div><strong>{t('history.item.digitsRemarkLabel')}</strong>{item.last5Digits || t('history.item.none')}</div>
+                    {item.note && (
+                      <div style={{ marginTop: '4px', color: '#065f46' }}>
+                        <strong>備註說明：</strong>{item.note}
+                      </div>
+                    )}
                     <div style={{ marginTop: '4px' }}>
                       <strong>{t('history.item.descLabel')}</strong>{t('history.item.descText')}
                     </div>

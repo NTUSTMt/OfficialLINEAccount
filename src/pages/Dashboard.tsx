@@ -411,18 +411,19 @@ function Dashboard({ userId }: { userId: string }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '16px',
             boxShadow: '0 4px 12px rgba(16, 185, 129, 0.08)'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
             <div style={{ width: '42px', height: '42px', borderRadius: '12px', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <ShieldCheck size={24} color="#059669" />
             </div>
-            <div style={{ textAlign: 'left' }}>
-              <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#065f46' }}>
+            <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+              <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#065f46', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 幹部專屬管理中心
               </h4>
-              <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#047857' }}>
+              <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#047857', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {profile.officerRole ? `${profile.officerRole} · ` : ''}活動發布、編輯與名單審核
               </p>
             </div>
@@ -431,6 +432,8 @@ function Dashboard({ userId }: { userId: string }) {
             onClick={() => navigate('/admin/events')}
             className="btn btn-primary"
             style={{
+              width: 'auto',
+              flexShrink: 0,
               padding: '8px 16px',
               fontSize: '13px',
               borderRadius: '10px',

@@ -3,11 +3,58 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.97` (v0.0.97)
+- **當前版本**：`0.0.99` (v0.0.99)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 99. LINE 原生 @Mention 精準裁切、群組招呼指令直通指南與 Gemini System Prompt 修正 (v0.0.99)
+- **LINE 原生 Mention 精準裁切演算法 (Precise Native Mention Stripping)**：
+  - 更新 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `handleTextCommand`。
+  - 改用 LINE Webhook 官方 `mention.mentionees` 結構中所提供的精確字串切片範圍 `index` 與 `length`。
+  - 採取由後往前（Descending Offset）的切割策略，精確抹除被 `@` 的機器人標籤，徹底解決因機器人自訂名稱含有空格、特殊字元或表情符號導致正則表達式切除不全的問題。
+  - 支援過濾各類 Unicode 空白字元（如 `\u2005` 四分之一空格、`\u00A0`、`\u3000` 全形空格）。
+- **群組常用問候與說明直通幹部指南 (Cadre Guide Direct Trigger)**：
+  - 在幹部群組環境中，只要呼叫助理並帶有「你好」、「您好」、「嗨」、「哈囉」、「hello」、「hi」、「指令」、「功能」、「說明」、「幫助」、「在嗎」或未帶任何問題時，系統一律直接回傳「🌲 幹部專屬助理功能指南」卡片，不再將問候文字誤送至 Gemini AI。
+- **Gemini AI 系統提示詞修正 (System Prompt & Persona Fix)**：
+  - 在 `talkToGemini` 將 AI 助理預設名稱由「小山」正式修正為「小岳（Yue）」，並更新人格設定為專業、親切與排版工整。
+  - 提示詞中加入幹部專屬指令導引（「小岳 幹部系統」、「小岳 抓取群組ID」），並移除鼓勵使用 Emoji 之指令，保持乾淨俐落之回覆風格。
+
+### 98. 儀表板版面修復、全站全面去 Emoji 化、匯款帳戶左對齊點擊複製與備註追蹤系統 (v0.0.98)
+- **儀表板幹部卡片跑版修復 (Dashboard Layout Bug Fix)**：
+  - 修復 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 中「幹部專屬管理中心」卡片內文被擠壓斷成多行狹窄文字的問題。
+  - 為文字容器添加 `flex: 1` 與 `minWidth: 0`；為「前往管理」按鈕明確設定 `width: 'auto'` 與 `flexShrink: 0`，避免被全域 `.btn` 之 `width: 100%` 擴張而擠壓左側說明文字。
+- **全站全面去 Emoji 化與向量圖示升級 (Complete Project-wide De-emojification)**：
+  - **導航與頁面結構 ([App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx))**：
+    - 頂部導航標題圖示全數替換為 Lucide 向量圖示（`ShieldCheck`、`Award`、`FileText`、`ClipboardList`、`CreditCard`、`User`、`Compass`）。
+    - 語言切換按鈕 `🌐` 升級為 `<Languages size={15} />`；彈窗警示 `⚠️` 升級為 `<AlertCircle size={48} color="#ef4444" />`。
+  - **裝備租借 ([Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx))**：
+    - 分類預設圖示由 Emoji 升級為標準向量圖示（`Tent`、`Moon`、`Package`、`Compass`、`Flame`、`Shield`、`Mountain`）。
+    - 購物車空狀態由 `🛒` 升級為 `<ShoppingCart size={40} />`。
+  - **繳費報帳 ([Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx))**：
+    - 移除成功彈窗的 `🎉`、`👍`，改用柔和綠底搭配 Lucide `<CheckCircle2 size={48} color="#16a34a" />`；錯誤提示 `⚠️` 替換為 `<AlertCircle size={14} />`。
+  - **歷史紀錄 ([History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx))**：
+    - 狀態標籤 `🟢`、`🔴`、`🟡` 替換為 6px CSS 實心動態狀態圓點。
+    - 欄位圖示 `👤`、`📅`、`🏕️`、`💰` 全面替換為 `<User />`、`<Calendar />`、`<Tent />`、`<CreditCard />`；空狀態與警示改用 `<FileText />` 與 `<AlertCircle />`。
+  - **榮譽徽章 ([Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx))**：
+    - 空狀態 `🧗` 與錯誤 `⚠️` 升級為 `<Award />` 與 `<AlertCircle />`；評分星號以 Lucide `<Star size={20} />` 精緻渲染。
+  - **註冊報名 ([Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx))**：
+    - 移除檔名標註 `✓`，改為內嵌向量 `<Check size={14} color="#16a34a" />`。
+  - **語系檔案與樣式表 ([zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json)、[en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json)、[App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css))**：
+    - 全面清除中英文語系 JSON 鍵值與 CSS 註解段落中的所有 Emoji，經全專案掃描驗證達到 0 Emoji 純淨度。
+- **社團匯款帳戶靠左對齊與一鍵複製功能 (Left-Aligned Account & Click-to-Copy)**：
+  - 更新 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx)：
+    - 匯款資訊卡改為靠左對齊排版，搭配銀行小圖示 `<Building2 size={16} color="#059669" />` 提升視覺層次。
+    - 匯款帳號（`111019636700`）提供點擊複製功能，點擊後自動複製至剪貼簿，並即時變更為「已複製！」打勾回饋狀態（維持 2 秒後復原）。
+- **繳費備註（Note）全端串聯與即時追蹤 (Payment Note Feature Across Stack)**：
+  - **前端輸入**：在 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx) 新增「匯款備註 (選填)」輸入框（上限 100 字），支援說明特定折抵、代繳對象或特殊用途。
+  - **後端存取 ([gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+    - 在 `processPaymentSubmit` 自動檢測並動態補齊 `Payments` 工作表之「備註」欄位標題，寫入填寫者提供的備註。
+    - 在推播給幹部群組的審核 Flex 卡片中加入「備註」欄位，讓幹部直接在 LINE 群組一眼掌握備註說明。
+    - 在 `getPaymentHistoryAPI` 讀取並回傳「備註」資料至繳費紀錄清單中。
+  - **紀錄查看 ([History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx))**：
+    - 繳費歷史紀錄展開詳細資訊時，若該筆款項附有備註，即時以標準文字卡片顯示「備註說明」。
 
 ### 97. 幹部群組單一綁定保護機制、防誤觸二次確認 Flex Card 與個人主頁全面去 Emoji 化 (v0.0.97)
 - **嚴格單一群組綁定原則（Single Cadre Group Binding）**：

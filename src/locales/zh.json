@@ -6,12 +6,12 @@
     "dashboard": { "title": "個人主頁", "subtitle": "My Dashboard" },
     "history": { "title": "歷史紀錄", "subtitle": "Payment History" },
     "achievements": { "title": "出隊足跡", "subtitle": "Mountaineering Footprint" },
-    "menuDashboard": "👤 個人主頁",
-    "menuRegister": "📝 資料填寫",
-    "menuBorrow": "🎒 裝備租借",
-    "menuPayment": "💳 繳費系統",
-    "menuHistory": "📜 繳費紀錄",
-    "menuAchievements": "🏆 出隊足跡",
+    "menuDashboard": "個人主頁",
+    "menuRegister": "資料填寫",
+    "menuBorrow": "裝備租借",
+    "menuPayment": "繳費系統",
+    "menuHistory": "繳費紀錄",
+    "menuAchievements": "出隊足跡",
     "adminEvents": { "title": "活動管理", "subtitle": "Events Management" },
     "menuAdminEvents": "幹部系統"
   },
@@ -24,7 +24,7 @@
       "safety": "安全",
       "experience": "經驗"
     },
-    "draftRestored": "✨ 已為您自動還原上次填寫的草稿",
+    "draftRestored": "已為您自動還原上次填寫的草稿",
     "clearDraft": "清除草稿",
     "alert": {
       "maxFiles": "最多只能上傳 5 張圖片！您目前還可以選擇 {{limit}} 張。",
@@ -32,14 +32,14 @@
       "imageParseError": "圖片解析失敗！",
       "imageLoadError": "載入圖片 {{name}} 失敗，請嘗試更換圖片檔案！",
       "fileReadError": "讀取檔案 {{name}} 失敗！",
-      "registerSuccess": "🎉 註冊成功！資料已寫入社團資料庫。",
-      "updateSuccess": "✅ 資料已成功更新！",
+      "registerSuccess": "註冊成功！資料已寫入社團資料庫。",
+      "updateSuccess": "資料已成功更新！",
       "saveFailed": "儲存失敗: {{message}}",
       "contactAdmin": "請聯絡社團管理員",
       "networkError": "網路連線失敗，請檢查您的網路狀態！"
     },
     "step1": {
-      "title": "📍主要必填資料",
+      "title": "主要必填資料",
       "nameLabel": "真實姓名",
       "namePlaceholder": "請輸入身分證姓名",
       "identityStatusLabel": "身分狀態",
@@ -59,7 +59,7 @@
       "lineIdPlaceholder": "方便幹部建立出隊聯絡群組"
     },
     "step2": {
-      "title": "📍基本選填資料",
+      "title": "基本選填資料",
       "genderLabel": "性別",
       "genderPlaceholder": "請選擇性別 (山屋床位安排依據)",
       "genderMale": "男 (Male)",
@@ -71,7 +71,7 @@
       "addressPlaceholder": "請輸入聯絡或現居地址"
     },
     "step3": {
-      "title": "📍緊急聯絡人資訊",
+      "title": "緊急聯絡人資訊",
       "emerNameLabel": "緊急聯絡人姓名",
       "emerNamePlaceholder": "家屬或親友姓名",
       "emerRelLabel": "與緊急聯絡人關係",
@@ -84,7 +84,7 @@
       "medicalHistoryPlaceholder": "如氣喘、嚴重高山症病史、過敏藥物等。此資訊僅供嚮導掌握隊員安全狀況，完全保密。"
     },
     "step4": {
-      "title": "📍登山經驗與體能 (Experience & Upload)",
+      "title": "登山經驗與體能 (Experience & Upload)",
       "expLabel": "過往登山經驗簡述",
       "expPlaceholder": "例如：登頂合歡群峰、玉山主峰、嘉明湖，或百岳累積 5 座...等等",
       "strengthLabel": "體能證明",
@@ -94,7 +94,7 @@
       "selectedFiles": "已選取待上傳檔案 ({{count}}/5)：",
       "remove": "移除",
       "uploadedFiles": "已上傳的舊體能證明：",
-      "viewUploaded": "🔍 查看已上傳證明 #{{num}}",
+      "viewUploaded": "查看已上傳證明 #{{num}}",
       "privacyConsent": "我同意將個人資料用於社團活動保險、入山申請及緊急聯繫使用。",
       "intendOfficialTitle": "加入社員意願",
       "intendOfficialYes": "我有意願成為社員 (享個人借裝 5 折)",
@@ -187,7 +187,7 @@
       "noOtherPurpose": "請輸入其他用途說明！",
       "systemError": "系統發生錯誤：{{message}}",
       "networkError": "連線失敗，請檢查網路狀態或通知幹部！",
-      "submitSuccess": "✅ 已成功送出 {{count}} 項裝備預約申請！\n系統處理中，請稍候...",
+      "submitSuccess": "已成功送出 {{count}} 項裝備預約申請！\n系統處理中，請稍候...",
       "submitSuccessBrowser": "訂單已送出"
     },
     "banner": {
@@ -224,7 +224,7 @@
       "nextBtn": "下一步"
     },
     "drawer": {
-      "title": "📝 租借預訂單明細",
+      "title": "租借預訂單明細",
       "selectedItems": "已選裝備",
       "formulaLabel": "公式: ",
       "daysUnit": "天",
@@ -233,7 +233,7 @@
       "discountMember": " (社員個人 5 折)",
       "emptyText": "預訂單中目前沒有任何裝備喔！",
       "startBrowsing": "去挑選裝備",
-      "detailsTitle": "📅 選擇預約詳情",
+      "detailsTitle": "選擇預約詳情",
       "pickupDate": "領取日期",
       "returnDate": "歸還日期",
       "durationBadge": "出隊天數：{{days}} 天 (2 天基本 + {{extra}} 天加成)",
@@ -262,11 +262,11 @@
       "discountMember": "社員個人 5 折"
     },
     "modal": {
-      "title": "🎒 裝備詳細資訊",
+      "title": "裝備詳細資訊",
       "codeLabel": "代號: ",
       "basePrice": "基本租金 (2天)：",
       "extraPrice": "續租費用 (每加一天)：",
-      "descTitle": "📝 裝備說明與規格",
+      "descTitle": "裝備說明與規格",
       "noDesc": "目前無此裝備的詳細描述。若有疑問請洽社團幹部。",
       "qtyLabel": "預約數量：",
       "outOfStock": "庫存不足",
@@ -296,7 +296,7 @@
       "description": "已順利將對帳單發送至幹部審核群組。款項確認無誤後，系統將自動以 LINE 訊息通知您。"
     },
     "account": {
-      "title": "🏦 社團指定匯款帳戶",
+      "title": "社團指定匯款帳戶",
       "bankLabel": "銀行名稱：",
       "bankName": "連線商業銀行 (824)（LINE Bank）",
       "accountLabel": "匯款帳號：",
@@ -305,7 +305,7 @@
       "note": "* 請務必依照「已選項目總金額」進行匯款，切勿分開或多匯，以免無法對帳。"
     },
     "list": {
-      "title": "📋 您的未繳費項目",
+      "title": "您的未繳費項目",
       "loading": "取得待繳項目中，請稍候...",
       "emptyTitle": "目前無待繳費用",
       "emptyText": "太棒了！您所有的費用均已結清。",
@@ -318,7 +318,7 @@
       "activity": "活動報名"
     },
     "membership": {
-      "title": "💡 社費說明：",
+      "title": "社費說明：",
       "semesterLabel": "一學期：",
       "graduationLabel": "直到畢業 (until graduation)：",
       "graduationValue": "大學部 / 研究所",
@@ -329,17 +329,20 @@
       "optionMaster": "直到畢業 - 研究所 ($400，預計到期 {{date}})"
     },
     "equip": {
-      "dateLabel": "📅 租借日期：",
-      "itemsLabel": "📦 租借項目明細：",
+      "dateLabel": "租借日期：",
+      "itemsLabel": "租借項目明細：",
       "qtyUnit": "件",
-      "modifyTip": "💡 貼心提醒：需要修改訂單的話，請到個人頁面取消訂單再重新租借一次。"
+      "modifyTip": "貼心提醒：需要修改訂單的話，請到個人頁面取消訂單再重新租借一次。"
     },
     "form": {
-      "title": "✍️ 填寫匯款資料",
+      "title": "填寫匯款資料",
       "amountLabel": "結帳總金額 (已自動計算)",
       "digitsLabel": "您的匯款帳號「末 5 碼」",
       "digitsPlaceholder": "例如 12345",
       "digitsTip": "請確實填寫網銀轉帳帳號或實體存摺的末 5 碼數字，否則幹部無法成功對帳。",
+      "noteLabel": "匯款備註 (選填)",
+      "notePlaceholder": "例如：王小明轉帳、兩筆合併匯款等備註說明",
+      "noteTip": "此備註將同步顯示於幹部通知群組及繳費紀錄中。",
       "submittingBtn": "申報送出中...",
       "submitBtn": "確認申報繳費"
     }
@@ -385,9 +388,9 @@
     },
     "alert": {
       "minContentLength": "心得內容請至少輸入 10 個字喔！",
-      "submitSuccess": "🎉 感謝您的心得回饋！已經為您寫入成就牆囉！",
-      "submitFailed": "⚠️ 提交失敗：{{message}}",
-      "submitSuccessMock": "🎉 感謝您的心得回饋！(本地模擬寫入成功)"
+      "submitSuccess": "感謝您的心得回饋！已經為您寫入成就牆囉！",
+      "submitFailed": "提交失敗：{{message}}",
+      "submitSuccessMock": "感謝您的心得回饋！(本地模擬寫入成功)"
     },
     "loading": "正在載入您的登山足跡牆...",
     "overview": {
@@ -398,20 +401,20 @@
       "reflectionsLabel": "回憶篇數"
     },
     "list": {
-      "title": "🏔️ 已參與活動清單",
+      "title": "已參與活動清單",
       "emptyTitle": "您目前還沒有已結束且正取的活動紀錄喔！",
       "emptyText": "出隊成功後，即可解鎖心得撰寫功能。",
-      "dateLabel": "📅 出隊日期: {{date}}",
-      "viewBtn": "📖 查看我的回憶",
-      "writeBtn": "✏️ 留下回憶"
+      "dateLabel": "出隊日期: {{date}}",
+      "viewBtn": "查看我的回憶",
+      "writeBtn": "留下回憶"
     },
     "modal": {
-      "viewTitle": "📖 路線出隊心得回顧",
-      "writeTitle": "✏️ 填寫出隊心得回饋",
+      "viewTitle": "路線出隊心得回顧",
+      "writeTitle": "填寫出隊心得回饋",
       "difficultyLabel": "路線難易度 (1~5 星)",
       "beautyLabel": "風景推薦度 (1~5 星)",
       "contentLabel": "心得分享 (最少 10 字)",
-      "contentPlaceholder": "跟大家分享一下這次的收穫、山上的趣事，或是想特別感謝哪位幹部/嚮導吧！居住/登山愉快！🏕️",
+      "contentPlaceholder": "跟大家分享一下這次的收穫、山上的趣事，或是想特別感謝哪位幹部/嚮導吧！祝登山愉快！",
       "imageLabel": "登頂照 / 團體合照網址 (選填)",
       "imagePlaceholder": "https://example.com/your-summit-photo.jpg",
       "closeBtn": "關閉視窗",

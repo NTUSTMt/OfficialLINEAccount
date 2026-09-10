@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AlertCircle, Award, Star } from 'lucide-react';
 import { getDirectImageUrl } from '../utils/image';
 import '../App.css';
 
@@ -297,8 +298,9 @@ function Achievements({ userId }: { userId: string }) {
     <div className="app-container animate-fade-in" style={{ padding: '16px', maxWidth: '600px', margin: '0 auto' }}>
 
       {error && (
-        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
-          ⚠️ {error}
+        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -346,9 +348,11 @@ function Achievements({ userId }: { userId: string }) {
       </div>
 
       {data?.activities.length === 0 ? (
-        <div className="empty-cart-state" style={{ padding: '60px 0', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-          <span className="empty-icon" style={{ fontSize: '48px' }}>🧗</span>
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '12px' }}>{t('achievements.list.emptyTitle')}</p>
+        <div className="empty-cart-state" style={{ padding: '60px 0', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
+            <Award size={36} color="#94a3b8" />
+          </div>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('achievements.list.emptyTitle')}</p>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('achievements.list.emptyText')}</p>
         </div>
       ) : (
@@ -485,13 +489,14 @@ function Achievements({ userId }: { userId: string }) {
                         style={{
                           background: 'none',
                           border: 'none',
-                          fontSize: '22px',
                           cursor: isViewOnly ? 'default' : 'pointer',
-                          color: star <= difficulty ? '#fbbf24' : '#cbd5e1',
-                          padding: 0
+                          padding: '2px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
                         }}
                       >
-                        ★
+                        <Star size={20} fill={star <= difficulty ? '#fbbf24' : 'none'} color={star <= difficulty ? '#fbbf24' : '#cbd5e1'} />
                       </button>
                     ))}
                   </div>
@@ -511,13 +516,14 @@ function Achievements({ userId }: { userId: string }) {
                         style={{
                           background: 'none',
                           border: 'none',
-                          fontSize: '22px',
                           cursor: isViewOnly ? 'default' : 'pointer',
-                          color: star <= beauty ? '#fbbf24' : '#cbd5e1',
-                          padding: 0
+                          padding: '2px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
                         }}
                       >
-                        ★
+                        <Star size={20} fill={star <= beauty ? '#fbbf24' : 'none'} color={star <= beauty ? '#fbbf24' : '#cbd5e1'} />
                       </button>
                     ))}
                   </div>

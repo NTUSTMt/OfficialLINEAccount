@@ -1,6 +1,7 @@
 import { useState, useEffect, Suspense, lazy, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ShieldCheck, Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle } from 'lucide-react';
 import liff from '@line/liff';
 import './App.css';
 
@@ -46,25 +47,25 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
   const getHeaderDetails = () => {
     const path = location.pathname;
     if (path.includes('/admin')) {
-      return { title: t('nav.adminEvents.title'), subtitle: t('nav.adminEvents.subtitle'), icon: '🛠️' };
+      return { title: t('nav.adminEvents.title'), subtitle: t('nav.adminEvents.subtitle'), icon: <ShieldCheck size={24} color="#059669" /> };
     }
     if (path.includes('/achievements')) {
-      return { title: t('nav.achievements.title'), subtitle: t('nav.achievements.subtitle'), icon: '🏆' };
+      return { title: t('nav.achievements.title'), subtitle: t('nav.achievements.subtitle'), icon: <Award size={24} color="#059669" /> };
     }
     if (path.includes('/history')) {
-      return { title: t('nav.history.title'), subtitle: t('nav.history.subtitle'), icon: '📜' };
+      return { title: t('nav.history.title'), subtitle: t('nav.history.subtitle'), icon: <FileText size={24} color="#059669" /> };
     }
     if (path.includes('/register')) {
-      return { title: t('nav.register.title'), subtitle: t('nav.register.subtitle'), icon: '📝' };
+      return { title: t('nav.register.title'), subtitle: t('nav.register.subtitle'), icon: <ClipboardList size={24} color="#059669" /> };
     }
     if (path.includes('/payment')) {
-      return { title: t('nav.payment.title'), subtitle: t('nav.payment.subtitle'), icon: '💳' };
+      return { title: t('nav.payment.title'), subtitle: t('nav.payment.subtitle'), icon: <CreditCard size={24} color="#059669" /> };
     }
     if (path.includes('/dashboard')) {
-      return { title: t('nav.dashboard.title'), subtitle: t('nav.dashboard.subtitle'), icon: '👤' };
+      return { title: t('nav.dashboard.title'), subtitle: t('nav.dashboard.subtitle'), icon: <User size={24} color="#059669" /> };
     }
     // 預設為裝備租借
-    return { title: t('nav.borrow.title'), subtitle: t('nav.borrow.subtitle'), icon: '🏕️' };
+    return { title: t('nav.borrow.title'), subtitle: t('nav.borrow.subtitle'), icon: <Compass size={24} color="#059669" /> };
   };
 
   const { title, subtitle, icon } = getHeaderDetails();
@@ -96,7 +97,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
   return (
     <header className="app-header" style={{ position: 'sticky', top: 0, width: '100%', boxSizing: 'border-box' }}>
       <div className="header-logo">
-        <span className="logo-icon">{icon}</span>
+        <span className="logo-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</span>
         <div className="logo-text">
           <h1>{title}</h1>
           <p>{subtitle}</p>
@@ -109,8 +110,10 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
           className="lang-switch-btn"
           onClick={toggleLanguage}
           title="Switch Language"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
         >
-          🌐 {i18n.language === 'zh' ? 'EN' : '中'}
+          <Languages size={15} />
+          <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
         </button>
 
         <div className="avatar-dropdown-container" style={{ position: 'relative' }}>
@@ -338,7 +341,9 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
           boxSizing: 'border-box'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+            <AlertCircle size={48} color="#ef4444" />
+          </div>
           <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '12px', color: '#1e293b' }}>個人資料不完整</h3>
           <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.6', marginBottom: '24px' }}>
             您尚未填寫完整的社員個人資料，請先完成必填欄位（姓名、系所、學號、手機、Email、LINE ID）後，方可使用裝備租借與繳費系統。
@@ -371,7 +376,7 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
 }
 
 function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; userId: string; displayName: string; pictureUrl: string } }) {
-  // ⚠️ 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，
+  // 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，需在初始化前鎖定初始路徑
   // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
   const [redirectPath] = useState(() => getInitialRedirectPath());
   const [isOfficer, setIsOfficer] = useState(false);

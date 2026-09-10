@@ -6,12 +6,12 @@
     "dashboard": { "title": "My Dashboard", "subtitle": "My Dashboard" },
     "history": { "title": "Payment History", "subtitle": "Payment History" },
     "achievements": { "title": "Footprints", "subtitle": "Mountaineering Footprint" },
-    "menuDashboard": "👤 Dashboard",
-    "menuRegister": "📝 Register",
-    "menuBorrow": "🎒 Rental",
-    "menuPayment": "💳 Payment",
-    "menuHistory": "📜 History",
-    "menuAchievements": "🏆 Footprint",
+    "menuDashboard": "Dashboard",
+    "menuRegister": "Register",
+    "menuBorrow": "Rental",
+    "menuPayment": "Payment",
+    "menuHistory": "History",
+    "menuAchievements": "Footprint",
     "adminEvents": { "title": "Events Admin", "subtitle": "Events Management" },
     "menuAdminEvents": "Officer"
   },
@@ -24,7 +24,7 @@
       "safety": "Safety",
       "experience": "Experience"
     },
-    "draftRestored": "✨ Restored your previously saved draft",
+    "draftRestored": "Restored your previously saved draft",
     "clearDraft": "Clear Draft",
     "alert": {
       "maxFiles": "You can upload up to 5 images! You can select {{limit}} more.",
@@ -32,14 +32,14 @@
       "imageParseError": "Failed to parse the image!",
       "imageLoadError": "Failed to load image {{name}}, please try another file!",
       "fileReadError": "Failed to read file {{name}}!",
-      "registerSuccess": "🎉 Registration successful! Data saved to club database.",
-      "updateSuccess": "✅ Profile updated successfully!",
+      "registerSuccess": "Registration successful! Data saved to club database.",
+      "updateSuccess": "Profile updated successfully!",
       "saveFailed": "Save failed: {{message}}",
       "contactAdmin": "Please contact the club administrator",
       "networkError": "Network connection failed, please check your network status!"
     },
     "step1": {
-      "title": "📍 Required Info",
+      "title": "Required Info",
       "nameLabel": "Full Name",
       "namePlaceholder": "Please enter name on national ID/passport",
       "identityStatusLabel": "Status / Affiliation",
@@ -59,7 +59,7 @@
       "lineIdPlaceholder": "For officers to create event contact groups"
     },
     "step2": {
-      "title": "📍 Basic Info (Optional)",
+      "title": "Basic Info (Optional)",
       "genderLabel": "Gender",
       "genderPlaceholder": "Please select gender (for cabin/bed arrangement)",
       "genderMale": "Male",
@@ -71,7 +71,7 @@
       "addressPlaceholder": "Please enter your contact or current address"
     },
     "step3": {
-      "title": "📍 Safety & Emergency Info (Optional)",
+      "title": "Safety & Emergency Info (Optional)",
       "emerNameLabel": "Emergency Contact Name",
       "emerNamePlaceholder": "Name of family member or friend",
       "emerRelLabel": "Relationship",
@@ -84,7 +84,7 @@
       "medicalHistoryPlaceholder": "e.g., asthma, severe altitude sickness, allergies. Confidential & only for leader to ensure safety."
     },
     "step4": {
-      "title": "📍 Experience & Upload (Optional)",
+      "title": "Experience & Upload (Optional)",
       "expLabel": "Mountaineering Experience",
       "expPlaceholder": "e.g., Hehuanshan, Yushan Main Peak, Jiaming Lake...",
       "strengthLabel": "Physical Fitness Proof",
@@ -94,7 +94,7 @@
       "selectedFiles": "Selected files to upload ({{count}}/5):",
       "remove": "Remove",
       "uploadedFiles": "Uploaded proof files:",
-      "viewUploaded": "🔍 View Uploaded Proof #{{num}}",
+      "viewUploaded": "View Uploaded Proof #{{num}}",
       "privacyConsent": "I agree to use my personal data for event insurance, entry permits, and emergency contact.",
       "intendOfficialTitle": "Join Club Membership",
       "intendOfficialYes": "I want to become a member (50% off gear rental)",
@@ -187,7 +187,7 @@
       "noOtherPurpose": "Please enter other purpose description!",
       "systemError": "System error: {{message}}",
       "networkError": "Connection failed. Please check network or contact officers!",
-      "submitSuccess": "✅ Successfully submitted reservation for {{count}} items!\nProcessing, please wait...",
+      "submitSuccess": "Successfully submitted reservation for {{count}} items!\nProcessing, please wait...",
       "submitSuccessBrowser": "Order submitted"
     },
     "banner": {
@@ -224,7 +224,7 @@
       "nextBtn": "Next"
     },
     "drawer": {
-      "title": "📝 Reservation Details",
+      "title": "Reservation Details",
       "selectedItems": "Selected Gear",
       "formulaLabel": "Formula: ",
       "daysUnit": "d",
@@ -233,7 +233,7 @@
       "discountMember": " (50% Off for Member)",
       "emptyText": "Your reservation cart is currently empty!",
       "startBrowsing": "Browse Gear",
-      "detailsTitle": "📅 Select Rental Details",
+      "detailsTitle": "Select Rental Details",
       "pickupDate": "Pickup Date",
       "returnDate": "Return Date",
       "durationBadge": "Duration: {{days}} days (2 base + {{extra}} extra)",
@@ -262,11 +262,11 @@
       "discountMember": "50% Member Discount"
     },
     "modal": {
-      "title": "🎒 Gear Specification",
+      "title": "Gear Specification",
       "codeLabel": "Code: ",
       "basePrice": "Rent (2 Days): ",
       "extraPrice": "Extend (+1 Day): ",
-      "descTitle": "📝 Specification & Description",
+      "descTitle": "Specification & Description",
       "noDesc": "No details descriptions for this gear yet. Contact officers if you have any questions.",
       "qtyLabel": "Quantity: ",
       "outOfStock": "Out of Stock",
@@ -296,7 +296,7 @@
       "description": "The declaration has been successfully sent to the officer verification group. The system will automatically notify you via LINE message after confirmation."
     },
     "account": {
-      "title": "🏦 Club Bank Account Details",
+      "title": "Club Bank Account Details",
       "bankLabel": "Bank Name: ",
       "bankName": "LINE Bank (824)",
       "accountLabel": "Account No: ",
@@ -305,7 +305,7 @@
       "note": "* Please transfer exactly the \"Total Amount\" for the selected items. Do not split or overpay, otherwise we cannot reconcile."
     },
     "list": {
-      "title": "📋 Your Unpaid Items",
+      "title": "Your Unpaid Items",
       "loading": "Getting unpaid items, please wait...",
       "emptyTitle": "No Unpaid Fees",
       "emptyText": "Awesome! All your dues have been cleared.",
@@ -318,7 +318,7 @@
       "activity": "Event Registration"
     },
     "membership": {
-      "title": "💡 Membership Fee Details:",
+      "title": "Membership Fee Details:",
       "semesterLabel": "Per semester: ",
       "graduationLabel": "Until graduation: ",
       "graduationValue": "Undergraduate $800 / Master $400",
@@ -329,17 +329,20 @@
       "optionMaster": "Until Graduation - Master ($400, Expiry date: {{date}})"
     },
     "equip": {
-      "dateLabel": "📅 Rental Period:",
-      "itemsLabel": "📦 Itemized Details:",
+      "dateLabel": "Rental Period:",
+      "itemsLabel": "Itemized Details:",
       "qtyUnit": "pcs",
-      "modifyTip": "💡 Tip: If you need to modify your order, please go to your Profile to cancel it and rent again."
+      "modifyTip": "Tip: If you need to modify your order, please go to your Profile to cancel it and rent again."
     },
     "form": {
-      "title": "✍️ Enter Payment Info",
+      "title": "Enter Payment Info",
       "amountLabel": "Total Amount (Auto-Calculated)",
       "digitsLabel": "Last 5 digits of your bank account",
       "digitsPlaceholder": "e.g., 12345",
       "digitsTip": "Please double check and enter the last 5 digits of your transfer account, otherwise officers cannot verify it.",
+      "noteLabel": "Payment Note / Remark (Optional)",
+      "notePlaceholder": "e.g., John Doe transfer, combined payment note",
+      "noteTip": "This note will be forwarded to officers and recorded in payment history.",
       "submittingBtn": "Submitting...",
       "submitBtn": "Confirm Payment"
     }
@@ -385,9 +388,9 @@
     },
     "alert": {
       "minContentLength": "Reflection content must be at least 10 characters!",
-      "submitSuccess": "🎉 Thank you for your feedback! It has been added to your achievement wall!",
-      "submitFailed": "⚠️ Submission failed: {{message}}",
-      "submitSuccessMock": "🎉 Thank you for your feedback! (Local mock submission successful)"
+      "submitSuccess": "Thank you for your feedback! It has been added to your achievement wall!",
+      "submitFailed": "Submission failed: {{message}}",
+      "submitSuccessMock": "Thank you for your feedback! (Local mock submission successful)"
     },
     "loading": "Loading your climbing footprint wall...",
     "overview": {
@@ -398,20 +401,20 @@
       "reflectionsLabel": "Reflections"
     },
     "list": {
-      "title": "🏔️ Attended Events List",
+      "title": "Attended Events List",
       "emptyTitle": "You do not have any past or confirmed event records yet!",
       "emptyText": "After successfully attending trips, reflection writing features will unlock.",
-      "dateLabel": "📅 Trip Date: {{date}}",
-      "viewBtn": "📖 View My Memory",
-      "writeBtn": "✏️ Write Reflection"
+      "dateLabel": "Trip Date: {{date}}",
+      "viewBtn": "View My Memory",
+      "writeBtn": "Write Reflection"
     },
     "modal": {
-      "viewTitle": "📖 Review Trip Reflection",
-      "writeTitle": "✏️ Write Trip Reflection",
+      "viewTitle": "Review Trip Reflection",
+      "writeTitle": "Write Trip Reflection",
       "difficultyLabel": "Difficulty (1~5 Stars)",
       "beautyLabel": "Scenic Recommendation (1~5 Stars)",
       "contentLabel": "Reflection Share (Min 10 characters)",
-      "contentPlaceholder": "Share your gains, interesting stories on the mountain, or special thanks to officers/guides! Happy climbing! 🏕️",
+      "contentPlaceholder": "Share your gains, interesting stories on the mountain, or special thanks to officers/guides! Happy climbing!",
       "imageLabel": "Summit/Group Photo URL (Optional)",
       "imagePlaceholder": "https://example.com/your-summit-photo.jpg",
       "closeBtn": "Close",

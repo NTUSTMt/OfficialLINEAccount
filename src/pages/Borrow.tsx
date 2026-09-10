@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
+import { Tent, Moon, Package, Compass, Flame, Shield, Mountain, ShoppingCart } from 'lucide-react';
 import { getDirectImageUrl } from '../utils/image';
 import '../App.css';
 
 // ==========================================
-// 📌 1. 型別定義 (Type Definitions)
+// 1. 型別定義 (Type Definitions)
 // ==========================================
 interface Equipment {
   id: string;
@@ -32,11 +33,11 @@ interface ApiResponse {
 }
 
 
-// 根據商品名稱或傳入的圖片網址渲染對應的真實圖片或對應的裝備 Emoji 圖示
+// 根據商品名稱智慧比對並產生對應的圖示
 function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
   const directUrl = getDirectImageUrl(imageUrl);
 
-  if (directUrl && directUrl.startsWith('http')) {
+  if (directUrl) {
     return (
       <div className="product-img-container">
         <img
@@ -51,43 +52,43 @@ function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
   }
 
   const lowercaseName = name.toLowerCase();
-  let emoji = '🏔️';
+  let icon = <Mountain size={36} color="#64748b" />;
   let bgClass = 'bg-default';
 
   // 帳篷
   if (lowercaseName.includes('帳') || lowercaseName.includes('tent')) {
-    emoji = '⛺';
+    icon = <Tent size={36} color="#059669" />;
     bgClass = 'bg-tent';
   }
   // 睡墊/睡袋
   else if (lowercaseName.includes('墊') || lowercaseName.includes('袋') || lowercaseName.includes('pad') || lowercaseName.includes('sleeping')) {
-    emoji = '💤';
+    icon = <Moon size={36} color="#4f46e5" />;
     bgClass = 'bg-pad';
   }
   // 背包
   else if (lowercaseName.includes('包') || lowercaseName.includes('pack')) {
-    emoji = '🎒';
+    icon = <Package size={36} color="#0891b2" />;
     bgClass = 'bg-pack';
   }
   // 登山杖
   else if (lowercaseName.includes('杖') || lowercaseName.includes('pole') || lowercaseName.includes('stick')) {
-    emoji = '🦯';
+    icon = <Compass size={36} color="#d97706" />;
     bgClass = 'bg-pole';
   }
   // 鋼盆/炊具/爐
   else if (lowercaseName.includes('盆') || lowercaseName.includes('鍋') || lowercaseName.includes('爐') || lowercaseName.includes('cook') || lowercaseName.includes('stove')) {
-    emoji = '🍳';
+    icon = <Flame size={36} color="#dc2626" />;
     bgClass = 'bg-bowl';
   }
   // 頭盔/岩盔/吊帶/攀登
   else if (lowercaseName.includes('盔') || lowercaseName.includes('吊帶') || lowercaseName.includes('繩') || lowercaseName.includes('harness') || lowercaseName.includes('helmet')) {
-    emoji = '🪖';
+    icon = <Shield size={36} color="#7c3aed" />;
     bgClass = 'bg-default';
   }
 
   return (
-    <div className={`product-img-container ${bgClass}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px' }}>
-      {emoji}
+    <div className={`product-img-container ${bgClass}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {icon}
     </div>
   );
 }
@@ -95,7 +96,7 @@ function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
 function Borrow({ userId }: { userId: string }) {
   const { t } = useTranslation();
   // ==========================================
-  // 📌 2. 狀態管理 (State Management)
+  // 2. 狀態管理 (State Management)
   // ==========================================
   const [equipments, setEquipments] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -118,11 +119,11 @@ function Borrow({ userId }: { userId: string }) {
     cart: {}
   });
 
-  // ⚠️ 替換成你剛剛重新部署的 GAS 網頁應用程式 URL
+  // 替換成你剛剛重新部署的 GAS 網頁應用程式 URL
   const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
 
   // ==========================================
-  // 📌 3. 初始化與資料獲取 (Initialization)
+  // 3. 初始化與資料獲取 (Initialization)
   // ==========================================
   useEffect(() => {
     const fetchData = async () => {
@@ -157,7 +158,7 @@ function Borrow({ userId }: { userId: string }) {
   }, [userId]);
 
   // ==========================================
-  // 📌 4. 核心邏輯處理 (Handlers)
+  // 4. 核心邏輯處理 (Handlers)
   // ==========================================
 
   // 購物車數量增減
@@ -275,7 +276,7 @@ function Borrow({ userId }: { userId: string }) {
 
     console.log('準備送出的資料:', orderPayload);
 
-    // 🌟 使用 fetch POST 將資料打回給 GAS
+    // 使用 fetch POST 將資料打回給 GAS
     try {
       const response = await fetch(GAS_API_URL, {
         method: 'POST',
@@ -309,7 +310,7 @@ function Borrow({ userId }: { userId: string }) {
   };
 
   // ==========================================
-  // 📌 5. 畫面渲染 (Render)
+  // 5. 畫面渲染 (Render)
   // ==========================================
   return (
     <div className="app-container">
@@ -472,8 +473,10 @@ function Borrow({ userId }: { userId: string }) {
 
           <div className="drawer-content">
             {totalItems === 0 ? (
-              <div className="empty-cart-state">
-                <span className="empty-icon">🛒</span>
+              <div className="empty-cart-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                  <ShoppingCart size={32} color="#94a3b8" />
+                </div>
                 <p>{t('borrow.drawer.emptyText')}</p>
                 <button className="start-rent-btn" onClick={() => setIsCartOpen(false)}>{t('borrow.drawer.startBrowsing')}</button>
               </div>

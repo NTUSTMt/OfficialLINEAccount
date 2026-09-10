@@ -1,5 +1,5 @@
 /* ==========================================
-   📌 設計系統變數 (Design Tokens)
+   設計系統變數 (Design Tokens)
    ========================================== */
 :root {
   --bg-primary: #f8fafc;
@@ -33,7 +33,7 @@
 }
 
 /* ==========================================
-   📌 全域重設與基本樣式 (Global Reset)
+   全域重設與基本樣式 (Global Reset)
    ========================================== */
 * {
   box-sizing: border-box;
@@ -63,7 +63,7 @@ body {
 }
 
 /* ==========================================
-   📌 頂部導覽列 (Header)
+   頂部導覽列 (Header)
    ========================================== */
 .app-header {
   display: flex;
@@ -162,7 +162,7 @@ body {
 }
 
 /* ==========================================
-   📌 首頁海報 (Promo Banner)
+   首頁海報 (Promo Banner)
    ========================================== */
 .promo-banner {
   background: linear-gradient(135deg, #10b981 0%, #064e3b 100%); /* 使用原本質感的綠色漸層 */
@@ -262,7 +262,7 @@ body {
 }
 
 /* ==========================================
-   📌 主要內容與商品網格 (Product Grid)
+   主要內容與商品網格 (Product Grid)
    ========================================== */
 .main-content {
   padding: 8px 16px 24px;
@@ -294,7 +294,7 @@ body {
 }
 
 /* ==========================================
-   📌 商品卡片 (Product Card)
+   商品卡片 (Product Card)
    ========================================== */
 .product-card {
   background-color: var(--bg-secondary);
@@ -421,7 +421,7 @@ body {
 }
 
 /* ==========================================
-   📌 商品按鈕與控制器 (Buttons / Controllers)
+   商品按鈕與控制器 (Buttons / Controllers)
    ========================================== */
 .product-actions {
   margin-top: 4px;
@@ -497,7 +497,7 @@ body {
 }
 
 /* ==========================================
-   📌 底部浮動條 (Floating Cart Bar)
+   底部浮動條 (Floating Cart Bar)
    ========================================== */
 .floating-cart-bar {
   position: fixed;
@@ -574,7 +574,7 @@ body {
 }
 
 /* ==========================================
-   📌 購物車抽屜 (Cart Drawer)
+   購物車抽屜 (Cart Drawer)
    ========================================== */
 .cart-drawer-overlay {
   position: fixed;
@@ -935,7 +935,7 @@ input[type="date"]::-webkit-date-and-time-value {
 }
 
 /* ==========================================
-   📌 底部導覽列 (Bottom Nav Bar)
+   底部導覽列 (Bottom Nav Bar)
    ========================================== */
 .bottom-nav-bar {
   position: fixed;
@@ -984,7 +984,7 @@ input[type="date"]::-webkit-date-and-time-value {
 }
 
 /* ==========================================
-   📌 資料註冊與更新頁面 (Register Page)
+   資料註冊與更新頁面 (Register Page)
    ========================================== */
 .register-container {
   padding: 20px;
@@ -1212,7 +1212,7 @@ input[type="date"]::-webkit-date-and-time-value {
 }
 
 /* ==========================================
-   📌 按鈕樣式 (Buttons)
+   按鈕樣式 (Buttons)
    ========================================== */
 .btn {
   display: inline-flex;
@@ -1269,7 +1269,7 @@ input[type="date"]::-webkit-date-and-time-value {
 }
 
 /* ==========================================
-   📌 裝備詳細資訊彈窗 (Equipment Detail Modal)
+   裝備詳細資訊彈窗 (Equipment Detail Modal)
    ========================================== */
 .detail-modal-overlay {
   position: fixed;
@@ -1363,7 +1363,7 @@ input[type="date"]::-webkit-date-and-time-value {
 }
 
 /* ==========================================
-   📌 語言切換按鈕 (Language Switcher Button)
+   語言切換按鈕 (Language Switcher Button)
    ========================================== */
 .lang-switch-btn {
   display: flex;
