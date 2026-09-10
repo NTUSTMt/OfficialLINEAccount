@@ -3,11 +3,35 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.92` (v0.0.92)
+- **當前版本**：`0.0.93` (v0.0.93)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 93. 幹部活動管理介面向量圖示現代化升級 (Lucide-React Vector Icons) (v0.0.93)
+- **引入 `lucide-react` 向量圖示庫**：
+  - 依社群規範使用 `pnpm add lucide-react` 安裝輕量、支援 Tree-shaking 之標準向量圖示套件。
+- **幹部活動管理頁面全面替換為專業 SVG 圖示**：
+  - 更新 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)。
+  - **頁籤導覽 (Tabs)**：將分頁 Emoji 替換為俐落的 `<ClipboardCheck size={17} />`（活動總覽與審核）與 `<Plus size={17} />` / `<Pencil size={17} />`（發布/編輯活動）。
+  - **搜尋列 (Search Bar)**：在輸入框前端嵌入精準的 `<Search size={16} />` 圖示，取代純文字前綴。
+  - **活動看板卡片 (Board Cards)**：
+    - 活動縮圖缺失時以現代化的 `<ImageIcon size={28} />` 作為預設替代。
+    - 時程費用獨立資訊格由原先的 📅、⏰、💰 Emoji 全面替換為 `<Calendar size={13} />`、`<Clock size={13} />` 與 `<CircleDollarSign size={13} />`。
+    - 四色指標看板分別採用 `<Users size={14} />`（總報名）、`<CheckCircle2 size={14} />`（正取）、`<Clock4 size={14} />`（備取）與 `<AlertCircle size={14} />`（待審核）。
+    - 底部操作按鈕對齊為 `<Pencil size={14} />`（編輯）與 `<ClipboardCheck size={15} />`（審核名單）。
+  - **編輯與新增表單 (Create / Edit Form)**：
+    - 狀態高亮區塊加入 `<Sparkles size={15} />` 強調動態提示。
+    - 照片上傳按鈕配置 `<ImageIcon size={16} />`，上傳完成反饋採用 `<Check size={16} />`。
+  - **審核名單彈窗 (Applicant Review Modal)**：
+    - 收合展開箭頭升級為旋轉流暢的 `<ChevronDown size={17} />`。
+    - LINE ID 膠囊配置 `<MessageSquare size={13} />`，點擊複製反饋動態由 `<Copy size={12} />` 切換為 `<Check size={12} />`。
+    - 電話撥號按鈕配置 `<Phone size={13} />`，體能照片連結配置 `<ImageIcon size={13} />`。
+    - 正取、備取、設為待審大按鈕分別使用 `<CheckCircle2 size={14} />`、`<Clock4 size={14} />` 與 `<RotateCcw size={14} />`。
+    - 推播按鈕配置 `<Send size={15} />`。
+- **解決跨平台行高與文字歪斜 (Cross-platform Consistency)**：
+  - 徹底解決 iOS/macOS 與 Android 因系統內建 Emoji 字型邊距及基線高度不一致所造成的版面微幅歪斜問題，提供統一、專業且兼具俐落美感的視覺體驗。
 
 ### 92. 幹部系統體驗全面優化：表單強制靠左、發布狀態預告、審核名單點擊展開與 LINE ID 複製 (v0.0.92)
 - **頂部頁籤極簡化**：

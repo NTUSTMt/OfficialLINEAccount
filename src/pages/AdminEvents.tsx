@@ -2,6 +2,28 @@ import { useState, useEffect, useMemo, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { getDirectImageUrl } from '../utils/image';
+import {
+  Search,
+  Calendar,
+  Clock,
+  CircleDollarSign,
+  Users,
+  CheckCircle2,
+  Clock4,
+  AlertCircle,
+  Pencil,
+  ClipboardCheck,
+  Plus,
+  MessageSquare,
+  Copy,
+  Check,
+  Phone,
+  ImageIcon,
+  RotateCcw,
+  Send,
+  Sparkles,
+  ChevronDown
+} from 'lucide-react';
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
 
@@ -535,10 +557,14 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             fontWeight: 'bold',
             fontSize: '14px',
             cursor: 'pointer',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px'
           }}
         >
-          {t('adminEvents.tabList')} ({events.length})
+          <ClipboardCheck size={16} />
+          <span>{t('adminEvents.tabList')} ({events.length})</span>
         </button>
         <button
           onClick={resetFormForCreate}
@@ -551,10 +577,14 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             fontWeight: 'bold',
             fontSize: '14px',
             cursor: 'pointer',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px'
           }}
         >
-          {isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}
+          {isEditing ? <Pencil size={15} /> : <Plus size={16} />}
+          <span>{isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}</span>
         </button>
       </div>
 
@@ -565,21 +595,24 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         <div>
           {/* 搜尋與篩選列 */}
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px' }}>
-            <input
-              type="text"
-              placeholder="🔍 搜尋活動名稱或代號..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                flex: 1,
-                minWidth: '200px',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: '1.5px solid #cbd5e1',
-                fontSize: '14px',
-                outline: 'none'
-              }}
-            />
+            <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+              <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+              <input
+                type="text"
+                placeholder="搜尋活動名稱或代號..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px 10px 36px',
+                  borderRadius: '10px',
+                  border: '1.5px solid #cbd5e1',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
             <div style={{ display: 'flex', gap: '6px' }}>
               {(['all', '開放', '未來開放', '關閉'] as const).map((st) => (
                 <button
@@ -720,7 +753,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                         {imgDirect ? (
                           <img src={imgDirect} alt={evt.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
-                          <span style={{ fontSize: '28px', opacity: 0.6 }}>⛰️</span>
+                          <ImageIcon size={28} color="#94a3b8" />
                         )}
                       </div>
 
@@ -766,7 +799,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                         flexDirection: 'column',
                         gap: '2px'
                       }}>
-                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>📅 出隊日程</span>
+                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Calendar size={13} /> 出隊日程
+                        </span>
                         <span style={{ fontSize: '12px', color: '#1e293b', fontWeight: 'bold' }}>
                           {evt.startDate} ~ {evt.endDate}
                         </span>
@@ -781,7 +816,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                         flexDirection: 'column',
                         gap: '2px'
                       }}>
-                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>⏰ 報名截止</span>
+                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Clock size={13} /> 報名截止
+                        </span>
                         <span style={{ fontSize: '12px', color: '#1e293b', fontWeight: 'bold' }}>
                           {evt.deadline}
                         </span>
@@ -796,7 +833,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                         flexDirection: 'column',
                         gap: '2px'
                       }}>
-                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>💰 活動費用</span>
+                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <CircleDollarSign size={13} /> 活動費用
+                        </span>
                         <span style={{ fontSize: '12px', color: '#059669', fontWeight: 'bold' }}>
                           NT$ {evt.cost}
                         </span>
@@ -817,7 +856,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                         textAlign: 'center',
                         border: '1px solid #dbeafe'
                       }}>
-                        <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: '500' }}>總報名</div>
+                        <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                          <Users size={12} /> 總報名
+                        </div>
                         <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#1d4ed8', marginTop: '2px' }}>
                           {evt.stats.total}
                         </div>
@@ -831,7 +872,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                         textAlign: 'center',
                         border: '1px solid #a7f3d0'
                       }}>
-                        <div style={{ fontSize: '11px', color: '#059669', fontWeight: '500' }}>正取</div>
+                        <div style={{ fontSize: '11px', color: '#059669', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                          <CheckCircle2 size={12} /> 正取
+                        </div>
                         <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#047857', marginTop: '2px' }}>
                           {evt.stats.accepted}
                         </div>
@@ -845,7 +888,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                         textAlign: 'center',
                         border: '1px solid #fed7aa'
                       }}>
-                        <div style={{ fontSize: '11px', color: '#ea580c', fontWeight: '500' }}>備取</div>
+                        <div style={{ fontSize: '11px', color: '#ea580c', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                          <Clock4 size={12} /> 備取
+                        </div>
                         <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#c2410c', marginTop: '2px' }}>
                           {evt.stats.waitlisted}
                         </div>
@@ -871,8 +916,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                             backgroundColor: '#ef4444'
                           }} />
                         )}
-                        <div style={{ fontSize: '11px', color: hasPending ? '#dc2626' : '#64748b', fontWeight: 'bold' }}>
-                          待審核
+                        <div style={{ fontSize: '11px', color: hasPending ? '#dc2626' : '#64748b', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                          <AlertCircle size={12} /> 待審核
                         </div>
                         <div style={{ fontSize: '15px', fontWeight: 'bold', color: hasPending ? '#b91c1c' : '#64748b', marginTop: '2px' }}>
                           {evt.stats.pending}
@@ -906,7 +951,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                           transition: 'all 0.2s'
                         }}
                       >
-                        ✏️ {t('adminEvents.btnEdit')}
+                        <Pencil size={13} />
+                        <span>{t('adminEvents.btnEdit')}</span>
                       </button>
 
                       <button
@@ -929,7 +975,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                           transition: 'all 0.2s'
                         }}
                       >
-                        <span>📋 {t('adminEvents.btnSignups')}</span>
+                        <ClipboardCheck size={14} />
+                        <span>{t('adminEvents.btnSignups')}</span>
                         {hasPending ? (
                           <span style={{
                             backgroundColor: '#ef4444',
@@ -1038,8 +1085,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               border: '1.5px solid #e2e8f0',
               textAlign: 'left'
             }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', marginBottom: '6px', textAlign: 'left' }}>
-                📌 {t('adminEvents.statusLabel')}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', marginBottom: '6px', textAlign: 'left' }}>
+                <Sparkles size={14} color="#059669" />
+                <span>{t('adminEvents.statusLabel')}</span>
               </label>
               <select
                 value={formData.status}
@@ -1058,9 +1106,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   color: formData.status === '開放' ? '#15803d' : formData.status === '未來開放' ? '#c2410c' : '#64748b'
                 }}
               >
-                <option value="未來開放">🟠 未來開放 (預設預告，暫不開放社員報名填寫)</option>
-                <option value="開放">🟢 開放報名 (發布後社員即可開始報名填表)</option>
-                <option value="關閉">⚪ 關閉活動 (僅幹部可見，暫不對外開放)</option>
+                <option value="未來開放">未來開放 (預設預告，暫不開放社員報名填寫)</option>
+                <option value="開放">開放報名 (發布後社員即可開始報名填表)</option>
+                <option value="關閉">關閉活動 (僅幹部可見，暫不對外開放)</option>
               </select>
               <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#64748b', textAlign: 'left', lineHeight: '1.4' }}>
                 {formData.status === '未來開放'
@@ -1149,11 +1197,14 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                     color: '#334155'
                   }}
                 >
-                  {previewImage ? t('adminEvents.coverChangeBtn') : t('adminEvents.coverUploadBtn')}
+                  <ImageIcon size={14} />
+                  <span>{previewImage ? t('adminEvents.coverChangeBtn') : t('adminEvents.coverUploadBtn')}</span>
                   <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
                 </label>
                 {previewImage && (
-                  <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 'bold' }}>✓ 已選擇照片</span>
+                  <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Check size={14} /> 已選擇照片
+                  </span>
                 )}
               </div>
             </div>
@@ -1499,15 +1550,14 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                           </span>
 
                           {/* 展開指示圖示 */}
-                          <span style={{
-                            fontSize: '10px',
-                            color: '#94a3b8',
-                            display: 'inline-block',
-                            transform: isExpanded ? 'rotate(180deg)' : 'none',
-                            transition: 'transform 0.2s'
-                          }}>
-                            ▼
-                          </span>
+                          <ChevronDown
+                            size={14}
+                            style={{
+                              color: '#94a3b8',
+                              transform: isExpanded ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s'
+                            }}
+                          />
                         </div>
                       </div>
 
@@ -1549,11 +1599,27 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                 transition: 'all 0.2s'
                               }}
                             >
-                              <span>💬 LINE:</span>
+                              <MessageSquare size={13} />
+                              <span>LINE:</span>
                               <span style={{ fontWeight: 'bold' }}>{s.lineId || '未留'}</span>
                               {s.lineId && (
-                                <span style={{ fontSize: '11px', color: copiedLineId === cardId ? '#15803d' : '#059669', fontWeight: 'bold' }}>
-                                  {copiedLineId === cardId ? '✅ 已複製！' : '📋 點擊複製'}
+                                <span style={{
+                                  fontSize: '11px',
+                                  color: copiedLineId === cardId ? '#15803d' : '#059669',
+                                  fontWeight: 'bold',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px'
+                                }}>
+                                  {copiedLineId === cardId ? (
+                                    <>
+                                      <Check size={12} color="#15803d" /> 已複製！
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy size={12} /> 點擊複製
+                                    </>
+                                  )}
                                 </span>
                               )}
                             </div>
@@ -1575,10 +1641,13 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                   fontWeight: '500'
                                 }}
                               >
-                                📞 {s.phone}
+                                <Phone size={13} />
+                                <span>{s.phone}</span>
                               </a>
                             ) : (
-                              <span style={{ color: '#94a3b8', padding: '5px 8px' }}>📞 無電話</span>
+                              <span style={{ color: '#94a3b8', padding: '5px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <Phone size={13} /> 無電話
+                              </span>
                             )}
 
                             {/* 體能證明連結 */}
@@ -1600,10 +1669,13 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                   fontWeight: 'bold'
                                 }}
                               >
-                                📷 {t('adminEvents.viewProof')}
+                                <ImageIcon size={13} />
+                                <span>{t('adminEvents.viewProof')}</span>
                               </a>
                             ) : (
-                              <span style={{ color: '#94a3b8', padding: '5px 8px' }}>📷 無證明照片</span>
+                              <span style={{ color: '#94a3b8', padding: '5px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <ImageIcon size={13} /> 無證明照片
+                              </span>
                             )}
                           </div>
 
@@ -1634,10 +1706,15 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                     backgroundColor: isAccepted ? '#16a34a' : '#e2e8f0',
                                     color: isAccepted ? 'white' : '#475569',
                                     transition: 'all 0.2s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '4px',
                                     boxShadow: isAccepted ? '0 2px 4px rgba(22, 163, 74, 0.25)' : 'none'
                                   }}
                                 >
-                                  ✅ {t('adminEvents.btnAccept')}
+                                  <CheckCircle2 size={13} />
+                                  <span>{t('adminEvents.btnAccept')}</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1653,10 +1730,15 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                     backgroundColor: isWaitlisted ? '#ea580c' : '#e2e8f0',
                                     color: isWaitlisted ? 'white' : '#475569',
                                     transition: 'all 0.2s',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '4px',
                                     boxShadow: isWaitlisted ? '0 2px 4px rgba(234, 88, 12, 0.25)' : 'none'
                                   }}
                                 >
-                                  ⏳ {t('adminEvents.btnWaitlist')}
+                                  <Clock4 size={13} />
+                                  <span>{t('adminEvents.btnWaitlist')}</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1669,10 +1751,15 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                     backgroundColor: 'white',
                                     color: '#64748b',
                                     cursor: 'pointer',
-                                    fontWeight: '500'
+                                    fontWeight: '500',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '4px'
                                   }}
                                 >
-                                  🔄 {t('adminEvents.btnReset')}
+                                  <RotateCcw size={12} />
+                                  <span>{t('adminEvents.btnReset')}</span>
                                 </button>
                               </>
                             )}
@@ -1732,9 +1819,12 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 }}
               >
                 {sendingNotifications && <div className="spinner" style={{ width: '14px', height: '14px' }}></div>}
-                {sendingNotifications
-                  ? t('adminEvents.sendingNotifications')
-                  : t('adminEvents.btnSendNotifications')}
+                <Send size={14} />
+                <span>
+                  {sendingNotifications
+                    ? t('adminEvents.sendingNotifications')
+                    : t('adminEvents.btnSendNotifications')}
+                </span>
               </button>
             </div>
 
