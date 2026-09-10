@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
-import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { appendAuthToken, withAuthPayload, gasGet } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import {
@@ -354,8 +354,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         status: newStatus
       });
 
-      const res = await fetch(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
-      const result = await res.json();
+      const result = await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
 
       if (result.status === 'success') {
         setEvents((prev) => {
@@ -475,8 +474,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         reviewResult: newResult
       });
 
-      const res = await fetch(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
-      const result = await res.json();
+      const result = await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
 
       if (result.status === 'success') {
         const oldResult = applicant.reviewResult || '';
@@ -563,8 +561,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         eventId: selectedEventForSignups.id
       });
 
-      const res = await fetch(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
-      const result = await res.json();
+      const result = await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
 
       if (result.status === 'success') {
         alert(t('adminEvents.alerts.notificationsSent', { count: result.notifiedCount || unnotifiedCount }));

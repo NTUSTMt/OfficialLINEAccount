@@ -3,11 +3,16 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.10` (v0.1.10)
+- **當前版本**：`0.1.11` (v0.1.11)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 111. iOS Safari/LINE LIFF 302 轉址 XHR 自動降級與 HTML 防快取機制 (v0.1.11)
+- **XHR 自動降級備援**：在 [api.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/api.ts) 新增 `gasGet()` 工具函式：以 `fetch` 為首選發送 GET 請求，若 Safari/WebKit 拋出 `TypeError: Load failed`（因 GAS 302 跨域轉址被阻斷），自動降級為 `XMLHttpRequest`（XHR 處理 302 跨域轉址的相容性更佳），確保在所有 iOS 環境下皆能完成請求。
+- **HTML 防快取標頭**：在 [vercel.json](file:///Users/brianhung/Documents/OfficialLINEAccount/vercel.json) 新增 `Cache-Control: no-cache, no-store, must-revalidate` 標頭，防止 LINE LIFF WebView 快取舊版 `index.html` 導致瀏覽器載入過期 JavaScript 套件。
+- 以上機制確保 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 的審核正取/備取、活動狀態切換、一鍵推播通知三大操作在 iOS LINE 環境中穩定運作。
 
 ### 110. 幹部審核與活動管理全面轉移為 GET 協定徹底消除 iOS WebKit 302 轉址 Load failed (v0.1.10)
 - **問題診斷**：
