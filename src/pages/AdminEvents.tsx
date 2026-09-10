@@ -322,7 +322,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload))
+        body: JSON.stringify(withAuthPayload(payload)),
+        redirect: 'follow'
       });
       const result = await res.json();
 
@@ -356,7 +357,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload))
+        body: JSON.stringify(withAuthPayload(payload)),
+        redirect: 'follow'
       });
       const result = await res.json();
 
@@ -481,7 +483,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload))
+        body: JSON.stringify(withAuthPayload(payload)),
+        redirect: 'follow'
       });
       const result = await res.json();
 
@@ -573,7 +576,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const res = await fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload))
+        body: JSON.stringify(withAuthPayload(payload)),
+        redirect: 'follow'
       });
       const result = await res.json();
 

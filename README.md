@@ -3,11 +3,26 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.8` (v0.1.8)
+- **當前版本**：`0.1.9` (v0.1.9)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 109. 審核操作異常與檔案權限防護修復 (v0.1.9)
+- **幹部審核「操作失敗: Load failed」根本原因診斷與修復 (Applicant Review "Load failed" Fix)**：
+  - **診斷發現**：
+    1. **Google Apps Script 部署存取權限**：GAS 部署若「誰可以存取 (Who has access)」非「所有人 (Anyone)」，未帶 Google Session 認證的請求會被 302 導向至 `accounts.google.com`。由於該登入頁無 CORS 標頭，iOS WebKit/Safari 會直接阻斷請求並丟出原生 `TypeError: Load failed`。經設定為「所有人」後，GAS 已能順利接收跨域請求。
+    2. **欄位模糊比對誤中「活動編號」修復**：[gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `processUpdateSignupStatus` 原先使用 `String(h).includes("編號")` 搜尋報名專屬碼欄位（`codeIdx`），導致誤配對到第一欄「活動編號」，比對邏輯因此失效。現已修正為排除含「活動」字樣並明確比對「專屬碼/報名代碼/報名編號/序號」。
+    3. **鎖定釋放安全性防護 (Lock Safety Guard)**：優化 `processUpdateEventStatus` 與 `processUpdateSignupStatus` 在 `finally` 區塊中的 `releaseLock()`，加入 `hasLock()` 狀態檢測與例外保護，防止未持鎖時調用導致後端崩潰拋出 500 HTML 錯誤。
+    4. **前端重導向跟隨設定 (Redirect Follow)**：在 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 的所有後台管理 POST fetch 請求中顯式加入 `redirect: 'follow'`，確保跨網域跳轉順暢接收。
+- **體能證明「你沒有呼叫 DriveApp.getFoldersByName 的權限」修復 (DriveApp Permission & Upload Error Handling)**：
+  - **診斷發現**：
+    1. 社員報名上傳體能證明時，後端呼叫 `DriveApp.getFoldersByName("LINE_Uploads")`。因 GAS 專案尚未在 Google 帳號授權 Google Drive 存取 Scope，導致 DriveApp 拋出權限例外。該例外被 catch 捕捉後，直接將錯誤訊息字串寫入試算表。
+    2. 幹部在後台點選「查看體能證明」時，前端安全檢核機制檢測出非 URL 內容並向幹部顯示提示視窗。
+  - **處置方案**：
+    - GAS 專案已確認/完成 DriveApp 權限授權，日後報名上傳將正常上傳並寫入 Drive 檔案連結。
+    - 針對已寫入錯誤訊息之舊資料列，可在試算表 `Signups` 表手動替換為正確檔案連結，或請社員重新報名即可。
 
 ### 108. 裝備頁面與活動審核中心第一階段前端載入加速與快取架構重構 (v0.1.8)
 - **裝備租借頁面解除瀑布串行阻擋與 SWR 快取實作 (Borrow Page Waterfall Elimination & Early Render)**：

@@ -6462,7 +6462,11 @@ function processUpdateEventStatus(payload) {
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   } finally {
-    lock.releaseLock();
+    try {
+      if (lock && typeof lock.hasLock === 'function' && lock.hasLock()) {
+        lock.releaseLock();
+      }
+    } catch (e) {}
   }
 }
 
@@ -6485,7 +6489,9 @@ function processUpdateSignupStatus(payload) {
     var sData = sSheet.getDataRange().getDisplayValues();
     var headers = sData[0];
     var codeIdx = headers.findIndex(function (h) {
-      return String(h).includes("專屬碼") || String(h).includes("代碼") || String(h).includes("序號") || String(h).includes("編號");
+      var s = String(h);
+      if (s.includes("活動")) return false;
+      return s.includes("專屬碼") || s.includes("報名代碼") || s.includes("報名編號") || s.includes("代碼") || s.includes("序號");
     });
     var sysIdx = headers.findIndex(function (h) {
       var s = String(h).toLowerCase();
@@ -6568,7 +6574,11 @@ function processUpdateSignupStatus(payload) {
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   } finally {
-    lock.releaseLock();
+    try {
+      if (lock && typeof lock.hasLock === 'function' && lock.hasLock()) {
+        lock.releaseLock();
+      }
+    } catch (e) {}
   }
 }
 
