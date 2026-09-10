@@ -4375,6 +4375,33 @@ function doGet(e) {
       var eventId = e.parameter.eventId;
       return getEventSignupsAPI(ss, eventId, userId);
 
+    } else if (action === "update_signup_status") {
+      var payload = {
+        userId: userId,
+        eventId: e.parameter.eventId || "",
+        signupCode: e.parameter.signupCode || "",
+        targetUserId: e.parameter.targetUserId || "",
+        rowNumber: e.parameter.rowNumber ? parseInt(e.parameter.rowNumber, 10) : undefined,
+        name: e.parameter.name || "",
+        reviewResult: e.parameter.reviewResult || ""
+      };
+      return processUpdateSignupStatus(payload);
+
+    } else if (action === "update_event_status") {
+      var payload = {
+        userId: userId,
+        eventId: e.parameter.eventId || "",
+        status: e.parameter.status || ""
+      };
+      return processUpdateEventStatus(payload);
+
+    } else if (action === "send_event_notifications") {
+      var payload = {
+        userId: userId,
+        eventId: e.parameter.eventId || ""
+      };
+      return processSendEventNotifications(payload);
+
     } else if (action === "get_equipments") {
       // 呼叫原本的裝備清單處理引擎
       return getEquipmentsListAPI(ss);

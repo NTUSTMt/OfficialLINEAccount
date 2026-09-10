@@ -347,19 +347,14 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   // 7. 快速切換活動狀態
   const handleQuickStatusChange = async (eventId: string, newStatus: string) => {
     try {
-      const payload = {
+      const query = new URLSearchParams({
         action: 'update_event_status',
         userId: userId || 'TEST_USER_ID',
         eventId: eventId,
         status: newStatus
-      };
-
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload)),
-        redirect: 'follow'
       });
+
+      const res = await fetch(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
       const result = await res.json();
 
       if (result.status === 'success') {
@@ -469,23 +464,18 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     const applicantKey = applicant.signupCode || applicant.userId || String(applicant.rowNumber);
     setUpdatingSignupCode(applicantKey);
     try {
-      const payload = {
+      const query = new URLSearchParams({
         action: 'update_signup_status',
         userId: userId || 'TEST_USER_ID',
-        eventId: selectedEventForSignups?.id,
+        eventId: selectedEventForSignups?.id || '',
         signupCode: applicant.signupCode || '',
         targetUserId: applicant.userId || '',
-        rowNumber: applicant.rowNumber,
+        rowNumber: applicant.rowNumber ? String(applicant.rowNumber) : '',
         name: applicant.name || '',
         reviewResult: newResult
-      };
-
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload)),
-        redirect: 'follow'
       });
+
+      const res = await fetch(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
       const result = await res.json();
 
       if (result.status === 'success') {
@@ -567,18 +557,13 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     setSendingNotifications(true);
     try {
-      const payload = {
+      const query = new URLSearchParams({
         action: 'send_event_notifications',
         userId: userId || 'TEST_USER_ID',
         eventId: selectedEventForSignups.id
-      };
-
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload)),
-        redirect: 'follow'
       });
+
+      const res = await fetch(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
       const result = await res.json();
 
       if (result.status === 'success') {

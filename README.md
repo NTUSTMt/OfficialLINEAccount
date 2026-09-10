@@ -3,11 +3,21 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.9` (v0.1.9)
+- **當前版本**：`0.1.10` (v0.1.10)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 110. 幹部審核與活動管理全面轉移為 GET 協定徹底消除 iOS WebKit 302 轉址 Load failed (v0.1.10)
+- **問題診斷**：
+  - 在 iOS LINE LIFF 內嵌瀏覽器環境中，因 WebKit 安全性規格限制，跨網域 `fetch` POST 請求接收到 Google Apps Script 必要的 `302 Found` 轉址時（轉向 `script.googleusercontent.com`），會直接在瀏覽器網路底層被阻斷，拋出原生例外 `TypeError: Load failed`。
+  - 與之相對，前端在讀取活動清單、報名名冊、個人資料與裝備列表時皆採用 `GET` 請求，iOS WebKit 能原生且完美跟隨 302 轉址完成跨域資料交換。
+- **架構重構與修復**：
+  1. **GAS 後端多路徑支援 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：在 `doGet(e)` 主路由中正式新增支援 `update_signup_status`（審核正取/備取）、`update_event_status`（快速啟閉活動報名）與 `send_event_notifications`（一鍵推播通知），並保留 `doPost` 雙向向下相容。
+  2. **前端切換為帶權杖 GET 請求 ([src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx))**：
+     - 將 `handleUpdateApplicantResult`、`handleQuickStatusChange` 與 `handleSendNotifications` 全面改為 `GET` 請求搭配 `appendAuthToken` 與 URL 參數。
+     - 徹底解決 iOS/Safari 跨網域 POST 轉址被阻斷的限制，達到與資料讀取相同之 100% 順暢與即時響應。
 
 ### 109. 審核操作異常與檔案權限防護修復 (v0.1.9)
 - **幹部審核「操作失敗: Load failed」根本原因診斷與修復 (Applicant Review "Load failed" Fix)**：
