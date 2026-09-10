@@ -22,7 +22,11 @@ import {
   RotateCcw,
   Send,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  Lock,
+  Mountain,
+  Info,
+  X
 } from 'lucide-react';
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -478,7 +482,11 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   if (!isOfficer) {
     return (
       <div className="animate-fade-in" style={{ maxWidth: '500px', margin: '60px auto', padding: '32px 20px', textAlign: 'center' }}>
-        <div style={{ fontSize: '56px', marginBottom: '16px' }}>🔒</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Lock size={40} color="#ef4444" />
+          </div>
+        </div>
         <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e293b', marginBottom: '12px' }}>
           {t('adminEvents.unauthorizedTitle')}
         </h2>
@@ -643,8 +651,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             </div>
           ) : filteredEvents.length === 0 ? (
             <div style={{ padding: '60px 20px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
-              <span style={{ fontSize: '40px' }}>🏔️</span>
-              <p style={{ marginTop: '12px', color: '#64748b', fontSize: '15px' }}>{t('adminEvents.empty')}</p>
+              <Mountain size={44} color="#94a3b8" style={{ margin: '0 auto 10px', display: 'block' }} />
+              <p style={{ margin: 0, color: '#64748b', fontSize: '15px' }}>{t('adminEvents.empty')}</p>
               <button
                 onClick={resetFormForCreate}
                 className="btn btn-primary"
@@ -692,9 +700,19 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                           borderRadius: '20px',
                           backgroundColor: evt.status === '開放' ? '#dcfce7' : evt.status === '未來開放' ? '#ffedd5' : '#f1f5f9',
                           color: evt.status === '開放' ? '#15803d' : evt.status === '未來開放' ? '#c2410c' : '#64748b',
-                          border: `1px solid ${evt.status === '開放' ? '#bbf7d0' : evt.status === '未來開放' ? '#fed7aa' : '#e2e8f0'}`
+                          border: `1px solid ${evt.status === '開放' ? '#bbf7d0' : evt.status === '未來開放' ? '#fed7aa' : '#e2e8f0'}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
                         }}>
-                          {evt.status === '開放' ? '🟢 開放報名' : evt.status === '未來開放' ? '🟠 未來開放' : '⚪ 已關閉'}
+                          <span style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: evt.status === '開放' ? '#16a34a' : evt.status === '未來開放' ? '#ea580c' : '#94a3b8',
+                            display: 'inline-block'
+                          }} />
+                          <span>{evt.status === '開放' ? '開放報名' : evt.status === '未來開放' ? '未來開放' : '已關閉'}</span>
                         </span>
                         <span style={{
                           fontSize: '12px',
@@ -1110,18 +1128,21 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 <option value="開放">開放報名 (發布後社員即可開始報名填表)</option>
                 <option value="關閉">關閉活動 (僅幹部可見，暫不對外開放)</option>
               </select>
-              <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#64748b', textAlign: 'left', lineHeight: '1.4' }}>
-                {formData.status === '未來開放'
-                  ? '💡 目前設定為「未來開放」，社員可見活動資訊預告，但無法點擊報名。'
-                  : formData.status === '開放'
-                  ? '💡 目前設定為「開放報名」，發布後社員即可立即開始報名。'
-                  : '💡 目前設定為「關閉活動」，活動不對外公開。'}
-              </p>
+              <div style={{ margin: '8px 0 0', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                <Info size={14} color="#059669" style={{ marginTop: '2px', flexShrink: 0 }} />
+                <p style={{ margin: 0, fontSize: '12px', color: '#64748b', textAlign: 'left', lineHeight: '1.4' }}>
+                  {formData.status === '未來開放'
+                    ? '目前設定為「未來開放」，社員可見活動資訊預告，但無法點擊報名。'
+                    : formData.status === '開放'
+                    ? '目前設定為「開放報名」，發布後社員即可立即開始報名。'
+                    : '目前設定為「關閉活動」，活動不對外公開。'}
+                </p>
+              </div>
             </div>
 
             {/* 日期區間與截止日 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', textAlign: 'left' }}>
-              <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '12px', textAlign: 'left' }}>
+              <div style={{ minWidth: 0 }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
                   {t('adminEvents.startDateLabel')}
                 </label>
@@ -1130,10 +1151,26 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   required
                   value={formData.startDate}
                   onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', textAlign: 'left' }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    maxWidth: '100%',
+                    minWidth: 0,
+                    minHeight: '42px',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '13px',
+                    backgroundColor: '#ffffff',
+                    color: '#1e293b',
+                    WebkitAppearance: 'none',
+                    appearance: 'none',
+                    boxSizing: 'border-box',
+                    textAlign: 'left'
+                  }}
                 />
               </div>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
                   {t('adminEvents.endDateLabel')}
                 </label>
@@ -1142,14 +1179,30 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   required
                   value={formData.endDate}
                   onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', textAlign: 'left' }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    maxWidth: '100%',
+                    minWidth: 0,
+                    minHeight: '42px',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '13px',
+                    backgroundColor: '#ffffff',
+                    color: '#1e293b',
+                    WebkitAppearance: 'none',
+                    appearance: 'none',
+                    boxSizing: 'border-box',
+                    textAlign: 'left'
+                  }}
                 />
               </div>
             </div>
 
             {/* 報名截止日與費用 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', textAlign: 'left' }}>
-              <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '12px', textAlign: 'left' }}>
+              <div style={{ minWidth: 0 }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
                   {t('adminEvents.deadlineLabel')}
                 </label>
@@ -1158,10 +1211,26 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   required
                   value={formData.deadline}
                   onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', textAlign: 'left' }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    maxWidth: '100%',
+                    minWidth: 0,
+                    minHeight: '42px',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '13px',
+                    backgroundColor: '#ffffff',
+                    color: '#1e293b',
+                    WebkitAppearance: 'none',
+                    appearance: 'none',
+                    boxSizing: 'border-box',
+                    textAlign: 'left'
+                  }}
                 />
               </div>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
                   {t('adminEvents.costLabel')}
                 </label>
@@ -1171,7 +1240,21 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   value={formData.cost}
                   placeholder={t('adminEvents.costPlaceholder')}
                   onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', textAlign: 'left' }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    maxWidth: '100%',
+                    minWidth: 0,
+                    minHeight: '42px',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '13px',
+                    backgroundColor: '#ffffff',
+                    color: '#1e293b',
+                    boxSizing: 'border-box',
+                    textAlign: 'left'
+                  }}
                 />
               </div>
             </div>
@@ -1302,8 +1385,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   <img src={previewImage} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <div style={{ textAlign: 'center', color: '#94a3b8' }}>
-                    <span style={{ fontSize: '36px' }}>🏔️</span>
-                    <p style={{ margin: 0, fontSize: '11px' }}>封面照片預覽</p>
+                    <Mountain size={36} color="#94a3b8" style={{ margin: '0 auto', display: 'block' }} />
+                    <p style={{ margin: '4px 0 0', fontSize: '11px' }}>封面照片預覽</p>
                   </div>
                 )}
               </div>
@@ -1323,18 +1406,18 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 </h3>
 
                 <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 'bold', color: '#666666' }}>
-                  💰 費用 Cost: {formData.cost || '尚未訂定'}
+                  費用 Cost: {formData.cost || '尚未訂定'}
                 </p>
 
                 <p style={{ margin: '0 0 2px', fontSize: '11px', color: '#888888' }}>
-                  📅 活動時間 Event Date:
+                  活動時間 Event Date:
                 </p>
                 <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 'bold', color: '#333333' }}>
                   {formData.startDate || 'YYYY/MM/DD'} ~ {formData.endDate || 'YYYY/MM/DD'}
                 </p>
 
                 <p style={{ margin: '0 0 2px', fontSize: '11px', color: '#888888' }}>
-                  ⏰ 截止報名 Deadline:
+                  截止報名 Deadline:
                 </p>
                 <p style={{ margin: '0 0 10px', fontSize: '12px', fontWeight: 'bold', color: '#E53935' }}>
                   {formData.deadline || 'YYYY/MM/DD'}
@@ -1361,7 +1444,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                     cursor: 'default'
                   }}
                 >
-                  {formData.status === '開放' ? '一鍵報名 Sign Up' : '⏳ 尚未開放 Not Open'}
+                  {formData.status === '開放' ? '一鍵報名 Sign Up' : '尚未開放 Not Open'}
                 </button>
               </div>
             </div>
@@ -1420,13 +1503,17 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 style={{
                   background: 'none',
                   border: 'none',
-                  fontSize: '22px',
                   color: '#64748b',
                   cursor: 'pointer',
-                  padding: '4px 8px'
+                  padding: '6px',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
+                aria-label="Close"
               >
-                ✕
+                <X size={20} />
               </button>
             </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
+import { ShieldCheck, ChevronRight } from 'lucide-react';
 import '../App.css';
 
 interface ProfileData {
@@ -384,7 +385,9 @@ function Dashboard({ userId }: { userId: string }) {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '28px' }}>🛠️</span>
+            <div style={{ width: '42px', height: '42px', borderRadius: '12px', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <ShieldCheck size={24} color="#059669" />
+            </div>
             <div style={{ textAlign: 'left' }}>
               <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#065f46' }}>
                 幹部專屬管理中心
@@ -406,10 +409,14 @@ function Dashboard({ userId }: { userId: string }) {
               color: 'white',
               fontWeight: 'bold',
               cursor: 'pointer',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
             }}
           >
-            進入管理 ➔
+            <span>進入管理</span>
+            <ChevronRight size={15} />
           </button>
         </div>
       )}

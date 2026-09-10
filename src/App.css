@@ -814,11 +814,15 @@ body {
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
-.form-group input[type="date"] {
+.form-group input[type="date"],
+input[type="date"] {
   cursor: pointer;
-  min-height: 48px;
   -webkit-appearance: none;
   appearance: none;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
 }
 
 .form-group select,

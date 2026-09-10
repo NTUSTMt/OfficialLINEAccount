@@ -3,11 +3,46 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.0.93` (v0.0.93)
+- **當前版本**：`0.0.95` (v0.0.95)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 95. 幹部系統全面「去 Emoji 化」與現代向量圖示重構 (Complete De-emojification) (v0.0.95)
+- **活動看板狀態標籤微型化與純淨化**：
+  - 更新 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)。
+  - 徹底移除 `🟢 開放報名`、`🟠 未來開放`、`⚪ 已關閉` 的彩色圓球文字 Emoji。
+  - 改為內嵌精美之 `6px` CSS 實心動態狀態圓點（綠色 `#16a34a` / 橙色 `#ea580c` / 灰色 `#94a3b8`）搭配工整純文字，徹底解決文字 Emoji 在跨作業系統渲染時之基線高度落差。
+- **權限不足與空狀態向量圖示化**：
+  - 將未授權頁面的巨大 `🔒` 替換為柔和圓形紅底搭配 Lucide `<Lock size={40} color="#ef4444" />`。
+  - 將活動列表無資料的 `🏔️` 空狀態替換為簡約高質感的 `<Mountain size={44} color="#94a3b8" />`。
+- **表單說明與 LINE 即時卡片預覽去 Emoji 化**：
+  - 表單狀態說明的 `💡` 替換為俐落的 Lucide `<Info size={14} color="#059669" />` 提示圖示。
+  - LINE 卡片預覽封面缺失預設由 `🏔️` 替換為 `<Mountain size={36} color="#94a3b8" />`。
+  - 移除預覽卡片中的 `💰`、`📅`、`⏰`、`⏳` 等冗餘 Emoji，轉為標準乾淨的雙語文字排版。
+  - 名冊審核彈窗右上角的關閉文字 `✕` 升級為精緻的向量 `<X size={20} />` 按鈕。
+- **個人主頁幹部入口卡片現代化**：
+  - 更新 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx)。
+  - 將「幹部專屬管理中心」入口的 `🛠️` Emoji 升級為現代綠底圓角 `<ShieldCheck size={24} color="#059669" />` 徽章，按鈕箭頭亦同步升級為 `<ChevronRight size={15} />`。
+- **雙語語系檔全面淨化**：
+  - 更新 [zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json) 與 [en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json)。
+  - 全面移除 `menuAdminEvents`（幹部系統）、`coverUploadBtn`（從相簿選擇照片）、`notifyOfficerGroup`（上架推播）等鍵值中殘留之 `🛠️`、`📷`、`📢` 等文字 Emoji。
+
+### 94. 徹底修復 iOS/WebKit 日期選取框樣式跑版與 CSS Grid 溢出重疊問題 (v0.0.94)
+- **問題根因分析**：
+  - 在 iOS Safari 或 WebKit 瀏覽器環境中，`<input type="date">` 預設以原生灰色藥丸按鈕樣式渲染，且內部含有固定最小內容寬度（Min-content width）。
+  - 當其置於 `grid-template-columns: 1fr 1fr;` 且未設定 `min-width: 0` 時，左欄日期元件因寬度超過網格容量而強制向右溢出（Overflow），吃掉欄間間距（gap）並直接侵入、覆蓋在右側輸入框之上（如「報名截止日」灰框穿透至「預計費用」白框底部）。
+  - iOS 預設的 `::-webkit-date-and-time-value` 行為會將日期文字強制置中，且原生元件高度與一般的文字輸入框不同，造成左右底部無法對齊。
+- **全方位修復方案**：
+  - 更新 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)：
+    - 將日期與費用區塊之網格樣式更新為防溢出的 `gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)'`，並在每個欄位容器強制鎖定 `minWidth: 0`。
+    - 日期與費用輸入框全面配置 `WebkitAppearance: 'none'`、`appearance: 'none'`、`backgroundColor: '#ffffff'`、`color: '#1e293b'`，清除 iOS 灰色藥丸原生樣式，還原為統一且精美的純白圓角輸入框。
+    - 統一輸入框之最小高度 `minHeight: '42px'`、內距 `padding: '8px 12px'` 與 `fontSize: '13px'`，確保左欄日期與右欄費用輸入框垂直高度與底部像素級對齊。
+  - 更新 [App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css)：
+    - 新增 `input[type="date"]::-webkit-date-and-time-value { text-align: left; }` 與全域 `appearance: none;`，徹底校正 iOS Safari 下日期文字強制居中之預設行為。
+  - 同步語系文字 [en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json)：
+    - 同步移除幹部管理相關標籤之冗餘 Emoji，與正體中文語系檔保持完全一致。
 
 ### 93. 幹部活動管理介面向量圖示現代化升級 (Lucide-React Vector Icons) (v0.0.93)
 - **引入 `lucide-react` 向量圖示庫**：
