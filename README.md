@@ -3,11 +3,28 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.12` (v0.1.12)
+- **當前版本**：`0.1.13` (v0.1.13)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 113. 備取卡片視覺邊框修復與報名者個人資料完整檢視功能 (v0.1.13)
+- **備取邊框與陰影狀態同步修復 (Waitlist Card Border & Shadow Sync)**：
+  - **修復前**：卡片展開樣式採用 `isExpanded ? '#059669' : ...`，導致報名者設為備取時，展開中的卡片邊框依然被寫死為綠色。
+  - **修復後**：邊框顏色依審核狀態優先決定：
+    - 正取（Confirmed）：展開深綠 `#059669`、收合淺綠 `#bbf7d0`。
+    - 備取（Waitlisted）：展開深橘 `#ea580c`、收合淺橘 `#fed7aa`、微橘色光暈。
+    - 待審核（Pending）：展開品牌綠 `#059669`、收合灰白 `#e2e8f0`。
+  - 同步將卡片展開與更新狀態鍵值鎖定在 `rowNumber`（實體列號），避免多筆相同專屬碼或測試帳號產生連帶操作。
+- **報名者個人資料檢視功能 (Applicant Personal Profile Viewer Modal)**：
+  - **後端資料擴充 ([gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+    - 在 `getEventSignupsAPI` 擴充提取 `Signups` 表與 `Members` 表欄位，回傳完整的報名者個資，包含：系所、學號、電話、Email、通訊地址、生日、證件字號、緊急聯絡人（姓名、關係、電話、地址）、登山經驗、體能紀錄、個人特殊病史或過敏等。
+  - **前端互動介面與專屬彈窗 ([AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx))**：
+    - 報名者卡片新增「瀏覽個人資料」按鈕（採純 Lucide SVG 圖示，不使用 Emoji）。
+    - 點擊後開啟全功能自適應彈窗，條理分明呈現基本資料、通訊聯絡、緊急聯絡人、登山經歷與體能證明。
+    - 支援一鍵複製 LINE ID、一鍵通話撥打、查看體能證明檔案。
+    - 彈窗底部內建「正取 / 備取 / 審核中」快捷操作按鈕，幹部查閱完個人資料可直接完成審核。
 
 ### 112. Google 試算表「審核結果」資料驗證規則相容性修復與防呆機制 (v0.1.12)
 - **問題根因診斷 (Root Cause Analysis)**：

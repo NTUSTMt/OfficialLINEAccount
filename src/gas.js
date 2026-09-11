@@ -6244,9 +6244,9 @@ function getEventSignupsAPI(ss, eventId, userId) {
     return ContentService.createTextOutput(JSON.stringify({ status: "success", signups: [] })).setMimeType(ContentService.MimeType.JSON);
   }
 
-  // 建立 Members 快取，若 Signups 表未記錄體能證明或為空，自動從 Members 表提取
+  // 建立 Members 快取，提取體能證明、系所、學號、病史、緊急聯絡人關係
   var mSheet = ss.getSheetByName("Members") || ss.getSheetByName("社員資料");
-  var memberProofMap = {};
+  var memberMap = {};
   if (mSheet) {
     var mData = mSheet.getDataRange().getDisplayValues();
     if (mData.length > 1) {
@@ -6259,12 +6259,22 @@ function getEventSignupsAPI(ss, eventId, userId) {
         var s = String(h);
         return s.includes("體能證明") || s.includes("證明");
       });
-      if (mSysIdx > -1 && mProofIdx > -1) {
+      var mDeptIdx = _fi(mH, "系所");
+      var mStuIdx = _fi(mH, "學號");
+      var mMedIdx = mH.findIndex(function(h) { return String(h).includes("病史") || String(h).includes("過敏"); });
+      var mRelIdx = _fi(mH, "關係");
+
+      if (mSysIdx > -1) {
         for (var m = 1; m < mData.length; m++) {
           var mUid = String(mData[m][mSysIdx] || "").trim();
-          var mProof = String(mData[m][mProofIdx] || "").trim();
-          if (mUid && mProof) {
-            memberProofMap[mUid] = mProof;
+          if (mUid) {
+            memberMap[mUid] = {
+              proof: (mProofIdx > -1) ? String(mData[m][mProofIdx] || "").trim() : "",
+              department: (mDeptIdx > -1) ? String(mData[m][mDeptIdx] || "").trim() : "",
+              studentId: (mStuIdx > -1) ? String(mData[m][mStuIdx] || "").trim() : "",
+              medicalHistory: (mMedIdx > -1) ? String(mData[m][mMedIdx] || "").trim() : "",
+              emerRel: (mRelIdx > -1) ? String(mData[m][mRelIdx] || "").trim() : ""
+            };
           }
         }
       }
@@ -6279,6 +6289,15 @@ function getEventSignupsAPI(ss, eventId, userId) {
   var sGenderIdx = _fi(sH, "性別");
   var sPhoneIdx = _fi(sH, "聯絡電話");
   var sLineIdx = sH.findIndex(function(h) { return String(h).toUpperCase().includes("LINE"); });
+  var sEmailIdx = sH.findIndex(function(h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); });
+  var sAddrIdx = sH.findIndex(function(h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
+  var sBirthdayIdx = _fi(sH, "生日");
+  var sIdNumberIdx = _fi(sH, "證件");
+  var sEmerNameIdx = sH.findIndex(function(h) { return String(h).includes("緊急聯絡人") && !String(h).includes("電話") && !String(h).includes("地址") && !String(h).includes("關係"); });
+  var sEmerPhoneIdx = _fi(sH, "緊急聯絡人電話");
+  var sEmerAddrIdx = sH.findIndex(function(h) { return String(h).includes("緊急聯絡人") && String(h).includes("地址"); });
+  var sExpIdx = _fi(sH, "經驗");
+  var sFitnessIdx = _fi(sH, "體能測驗");
   var sProofIdx = sH.findIndex(function(h) { return String(h).includes("證明"); });
   var sOfficialIdx = _fi(sH, "是否為社員");
   var sResultIdx = _fi(sH, "審核結果");
@@ -6291,9 +6310,10 @@ function getEventSignupsAPI(ss, eventId, userId) {
     var row = sData[i];
     if (sEvtIdIdx > -1 && row[sEvtIdIdx].trim() === eventId) {
       var applicantUid = (sSysIdx > -1) ? String(row[sSysIdx] || "").trim() : "";
+      var mem = (applicantUid && memberMap[applicantUid]) ? memberMap[applicantUid] : {};
       var proofVal = (sProofIdx > -1) ? String(row[sProofIdx] || "").trim() : "";
-      if (!proofVal && applicantUid && memberProofMap[applicantUid]) {
-        proofVal = memberProofMap[applicantUid];
+      if (!proofVal && mem.proof) {
+        proofVal = mem.proof;
       }
 
       signups.push({
@@ -6304,7 +6324,20 @@ function getEventSignupsAPI(ss, eventId, userId) {
         gender: (sGenderIdx > -1) ? row[sGenderIdx] : "",
         phone: (sPhoneIdx > -1) ? row[sPhoneIdx] : "",
         lineId: (sLineIdx > -1) ? row[sLineIdx] : "",
+        email: (sEmailIdx > -1) ? row[sEmailIdx] : "",
+        address: (sAddrIdx > -1) ? row[sAddrIdx] : "",
+        birthday: (sBirthdayIdx > -1) ? row[sBirthdayIdx] : "",
+        idNumber: (sIdNumberIdx > -1) ? row[sIdNumberIdx] : "",
+        emerName: (sEmerNameIdx > -1) ? row[sEmerNameIdx] : "",
+        emerPhone: (sEmerPhoneIdx > -1) ? row[sEmerPhoneIdx] : "",
+        emerRel: mem.emerRel || "",
+        emerAddr: (sEmerAddrIdx > -1) ? row[sEmerAddrIdx] : "",
+        experience: (sExpIdx > -1) ? row[sExpIdx] : "",
+        fitnessTest: (sFitnessIdx > -1) ? row[sFitnessIdx] : "",
         strengthProof: proofVal,
+        department: mem.department || "",
+        studentId: mem.studentId || "",
+        medicalHistory: mem.medicalHistory || "",
         isOfficial: (sOfficialIdx > -1) ? row[sOfficialIdx] : "",
         reviewResult: (sResultIdx > -1) ? row[sResultIdx] : "",
         notifyStatus: (sNotifyIdx > -1) ? row[sNotifyIdx] : "",

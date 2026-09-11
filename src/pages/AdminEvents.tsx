@@ -31,7 +31,9 @@ import {
   Mountain,
   Info,
   X,
-  ExternalLink
+  ExternalLink,
+  User,
+  ShieldAlert
 } from 'lucide-react';
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -64,7 +66,20 @@ export interface SignupApplicant {
   gender: string;
   phone: string;
   lineId: string;
+  email?: string;
+  address?: string;
+  birthday?: string;
+  idNumber?: string;
+  emerName?: string;
+  emerPhone?: string;
+  emerRel?: string;
+  emerAddr?: string;
+  experience?: string;
+  fitnessTest?: string;
   strengthProof: string;
+  department?: string;
+  studentId?: string;
+  medicalHistory?: string;
   isOfficial: string;
   reviewResult: string;
   notifyStatus: string;
@@ -121,6 +136,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const [sendingNotifications, setSendingNotifications] = useState(false);
   const [expandedSignupCode, setExpandedSignupCode] = useState<string | null>(null);
   const [copiedLineId, setCopiedLineId] = useState<string | null>(null);
+  const [profileModalApplicant, setProfileModalApplicant] = useState<SignupApplicant | null>(null);
   const [proofModalData, setProofModalData] = useState<{
     name: string;
     urls: string[];
@@ -460,7 +476,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
   // 9. 更新個別報名審核結果 (正取 / 備取 / 審核中)
   const handleUpdateApplicantResult = async (applicant: SignupApplicant, newResult: string) => {
-    const applicantKey = applicant.signupCode || applicant.userId || String(applicant.rowNumber);
+    const applicantKey = String(applicant.rowNumber);
     setUpdatingSignupCode(applicantKey);
     try {
       const query = new URLSearchParams({
@@ -486,13 +502,10 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         const oldCat = getCategory(oldResult);
         const newCat = getCategory(newResult);
 
-        // 1. 本地樂觀更新審核名冊與快取
+        // 1. 本地樂觀更新審核名冊與快取（依據 rowNumber 嚴格鎖定個別報名者）
         setSignupsList((prev) => {
           const updated = prev.map((s) => {
-            const isMatch =
-              (applicant.signupCode && s.signupCode === applicant.signupCode) ||
-              (applicant.rowNumber && s.rowNumber === applicant.rowNumber) ||
-              (applicant.userId && s.userId === applicant.userId);
+            const isMatch = s.rowNumber === applicant.rowNumber;
             return isMatch ? { ...s, reviewResult: newResult, notifyStatus: '' } : s;
           });
           if (selectedEventForSignups?.id) {
@@ -1851,10 +1864,21 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 </div>
               ) : (
                 filteredSignups.map((s) => {
-                  const cardId = s.signupCode || String(s.rowNumber);
+                  const cardId = String(s.rowNumber);
                   const isExpanded = expandedSignupCode === cardId;
                   const isAccepted = s.reviewResult.indexOf('正取') > -1;
                   const isWaitlisted = s.reviewResult.indexOf('備取') > -1;
+
+                  const borderColor = isWaitlisted
+                    ? (isExpanded ? '#ea580c' : '#fed7aa')
+                    : isAccepted
+                    ? (isExpanded ? '#059669' : '#bbf7d0')
+                    : (isExpanded ? '#059669' : '#e2e8f0');
+
+                  const bgColor = isAccepted ? '#f0fdf4' : isWaitlisted ? '#fff7ed' : '#ffffff';
+                  const boxShadow = isExpanded
+                    ? (isWaitlisted ? '0 4px 12px rgba(234, 88, 12, 0.12)' : '0 4px 12px rgba(5, 150, 105, 0.08)')
+                    : '0 1px 3px rgba(0,0,0,0.03)';
 
                   return (
                     <div
@@ -1863,9 +1887,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                       style={{
                         padding: '12px 14px',
                         borderRadius: '12px',
-                        border: `1.5px solid ${isExpanded ? '#059669' : isAccepted ? '#bbf7d0' : isWaitlisted ? '#fed7aa' : '#e2e8f0'}`,
-                        backgroundColor: isAccepted ? '#f0fdf4' : isWaitlisted ? '#fff7ed' : '#ffffff',
-                        boxShadow: isExpanded ? '0 4px 12px rgba(5, 150, 105, 0.08)' : '0 1px 3px rgba(0,0,0,0.03)',
+                        border: `1.5px solid ${borderColor}`,
+                        backgroundColor: bgColor,
+                        boxShadow: boxShadow,
                         cursor: 'pointer',
                         transition: 'all 0.2s',
                         display: 'flex',
@@ -2094,6 +2118,32 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                                 </span>
                               );
                             })()}
+
+                            {/* 瀏覽個人資料按鈕 */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setProfileModalApplicant(s);
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                backgroundColor: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                padding: '5px 10px',
+                                borderRadius: '6px',
+                                color: '#1d4ed8',
+                                fontSize: '12px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              <User size={13} />
+                              <span>瀏覽個人資料</span>
+                            </button>
                           </div>
 
                           {/* 審核操作按鈕組 */}
@@ -2105,7 +2155,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                             borderTop: '1px dashed #e2e8f0',
                             paddingTop: '10px'
                           }}>
-                            {updatingSignupCode === (s.signupCode || s.userId || String(s.rowNumber)) ? (
+                            {updatingSignupCode === String(s.rowNumber) ? (
                               <div className="spinner" style={{ width: '20px', height: '20px', margin: '4px auto' }}></div>
                             ) : (
                               <>
@@ -2281,9 +2331,12 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>
-                📷 {proofModalData.name} 的體能證明檔案 ({proofModalData.urls.length})
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ImageIcon size={18} color="#2563eb" />
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>
+                  {proofModalData.name} 的體能證明檔案 ({proofModalData.urls.length})
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setProofModalData(null)}
@@ -2332,6 +2385,335 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 報名者詳細個人資料彈窗 (Applicant Profile Modal) - 無 Emoji */}
+      {profileModalApplicant && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px'
+          }}
+          onClick={() => setProfileModalApplicant(null)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '16px',
+              maxWidth: '520px',
+              width: '100%',
+              padding: '22px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 標題欄 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  backgroundColor: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#16a34a'
+                }}>
+                  <User size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>
+                    報名者個人資料
+                  </h3>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    {profileModalApplicant.name} · {profileModalApplicant.signupCode ? `代碼: ${profileModalApplicant.signupCode}` : `序號: #${profileModalApplicant.rowNumber}`}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProfileModalApplicant(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* 內容區塊 1: 基本資料 */}
+            <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>
+                <Info size={14} color="#059669" />
+                <span>基本資料</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
+                <div><span style={{ color: '#64748b' }}>姓名：</span><span style={{ fontWeight: '600', color: '#0f172a' }}>{profileModalApplicant.name}</span></div>
+                <div><span style={{ color: '#64748b' }}>性別：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.gender || '未填'}</span></div>
+                <div><span style={{ color: '#64748b' }}>身分資格：</span><span style={{ fontWeight: 'bold', color: profileModalApplicant.isOfficial === '是' ? '#16a34a' : '#64748b' }}>{profileModalApplicant.isOfficial === '是' ? '正式社員' : '非社員'}</span></div>
+                <div><span style={{ color: '#64748b' }}>生日：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.birthday || '未填'}</span></div>
+                {profileModalApplicant.studentId && (
+                  <div><span style={{ color: '#64748b' }}>學號：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.studentId}</span></div>
+                )}
+                {profileModalApplicant.department && (
+                  <div><span style={{ color: '#64748b' }}>系所：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.department}</span></div>
+                )}
+                {profileModalApplicant.idNumber && (
+                  <div><span style={{ color: '#64748b' }}>證件號碼：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.idNumber}</span></div>
+                )}
+              </div>
+            </div>
+
+            {/* 內容區塊 2: 通訊與聯絡 */}
+            <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>
+                <Phone size={14} color="#059669" />
+                <span>通訊與聯絡</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span><span style={{ color: '#64748b' }}>LINE ID：</span><span style={{ fontWeight: '600', color: '#0f172a' }}>{profileModalApplicant.lineId || '未填'}</span></span>
+                  {profileModalApplicant.lineId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(profileModalApplicant.lineId);
+                        setCopiedLineId(String(profileModalApplicant.rowNumber));
+                        setTimeout(() => setCopiedLineId(null), 1800);
+                      }}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: 'white',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        color: copiedLineId === String(profileModalApplicant.rowNumber) ? '#16a34a' : '#475569'
+                      }}
+                    >
+                      {copiedLineId === String(profileModalApplicant.rowNumber) ? <Check size={11} /> : <Copy size={11} />}
+                      <span>{copiedLineId === String(profileModalApplicant.rowNumber) ? '已複製' : '複製'}</span>
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span><span style={{ color: '#64748b' }}>聯絡電話：</span><span style={{ fontWeight: '600', color: '#0f172a' }}>{profileModalApplicant.phone || '未填'}</span></span>
+                  {profileModalApplicant.phone && (
+                    <a
+                      href={`tel:${profileModalApplicant.phone}`}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid #bfdbfe',
+                        backgroundColor: '#eff6ff',
+                        fontSize: '11px',
+                        color: '#1d4ed8',
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      <Phone size={11} />
+                      <span>通話撥打</span>
+                    </a>
+                  )}
+                </div>
+                {profileModalApplicant.email && (
+                  <div><span style={{ color: '#64748b' }}>電子信箱：</span><a href={`mailto:${profileModalApplicant.email}`} style={{ color: '#2563eb', textDecoration: 'none' }}>{profileModalApplicant.email}</a></div>
+                )}
+                {profileModalApplicant.address && (
+                  <div><span style={{ color: '#64748b' }}>聯絡地址：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.address}</span></div>
+                )}
+              </div>
+            </div>
+
+            {/* 內容區塊 3: 緊急聯絡人 */}
+            {(profileModalApplicant.emerName || profileModalApplicant.emerPhone || profileModalApplicant.emerRel || profileModalApplicant.emerAddr) && (
+              <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>
+                  <ShieldAlert size={14} color="#e11d48" />
+                  <span>緊急聯絡人資訊</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
+                  <div><span style={{ color: '#64748b' }}>聯絡人：</span><span style={{ fontWeight: '600', color: '#0f172a' }}>{profileModalApplicant.emerName || '未填'}</span></div>
+                  <div><span style={{ color: '#64748b' }}>關係：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.emerRel || '未填'}</span></div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: '#64748b' }}>電話：</span>
+                    {profileModalApplicant.emerPhone ? (
+                      <a href={`tel:${profileModalApplicant.emerPhone}`} style={{ color: '#2563eb', fontWeight: 'bold', textDecoration: 'none' }}>
+                        {profileModalApplicant.emerPhone}
+                      </a>
+                    ) : '未填'}
+                  </div>
+                  {profileModalApplicant.emerAddr && (
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <span style={{ color: '#64748b' }}>地址：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.emerAddr}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 內容區塊 4: 登山經歷與體能 */}
+            <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>
+                <Mountain size={14} color="#059669" />
+                <span>登山經歷與體能</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                <div><span style={{ color: '#64748b' }}>爬山經驗：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.experience || '未填寫'}</span></div>
+                <div><span style={{ color: '#64748b' }}>體能紀錄：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.fitnessTest || '未填寫'}</span></div>
+                {profileModalApplicant.medicalHistory && (
+                  <div><span style={{ color: '#e11d48', fontWeight: '600' }}>特殊病史/過敏：</span><span style={{ color: '#e11d48' }}>{profileModalApplicant.medicalHistory}</span></div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px' }}>
+                  <span style={{ color: '#64748b' }}>體能證明文件：</span>
+                  {(() => {
+                    const validUrls = parseProofUrls(profileModalApplicant.strengthProof);
+                    if (validUrls.length > 0) {
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleViewProof(profileModalApplicant)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            backgroundColor: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#1d4ed8',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <ImageIcon size={12} />
+                          <span>查看證明檔案 ({validUrls.length})</span>
+                        </button>
+                      );
+                    }
+                    return <span style={{ color: '#94a3b8', fontSize: '12px' }}>無證明照片</span>;
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* 內容區塊 5: 快速審核操作列 */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>當前審核狀態：</span>
+                <span style={{
+                  padding: '2px 10px',
+                  borderRadius: '12px',
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                  backgroundColor: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? '#dcfce7' : profileModalApplicant.reviewResult.indexOf('備取') > -1 ? '#ffedd5' : '#f1f5f9',
+                  color: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? '#15803d' : profileModalApplicant.reviewResult.indexOf('備取') > -1 ? '#c2410c' : '#64748b'
+                }}>
+                  {profileModalApplicant.reviewResult || '審核中 Checking'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleUpdateApplicantResult(profileModalApplicant, '正取 Confirmed');
+                    setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: '正取 Confirmed' } : null);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? '#16a34a' : '#f1f5f9',
+                    color: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? 'white' : '#475569',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <CheckCircle2 size={13} />
+                  <span>正取</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleUpdateApplicantResult(profileModalApplicant, '備取 Waitlisted');
+                    setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: '備取 Waitlisted' } : null);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? '#ea580c' : '#f1f5f9',
+                    color: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? 'white' : '#475569',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Clock4 size={13} />
+                  <span>備取</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleUpdateApplicantResult(profileModalApplicant, '審核中 Checking');
+                    setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: '審核中 Checking' } : null);
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    border: '1px solid #cbd5e1',
+                    backgroundColor: 'white',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    fontWeight: '500',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <RotateCcw size={12} />
+                  <span>重設</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
