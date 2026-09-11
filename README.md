@@ -3,11 +3,23 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.23` (v0.1.23)
+- **當前版本**：`0.1.24` (v0.1.24)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 124. 裝備照片左右滑動手勢、列表圖片問號修復與卡片 1:1 正方形 (v0.1.24)
+- **多圖左右滑動與平滑對齊手勢 (Touch & Mouse Drag Swipe Carousel)**：
+  - 裝備詳細彈窗全面支援手機觸控滑動（`onTouchStart / Move / End`）與滑鼠拖曳（Mouse Drag）。
+  - 水平滑動時圖片跟隨手指即時位移，並在首尾具備阻尼彈性，放開後自動平滑 Snap 切換上一張／下一張，圓點指示同步連動。
+  - 智慧防誤觸機制：滑動位移超過 5px 時不觸發 Lightbox 放大，僅原地輕觸（Tap/Click）方開啟全螢幕檢視。
+  - 全螢幕 Lightbox 模式下同步支援觸控左右滑動切換相片與底部分頁圓點。
+- **修復列表封面圖片顯示問號破損 (List Broken Image Fix & Fallback)**：
+  - 在 `getDirectImageUrl` 與 `ProductImage` 中嚴格擷取第一張有效網址，徹底解決多圖欄位傳回逗號分隔字串導致圖片路徑解析異常、Safari/瀏覽器顯示問號圖示的問題。
+  - 加入 `onError` 自動退回優雅分類向量圖示機制，確保網路不良或圖片失效時絕不呈現破圖。
+- **裝備列表卡片圖片改為 1:1 正方形 (Square Product Cards)**：
+  - 列表卡片圖片容器 `.product-img-container` 移除原本固定高度 `110px`，改為 `width: 100%; aspect-ratio: 1 / 1; overflow: hidden;`，呈現一致且高質感的現代正方形卡片風格。
 
 ### 123. 裝備詳情懸浮代號膠囊與版面極簡去冗餘優化 (v0.1.23)
 - **移除內文重複之庫存與代號標籤 (Streamlined Modal Content)**：

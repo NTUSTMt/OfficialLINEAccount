@@ -7,7 +7,10 @@
  */
 export function getDirectImageUrl(url: string | undefined, size: number = 1000): string | undefined {
   if (!url) return undefined;
-  const cleanUrl = url.trim();
+  // 若傳入逗號、分號或換行分隔的多個網址，取第一個有效網址
+  const rawUrl = url.split(/[\n,，;\s]+/).map(u => u.trim()).find(u => u.startsWith('http')) || url.trim();
+  const cleanUrl = rawUrl.trim();
+  if (!cleanUrl || !cleanUrl.startsWith('http')) return undefined;
   
   // 匹配 Google Drive 格式：
   // 1. https://drive.google.com/file/d/{FILE_ID}/view...
@@ -19,6 +22,14 @@ export function getDirectImageUrl(url: string | undefined, size: number = 1000):
   
   if (match && match[1]) {
     const fileId = match[1];
+    return `https://lh3.googleusercontent.com/d/${fileId}=w${size}`;
+  }
+
+  // 5. 若已是 lh3.googleusercontent.com/d/{FILE_ID} 格式，替換或指定縮圖尺寸
+  const lh3Regex = /(?:https?:\/\/)?lh\d?\.googleusercontent\.com\/d\/([^/=?]+)(?:=.*)?/;
+  const lh3Match = cleanUrl.match(lh3Regex);
+  if (lh3Match && lh3Match[1]) {
+    const fileId = lh3Match[1];
     return `https://lh3.googleusercontent.com/d/${fileId}=w${size}`;
   }
   

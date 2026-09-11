@@ -37,9 +37,23 @@ interface ApiResponse {
 
 // 根據商品名稱智慧比對並產生對應的圖示
 function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
-  const directUrl = getDirectImageUrl(imageUrl);
+  const [hasError, setHasError] = useState(false);
 
-  if (directUrl) {
+  // 取第一個網址
+  const firstUrl = useMemo(() => {
+    if (!imageUrl) return undefined;
+    return imageUrl.split(/[\n,，;\s]+/).map(u => u.trim()).find(u => u.startsWith('http'));
+  }, [imageUrl]);
+
+  const directUrl = useMemo(() => {
+    return getDirectImageUrl(firstUrl, 400);
+  }, [firstUrl]);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [imageUrl]);
+
+  if (directUrl && !hasError) {
     return (
       <div className="product-img-container">
         <img
@@ -47,6 +61,7 @@ function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
           alt={name}
           className="product-img-real"
           loading="lazy"
+          onError={() => setHasError(true)}
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
       </div>
@@ -133,6 +148,101 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
   const [modalQty, setModalQty] = useState<number>(0);
   const [isSavingPhotos, setIsSavingPhotos] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 照片輪播滑動手勢狀態
+  const [dragOffset, setDragOffset] = useState<number>(0);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const didDrag = useRef<boolean>(false);
+
+  const handleCarouselTouchStart = (e: React.TouchEvent) => {
+    if (modalPhotos.length <= 1) return;
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    didDrag.current = false;
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+
+  const handleCarouselTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPos.current || modalPhotos.length <= 1) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartPos.current.x;
+    const dy = touch.clientY - touchStartPos.current.y;
+
+    if (Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
+      didDrag.current = true;
+      if ((activePhotoIdx === 0 && dx > 0) || (activePhotoIdx === modalPhotos.length - 1 && dx < 0)) {
+        setDragOffset(dx * 0.3);
+      } else {
+        setDragOffset(dx);
+      }
+    }
+  };
+
+  const handleCarouselTouchEnd = () => {
+    if (!touchStartPos.current) return;
+    setIsDragging(false);
+
+    if (Math.abs(dragOffset) > 40) {
+      if (dragOffset < 0 && activePhotoIdx < modalPhotos.length - 1) {
+        setActivePhotoIdx(prev => prev + 1);
+      } else if (dragOffset > 0 && activePhotoIdx > 0) {
+        setActivePhotoIdx(prev => prev - 1);
+      }
+    }
+
+    setDragOffset(0);
+    touchStartPos.current = null;
+    setTimeout(() => {
+      didDrag.current = false;
+    }, 120);
+  };
+
+  const handleCarouselMouseDown = (e: React.MouseEvent) => {
+    if (modalPhotos.length <= 1) return;
+    touchStartPos.current = { x: e.clientX, y: e.clientY };
+    didDrag.current = false;
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+
+  const handleCarouselMouseMove = (e: React.MouseEvent) => {
+    if (!touchStartPos.current || !isDragging || modalPhotos.length <= 1) return;
+    const dx = e.clientX - touchStartPos.current.x;
+    if (Math.abs(dx) > 5) {
+      didDrag.current = true;
+      if ((activePhotoIdx === 0 && dx > 0) || (activePhotoIdx === modalPhotos.length - 1 && dx < 0)) {
+        setDragOffset(dx * 0.3);
+      } else {
+        setDragOffset(dx);
+      }
+    }
+  };
+
+  const handleCarouselMouseUp = () => {
+    if (isDragging) {
+      handleCarouselTouchEnd();
+    }
+  };
+
+  // Lightbox 觸控滑動手勢
+  const lbTouchStart = useRef<number | null>(null);
+  const handleLbTouchStart = (e: React.TouchEvent) => {
+    lbTouchStart.current = e.touches[0].clientX;
+  };
+  const handleLbTouchEnd = (e: React.TouchEvent) => {
+    if (lbTouchStart.current === null) return;
+    const dx = e.changedTouches[0].clientX - lbTouchStart.current;
+    if (Math.abs(dx) > 40) {
+      if (dx < 0 && activePhotoIdx < modalPhotos.length - 1) {
+        setActivePhotoIdx(prev => prev + 1);
+      } else if (dx > 0 && activePhotoIdx > 0) {
+        setActivePhotoIdx(prev => prev - 1);
+      }
+    }
+    lbTouchStart.current = null;
+  };
 
   const CACHE_KEY_EQUIPMENTS = 'borrow_equipments_list';
   const CACHE_KEY_OFFICIAL = 'user_is_official_';
@@ -892,7 +1002,16 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
           <div className="detail-modal" onClick={(e) => e.stopPropagation()} style={{ paddingTop: '16px' }}>
             <div className="detail-modal-content">
               {/* 1:1 正方形相片輪播區 */}
-              <div className="detail-modal-image-wrapper">
+              <div
+                className="detail-modal-image-wrapper"
+                onTouchStart={handleCarouselTouchStart}
+                onTouchMove={handleCarouselTouchMove}
+                onTouchEnd={handleCarouselTouchEnd}
+                onMouseDown={handleCarouselMouseDown}
+                onMouseMove={handleCarouselMouseMove}
+                onMouseUp={handleCarouselMouseUp}
+                onMouseLeave={handleCarouselMouseUp}
+              >
                 {/* 裝備代號懸浮膠囊 */}
                 {selectedEquipment.id && (
                   <span className="equipment-code-capsule">
@@ -901,12 +1020,35 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
                 )}
 
                 {modalPhotos.length > 0 ? (
-                  <img
-                    src={getDirectImageUrl(modalPhotos[activePhotoIdx]?.url, 1000) || modalPhotos[activePhotoIdx]?.url}
-                    alt={selectedEquipment.name}
-                    onClick={() => !isEditMode && setIsLightboxOpen(true)}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: isEditMode ? 'default' : 'zoom-in' }}
-                  />
+                  <div
+                    className={`photo-carousel-track ${isDragging ? 'dragging' : ''}`}
+                    style={{
+                      transform: `translateX(calc(-${activePhotoIdx * 100}% + ${dragOffset}px))`,
+                    }}
+                  >
+                    {modalPhotos.map((photo, idx) => (
+                      <div key={idx} className="photo-carousel-slide">
+                        <img
+                          src={getDirectImageUrl(photo.url, 1000) || photo.url}
+                          alt={`${selectedEquipment.name} ${idx + 1}`}
+                          draggable={false}
+                          onClick={() => {
+                            if (!isEditMode && !didDrag.current) {
+                              setIsLightboxOpen(true);
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                            cursor: isEditMode ? 'default' : 'zoom-in',
+                            userSelect: 'none',
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <ProductImage name={selectedEquipment.name} imageUrl="" />
                 )}
@@ -1179,10 +1321,15 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
       {/* 全螢幕照片放大 Lightbox */}
       {isLightboxOpen && modalPhotos[activePhotoIdx] && (
-        <div className="photo-lightbox-overlay" onClick={() => setIsLightboxOpen(false)}>
+        <div
+          className="photo-lightbox-overlay"
+          onClick={() => setIsLightboxOpen(false)}
+          onTouchStart={handleLbTouchStart}
+          onTouchEnd={handleLbTouchEnd}
+        >
           <button
             type="button"
-            style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer' }}
+            style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', zIndex: 10 }}
             onClick={() => setIsLightboxOpen(false)}
           >
             <X size={30} />
@@ -1191,8 +1338,31 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
             className="photo-lightbox-img"
             src={getDirectImageUrl(modalPhotos[activePhotoIdx].url, 1600) || modalPhotos[activePhotoIdx].url}
             alt={selectedEquipment?.name}
+            draggable={false}
             onClick={(e) => e.stopPropagation()}
           />
+          {modalPhotos.length > 1 && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '24px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                gap: '8px',
+                zIndex: 10,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {modalPhotos.map((_, idx) => (
+                <span
+                  key={idx}
+                  className={`carousel-dot ${idx === activePhotoIdx ? 'active' : ''}`}
+                  onClick={() => setActivePhotoIdx(idx)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
