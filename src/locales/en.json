@@ -91,7 +91,7 @@
       "strengthLabel": "Physical Fitness Proof",
       "strengthPlaceholder": "e.g., 5000m run in 25 mins, hiking record, marathon...",
       "uploadProofLabel": "Upload Physical Fitness Proof (Max 5)",
-      "uploadTip": "Tip: Re-uploading will overwrite old proof files. Max 5 images.",
+      "uploadTip": "Tip: The system will keep up to the 5 most recent proof files. You can select multiple images.",
       "selectedFiles": "Selected files to upload ({{count}}/5):",
       "remove": "Remove",
       "uploadedFiles": "Uploaded Fitness & Hiking Proof:",
@@ -100,6 +100,11 @@
       "intendOfficialTitle": "Join Club Membership",
       "intendOfficialYes": "I want to become a member (50% off gear rental)",
       "intendOfficialNo": "I do not want to become a member at this moment",
+      "feeInfoTitle": "Membership Fee Details",
+      "feeInfoBenefit": "Exclusive Member Benefit: 50% discount on gear rental",
+      "feeInfoSemester": "One Semester Scheme: $200",
+      "feeInfoGraduation": "Until Graduation Scheme: Undergrad $800 / Master $400",
+      "feeInfoNote": "After submitting your profile, you can visit the Payment page anytime to select a scheme and pay.",
       "intendOfficerTitle": "Officer Interest",
       "intendOfficerCheckbox": "I am interested in becoming a club officer (Exchange student is not able to become an officer, sorry >_<)"
     },
@@ -270,10 +275,12 @@
       "basePrice": "Rent (2 Days): ",
       "extraPrice": "Extend (+1 Day): ",
       "descTitle": "Specification & Description",
-      "noDesc": "No details descriptions for this gear yet. Contact officers if you have any questions.",
+      "noDesc": "No details descriptions for this gear yet. Send a message in this LINE account if you have any questions.",
       "qtyLabel": "Quantity: ",
+      "remainStock": "Remaining Stock: ",
       "outOfStock": "Out of Stock",
-      "addToReservation": "Add to Reservation"
+      "addToReservation": "Add to Reservation",
+      "addedToReservation": "{{count}} Reserved (Click to add more)"
     }
   },
   "payment": {

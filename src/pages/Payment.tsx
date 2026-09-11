@@ -389,23 +389,22 @@ function Payment({ userId }: { userId: string }) {
               <button
                 type="button"
                 onClick={handleCopyAccount}
+                title={copied ? "已複製帳號！" : "點擊複製帳號"}
+                aria-label={copied ? "已複製帳號" : "複製帳號"}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '4px',
-                  padding: '3px 8px',
-                  fontSize: '11px',
+                  justifyContent: 'center',
+                  padding: '5px',
                   borderRadius: '6px',
                   border: '1px solid #10b981',
                   backgroundColor: copied ? '#ecfdf5' : 'white',
                   color: '#059669',
                   cursor: 'pointer',
-                  fontWeight: '600',
                   transition: 'all 0.2s'
                 }}
               >
-                {copied ? <Check size={12} color="#059669" /> : <Copy size={12} color="#059669" />}
-                <span>{copied ? '已複製！' : '點擊複製'}</span>
+                {copied ? <Check size={14} color="#059669" /> : <Copy size={14} color="#059669" />}
               </button>
             </div>
             <div>

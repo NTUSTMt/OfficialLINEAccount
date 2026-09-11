@@ -5067,6 +5067,33 @@ function getMemberProfileAPI(ss, userId) {
       profile.strength = mData[i][_fi(mH, "體能")] || "";
       profile.strengthProof = mData[i][_fi(mH, "證明")] || "";
 
+      // 智慧檢查並回補 Google Drive LINE_Uploads/體能登山證明 中的歷史證明檔案
+      try {
+        var existingProofList = String(profile.strengthProof).split(/[\n,，;\s]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.startsWith("http"); });
+        if (existingProofList.length < 5 && profile.name) {
+          var rootFolders = DriveApp.getFoldersByName("LINE_Uploads");
+          if (rootFolders.hasNext()) {
+            var rootFolder = rootFolders.next();
+            var proofFolders = rootFolder.getFoldersByName("體能登山證明");
+            var targetFolder = proofFolders.hasNext() ? proofFolders.next() : rootFolder;
+            var searchFiles = targetFolder.searchFiles("title contains '" + profile.name + "_體能證明' and trashed = false");
+            while (searchFiles.hasNext() && existingProofList.length < 5) {
+              var fObj = searchFiles.next();
+              var fUrl = fObj.getUrl();
+              if (existingProofList.indexOf(fUrl) === -1) {
+                existingProofList.push(fUrl);
+              }
+            }
+            if (existingProofList.length > 5) {
+              existingProofList = existingProofList.slice(-5);
+            }
+            profile.strengthProof = existingProofList.join(",");
+          }
+        }
+      } catch (driveErr) {
+        // 若查詢 Drive 失敗則維持試算表原有值，確保不中斷 API
+      }
+
       var medIdx = mH.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
       profile.medicalHistory = medIdx > -1 ? mData[i][medIdx] : "";
 
@@ -5392,7 +5419,24 @@ function processSaveProfile(payload) {
     if (isUpdate) {
       var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
       oldValuesForCompare = JSON.parse(JSON.stringify(oldValues)); // 深拷貝一份舊值做比對
-      rowData[strengthProofIdx] = data.strengthProof || oldValues[strengthProofIdx] || "";
+
+      // 合併舊有證明與新上傳證明，去重並最多保留最新 5 張
+      var combinedProofList = [];
+      if (oldValues[strengthProofIdx]) {
+        combinedProofList = String(oldValues[strengthProofIdx]).split(/[\n,，;\s]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.startsWith("http"); });
+      }
+      if (data.strengthProof) {
+        var newProofList = String(data.strengthProof).split(/[\n,，;\s]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.startsWith("http"); });
+        newProofList.forEach(function(u) {
+          if (combinedProofList.indexOf(u) === -1) {
+            combinedProofList.push(u);
+          }
+        });
+      }
+      if (combinedProofList.length > 5) {
+        combinedProofList = combinedProofList.slice(-5);
+      }
+      rowData[strengthProofIdx] = combinedProofList.length > 0 ? combinedProofList.join(",") : (oldValues[strengthProofIdx] || "");
       rowData[payIdx] = oldValues[payIdx] || "未繳費 Unpaid";
     } else {
       rowData[strengthProofIdx] = data.strengthProof || "";

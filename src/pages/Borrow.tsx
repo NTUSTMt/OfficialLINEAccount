@@ -788,36 +788,118 @@ function Borrow({ userId }: { userId: string }) {
               </div>
             </div>
 
-            <div className="detail-modal-footer" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
-              <div className="detail-qty-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                <span style={{ fontSize: '14px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{t('borrow.modal.qtyLabel')}</span>
-                {(() => {
-                  const currentQty = form.cart[selectedEquipment.id] || 0;
-                  return currentQty === 0 ? (
-                    <button
-                      className="add-to-cart-btn modal-add-btn"
-                      onClick={() => updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty)}
-                      disabled={selectedEquipment.remainQty <= 0}
-                      style={{ padding: '8px 24px', fontSize: '13px', borderRadius: '8px', backgroundColor: 'var(--primary-color)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                      {selectedEquipment.remainQty <= 0 ? t('borrow.modal.outOfStock') : t('borrow.modal.addToReservation')}
-                    </button>
+            <div className="detail-modal-footer" style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '14px' }}>
+              {/* 第一列：剩餘庫存與數量調整 */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
+                {/* 剩餘庫存標籤 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '500' }}>{t('borrow.modal.remainStock')}</span>
+                  {selectedEquipment.remainQty <= 0 ? (
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ef4444', backgroundColor: '#fee2e2', padding: '2px 8px', borderRadius: '6px' }}>
+                      {t('borrow.modal.outOfStock')}
+                    </span>
                   ) : (
-                    <div className="quantity-controller" style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden' }}>
-                      <button className="qty-btn" onClick={() => updateCart(selectedEquipment.id, -1, selectedEquipment.remainQty)} style={{ border: 'none', background: 'transparent', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>-</button>
-                      <span className="qty-number" style={{ padding: '0 12px', fontSize: '14px', minWidth: '24px', textAlign: 'center', fontWeight: 'bold' }}>{currentQty}</span>
-                      <button
-                        className="qty-btn"
-                        onClick={() => updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty)}
-                        disabled={currentQty >= selectedEquipment.remainQty}
-                        style={{ border: 'none', background: 'transparent', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  );
-                })()}
+                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: selectedEquipment.remainQty <= 2 ? '#d97706' : '#059669', backgroundColor: selectedEquipment.remainQty <= 2 ? '#fef3c7' : '#dcfce7', padding: '2px 8px', borderRadius: '6px' }}>
+                      {selectedEquipment.remainQty} {t('borrow.equip.qtyUnit', '件')}
+                    </span>
+                  )}
+                </div>
+
+                {/* 數量調整器 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '13px', color: '#475569', fontWeight: '600' }}>{t('borrow.modal.qtyLabel')}</span>
+                  <div className="quantity-controller" style={{ display: 'inline-flex', alignItems: 'center', border: '1.5px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden', height: '36px', backgroundColor: '#fff' }}>
+                    <button
+                      type="button"
+                      className="qty-btn"
+                      onClick={() => updateCart(selectedEquipment.id, -1, selectedEquipment.remainQty)}
+                      disabled={!(form.cart[selectedEquipment.id] > 0)}
+                      style={{ border: 'none', background: 'transparent', padding: '0 12px', height: '100%', cursor: (form.cart[selectedEquipment.id] > 0) ? 'pointer' : 'not-allowed', fontWeight: 'bold', fontSize: '16px', color: (form.cart[selectedEquipment.id] > 0) ? '#1e293b' : '#cbd5e1' }}
+                    >
+                      -
+                    </button>
+                    <span className="qty-number" style={{ padding: '0 10px', fontSize: '15px', minWidth: '28px', textAlign: 'center', fontWeight: 'bold', color: '#0f172a' }}>
+                      {form.cart[selectedEquipment.id] || 0}
+                    </span>
+                    <button
+                      type="button"
+                      className="qty-btn"
+                      onClick={() => updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty)}
+                      disabled={selectedEquipment.remainQty <= 0 || (form.cart[selectedEquipment.id] || 0) >= selectedEquipment.remainQty}
+                      style={{ border: 'none', background: 'transparent', padding: '0 12px', height: '100%', cursor: (selectedEquipment.remainQty > 0 && (form.cart[selectedEquipment.id] || 0) < selectedEquipment.remainQty) ? 'pointer' : 'not-allowed', fontWeight: 'bold', fontSize: '16px', color: (selectedEquipment.remainQty > 0 && (form.cart[selectedEquipment.id] || 0) < selectedEquipment.remainQty) ? '#1e293b' : '#cbd5e1' }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {/* 第二列：主要操作大按鈕 */}
+              {(() => {
+                const currentQty = form.cart[selectedEquipment.id] || 0;
+                if (selectedEquipment.remainQty <= 0) {
+                  return (
+                    <button
+                      disabled
+                      style={{
+                        width: '100%',
+                        height: '46px',
+                        fontSize: '15px',
+                        borderRadius: '10px',
+                        backgroundColor: '#e2e8f0',
+                        color: '#94a3b8',
+                        border: 'none',
+                        cursor: 'not-allowed',
+                        fontWeight: 'bold',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      {t('borrow.modal.outOfStock')}
+                    </button>
+                  );
+                }
+
+                return (
+                  <button
+                    type="button"
+                    className="add-to-cart-btn modal-add-btn"
+                    onClick={() => {
+                      if (currentQty === 0) {
+                        updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty);
+                      } else if (currentQty < selectedEquipment.remainQty) {
+                        updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '46px',
+                      fontSize: '15px',
+                      borderRadius: '10px',
+                      backgroundColor: 'var(--primary-color)',
+                      color: 'white',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
+                      transition: 'transform 0.1s ease, background-color 0.2s ease'
+                    }}
+                  >
+                    <ShoppingCart size={18} />
+                    <span>
+                      {currentQty === 0
+                        ? t('borrow.modal.addToReservation')
+                        : t('borrow.modal.addedToReservation', { count: currentQty })}
+                    </span>
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>

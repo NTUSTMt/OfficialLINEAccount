@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { Check, ShieldCheck } from 'lucide-react';
+import { Check, ShieldCheck, Info } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import '../App.css';
@@ -747,9 +747,10 @@ function Register({ userId }: { userId: string }) {
                   <p className="proof-history-title">{t('register.step4.uploadedFiles')}</p>
                   <div className="proof-item-list">
                     {formData.strengthProof
-                      .split(',')
+                      .split(/[\n,，;\s]+/)
                       .map((u) => u.trim())
                       .filter((u) => u.startsWith('http'))
+                      .filter((u, idx, arr) => arr.indexOf(u) === idx)
                       .slice(-5)
                       .map((url, idx) => {
                         const directThumb = getDirectImageUrl(url, 200);
@@ -831,6 +832,31 @@ function Register({ userId }: { userId: string }) {
                   />
                   <span>{t('register.step4.intendOfficialNo')}</span>
                 </label>
+
+                {/* 社費說明資訊卡 */}
+                <div style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  marginTop: '4px',
+                  fontSize: '13px',
+                  color: 'var(--text-secondary)',
+                  lineHeight: '1.6'
+                }}>
+                  <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Info size={15} color="#059669" />
+                    <span>{t('register.step4.feeInfoTitle')}</span>
+                  </div>
+                  <ul style={{ margin: '0 0 8px 18px', padding: 0, listStyleType: 'disc', fontSize: '12px', color: '#475569' }}>
+                    <li><strong>{t('register.step4.feeInfoBenefit')}</strong></li>
+                    <li>{t('register.step4.feeInfoSemester')}</li>
+                    <li>{t('register.step4.feeInfoGraduation')}</li>
+                  </ul>
+                  <div style={{ fontSize: '11px', color: '#64748b' }}>
+                    {t('register.step4.feeInfoNote')}
+                  </div>
+                </div>
               </div>
 
               <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>

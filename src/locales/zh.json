@@ -91,15 +91,20 @@
       "strengthLabel": "體能證明",
       "strengthPlaceholder": "例如：5000公尺跑步26分鐘證明、登山證明、馬拉松...",
       "uploadProofLabel": "上傳體能證明- 最多 5 張",
-      "uploadTip": "提示：重新上傳將會覆蓋舊的體能證明，可多選或分次選取，上限 5 張。",
+      "uploadTip": "提示：系統將自動保留最新 5 張體能與登山證明。可多選或分次選取，每次上限 5 張。",
       "selectedFiles": "已選取待上傳檔案 ({{count}}/5)：",
       "remove": "移除",
       "uploadedFiles": "已上傳的舊體能與登山證明：",
       "viewUploaded": "查看已上傳證明 #{{num}}",
       "privacyConsent": "我同意將個人資料用於社團活動保險、入山申請及緊急聯繫使用。",
-      "intendOfficialTitle": "加入社員意願",
+      "intendOfficialTitle": "入社意願",
       "intendOfficialYes": "我有意願成為社員 (享個人借裝 5 折)",
       "intendOfficialNo": "我目前沒有意願成為社員",
+      "feeInfoTitle": "社費說明",
+      "feeInfoBenefit": "社員專屬福利：個人借用裝備享 5 折優惠",
+      "feeInfoSemester": "一學期方案：$200",
+      "feeInfoGraduation": "直到畢業方案：大學部 $800 / 研究所 $400",
+      "feeInfoNote": "完成個人資料送出後，可隨時至「繳費系統」選擇方案並進行繳費回報。",
       "intendOfficerTitle": "幹部意願調查",
       "intendOfficerCheckbox": "我有意願成為社團幹部（享免繳社費、決定活動內容、活動優先卡位等等福利。不需要很有經驗或體能很好之類的條件，但當然也是要經過社團審查，不過不管怎樣多多參加活動就很有機會！）"
     },
@@ -270,10 +275,12 @@
       "basePrice": "基本租金 (2天)：",
       "extraPrice": "續租費用 (每加一天)：",
       "descTitle": "裝備說明與規格",
-      "noDesc": "目前無此裝備的詳細描述。若有疑問請洽社團幹部。",
+      "noDesc": "目前無此裝備的詳細描述。若有疑問請洽本帳號。",
       "qtyLabel": "預約數量：",
+      "remainStock": "剩餘數量：",
       "outOfStock": "庫存不足",
-      "addToReservation": "加入預訂"
+      "addToReservation": "加入預訂",
+      "addedToReservation": "已預約 {{count}} 件 (點擊加購)"
     }
   },
   "payment": {
