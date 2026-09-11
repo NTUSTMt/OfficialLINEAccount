@@ -5281,12 +5281,17 @@ function processSaveProfile(payload) {
     // 處理多張檔案上傳至 Google Drive，並用逗號區隔多個 URL
     if (payload.strengthProofFiles && payload.strengthProofFiles.length > 0) {
       var fileUrls = [];
+      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
       for (var f = 0; f < payload.strengthProofFiles.length; f++) {
         var fileObj = payload.strengthProofFiles[f];
         if (fileObj && fileObj.base64 && fileObj.name) {
-          var ext = fileObj.name.split('.').pop();
-          var customFileName = name + "_體能證明_" + (f + 1) + "." + ext;
-          var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName);
+          var ext = fileObj.name.split('.').pop() || "jpg";
+          var customFileName = name + "_體能證明_" + todayStr;
+          if (payload.strengthProofFiles.length > 1) {
+            customFileName += "_" + (f + 1);
+          }
+          customFileName += "." + ext;
+          var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName, "體能登山證明");
           if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
             fileUrls.push(uploadedUrl);
           }
@@ -5471,7 +5476,7 @@ function processSaveProfile(payload) {
           }
 
           if (newValStr !== oldValStr) {
-            changes.push("✏️ " + item.label + "：" + (oldValStr || "(空)") + " ➡️ " + (newValStr || "(空)"));
+            changes.push("• " + item.label + "：" + (oldValStr || "(空)") + " -> " + (newValStr || "(空)"));
           }
         });
 
@@ -5479,7 +5484,7 @@ function processSaveProfile(payload) {
         if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
           var oldProofStr = isUpdate ? String(oldValuesForCompare[strengthProofIdx]).trim() : "";
           if (data.strengthProof !== oldProofStr) {
-            changes.push("📷 體能證明截圖：已重新上傳新檔案");
+            changes.push("• 體能與登山證明：已重新上傳新檔案");
           }
         }
 
@@ -5495,11 +5500,11 @@ function processSaveProfile(payload) {
         var infoList = [];
         fieldMappings.forEach(function (item) {
           if (item.value && String(item.value).trim() !== "") {
-            infoList.push("📝 " + item.label + "：" + item.value);
+            infoList.push("• " + item.label + "：" + item.value);
           }
         });
         if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
-          infoList.push("📷 體能證明截圖：已上傳證明檔案");
+          infoList.push("• 體能與登山證明：已上傳證明檔案");
         }
         pushMsg = "🎉 歡迎加入野境戶外！您的個人資料已建立成功：\n\n" +
           infoList.join("\n") + "\n\n" +
@@ -5535,8 +5540,8 @@ function getOrCreateColIdx(sheet, headers, columnName) {
   return idx;
 }
 
-// 將上傳檔案存入雲端硬碟指定資料夾 (預設為 LINE_Uploads) 並設為公開連結
-function uploadFileToDrive(base64Str, fileName) {
+// 將上傳檔案存入雲端硬碟指定資料夾 (預設為 LINE_Uploads，可指定多層子資料夾路徑) 並設為公開連結
+function uploadFileToDrive(base64Str, fileName, folderPath) {
   if (!base64Str) return "";
   try {
     var splitData = base64Str.split(",");
@@ -5552,15 +5557,31 @@ function uploadFileToDrive(base64Str, fileName) {
     var decoded = Utilities.base64Decode(rawData);
     var blob = Utilities.newBlob(decoded, contentType, fileName);
 
-    var folder;
-    var folders = DriveApp.getFoldersByName("LINE_Uploads");
-    if (folders.hasNext()) {
-      folder = folders.next();
+    // 1. 取得或建立主資料夾 LINE_Uploads
+    var currentFolder;
+    var rootFolders = DriveApp.getFoldersByName("LINE_Uploads");
+    if (rootFolders.hasNext()) {
+      currentFolder = rootFolders.next();
     } else {
-      folder = DriveApp.createFolder("LINE_Uploads");
+      currentFolder = DriveApp.createFolder("LINE_Uploads");
     }
 
-    var file = folder.createFile(blob);
+    // 2. 支援深層子資料夾路徑 (字串如 "心得照片/20260911-七星山" 或 "體能登山證明")
+    if (folderPath) {
+      var parts = Array.isArray(folderPath) ? folderPath : String(folderPath).split("/");
+      for (var i = 0; i < parts.length; i++) {
+        var partName = parts[i].trim();
+        if (!partName) continue;
+        var subFolders = currentFolder.getFoldersByName(partName);
+        if (subFolders.hasNext()) {
+          currentFolder = subFolders.next();
+        } else {
+          currentFolder = currentFolder.createFolder(partName);
+        }
+      }
+    }
+
+    var file = currentFolder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return file.getUrl();
   } catch (err) {
@@ -5831,18 +5852,19 @@ function processSubmitReflection(payload) {
       var d = ("0" + today.getDate()).slice(-2);
       formattedDate = y + m + d;
     }
+    var eventSubFolder = "心得照片/" + formattedDate + "-" + (details.eventName || "活動");
 
     if (payload.reflectionPhotoFiles && payload.reflectionPhotoFiles.length > 0) {
       for (var f = 0; f < payload.reflectionPhotoFiles.length; f++) {
         var fileObj = payload.reflectionPhotoFiles[f];
         if (fileObj && fileObj.base64 && fileObj.name) {
-          var ext = fileObj.name.split('.').pop();
-          var customFileName = formattedDate + "-" + details.eventName + "-" + userName;
+          var ext = fileObj.name.split('.').pop() || "jpg";
+          var customFileName = formattedDate + "_" + details.eventName + "_" + userName;
           if (payload.reflectionPhotoFiles.length > 1) {
             customFileName += "_" + (f + 1);
           }
           customFileName += "." + ext;
-          var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName);
+          var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName, eventSubFolder);
           if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
             photoUrls.push(uploadedUrl);
           }
@@ -5851,9 +5873,9 @@ function processSubmitReflection(payload) {
     }
 
     if (photoUrls.length === 0 && payload.reflectionPhotoFile && payload.reflectionPhotoFile.base64 && payload.reflectionPhotoFile.name) {
-      var ext = payload.reflectionPhotoFile.name.split('.').pop();
-      var customFileName = formattedDate + "-" + details.eventName + "-" + userName + "." + ext;
-      var uploadedUrl = uploadFileToDrive(payload.reflectionPhotoFile.base64, customFileName);
+      var ext = payload.reflectionPhotoFile.name.split('.').pop() || "jpg";
+      var customFileName = formattedDate + "_" + details.eventName + "_" + userName + "." + ext;
+      var uploadedUrl = uploadFileToDrive(payload.reflectionPhotoFile.base64, customFileName, eventSubFolder);
       if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
         photoUrls.push(uploadedUrl);
       }
@@ -6470,8 +6492,10 @@ function processSaveEvent(payload) {
     // 處理圖片上傳
     var imageUrl = payload.imageUrl || "";
     if (payload.coverImageFile && payload.coverImageFile.base64) {
-      var fileName = (payload.name || "活動") + "_封面_" + Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMddHHmmss") + ".jpg";
-      var uploadResult = uploadFileToDrive(payload.coverImageFile.base64, fileName);
+      var eventFirstDate = payload.startDate ? String(payload.startDate).replace(/\D/g, "").substring(0, 8) : Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
+      var eventCleanName = (payload.name || "活動").trim();
+      var fileName = eventFirstDate + "_" + eventCleanName + "_封面.jpg";
+      var uploadResult = uploadFileToDrive(payload.coverImageFile.base64, fileName, "活動封面");
       if (uploadResult && !uploadResult.startsWith("上傳失敗")) {
         var driveMatch = uploadResult.match(/(?:file\/d\/|id=)([^/&?]+)/);
         if (driveMatch && driveMatch[1]) {
