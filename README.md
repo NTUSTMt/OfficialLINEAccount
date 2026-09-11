@@ -3,11 +3,36 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.13` (v0.1.13)
+- **當前版本**：`0.1.14` (v0.1.14)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 114. 幹部系統雙向多維排序、標籤頁 0 延遲權限控管與個人資料排版優化 (v0.1.14)
+- **活動管理與審核名單多維排序功能 (Dual-Direction Multi-Dimensional Sorting)**：
+  - **活動清單排序 (Admin Events List Sorting)**：
+    - 支援依「活動日期（startDate）」、「截止時間（deadline）」、「活動狀態（status）」三種維度排序。
+    - 支援即時升冪（Ascending）與降冪（Descending）切換按鈕。
+  - **報名者審核名單排序 (Applicant Signups List Sorting)**：
+    - 支援依「報名順序（order，依 rowNumber）」、「社員優先（member，正式社員排前）」、「審核狀態（status，正取 → 備取 → 審核中）」排序。
+    - 支援即時升降序切換。
+  - **精緻緊湊型介面 (Compact UI)**：
+    - 嚴格遵守 0 Emoji 規範，全數採用 Lucide-react 向量圖示（`ArrowUpDown`、`ArrowUp`、`ArrowDown`）。
+    - 緊湊排版不佔手機螢幕空間，無縫整合於搜尋與篩選列。
+  - **重新整理按鈕位置優化 (Refresh Button Placement)**：
+    - 將活動管理頁面中的「重新整理」按鈕自頂部標籤列移至活動搜尋框右側，與搜尋輸入框並列同列，更加直覺便利。
+- **幹部標籤頁 0 延遲權限控管 (Zero-Latency Officer Tab Control with SWR Cache)**：
+  - **效能保證**：透過 `cacheUtils`（`sessionStorage` 結合記憶體備援），首次驗證後快取 5 分鐘，頁面切換與選單展開耗時 0 毫秒，絕不造成介面卡頓。
+  - **完全隱藏**：非幹部帳號或尚未通過驗證前，右上角頭貼下拉選單一律不顯示「幹部系統」入口；直接輸入 `/admin/events` 亦有路由防護阻擋。
+  - **測試環境修正**：移除測試帳號（`TEST_USER_ID`）盲目給予幹部權限的預設邏輯，確保只有通過驗證之幹部才具備訪問權限。
+- **個人資料彈窗層級（z-index）與排版修復 (Profile Modal Layering & Layout Fixes)**：
+  - **視窗層級修正**：將個人資料 Modal 的 `zIndex` 提升至 `10001`、體能證明 Modal 提升至 `10002`（高於審核名單 Modal 的 `9999`），徹底解決個人資料彈窗被壓在審核頁面後方的問題。
+  - **證件號碼跨欄單行顯示**：為基本資料內的「證件號碼」加上 `gridColumn: 'span 2'`，提供充足寬度，徹底解決因單欄寬度不足導致證件字號折至下一行的問題。
+  - **審核操作按鈕防連點與轉圈圈載入動效**：在個人資料彈窗內點擊「正取」、「備取」或「重設」時，即時顯示旋轉 Spinner 圖示，並自動停用按鈕點擊，防止重複誤按。
+- **緊急聯絡人關係欄位解析修復 (Emergency Contact Relation Parsing Fix)**：
+  - 於後端 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 的 `get_admin_event_signups` 函式中補齊報名表表頭的 `sEmerRelIdx`（支援「與緊急聯絡人關係」、「關係」、「Relation」等多種命名格式）。
+  - 在社員資料比對時擴充支援以系統識別碼（`userId`）與手機號碼（`phone`）雙向關聯，確保緊急聯絡人關係資料精準提取並呈現在前端。
 
 ### 113. 備取卡片視覺邊框修復與報名者個人資料完整檢視功能 (v0.1.13)
 - **備取邊框與陰影狀態同步修復 (Waitlist Card Border & Shadow Sync)**：

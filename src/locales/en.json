@@ -494,6 +494,16 @@
     "unnotifiedBadge": "Unnotified",
     "viewProof": "View Fitness Proof",
     "closeBtn": "Close Roster",
+    "sort": {
+      "startDate": "Start Date",
+      "deadline": "Deadline",
+      "status": "Status",
+      "signupOrder": "Signup Order",
+      "memberFirst": "Member First",
+      "reviewStatus": "Review Status",
+      "asc": "Asc",
+      "desc": "Desc"
+    },
     "alerts": {
       "fillRequired": "Please fill in all required fields (Name, Start/End date, Deadline, Cost, and Summary)!",
       "saveSuccess": "Event saved successfully!",

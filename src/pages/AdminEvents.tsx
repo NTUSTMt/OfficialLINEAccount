@@ -33,7 +33,10 @@ import {
   X,
   ExternalLink,
   User,
-  ShieldAlert
+  ShieldAlert,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -108,6 +111,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [eventSortBy, setEventSortBy] = useState<'startDate' | 'deadline' | 'status'>('startDate');
+  const [eventSortOrder, setEventSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // 表單狀態
   const [formData, setFormData] = useState({
@@ -132,6 +137,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const [signupsList, setSignupsList] = useState<SignupApplicant[]>([]);
   const [loadingSignups, setLoadingSignups] = useState(false);
   const [signupFilter, setSignupFilter] = useState<'all' | 'accepted' | 'waitlisted' | 'pending'>('all');
+  const [signupSortBy, setSignupSortBy] = useState<'order' | 'member' | 'status'>('order');
+  const [signupSortOrder, setSignupSortOrder] = useState<'asc' | 'desc'>('asc');
   const [updatingSignupCode, setUpdatingSignupCode] = useState<string | null>(null);
   const [sendingNotifications, setSendingNotifications] = useState(false);
   const [expandedSignupCode, setExpandedSignupCode] = useState<string | null>(null);
@@ -601,9 +608,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     }
   };
 
-  // 篩選後活動列表
+  // 篩選與排序後活動列表
   const filteredEvents = useMemo(() => {
-    return events.filter((evt) => {
+    const list = events.filter((evt) => {
       const matchesStatus = statusFilter === 'all' || evt.status === statusFilter;
       const matchesSearch =
         searchQuery.trim() === '' ||
@@ -611,17 +618,67 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         evt.id.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesStatus && matchesSearch;
     });
-  }, [events, statusFilter, searchQuery]);
 
-  // 篩選後報名者列表
+    return [...list].sort((a, b) => {
+      let comparison = 0;
+      if (eventSortBy === 'startDate') {
+        const timeA = a.startDate ? new Date(a.startDate.replace(/\./g, '/')).getTime() : 0;
+        const timeB = b.startDate ? new Date(b.startDate.replace(/\./g, '/')).getTime() : 0;
+        comparison = (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+      } else if (eventSortBy === 'deadline') {
+        const timeA = a.deadline ? new Date(a.deadline.replace(/\./g, '/')).getTime() : 0;
+        const timeB = b.deadline ? new Date(b.deadline.replace(/\./g, '/')).getTime() : 0;
+        comparison = (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+      } else if (eventSortBy === 'status') {
+        const getStatusWeight = (st: string) => {
+          if (st.includes('開放報名') || st === '開放') return 1;
+          if (st.includes('審核')) return 2;
+          if (st.includes('未來開放')) return 3;
+          if (st.includes('截止')) return 4;
+          if (st.includes('結束') || st === '關閉') return 5;
+          return 9;
+        };
+        comparison = getStatusWeight(a.status) - getStatusWeight(b.status);
+      }
+      return eventSortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [events, statusFilter, searchQuery, eventSortBy, eventSortOrder]);
+
+  // 篩選與排序後報名者列表
   const filteredSignups = useMemo(() => {
-    return signupsList.filter((s) => {
+    const list = signupsList.filter((s) => {
       if (signupFilter === 'accepted') return s.reviewResult.indexOf('正取') > -1;
       if (signupFilter === 'waitlisted') return s.reviewResult.indexOf('備取') > -1;
       if (signupFilter === 'pending') return s.reviewResult.indexOf('正取') === -1 && s.reviewResult.indexOf('備取') === -1;
       return true;
     });
-  }, [signupsList, signupFilter]);
+
+    return [...list].sort((a, b) => {
+      let comparison = 0;
+      if (signupSortBy === 'order') {
+        comparison = (a.rowNumber || 0) - (b.rowNumber || 0);
+      } else if (signupSortBy === 'member') {
+        const isMemberA = a.isOfficial === '是' ? 1 : 0;
+        const isMemberB = b.isOfficial === '是' ? 1 : 0;
+        comparison = isMemberB - isMemberA; // 社員優先在前
+        if (comparison === 0) {
+          comparison = (a.rowNumber || 0) - (b.rowNumber || 0);
+        }
+      } else if (signupSortBy === 'status') {
+        const getStatusWeight = (res: string) => {
+          if (res.includes('正取')) return 1;
+          if (res.includes('備取')) return 2;
+          if (res.includes('審核中') || !res) return 3;
+          return 4;
+        };
+        comparison = getStatusWeight(a.reviewResult) - getStatusWeight(b.reviewResult);
+        if (comparison === 0) {
+          comparison = (a.rowNumber || 0) - (b.rowNumber || 0);
+        }
+      }
+      return signupSortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [signupsList, signupFilter, signupSortBy, signupSortOrder]);
 
   // 未授權或載入狀態渲染
   if (authLoading) {
@@ -753,33 +810,6 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             <span>{isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}</span>
           </button>
         </div>
-
-        {activeTab === 'list' && (
-          <button
-            type="button"
-            onClick={() => fetchEvents(true)}
-            disabled={isRefreshingEvents || loadingEvents}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
-              fontSize: '12px',
-              fontWeight: 600,
-              borderRadius: '20px',
-              border: '1px solid #e2e8f0',
-              background: '#ffffff',
-              color: '#475569',
-              cursor: (isRefreshingEvents || loadingEvents) ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s ease',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
-            }}
-            title={t('adminEvents.refresh', '重新整理')}
-          >
-            <RotateCw size={13} style={{ animation: isRefreshingEvents ? 'spin 1s linear infinite' : 'none' }} />
-            <span>{isRefreshingEvents ? t('adminEvents.refreshing', '更新中...') : t('adminEvents.refresh', '重新整理')}</span>
-          </button>
-        )}
       </div>
 
       {/* ============================================================ */}
@@ -789,25 +819,52 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         <div>
           {/* 搜尋與篩選列 */}
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px' }}>
-            <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-              <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-              <input
-                type="text"
-                placeholder="搜尋活動名稱或代號..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+            <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: '240px' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                <input
+                  type="text"
+                  placeholder="搜尋活動名稱或代號..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px 10px 36px',
+                    borderRadius: '10px',
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchEvents(true)}
+                disabled={isRefreshingEvents || loadingEvents}
                 style={{
-                  width: '100%',
-                  padding: '10px 14px 10px 36px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '10px 14px',
+                  fontSize: '13px',
+                  fontWeight: 600,
                   borderRadius: '10px',
                   border: '1.5px solid #cbd5e1',
-                  fontSize: '14px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
+                  background: '#ffffff',
+                  color: '#475569',
+                  cursor: (isRefreshingEvents || loadingEvents) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
                 }}
-              />
+                title={t('adminEvents.refresh', '重新整理')}
+              >
+                <RotateCw size={13} style={{ animation: isRefreshingEvents ? 'spin 1s linear infinite' : 'none' }} />
+                <span>{isRefreshingEvents ? t('adminEvents.refreshing', '更新中...') : t('adminEvents.refresh', '重新整理')}</span>
+              </button>
             </div>
-            <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
               {(['all', '開放', '未來開放', '關閉'] as const).map((st) => (
                 <button
                   key={st}
@@ -827,6 +884,57 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   {st === 'all' ? '全部' : st}
                 </button>
               ))}
+
+              {/* 活動清單排序控制項 */}
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: '#ffffff',
+                padding: '4px 8px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '12px'
+              }}>
+                <ArrowUpDown size={13} color="#64748b" />
+                <select
+                  value={eventSortBy}
+                  onChange={(e) => setEventSortBy(e.target.value as any)}
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#334155',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="startDate">{t('adminEvents.sort.startDate', '活動日期')}</option>
+                  <option value="deadline">{t('adminEvents.sort.deadline', '截止時間')}</option>
+                  <option value="status">{t('adminEvents.sort.status', '活動狀態')}</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setEventSortOrder((prev) => prev === 'asc' ? 'desc' : 'asc')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '2px',
+                    border: 'none',
+                    backgroundColor: '#f1f5f9',
+                    borderRadius: '4px',
+                    padding: '3px 6px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    color: '#1e293b',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {eventSortOrder === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+                  <span>{eventSortOrder === 'asc' ? t('adminEvents.sort.asc', '升冪') : t('adminEvents.sort.desc', '降冪')}</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1819,36 +1927,102 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               </div>
             </div>
 
-            {/* 篩選標籤 */}
-            <div style={{ padding: '12px 24px', display: 'flex', gap: '8px', borderBottom: '1px solid #f1f5f9', overflowX: 'auto' }}>
-              {(['all', 'accepted', 'waitlisted', 'pending'] as const).map((filterKey) => {
-                const count = signupsList.filter((s) => {
-                  if (filterKey === 'accepted') return s.reviewResult.indexOf('正取') > -1;
-                  if (filterKey === 'waitlisted') return s.reviewResult.indexOf('備取') > -1;
-                  if (filterKey === 'pending') return s.reviewResult.indexOf('正取') === -1 && s.reviewResult.indexOf('備取') === -1;
-                  return true;
-                }).length;
+            {/* 篩選標籤與排序工具列 */}
+            <div style={{
+              padding: '10px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              borderBottom: '1px solid #f1f5f9',
+              flexWrap: 'wrap',
+              backgroundColor: '#fafafa'
+            }}>
+              {/* 篩選標籤 */}
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+                {(['all', 'accepted', 'waitlisted', 'pending'] as const).map((filterKey) => {
+                  const count = signupsList.filter((s) => {
+                    if (filterKey === 'accepted') return s.reviewResult.indexOf('正取') > -1;
+                    if (filterKey === 'waitlisted') return s.reviewResult.indexOf('備取') > -1;
+                    if (filterKey === 'pending') return s.reviewResult.indexOf('正取') === -1 && s.reviewResult.indexOf('備取') === -1;
+                    return true;
+                  }).length;
 
-                return (
-                  <button
-                    key={filterKey}
-                    onClick={() => setSignupFilter(filterKey)}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: '20px',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      border: 'none',
-                      cursor: 'pointer',
-                      backgroundColor: signupFilter === filterKey ? '#059669' : '#f1f5f9',
-                      color: signupFilter === filterKey ? 'white' : '#475569',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {t(`adminEvents.filter${filterKey.charAt(0).toUpperCase() + filterKey.slice(1)}`, { count })}
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={filterKey}
+                      onClick={() => setSignupFilter(filterKey)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        border: 'none',
+                        cursor: 'pointer',
+                        backgroundColor: signupFilter === filterKey ? '#059669' : '#ffffff',
+                        color: signupFilter === filterKey ? 'white' : '#475569',
+                        boxShadow: signupFilter === filterKey ? '0 2px 4px rgba(5, 150, 105, 0.2)' : '0 1px 2px rgba(0,0,0,0.05)',
+                        transition: 'all 0.2s',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {t(`adminEvents.filter${filterKey.charAt(0).toUpperCase() + filterKey.slice(1)}`, { count })}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 報名者排序控制項 */}
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: '#ffffff',
+                padding: '4px 8px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '12px',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}>
+                <ArrowUpDown size={13} color="#64748b" />
+                <select
+                  value={signupSortBy}
+                  onChange={(e) => setSignupSortBy(e.target.value as any)}
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#334155',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="order">{t('adminEvents.sort.signupOrder', '報名順序')}</option>
+                  <option value="member">{t('adminEvents.sort.memberFirst', '社員優先')}</option>
+                  <option value="status">{t('adminEvents.sort.reviewStatus', '審核狀態')}</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setSignupSortOrder((prev) => prev === 'asc' ? 'desc' : 'asc')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '2px',
+                    border: 'none',
+                    backgroundColor: '#f1f5f9',
+                    borderRadius: '4px',
+                    padding: '3px 6px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    color: '#1e293b',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {signupSortOrder === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+                  <span>{signupSortOrder === 'asc' ? t('adminEvents.sort.asc', '升冪') : t('adminEvents.sort.desc', '降冪')}</span>
+                </button>
+              </div>
             </div>
 
             {/* 名冊內容區 (滾動) */}
@@ -2312,7 +2486,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1100,
+            zIndex: 10002,
             padding: '16px'
           }}
           onClick={() => setProofModalData(null)}
@@ -2402,7 +2576,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1100,
+            zIndex: 10001,
             padding: '16px'
           }}
           onClick={() => setProfileModalApplicant(null)}
@@ -2475,7 +2649,10 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   <div><span style={{ color: '#64748b' }}>系所：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.department}</span></div>
                 )}
                 {profileModalApplicant.idNumber && (
-                  <div><span style={{ color: '#64748b' }}>證件號碼：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.idNumber}</span></div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: '#64748b' }}>證件號碼：</span>
+                    <span style={{ color: '#0f172a' }}>{profileModalApplicant.idNumber}</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -2636,81 +2813,106 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   {profileModalApplicant.reviewResult || '審核中 Checking'}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await handleUpdateApplicantResult(profileModalApplicant, '正取 Confirmed');
-                    setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: '正取 Confirmed' } : null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    fontWeight: 'bold',
-                    border: 'none',
-                    cursor: 'pointer',
-                    backgroundColor: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? '#16a34a' : '#f1f5f9',
-                    color: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? 'white' : '#475569',
-                    display: 'inline-flex',
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {updatingSignupCode === String(profileModalApplicant.rowNumber) ? (
+                  <div style={{
+                    display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <CheckCircle2 size={13} />
-                  <span>正取</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await handleUpdateApplicantResult(profileModalApplicant, '備取 Waitlisted');
-                    setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: '備取 Waitlisted' } : null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
+                    gap: '8px',
+                    padding: '10px',
+                    width: '100%',
+                    backgroundColor: '#f8fafc',
                     borderRadius: '8px',
-                    fontSize: '13px',
-                    fontWeight: 'bold',
-                    border: 'none',
-                    cursor: 'pointer',
-                    backgroundColor: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? '#ea580c' : '#f1f5f9',
-                    color: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? 'white' : '#475569',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Clock4 size={13} />
-                  <span>備取</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await handleUpdateApplicantResult(profileModalApplicant, '審核中 Checking');
-                    setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: '審核中 Checking' } : null);
-                  }}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: 'white',
-                    color: '#64748b',
-                    cursor: 'pointer',
-                    fontWeight: '500',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <RotateCcw size={12} />
-                  <span>重設</span>
-                </button>
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <div className="spinner" style={{ width: '18px', height: '18px', margin: 0 }}></div>
+                    <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>審核更新中...</span>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={updatingSignupCode !== null}
+                      onClick={async () => {
+                        await handleUpdateApplicantResult(profileModalApplicant, '正取 Confirmed');
+                        setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: '正取 Confirmed' } : null);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: 'bold',
+                        border: 'none',
+                        cursor: updatingSignupCode !== null ? 'not-allowed' : 'pointer',
+                        backgroundColor: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? '#16a34a' : '#f1f5f9',
+                        color: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? 'white' : '#475569',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        opacity: updatingSignupCode !== null ? 0.6 : 1
+                      }}
+                    >
+                      <CheckCircle2 size={13} />
+                      <span>正取</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatingSignupCode !== null}
+                      onClick={async () => {
+                        await handleUpdateApplicantResult(profileModalApplicant, '備取 Waitlisted');
+                        setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: '備取 Waitlisted' } : null);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: 'bold',
+                        border: 'none',
+                        cursor: updatingSignupCode !== null ? 'not-allowed' : 'pointer',
+                        backgroundColor: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? '#ea580c' : '#f1f5f9',
+                        color: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? 'white' : '#475569',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        opacity: updatingSignupCode !== null ? 0.6 : 1
+                      }}
+                    >
+                      <Clock4 size={13} />
+                      <span>備取</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatingSignupCode !== null}
+                      onClick={async () => {
+                        await handleUpdateApplicantResult(profileModalApplicant, '審核中 Checking');
+                        setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: '審核中 Checking' } : null);
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: 'white',
+                        color: '#64748b',
+                        cursor: updatingSignupCode !== null ? 'not-allowed' : 'pointer',
+                        fontWeight: '500',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        opacity: updatingSignupCode !== null ? 0.6 : 1
+                      }}
+                    >
+                      <RotateCcw size={12} />
+                      <span>重設</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 

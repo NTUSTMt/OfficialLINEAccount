@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ShieldCheck, Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle } from 'lucide-react';
 import liff from '@line/liff';
 import { appendAuthToken } from './utils/api';
+import { getCache, setCache } from './utils/cacheUtils';
 import './App.css';
 
 const Borrow = lazy(() => import('./pages/Borrow'));
@@ -377,20 +378,30 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
   // 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，需在初始化前鎖定初始路徑
   // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
   const [redirectPath] = useState(() => getInitialRedirectPath());
-  const [isOfficer, setIsOfficer] = useState(false);
+  const [isOfficer, setIsOfficer] = useState<boolean>(() => {
+    if (!liffInit.userId || liffInit.userId === 'TEST_USER_ID') return false;
+    const cached = getCache<boolean>(`officer_status_${liffInit.userId}`);
+    return cached === true;
+  });
 
   useEffect(() => {
     if (!liffInit.userId || liffInit.userId === 'TEST_USER_ID') {
-      setIsOfficer(true);
+      setIsOfficer(false);
       return;
     }
+    const cacheKey = `officer_status_${liffInit.userId}`;
+    const cached = getCache<boolean>(cacheKey);
+    if (cached !== null) {
+      setIsOfficer(cached);
+    }
+
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
     fetch(appendAuthToken(`${GAS_API_URL}?action=check_officer_status&userId=${liffInit.userId}`))
       .then((res) => res.json())
       .then((data) => {
-        if (data.status === 'success' && data.isOfficer) {
-          setIsOfficer(true);
-        }
+        const officerResult = !!(data.status === 'success' && data.isOfficer);
+        setIsOfficer(officerResult);
+        setCache(cacheKey, officerResult, 300); // 快取 5 分鐘，後續切換頁面 0ms
       })
       .catch((err) => console.error('幹部權限初檢出錯:', err));
   }, [liffInit.userId]);

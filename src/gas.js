@@ -6262,20 +6262,25 @@ function getEventSignupsAPI(ss, eventId, userId) {
       var mDeptIdx = _fi(mH, "系所");
       var mStuIdx = _fi(mH, "學號");
       var mMedIdx = mH.findIndex(function(h) { return String(h).includes("病史") || String(h).includes("過敏"); });
-      var mRelIdx = _fi(mH, "關係");
+      var mRelIdx = mH.findIndex(function(h) {
+        var s = String(h);
+        return s.includes("關係") || s.toLowerCase().includes("relation");
+      });
+      var mPhoneIdx = _fi(mH, "電話");
 
-      if (mSysIdx > -1) {
+      if (mSysIdx > -1 || mPhoneIdx > -1) {
         for (var m = 1; m < mData.length; m++) {
-          var mUid = String(mData[m][mSysIdx] || "").trim();
-          if (mUid) {
-            memberMap[mUid] = {
-              proof: (mProofIdx > -1) ? String(mData[m][mProofIdx] || "").trim() : "",
-              department: (mDeptIdx > -1) ? String(mData[m][mDeptIdx] || "").trim() : "",
-              studentId: (mStuIdx > -1) ? String(mData[m][mStuIdx] || "").trim() : "",
-              medicalHistory: (mMedIdx > -1) ? String(mData[m][mMedIdx] || "").trim() : "",
-              emerRel: (mRelIdx > -1) ? String(mData[m][mRelIdx] || "").trim() : ""
-            };
-          }
+          var mUid = (mSysIdx > -1) ? String(mData[m][mSysIdx] || "").trim() : "";
+          var mPhone = (mPhoneIdx > -1) ? String(mData[m][mPhoneIdx] || "").trim().replace(/[^0-9]/g, "") : "";
+          var memberInfo = {
+            proof: (mProofIdx > -1) ? String(mData[m][mProofIdx] || "").trim() : "",
+            department: (mDeptIdx > -1) ? String(mData[m][mDeptIdx] || "").trim() : "",
+            studentId: (mStuIdx > -1) ? String(mData[m][mStuIdx] || "").trim() : "",
+            medicalHistory: (mMedIdx > -1) ? String(mData[m][mMedIdx] || "").trim() : "",
+            emerRel: (mRelIdx > -1) ? String(mData[m][mRelIdx] || "").trim() : ""
+          };
+          if (mUid) memberMap[mUid] = memberInfo;
+          if (mPhone) memberMap["phone_" + mPhone] = memberInfo;
         }
       }
     }
@@ -6294,6 +6299,10 @@ function getEventSignupsAPI(ss, eventId, userId) {
   var sBirthdayIdx = _fi(sH, "生日");
   var sIdNumberIdx = _fi(sH, "證件");
   var sEmerNameIdx = sH.findIndex(function(h) { return String(h).includes("緊急聯絡人") && !String(h).includes("電話") && !String(h).includes("地址") && !String(h).includes("關係"); });
+  var sEmerRelIdx = sH.findIndex(function(h) {
+    var s = String(h);
+    return s.includes("關係") || s.toLowerCase().includes("relation");
+  });
   var sEmerPhoneIdx = _fi(sH, "緊急聯絡人電話");
   var sEmerAddrIdx = sH.findIndex(function(h) { return String(h).includes("緊急聯絡人") && String(h).includes("地址"); });
   var sExpIdx = _fi(sH, "經驗");
@@ -6310,10 +6319,17 @@ function getEventSignupsAPI(ss, eventId, userId) {
     var row = sData[i];
     if (sEvtIdIdx > -1 && row[sEvtIdIdx].trim() === eventId) {
       var applicantUid = (sSysIdx > -1) ? String(row[sSysIdx] || "").trim() : "";
-      var mem = (applicantUid && memberMap[applicantUid]) ? memberMap[applicantUid] : {};
+      var rawPhone = (sPhoneIdx > -1) ? String(row[sPhoneIdx] || "").trim().replace(/[^0-9]/g, "") : "";
+      var mem = (applicantUid && memberMap[applicantUid]) 
+        ? memberMap[applicantUid] 
+        : (rawPhone && memberMap["phone_" + rawPhone] ? memberMap["phone_" + rawPhone] : {});
       var proofVal = (sProofIdx > -1) ? String(row[sProofIdx] || "").trim() : "";
       if (!proofVal && mem.proof) {
         proofVal = mem.proof;
+      }
+      var relVal = (sEmerRelIdx > -1) ? String(row[sEmerRelIdx] || "").trim() : "";
+      if (!relVal && mem.emerRel) {
+        relVal = mem.emerRel;
       }
 
       signups.push({
@@ -6330,7 +6346,7 @@ function getEventSignupsAPI(ss, eventId, userId) {
         idNumber: (sIdNumberIdx > -1) ? row[sIdNumberIdx] : "",
         emerName: (sEmerNameIdx > -1) ? row[sEmerNameIdx] : "",
         emerPhone: (sEmerPhoneIdx > -1) ? row[sEmerPhoneIdx] : "",
-        emerRel: mem.emerRel || "",
+        emerRel: relVal,
         emerAddr: (sEmerAddrIdx > -1) ? row[sEmerAddrIdx] : "",
         experience: (sExpIdx > -1) ? row[sExpIdx] : "",
         fitnessTest: (sFitnessIdx > -1) ? row[sFitnessIdx] : "",
