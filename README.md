@@ -3,11 +3,19 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.40` (v0.1.40)
+- **當前版本**：`0.1.41` (v0.1.41)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 141. 繳費送出與裝備預約非阻塞發話 (Promise.race 逾時防禦) 與即時成功畫面切換 (v0.1.41)
+- **前端 `liff.sendMessages` iOS 掛起致命卡死修復 (Non-blocking sendMessages with Promise.race Timeout)**：
+  - **問題根因**：在 iOS LINE LIFF 環境中，若用戶端視窗未開通發話權限（例如直接自通知 URI 點開 LIFF），LIFF SDK 內部的 `liff.sendMessages` Promise 在特定 iOS LINE 版本會呈現永久掛起（Never resolve / reject）狀態。過去程式碼使用 `await liff.sendMessages(...)`，導致 JavaScript 執行緒被永久凍結在該行，後續的 `liff.closeWindow()`、`setSubmitted(true)` 與 `finally { setIsSubmitting(false) }` 全數無法執行，因此即使後端試算表與幹部推播已正常完成，前端按鈕仍持續卡在「申報送出中...」。
+  - **雙重防護機制 (Dual Protection Mechanism)**：
+    - **立即切換成功畫面**：在 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx) 收到後端 `status === "success"` 成功回應時，第一時間呼叫 `setSubmitted(true)`，UI 立即切換為綠色勾勾之「申報成功」頁面，徹底杜絕停留在輸入表單按鈕禁用畫面。
+    - **非阻塞逾時發話與自動關閉**：使用 `Promise.race([liff.sendMessages(...), timeout(800ms)])`，若 800ms 內未能送出訊息則強制進入 catch 略過，並於 `finally` 區塊呼叫 `liff.closeWindow()`。若 iOS 視窗限制關閉，使用者亦可從成功畫面手動點擊「關閉視窗」按鈕。
+  - **同步套用至裝備租借**：在 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 同步套用 `Promise.race` 800ms 逾時保護與關閉機制，杜絕租借送出時因相同原因卡在「送出預約中...」。
 
 ### 140. Google Sheets 資料驗證嚴格對齊 (全形括號修復)、已取消狀態防崩潰與單元測試更新 (v0.1.40)
 - **Signups 表審核結果全形括號精確校正 (Full-width Parentheses Data Validation Alignment)**：

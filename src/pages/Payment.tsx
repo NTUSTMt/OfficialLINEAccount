@@ -335,7 +335,9 @@ function Payment({ userId }: { userId: string }) {
         }));
         setSelectedIds([]);
 
-        // 發送 LINE 明細訊息並關閉 LIFF
+        setSubmitted(true);
+
+        // 發送 LINE 明細訊息並關閉 LIFF (非阻塞式發話，避免 iOS LIFF sendMessages 掛起卡死)
         if (liff.isInClient()) {
           const selectedItems = allItemsFlat
             .filter(item => uniqueSelectedIds.includes(item.id));
@@ -357,17 +359,21 @@ function Payment({ userId }: { userId: string }) {
             selectedNames.map(n => `• ${n}`).join('\n') + `\n\n` +
             `${t('payment.msg.footer')}`;
 
-          try {
-            await liff.sendMessages([{
+          Promise.race([
+            liff.sendMessages([{
               type: 'text',
               text: msgText
-            }]);
-          } catch (liffErr) {
-            console.warn('liff.sendMessages 略過 (可能未開通發話權限):', liffErr);
-          }
-          liff.closeWindow();
-        } else {
-          setSubmitted(true);
+            }]),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 800))
+          ]).catch(liffErr => {
+            console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
+          }).finally(() => {
+            try {
+              liff.closeWindow();
+            } catch (e) {
+              console.warn('liff.closeWindow 略過:', e);
+            }
+          });
         }
       } else {
         alert(t('payment.alert.submitFailed', { message: result.message || t('payment.alert.contactAdmin') }));

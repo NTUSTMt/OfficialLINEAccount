@@ -616,17 +616,23 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         otherPurpose: ''
       });
 
-      // 2. 在 LINE 聊天室印出確認訊息 (隔離發話權限例外，避免中斷正常關閉流程)
+      // 2. 在 LINE 聊天室印出確認訊息 (非阻塞發話，避免 iOS LIFF 掛起)
       if (liff.isInClient()) {
-        try {
-          await liff.sendMessages([{
+        Promise.race([
+          liff.sendMessages([{
             type: 'text',
             text: t('borrow.alert.submitSuccess', { count: totalItems })
-          }]);
-        } catch (liffErr) {
-          console.warn('liff.sendMessages 略過 (可能未開通發話權限):', liffErr);
-        }
-        liff.closeWindow();
+          }]),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 800))
+        ]).catch(liffErr => {
+          console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
+        }).finally(() => {
+          try {
+            liff.closeWindow();
+          } catch (e) {
+            console.warn('liff.closeWindow 略過:', e);
+          }
+        });
       } else {
         alert(t('borrow.alert.submitSuccessBrowser'));
       }
