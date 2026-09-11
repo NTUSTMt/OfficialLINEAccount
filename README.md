@@ -3,11 +3,51 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.24` (v0.1.24)
+- **當前版本**：`0.1.28` (v0.1.28)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 128. 社籍到期推播通知語氣優化為感恩祝福 (v0.1.28)
+- **移除催繳社費與繳費系統引導 (Remove Payment Reminders from Expiration Message)**：
+  - 徹底移除社籍到期推播通知中提及「繳納新學期社費」與「繳費系統」等字句，避免帶給社員催款或繳費壓力。
+- **改為充滿感恩與同行情誼的溫馨祝福語氣 (Warm Milestone & Safe Trail Blessings)**：
+  - 感謝社員一路以來的陪伴與在山林間留下的美好足跡。
+  - 表達「山一直在那裡，夥伴的情誼也始終常在」，真誠祝福社員在未來每座山頭與新旅程中皆平安順遂、風景相伴，並隨時歡迎回來登山社大家庭。
+
+### 127. 繳費後五碼填寫提示文字靠左對齊優化 (v0.1.27)
+- **帳號後五碼提示訊息靠左對齊 (Align Digits Tip to Left)**：
+  - 在繳費回報表單中，將「帳號後五碼」欄位容器（`.form-group`）與下方的提示說明文字（`digitsTip`）統一設定為 `textAlign: 'left'`，解決置中或浮動對齊造成的視覺不一致問題，與「匯款備註」欄位維持一致的高質感靠左排版。
+
+### 126. 資料填寫更新自動同步至活動報名表 (Signups) 與社籍逾期自動個別推播 (v0.1.26)
+- **資料填寫更新即時同步至活動報名表 (Signups Profile Synchronization)**：
+  - **自動同動更新機制**：當社員在「資料填寫 (Register)」修改或更新個人資料後，後端 `processSaveProfile` 除了寫入 `Members` 表外，自動調用 `syncProfileToSignups` 函式，將該社員名下於 `Signups` 表的所有已報名紀錄同步更新為最新資料。
+  - **同步欄位全覆蓋**：包含姓名、性別、LINE ID、電子信箱、聯絡電話、生日、身分證字號、聯絡地址、緊急聯絡人姓名/電話/地址、所有關係欄位、登山經驗、體能、最新體能證明列表、系所、學號、個人特殊病史或過敏。
+  - **嚴格保護活動與資格專屬欄位 (Preserved Event-Specific Fields)**：
+    - 嚴格維持原本報名時的 **「是否為社員」** 身分資格，絕不因事後社籍過期或更動而覆寫活動報名當時的社籍身分。
+    - 完整保留 `活動編號`、`專屬碼`、`活動名稱`、`審核結果`、`通知狀態`、`繳費狀態`、`報名時間`、`備註` 等活動專屬資料，確保行政作業與帳務流程安全無虞。
+- **每日巡檢社籍到期個別推播提醒 (Personal Membership Expiration Push)**：
+  - 在 GAS 每日自動巡檢 `dailySystemCheck()` 中，當偵測到社員社籍已逾期，將其繳費狀態由「已繳費」重置為「未繳費 Unpaid」時，系統即時調用 `pushMessage(userId, ...)` 傳送專屬 LINE 雙語溫馨提醒。
+  - 清楚告知社員資格到期日，並引導至官方帳號「繳費系統」隨時繳納新學期社費。
+  - 採狀態切換單次觸發機制，次日狀態已為未繳費時不重複發送，避免打擾社員。
+
+### 125. 社籍逾期自動重置未繳費、即時繳費單產生與緊急聯絡人關係同步修復 (v0.1.25)
+- **社籍到期雙軌自動標記為未繳費機制 (Dual Auto-Expiration & Status Synchronization)**：
+  - **即時存取自動重置 (On-Access Auto-Reset)**：
+    - 當社員開啟繳費系統（`get_unpaid`）、個人主頁儀表板（`get_profile_status`）或在資料填寫儲存個人資料（`save_profile`）時，後端即時比對 `Members` 表中的社籍到期日。
+    - 若社籍到期日早於今日且繳費狀態為「已繳費 Paid」或「是」，系統立即自動將試算表 `Members` 之「繳費狀態」欄位重置為「未繳費 Unpaid」（若為「待確認 Checking」則予保留）。
+  - **每日排程自動巡檢 (Daily Scheduled Patrol & Notification)**：
+    - 在 GAS 每日定時觸發的 `dailySystemCheck()` 中新增 `Members` 表巡檢邏輯。
+    - 自動遍歷所有社員，將所有已逾期但仍標記為已繳費的社員批次重置為「未繳費 Unpaid」，並自動彙整名單推播至幹部 LINE 群組，大幅降低人工巡視成本。
+- **繳費系統社費欠款即時動態生成 (Dynamic $200 Membership Fee Invoice)**：
+  - 在 `getUnpaidListAPI` 中加入動態到期與意願判定：
+    - 社員若勾選「加入社員意願」且目前社籍已過期或狀態為「未繳費 Unpaid」，繳費系統自動產生 $200 社費（`fee_membership`）繳費項目與專屬繳費金額。
+    - 解決了以往逾期社員即使勾選入社意願，繳費系統卻因試算表殘留舊學期已繳費狀態而漏發社費帳單的問題。
+- **緊急聯絡人關係多欄位相容同步與防快取機制 (Emergency Relation Multi-Column Sync & Cache Busting)**：
+  - **多欄位全相容寫入 (Multi-Column Sync)**：在 `processSaveProfile` 儲存個資時，自動遍歷所有包含「關係」或「relation」的欄位（相容「與緊急聯絡人關係」、「緊急聯絡人關係」、「關係」等），將填寫數值同步寫入試算表所有相應欄位；若無任何關係欄位則自動建立「與緊急聯絡人關係」。
+  - **多欄位優先級讀取 (Prioritized Candidate Fallback)**：在 `getProfileAPI` 讀取個資時，優先取用「緊急」且包含「關係」之欄位，若無則依序 fallback 取用任何非空的關係欄位數值。
+  - **前端防止 WebView 快取 (Client-Side Cache Busting)**：在 `src/utils/api.ts` 與 `src/pages/Register.tsx` 的所有 GET 請求中加入 `cache: 'no-store'` 與 `_t=${Date.now()}` 時間戳記，避免 LINE 或 Safari 內嵌瀏覽器快取舊資料導致重新整理時顯示修改前的資訊。
 
 ### 124. 裝備照片左右滑動手勢、列表圖片問號修復與卡片 1:1 正方形 (v0.1.24)
 - **多圖左右滑動與平滑對齊手勢 (Touch & Mouse Drag Swipe Carousel)**：

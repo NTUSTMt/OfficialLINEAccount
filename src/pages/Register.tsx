@@ -92,7 +92,7 @@ function Register({ userId }: { userId: string }) {
 
         // 2. 向 GAS 查詢現有社員資料
         if (userId && userId !== 'TEST_USER_ID') {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`));
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`), { cache: 'no-store' });
           const result = await res.json();
           if (result.status === 'success' && result.isMember && result.profile) {
             memberFound = true;

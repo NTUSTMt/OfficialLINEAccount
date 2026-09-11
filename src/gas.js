@@ -2219,7 +2219,15 @@ function _checkProfileComplete(userId, ss, type) {
         p.emerName = mData[i][mH.findIndex(function (h) {
           return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
         })] || "";
-        p.emerRel = mData[i][_fi(mH, "關係")] || "";
+        var emerRelVal = "";
+        mH.forEach(function (h, idx) {
+          var hStr = String(h);
+          if (hStr.includes("關係") || hStr.toLowerCase().includes("relation")) {
+            var val = String(mData[i][idx] || "").trim();
+            if (val && !emerRelVal) emerRelVal = val;
+          }
+        });
+        p.emerRel = emerRelVal;
         p.emerAddr = mData[i][mH.findIndex(function (h) {
           return String(h).includes("地址") && String(h).includes("緊急");
         })] || "";
@@ -4134,13 +4142,79 @@ function dailySystemCheck() {
     }
   }
 
-  // 若有自動關閉之活動，推播告知幹部群組
+  // 2. 巡檢 Members 表：社籍已過期且目前繳費狀態為「已繳費 Paid」或「是」者，自動標記為「未繳費 Unpaid」
+  var memberSheet = ss.getSheetByName("Members");
+  var expiredMemberCount = 0;
+  var expiredMembers = [];
+  if (memberSheet) {
+    var mData = memberSheet.getDataRange().getDisplayValues();
+    if (mData.length > 1) {
+      var mHeaders = mData[0];
+      var mSysCol = mHeaders.findIndex(function (h) {
+        var s = String(h).toLowerCase();
+        return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
+      });
+      var mNameCol = _fi(mHeaders, "姓名");
+      var mPayCol = _fi(mHeaders, "繳費狀態");
+      var mExpCol = mHeaders.findIndex(function (h) {
+        return String(h).includes("到期日") || String(h).includes("社籍");
+      });
+
+      if (mPayCol > -1 && mExpCol > -1) {
+        for (var mi = 1; mi < mData.length; mi++) {
+          var curPay = String(mData[mi][mPayCol]).trim();
+          var curExp = String(mData[mi][mExpCol]).trim();
+          var curMemName = mNameCol > -1 ? mData[mi][mNameCol] : ("成員 " + mi);
+          var curUserId = mSysCol > -1 ? String(mData[mi][mSysCol]).trim() : "";
+
+          if (curPay === "已繳費 Paid" || curPay === "是") {
+            if (_isEventExpired(curExp)) {
+              memberSheet.getRange(mi + 1, mPayCol + 1).setValue("未繳費 Unpaid");
+              expiredMemberCount++;
+              expiredMembers.push(curMemName + " (到期日: " + curExp + ")");
+
+              // 自動傳送專屬 LINE 通知告知該社員社籍已到期
+              if (curUserId && curUserId.startsWith("U")) {
+                try {
+                  var memberNotice = "【社籍期滿溫馨祝福 / Club Membership Milestone】\n\n" +
+                    "親愛的 " + curMemName + " 您好：\n\n" +
+                    "您的登山社社員資格已於 " + curExp + " 圓滿告一段落。\n\n" +
+                    "非常感謝您這段時間以來對登山社的陪伴與熱情參與，與大家一同在山林與步道間留下了許多珍貴美好的回憶！\n\n" +
+                    "山一直在那裡，夥伴的情誼也始終常在。\n" +
+                    "無論未來您走向哪一座山頭、開啟怎樣的新冒險，登山社都由衷祝福您平安順遂、每一步都有美麗的風景相伴！🏔️✨\n\n" +
+                    "若想念山林或想再與大家聚聚，隨時都歡迎回到登山社這個溫暖的大家庭！\n" +
+                    "─────────────\n" +
+                    "Dear " + curMemName + ",\n\n" +
+                    "Your club membership period has concluded on " + curExp + ".\n\n" +
+                    "Thank you so much for being an essential part of our mountaineering journey and sharing unforgettable moments with us on the trails.\n\n" +
+                    "The mountains will always be here, and so will our friendship. Wherever your next journey takes you, we warmly wish you safety, joy, and breathtaking views along the way! 🏔️✨\n\n" +
+                    "You are always welcome back to our club family whenever you wish!";
+                  pushMessage(curUserId, memberNotice);
+                } catch (pushErr) {
+                  console.error("發送社籍到期推播至社員失敗 (" + curUserId + "):", pushErr);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 若有自動關閉之活動或社籍到期更新，推播告知幹部群組
+  var noticeSections = [];
   if (closedCount > 0) {
-    var adminNotice = "【系統自動巡檢：活動截止自動關閉】\n\n" +
-      "系統已自動將下列 " + closedCount + " 場已過截止日之活動狀態切換為「關閉」：\n\n" +
+    noticeSections.push("【活動截止自動關閉】\n系統已自動將下列 " + closedCount + " 場已過截止日之活動狀態切換為「關閉」：\n\n" +
       closedEvents.map(function (item) { return "• " + item; }).join("\n") +
-      "\n\n社員將無法再進行報名，幹部可於管理中心進行後續名冊審核。";
-    pushAdminMessage(adminNotice);
+      "\n\n社員將無法再進行報名，幹部可於管理中心進行後續名冊審核。");
+  }
+  if (expiredMemberCount > 0) {
+    noticeSections.push("【社籍到期自動轉未繳費】\n系統巡檢偵測到下列 " + expiredMemberCount + " 位社員之社籍已逾期，已將繳費狀態自動重置為「未繳費 Unpaid」：\n\n" +
+      expiredMembers.map(function (item) { return "• " + item; }).join("\n") +
+      "\n\n社員登入繳費系統即可繳納新學期社費。");
+  }
+  if (noticeSections.length > 0) {
+    pushAdminMessage("【系統每日自動巡檢報告】\n\n" + noticeSections.join("\n\n--------------------\n\n"));
   }
 }
 
@@ -4555,16 +4629,40 @@ function getUnpaidListAPI(ss, userId) {
     var mData = mSheet.getDataRange().getValues();
     var mSysIdx = _fi(mData[0], "系統識別碼");
     var mPayIdx = _fi(mData[0], "繳費狀態");
+    var mExpireIdx = mData[0].findIndex(function (h) {
+      return String(h).includes("到期日") || String(h).includes("社籍");
+    });
+    var mIntendIdx = mData[0].findIndex(function (h) {
+      return String(h).includes("加入社員意願") || (String(h).includes("意願") && String(h).includes("社"));
+    });
+
     for (var i = 1; i < mData.length; i++) {
       if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
-        var payStatus = String(mData[i][mPayIdx]).trim();
-        // 只要不是「已繳費」或「待確認」，就列入未繳費清單
-        if (payStatus !== "已繳費 Paid" && payStatus !== "待確認 Checking" && payStatus !== "是") {
-          responseData.membership.push({
-            id: "fee_membership",
-            name: "社籍與社費 (Membership Fee)",
-            amount: 200 // 依據你先前的設定，這裡預設為 200
-          });
+        var payStatus = mPayIdx > -1 ? String(mData[i][mPayIdx]).trim() : "";
+        var expireVal = mExpireIdx > -1 ? mData[i][mExpireIdx] : "";
+        var intendVal = mIntendIdx > -1 ? String(mData[i][mIntendIdx]).trim() : "";
+        var isExpired = _isEventExpired(expireVal);
+        var intendOfficial = (intendVal === "是" || intendVal.indexOf("有意願") > -1 || intendVal.toLowerCase() === "true");
+
+        // 若社籍到期且原本狀態為已繳費，即時將試算表狀態重置為「未繳費 Unpaid」
+        if (isExpired && (payStatus === "已繳費 Paid" || payStatus === "是") && mPayIdx > -1) {
+          payStatus = "未繳費 Unpaid";
+          mSheet.getRange(i + 1, mPayIdx + 1).setValue("未繳費 Unpaid");
+        }
+
+        // 只要不是「待確認 Checking」：
+        // 1. 若繳費狀態為未繳費，或者社籍已過期
+        // 2. 且有加入意願（或曾有社籍到期日）
+        // 則列入社費欠款清單 ($200)
+        var isUnpaid = (payStatus !== "已繳費 Paid" && payStatus !== "是");
+        if (payStatus !== "待確認 Checking") {
+          if ((isUnpaid || isExpired) && (intendOfficial || expireVal)) {
+            responseData.membership.push({
+              id: "fee_membership",
+              name: "社籍與社費 (Membership Fee)",
+              amount: 200 // 依據社團規章設定，社費預設為 200
+            });
+          }
         }
         break; // 系統識別碼唯一，找到即可跳出
       }
@@ -5090,7 +5188,26 @@ function getMemberProfileAPI(ss, userId) {
 
       var emerNameIdx = mH.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
       profile.emerName = emerNameIdx > -1 ? mData[i][emerNameIdx] : "";
-      profile.emerRel = mData[i][_fi(mH, "關係")] || "";
+
+      // 優先尋找「緊急」與「關係」欄位，若無則依序尋找「關係」或「relation」之非空值
+      var emerRelVal = "";
+      var emerRelCandidates = [];
+      mH.forEach(function (h, idx) {
+        var hStr = String(h);
+        if (hStr.includes("緊急") && hStr.includes("關係")) {
+          emerRelCandidates.unshift(idx);
+        } else if (hStr.includes("關係") || hStr.toLowerCase().includes("relation")) {
+          emerRelCandidates.push(idx);
+        }
+      });
+      for (var rIdx = 0; rIdx < emerRelCandidates.length; rIdx++) {
+        var val = String(mData[i][emerRelCandidates[rIdx]] || "").trim();
+        if (val) {
+          emerRelVal = val;
+          break;
+        }
+      }
+      profile.emerRel = emerRelVal;
       profile.emerPhone = mData[i][_fi(mH, "緊急聯絡人電話")] || "";
 
       var emerAddrIdx = mH.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
@@ -5183,6 +5300,7 @@ function getMyStatusAPI(ss, userId) {
         });
 
         var hasExpireDate = false;
+        var isExpired = false;
         if (mExpireIdx > -1 && mData[i][mExpireIdx]) {
           var d = new Date(mData[i][mExpireIdx]);
           if (!isNaN(d.getTime())) {
@@ -5190,17 +5308,27 @@ function getMyStatusAPI(ss, userId) {
             responseData.profile.expireDate = Utilities.formatDate(d, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
             if (d.getTime() >= new Date().getTime()) {
               responseData.profile.isOfficial = true;
+            } else {
+              isExpired = true;
             }
           } else {
             var rawExp = String(mData[i][mExpireIdx]).trim();
             if (rawExp !== "") {
               hasExpireDate = true;
               responseData.profile.expireDate = rawExp;
-              if (rawExp.indexOf("過期") === -1 && rawExp.indexOf("未") === -1) {
+              if (rawExp.indexOf("過期") === -1 && rawExp.indexOf("未") === -1 && !_isEventExpired(rawExp)) {
                 responseData.profile.isOfficial = true;
+              } else {
+                isExpired = true;
               }
             }
           }
+        }
+
+        // 若社籍已過期且狀態仍為「已繳費」，即時將試算表標註為「未繳費 Unpaid」
+        if (isExpired && hasPaid && mPayIdx > -1) {
+          mSheet.getRange(i + 1, mPayIdx + 1).setValue("未繳費 Unpaid");
+          hasPaid = false;
         }
 
         if (hasPaid && !hasExpireDate) {
@@ -5391,7 +5519,19 @@ function processSaveProfile(payload) {
     var emerNameIdx = headers.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
     if (emerNameIdx === -1) emerNameIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人姓名");
 
-    var emerRelIdx = getOrCreateColIdx(memberSheet, headers, "關係");
+    // 找出所有與緊急聯絡人關係相關的欄位（如「與緊急聯絡人關係」、「緊急聯絡人關係」、「關係」）
+    var emerRelCols = [];
+    headers.forEach(function (h, idx) {
+      var hStr = String(h);
+      if (hStr.includes("關係") || hStr.toLowerCase().includes("relation")) {
+        emerRelCols.push(idx);
+      }
+    });
+    if (emerRelCols.length === 0) {
+      var newRelIdx = getOrCreateColIdx(memberSheet, headers, "與緊急聯絡人關係");
+      emerRelCols.push(newRelIdx);
+    }
+    var emerRelIdx = emerRelCols[0];
 
     var emerAddrIdx = headers.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
     if (emerAddrIdx === -1) emerAddrIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人地址");
@@ -5442,7 +5582,10 @@ function processSaveProfile(payload) {
     rowData[idNumberIdx] = data.idNumber || "";
     rowData[studentAddrIdx] = data.studentAddr || "";
     rowData[emerNameIdx] = data.emerName || "";
-    rowData[emerRelIdx] = data.emerRel || "";
+    // 同步寫入所有關係欄位，避免欄位名稱不同或多欄位導致遺漏
+    emerRelCols.forEach(function (colIdx) {
+      rowData[colIdx] = data.emerRel || "";
+    });
     rowData[emerAddrIdx] = data.emerAddr || "";
     rowData[emerPhoneIdx] = data.emerPhone ? "'" + String(data.emerPhone) : "";
     rowData[expIdx] = data.exp || "";
@@ -5470,7 +5613,25 @@ function processSaveProfile(payload) {
         combinedProofList = combinedProofList.slice(-5);
       }
       rowData[strengthProofIdx] = combinedProofList.length > 0 ? combinedProofList.join(",") : (oldValues[strengthProofIdx] || "");
-      rowData[payIdx] = oldValues[payIdx] || "未繳費 Unpaid";
+
+      var curPayStatus = oldValues[payIdx] || "未繳費 Unpaid";
+      var mExpireIdx = headers.findIndex(function (h) {
+        return String(h).includes("到期日") || String(h).includes("社籍");
+      });
+      var curExpVal = mExpireIdx > -1 ? oldValues[mExpireIdx] : "";
+      var isExpired = _isEventExpired(curExpVal);
+
+      // 若社籍已過期且原狀態為已繳費，自動將試算表標記為「未繳費 Unpaid」
+      if (isExpired && (curPayStatus === "已繳費 Paid" || curPayStatus === "是")) {
+        curPayStatus = "未繳費 Unpaid";
+      }
+      // 若有意願成為社員且社籍已到期，且非待審核中，確保狀態為「未繳費 Unpaid」
+      var isIntendOfficial = (data.intendOfficial === "是" || String(data.intendOfficial).indexOf("有意願") > -1 || String(data.intendOfficial).toLowerCase() === "true");
+      if (isIntendOfficial && isExpired && curPayStatus !== "待確認 Checking") {
+        curPayStatus = "未繳費 Unpaid";
+      }
+
+      rowData[payIdx] = curPayStatus;
     } else {
       rowData[strengthProofIdx] = data.strengthProof || "";
       rowData[payIdx] = "未繳費 Unpaid";
@@ -5485,6 +5646,13 @@ function processSaveProfile(payload) {
       memberSheet.getRange(userRow, 1, 1, rowData.length).setValues([rowData]);
     } else {
       memberSheet.appendRow(rowData);
+    }
+
+    // ⭐️ 資料填寫更新同步至 Signups 頁面 (嚴格保護「是否為社員」及活動審核繳費狀態)
+    try {
+      syncProfileToSignups(ss, userId, data, rowData[strengthProofIdx]);
+    } catch (syncErr) {
+      console.error("同步更新 Signups 表資料失敗:", syncErr);
     }
 
     // 幹部意願通知處理
@@ -5603,6 +5771,86 @@ function processSaveProfile(payload) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
+  }
+}
+
+// ⭐️ 將更新後的個人基本資料同步至 Signups 活動報名表
+// 說明：若社員報名活動後修改個人資料，即時同步更新其名下所有報名紀錄
+// ⚠️ 嚴格保護活動專屬資料：不修改「是否為社員」、「活動編號」、「專屬碼」、「活動名稱」、「審核結果」、「通知狀態」、「繳費狀態」、「報名時間」、「備註」等欄位！
+function syncProfileToSignups(ss, userId, data, updatedStrengthProof) {
+  var sSheet = ss.getSheetByName("Signups");
+  if (!sSheet || !userId) return;
+
+  var sData = sSheet.getDataRange().getValues();
+  if (sData.length <= 1) return;
+
+  var sHeaders = sData[0];
+  var sSysIdx = sHeaders.findIndex(function (h) {
+    var s = String(h).toLowerCase();
+    return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
+  });
+  if (sSysIdx === -1) return;
+
+  // 動態定位 Signups 中個人基本資料欄位
+  var sNameIdx = _fi(sHeaders, "姓名");
+  var sGenderIdx = _fi(sHeaders, "性別");
+  var sLineIdx = sHeaders.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
+  var sEmailIdx = sHeaders.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); });
+  var sPhoneIdx = sHeaders.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); });
+  var sBirthdayIdx = _fi(sHeaders, "生日");
+  var sIdNumberIdx = _fi(sHeaders, "證件");
+  var sAddrIdx = sHeaders.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
+  var sEmerNameIdx = sHeaders.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
+
+  // 找出所有緊急聯絡人關係欄位
+  var sEmerRelCols = [];
+  sHeaders.forEach(function (h, idx) {
+    var hStr = String(h);
+    if (hStr.includes("關係") || hStr.toLowerCase().includes("relation")) {
+      sEmerRelCols.push(idx);
+    }
+  });
+
+  var sEmerPhoneIdx = sHeaders.findIndex(function (h) { return String(h).includes("電話") && String(h).includes("緊急"); });
+  var sEmerAddrIdx = sHeaders.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
+  var sExpIdx = _fi(sHeaders, "經驗");
+  var sStrengthIdx = _fi(sHeaders, "體能");
+  var sProofIdx = sHeaders.findIndex(function (h) { return String(h).includes("證明"); });
+  var sDeptIdx = _fi(sHeaders, "系所");
+  var sStuIdx = _fi(sHeaders, "學號");
+  var sMedIdx = sHeaders.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
+
+  for (var i = 1; i < sData.length; i++) {
+    if (String(sData[i][sSysIdx]).trim() === String(userId).trim()) {
+      var row = sData[i];
+      var rowNum = i + 1;
+
+      if (sNameIdx > -1 && data.name) row[sNameIdx] = data.name;
+      if (sGenderIdx > -1 && data.gender) row[sGenderIdx] = data.gender;
+      if (sLineIdx > -1 && data.realLineId !== undefined) row[sLineIdx] = data.realLineId;
+      if (sEmailIdx > -1 && data.email !== undefined) row[sEmailIdx] = data.email;
+      if (sPhoneIdx > -1 && data.phone) row[sPhoneIdx] = "'" + String(data.phone);
+      if (sBirthdayIdx > -1 && data.birthday) row[sBirthdayIdx] = "'" + String(data.birthday).replace(/-/g, "/");
+      if (sIdNumberIdx > -1 && data.idNumber !== undefined) row[sIdNumberIdx] = data.idNumber;
+      if (sAddrIdx > -1 && data.studentAddr !== undefined) row[sAddrIdx] = data.studentAddr;
+      if (sEmerNameIdx > -1 && data.emerName !== undefined) row[sEmerNameIdx] = data.emerName;
+
+      sEmerRelCols.forEach(function (cIdx) {
+        if (data.emerRel !== undefined) row[cIdx] = data.emerRel;
+      });
+
+      if (sEmerPhoneIdx > -1 && data.emerPhone) row[sEmerPhoneIdx] = "'" + String(data.emerPhone);
+      if (sEmerAddrIdx > -1 && data.emerAddr !== undefined) row[sEmerAddrIdx] = data.emerAddr;
+      if (sExpIdx > -1 && data.exp !== undefined) row[sExpIdx] = data.exp;
+      if (sStrengthIdx > -1 && data.strength !== undefined) row[sStrengthIdx] = data.strength;
+      if (sProofIdx > -1 && updatedStrengthProof !== undefined) row[sProofIdx] = updatedStrengthProof;
+      if (sDeptIdx > -1 && data.department !== undefined) row[sDeptIdx] = data.department;
+      if (sStuIdx > -1 && data.studentId !== undefined) row[sStuIdx] = data.studentId;
+      if (sMedIdx > -1 && data.medicalHistory !== undefined) row[sMedIdx] = data.medicalHistory;
+
+      // ⚠️ 特別注意：完全不修改 row 中的「是否為社員」以及其他審核/活動欄位！
+      sSheet.getRange(rowNum, 1, 1, row.length).setValues([row]);
+    }
   }
 }
 

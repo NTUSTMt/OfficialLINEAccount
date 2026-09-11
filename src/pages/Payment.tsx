@@ -574,7 +574,7 @@ function Payment({ userId }: { userId: string }) {
               />
             </div>
 
-            <div className="form-group" style={{ marginBottom: '20px' }}>
+            <div className="form-group" style={{ marginBottom: '20px', textAlign: 'left' }}>
               <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>{t('payment.form.digitsLabel')}</label>
               <input 
                 type="text" 
@@ -585,7 +585,7 @@ function Payment({ userId }: { userId: string }) {
                 required
                 style={{ fontSize: '15px' }}
               />
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>{t('payment.form.digitsTip')}</p>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'left' }}>{t('payment.form.digitsTip')}</p>
             </div>
 
             <div className="form-group" style={{ marginBottom: '20px', textAlign: 'left' }}>

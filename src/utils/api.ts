@@ -17,13 +17,16 @@ export const getIdToken = (): string => {
 };
 
 /**
- * 為 GET 請求 URL 附加 idToken
+ * 為 GET 請求 URL 附加 idToken 與防快取時間戳記
  */
 export const appendAuthToken = (url: string): string => {
   const token = getIdToken();
-  if (!token) return url;
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}idToken=${encodeURIComponent(token)}`;
+  const sep1 = url.includes('?') ? '&' : '?';
+  let finalUrl = `${url}${sep1}_t=${Date.now()}`;
+  if (token) {
+    finalUrl += `&idToken=${encodeURIComponent(token)}`;
+  }
+  return finalUrl;
 };
 
 /**
@@ -43,7 +46,7 @@ export const withAuthPayload = <T extends Record<string, any>>(payload: T): T & 
  */
 export const gasGet = async (url: string): Promise<any> => {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) {
       throw new Error(`伺服器回應異常 (HTTP ${res.status})`);
     }
