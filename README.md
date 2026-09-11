@@ -3,11 +3,16 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.15` (v0.1.15)
+- **當前版本**：`0.1.16` (v0.1.16)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 116. 幹部活動管理活動清單預設排序調整為截止時間降冪 (v0.1.16)
+- **預設排序方式優化 (Default Sorting Optimization)**：
+  - 將幹部活動管理（AdminEvents）活動總覽清單的預設排序欄位由「出隊日期（startDate）」調整為「報名截止時間（deadline）」。
+  - 預設排序順序調整為「降冪（descending）」，使最新截止或近期活動第一時間呈現在列表最上方，方便幹部即時掌握最新即將截止之活動動態。
 
 ### 115. 活動報名寫入 Signups 欄位精準映射與緊急關係自動補欄防呆 (v0.1.15)
 - **聯絡地址被緊急聯絡人地址覆蓋之重大 Bug 修復 (Contact Address Overwrite Bug Fix)**：

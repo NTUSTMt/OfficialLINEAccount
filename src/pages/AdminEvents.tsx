@@ -111,8 +111,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [eventSortBy, setEventSortBy] = useState<'startDate' | 'deadline' | 'status'>('startDate');
-  const [eventSortOrder, setEventSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [eventSortBy, setEventSortBy] = useState<'startDate' | 'deadline' | 'status'>('deadline');
+  const [eventSortOrder, setEventSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // 表單狀態
   const [formData, setFormData] = useState({
