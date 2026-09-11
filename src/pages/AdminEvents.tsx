@@ -34,7 +34,6 @@ import {
   ExternalLink,
   User,
   ShieldAlert,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
@@ -889,17 +888,22 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '6px',
                 backgroundColor: '#ffffff',
-                padding: '4px 8px',
+                padding: '6px 10px',
+                height: '35px',
+                boxSizing: 'border-box',
                 borderRadius: '8px',
                 border: '1px solid #cbd5e1',
                 fontSize: '12px'
               }}>
-                <ArrowUpDown size={13} color="#64748b" />
                 <select
-                  value={eventSortBy}
-                  onChange={(e) => setEventSortBy(e.target.value as any)}
+                  value={`${eventSortBy}_${eventSortOrder}`}
+                  onChange={(e) => {
+                    const [by, order] = e.target.value.split('_') as [any, any];
+                    setEventSortBy(by);
+                    setEventSortOrder(order);
+                  }}
                   style={{
                     border: 'none',
                     backgroundColor: 'transparent',
@@ -910,9 +914,12 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="startDate">{t('adminEvents.sort.startDate', '活動日期')}</option>
-                  <option value="deadline">{t('adminEvents.sort.deadline', '截止時間')}</option>
-                  <option value="status">{t('adminEvents.sort.status', '活動狀態')}</option>
+                  <option value="startDate_asc">{t('adminEvents.sort.startDateAsc', '活動日期（升冪）')}</option>
+                  <option value="startDate_desc">{t('adminEvents.sort.startDateDesc', '活動日期（降冪）')}</option>
+                  <option value="deadline_asc">{t('adminEvents.sort.deadlineAsc', '截止時間（升冪）')}</option>
+                  <option value="deadline_desc">{t('adminEvents.sort.deadlineDesc', '截止時間（降冪）')}</option>
+                  <option value="status_asc">{t('adminEvents.sort.statusAsc', '活動狀態（升冪）')}</option>
+                  <option value="status_desc">{t('adminEvents.sort.statusDesc', '活動狀態（降冪）')}</option>
                 </select>
                 <button
                   type="button"
@@ -920,19 +927,17 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '2px',
+                    justifyContent: 'center',
                     border: 'none',
                     backgroundColor: '#f1f5f9',
                     borderRadius: '4px',
-                    padding: '3px 6px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
+                    padding: '4px',
                     color: '#1e293b',
                     cursor: 'pointer'
                   }}
+                  title={eventSortOrder === 'asc' ? '切換為降冪' : '切換為升冪'}
                 >
-                  {eventSortOrder === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
-                  <span>{eventSortOrder === 'asc' ? t('adminEvents.sort.asc', '升冪') : t('adminEvents.sort.desc', '降冪')}</span>
+                  {eventSortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
                 </button>
               </div>
             </div>
@@ -1976,18 +1981,23 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '6px',
                 backgroundColor: '#ffffff',
-                padding: '4px 8px',
+                padding: '6px 10px',
+                height: '35px',
+                boxSizing: 'border-box',
                 borderRadius: '8px',
                 border: '1px solid #cbd5e1',
                 fontSize: '12px',
                 boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
               }}>
-                <ArrowUpDown size={13} color="#64748b" />
                 <select
-                  value={signupSortBy}
-                  onChange={(e) => setSignupSortBy(e.target.value as any)}
+                  value={`${signupSortBy}_${signupSortOrder}`}
+                  onChange={(e) => {
+                    const [by, order] = e.target.value.split('_') as [any, any];
+                    setSignupSortBy(by);
+                    setSignupSortOrder(order);
+                  }}
                   style={{
                     border: 'none',
                     backgroundColor: 'transparent',
@@ -1998,9 +2008,12 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="order">{t('adminEvents.sort.signupOrder', '報名順序')}</option>
-                  <option value="member">{t('adminEvents.sort.memberFirst', '社員優先')}</option>
-                  <option value="status">{t('adminEvents.sort.reviewStatus', '審核狀態')}</option>
+                  <option value="order_asc">{t('adminEvents.sort.signupOrderAsc', '報名順序（升冪）')}</option>
+                  <option value="order_desc">{t('adminEvents.sort.signupOrderDesc', '報名順序（降冪）')}</option>
+                  <option value="member_asc">{t('adminEvents.sort.memberFirstAsc', '社員優先（升冪）')}</option>
+                  <option value="member_desc">{t('adminEvents.sort.memberFirstDesc', '社員優先（降冪）')}</option>
+                  <option value="status_asc">{t('adminEvents.sort.reviewStatusAsc', '審核狀態（升冪）')}</option>
+                  <option value="status_desc">{t('adminEvents.sort.reviewStatusDesc', '審核狀態（降冪）')}</option>
                 </select>
                 <button
                   type="button"
@@ -2008,19 +2021,17 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '2px',
+                    justifyContent: 'center',
                     border: 'none',
                     backgroundColor: '#f1f5f9',
                     borderRadius: '4px',
-                    padding: '3px 6px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
+                    padding: '4px',
                     color: '#1e293b',
                     cursor: 'pointer'
                   }}
+                  title={signupSortOrder === 'asc' ? '切換為降冪' : '切換為升冪'}
                 >
-                  {signupSortOrder === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
-                  <span>{signupSortOrder === 'asc' ? t('adminEvents.sort.asc', '升冪') : t('adminEvents.sort.desc', '降冪')}</span>
+                  {signupSortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
                 </button>
               </div>
             </div>
