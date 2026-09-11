@@ -115,11 +115,11 @@ function Payment({ userId }: { userId: string }) {
         const result = await res.json();
         if (result.status === 'success') {
           setUnpaidList(result.data);
-          // 預設勾選活動與裝備，社費預設為未勾選
-          const initialSelectedIds = [
+          // 預設勾選活動與裝備，社費預設為未勾選 (去重以防同筆訂單多項裝備產生多個相同 ID)
+          const initialSelectedIds = Array.from(new Set([
             ...result.data.activities.map((item: UnpaidItem) => item.id),
             ...result.data.equipments.map((item: UnpaidItem) => item.id)
-          ];
+          ]));
           setSelectedIds(initialSelectedIds);
         } else {
           setError(result.message || t('payment.error.loadFailed'));
@@ -288,11 +288,12 @@ function Payment({ userId }: { userId: string }) {
     );
   };
 
-  // 防呆判斷
+  // 防呆判斷：若總金額為 0 元則免驗證帳號末 5 碼，否則需嚴格驗證 5 碼純數字
   const isFormValid = useMemo(() => {
-    const isDigitsOk = /^\d{5}$/.test(last5Digits.trim());
-    return selectedIds.length > 0 && isDigitsOk;
-  }, [selectedIds, last5Digits]);
+    if (selectedIds.length === 0) return false;
+    if (totalAmount === 0) return true;
+    return /^\d{5}$/.test(last5Digits.trim());
+  }, [selectedIds, last5Digits, totalAmount]);
 
   // 送出申報
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -301,14 +302,20 @@ function Payment({ userId }: { userId: string }) {
 
     setIsSubmitting(true);
     try {
+      const finalDigits = totalAmount === 0 && !last5Digits.trim() ? '00000' : last5Digits.trim();
+      const hasMembership = selectedIds.includes('fee_membership');
+      const uniqueSelectedIds = Array.from(new Set(selectedIds));
+
       const payload = {
         action: 'submit_payment',
         userId,
         details: {
-          selectedIds,
-          last5Digits: last5Digits.trim(),
+          selectedIds: uniqueSelectedIds,
+          last5Digits: finalDigits,
           totalAmount,
-          note: note.trim()
+          note: note.trim(),
+          membershipOption: hasMembership ? membershipOption : undefined,
+          membershipExpiryDate: hasMembership ? membershipDetails.expiryDate : undefined
         }
       };
 
@@ -320,10 +327,18 @@ function Payment({ userId }: { userId: string }) {
       
       const result = await res.json();
       if (result.status === 'success') {
+        // 本地立即將已申報項目自待繳清單中排除，杜絕重複勾選申報
+        setUnpaidList(prev => ({
+          membership: hasMembership ? [] : prev.membership,
+          activities: prev.activities.filter(a => !uniqueSelectedIds.includes(a.id)),
+          equipments: prev.equipments.filter(eq => !uniqueSelectedIds.includes(eq.id))
+        }));
+        setSelectedIds([]);
+
         // 發送 LINE 明細訊息並關閉 LIFF
         if (liff.isInClient()) {
           const selectedItems = allItemsFlat
-            .filter(item => selectedIds.includes(item.id));
+            .filter(item => uniqueSelectedIds.includes(item.id));
 
           const selectedNames = selectedItems.map(item => {
             if (item.type === 'equipment' && item.isDiscounted) {
@@ -335,7 +350,7 @@ function Payment({ userId }: { userId: string }) {
           const msgText = `【${t('payment.msg.title')}】\n\n` +
             `${t('payment.msg.success')}\n` +
             `${t('payment.msg.amount')}：$${totalAmount}\n` +
-            `${t('payment.msg.digits')}：${last5Digits.trim()}\n` +
+            `${t('payment.msg.digits')}：${finalDigits}\n` +
             (note.trim() ? `備註：${note.trim()}\n` : '') +
             `\n` +
             `${t('payment.msg.items')}：\n` +
@@ -634,14 +649,17 @@ function Payment({ userId }: { userId: string }) {
               <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>{t('payment.form.digitsLabel')}</label>
               <input 
                 type="text" 
-                placeholder={t('payment.form.digitsPlaceholder')} 
+                placeholder={totalAmount === 0 ? '申報金額為 $0，免填末 5 碼' : t('payment.form.digitsPlaceholder')} 
                 maxLength={5}
-                value={last5Digits}
+                value={totalAmount === 0 ? '' : last5Digits}
                 onChange={(e) => setLast5Digits(e.target.value.replace(/\D/g, ''))} // 只允許數字
-                required
-                style={{ fontSize: '15px' }}
+                required={totalAmount > 0}
+                disabled={totalAmount === 0}
+                style={{ fontSize: '15px', backgroundColor: totalAmount === 0 ? '#f8fafc' : 'white' }}
               />
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'left' }}>{t('payment.form.digitsTip')}</p>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'left' }}>
+                {totalAmount === 0 ? '當次申報無須匯款，系統將自動處理對帳。' : t('payment.form.digitsTip')}
+              </p>
             </div>
 
             <div className="form-group" style={{ marginBottom: '20px', textAlign: 'left' }}>

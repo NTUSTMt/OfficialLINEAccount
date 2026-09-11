@@ -3,13 +3,32 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.34` (v0.1.34)
+- **當前版本**：`0.1.35` (v0.1.35)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
 
-### 134. 繳費系統社費與個人借裝費用合併繳納 5 折優惠機制 (v0.1.34)
+### 135. 繳費系統核心帳務修復、歷史紀錄待確認判定與社籍到期日聯動更新 (Phase 1) (v0.1.35)
+- **歷史紀錄狀態判定與明細展開修復 (Payment History Status & Expandable Details Fix)**：
+  - 修復 `History.tsx` 中 `getStatusStyle` 因判斷 `status.indexOf('確認') > -1` 導致「待確認 Checking」被誤判為「已確認無誤」綠色徽章之重大邏輯 Bug。
+  - 將「待確認 / 待核對 / Checking / 審核中」等狀態優先判定為黃色「待確認」徽章，僅嚴格符合「已確認無誤 / 已確認 / 已繳費 / 已核對」者方判定為綠色徽章。
+  - 修復 `gas.js` 之 `getPaymentHistoryAPI` 累計支出金額 (`totalSpent`) 運算時同樣將「待確認」款項加總計入之問題。
+  - 歷史紀錄明細卡片支援完整項目展開（`whiteSpace: 'normal'`），點擊卡片時列出該筆交易的所有詳細子項目清單。
+- **防止裝備多筆重複列出與折扣異常 (Prevent Equipment Duplicates & Discount Glitch)**：
+  - 在 `Payment.tsx` 中將未繳清單勾選陣列 `selectedIds` 進行去重初始化 (`Set`)，防止同筆租借單內的多項裝備造成重複 ID。
+  - 在 `gas.js` 之 `processPaymentSubmit` 中對傳入的 `details.selectedIds` 進行去重驗證，避免多次遍歷同一訂單導致產生重複的 4 筆裝備（前 2 筆標社員 5 折、後 2 筆未標）之異常現象。
+- **社費到期日聯動儲存與幹部審核自動更新 (Membership Expiry Date Sync & Officer Approval)**：
+  - `Payment.tsx` 申報社費時，將社員所選之社費方案（本學期、大學部畢業、研究所畢業）及其對應之「社籍到期日」傳送至後端。
+  - `processPaymentSubmit` 將「社籍到期日」寫入 `Payments` 工作表專屬欄位。
+  - 幹部在 LINE 點擊「確認無誤並發送通知 (`admin_confirm`)」時：
+    - 支援 `combined` 合併繳費判定社費項目，通知中補齊「🔸 社籍與社費 (Membership Fee)」。
+    - 自動將 `Payments` 表中記錄之到期日寫入 `Members` 工作表之「社籍到期日」欄位，實現幹部確認後社員社籍無縫延長。
+- **支援 0 元項目申報與防呆 (Support $0 Items Declaration & Safeguard)**：
+  - `gas.js` 之 `getUnpaidListAPI` 調整金額過濾邏輯為 `if (cost >= 0)`，讓出隊或免費之活動與裝備可正確呈現在未繳清單中。
+  - `Payment.tsx` 支援 0 元項目申報：當申報總金額為 $0 時，帳號末 5 碼免填，系統自動帶入 `00000` 順利送出申報。
+- **申報送出後即時防重複勾選 (Instant Anti-Duplicate State Update)**：
+  - 送出申報後，本地狀態即時將已申報項目自未繳清單中移除，並清空勾選陣列，防止二次誤觸或重複申報。
 - **社費與個人借裝費用動態折算 5 折 (Dynamic 50% Rental Discount with Membership Fee)**：
   - 在繳費系統 (`Payment.tsx`) 中，當使用者同時勾選「社籍與社費」以及「個人用途裝備租借」時，該筆原為非社員全額的個人借裝費用自動享有 **5 折優惠** (`Math.round(金額 * 0.5)`)。
   - 介面即時回饋：

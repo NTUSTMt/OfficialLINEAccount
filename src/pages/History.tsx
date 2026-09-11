@@ -131,11 +131,17 @@ function History({ userId }: { userId: string }) {
   };
 
   const getStatusStyle = (status: string) => {
-    if (status.indexOf('確認') > -1 || status.indexOf('已繳') > -1 || status.indexOf('已確認') > -1) {
-      return { bg: '#dcfce7', color: '#15803d', dot: '#16a34a', label: t('history.status.confirmed') };
-    }
-    if (status.indexOf('失敗') > -1 || status.indexOf('退回') > -1 || status.indexOf('錯誤') > -1) {
+    const s = String(status || '').trim();
+    if (s.includes('失敗') || s.includes('退回') || s.includes('錯誤')) {
       return { bg: '#fee2e2', color: '#b91c1c', dot: '#ef4444', label: t('history.status.failed') };
+    }
+    // 待確認 / 待核對 / Checking / 審核中
+    if (s.includes('待確認') || s.includes('待核對') || s.includes('Checking') || s.includes('審核中') || s.includes('未核對')) {
+      return { bg: '#fef3c7', color: '#b45309', dot: '#f59e0b', label: t('history.status.checking') };
+    }
+    // 已確認無誤 / 已確認 / 已繳費 / 已核對
+    if (s.includes('已確認') || s.includes('已核對') || s.includes('已繳') || s.includes('Paid')) {
+      return { bg: '#dcfce7', color: '#15803d', dot: '#16a34a', label: t('history.status.confirmed') };
     }
     return { bg: '#fef3c7', color: '#b45309', dot: '#f59e0b', label: t('history.status.checking') };
   };
@@ -299,9 +305,10 @@ function History({ userId }: { userId: string }) {
                       fontWeight: 'bold',
                       color: '#1e293b',
                       margin: '6px 0 4px 0',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
+                      whiteSpace: isExpanded ? 'normal' : 'nowrap',
+                      overflow: isExpanded ? 'visible' : 'hidden',
+                      textOverflow: isExpanded ? 'clip' : 'ellipsis',
+                      lineHeight: '1.4'
                     }}>
                       {item.title}
                     </p>
@@ -324,6 +331,22 @@ function History({ userId }: { userId: string }) {
                     }}
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <div style={{ marginBottom: '8px' }}>
+                      <strong style={{ display: 'block', marginBottom: '4px', color: '#1e293b' }}>
+                        申報繳費項目明細：
+                      </strong>
+                      <div style={{ backgroundColor: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        {item.title.split(/[,，\n]+/).map((subItem, idx) => {
+                          const trimmed = subItem.trim();
+                          if (!trimmed) return null;
+                          return (
+                            <div key={idx} style={{ padding: '2px 0', color: '#334155', fontWeight: '500' }}>
+                              {trimmed.startsWith('•') || trimmed.startsWith('🔹') || trimmed.startsWith('🔸') ? trimmed : `• ${trimmed}`}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <div><strong>{t('history.item.digitsRemarkLabel')}</strong>{item.last5Digits || t('history.item.none')}</div>
                     {item.note && (
                       <div style={{ marginTop: '4px', color: '#065f46' }}>

@@ -844,16 +844,30 @@ function handlePostback(replyToken, userId, postbackData) {
     var pType = decodeURIComponent(postbackData.substring(postbackData.indexOf("&type=") + 6));
 
     var paymentSheet = ss.getSheetByName("Payments");
+    var hasMembershipFee = (pType === "繳交社費");
+    var expiryDateFromPayment = "";
     if (paymentSheet && !isNaN(row) && row > 0) {
       var pHeaders = paymentSheet.getRange(1, 1, 1, paymentSheet.getLastColumn()).getValues()[0];
       var pStatusCol = _fi(pHeaders, "對帳狀態") + 1;
       if (pStatusCol > 0) paymentSheet.getRange(row, pStatusCol).setValue("已確認無誤");
+
+      var pItemCol = _fi(pHeaders, "繳費項目");
+      if (pItemCol > -1) {
+        var itemsText = String(paymentSheet.getRange(row, pItemCol + 1).getValue() || "");
+        if (itemsText.indexOf("社籍") > -1 || itemsText.indexOf("社費") > -1 || itemsText.indexOf("Membership") > -1) {
+          hasMembershipFee = true;
+        }
+      }
+      var pExpireCol = _fi(pHeaders, "社籍到期日");
+      if (pExpireCol > -1) {
+        expiryDateFromPayment = String(paymentSheet.getRange(row, pExpireCol + 1).getValue() || "").trim();
+      }
     }
 
     var confirmedList = [];
 
-    // 1. 社費
-    if (pType === "繳交社費") {
+    // 1. 社費 (支援獨立社費或 combined 申報)
+    if (hasMembershipFee) {
       var mSheet = ss.getSheetByName("Members");
       if (mSheet) {
         var mData = mSheet.getDataRange().getValues();
@@ -861,7 +875,11 @@ function handlePostback(replyToken, userId, postbackData) {
         var payIdx = _fi(mData[0], "繳費狀態");
         for (var i = 1; i < mData.length; i++) {
           if (sysIdx > -1 && mData[i][sysIdx] === targetUserId) {
-            if (String(mData[i][payIdx]).trim() !== "已繳費 Paid") confirmedList.push("🔸 社費 (入社/續社費)");
+            var feeLabel = "🔸 社籍與社費 (Membership Fee)";
+            if (expiryDateFromPayment) {
+              feeLabel += " (有效至 " + expiryDateFromPayment + ")";
+            }
+            confirmedList.push(feeLabel);
             break;
           }
         }
@@ -932,7 +950,7 @@ function handlePostback(replyToken, userId, postbackData) {
       }
     }
 
-    processPaymentConfirmation(targetUserId, pType, ss);
+    processPaymentConfirmation(targetUserId, pType, ss, expiryDateFromPayment);
 
     var confirmedItemsStr = confirmedList.length > 0 ? confirmedList.join("\n") : "🔸 " + pType;
 
@@ -3876,7 +3894,7 @@ function markAsPending(userId, paymentType, ss) {
 
 // ⭐️ 引擎二：確認無誤後標記獨立欄位為「已繳費」 (100% 全動態防彈版 + 效能優化版)
 // 💡 全域效能優化：改用 TextFinder 快速鎖定特定社員，避免大量陣列讀取與運算！
-function processPaymentConfirmation(userId, paymentType, ss) {
+function processPaymentConfirmation(userId, paymentType, ss, customExpiryDate) {
   // 1. 社費
   if (paymentType === "繳交社費" || paymentType === "combined") {
     var mSheet = ss.getSheetByName("Members");
@@ -3884,12 +3902,20 @@ function processPaymentConfirmation(userId, paymentType, ss) {
       var mH = mSheet.getRange(1, 1, 1, mSheet.getLastColumn()).getValues()[0];
       var payCol = _fi(mH, "繳費狀態") + 1,
         sysCol = _fi(mH, "系統識別碼") + 1;
+      var expireCol = _fi(mH, "社籍到期日") + 1;
+      if (expireCol === 0) {
+        var expIdx = mH.findIndex(function (h) { return String(h).includes("到期日") || String(h).includes("社籍"); });
+        if (expIdx > -1) expireCol = expIdx + 1;
+      }
       if (payCol > 0 && sysCol > 0) {
         var matches = mSheet.createTextFinder(userId).matchEntireCell(true).findAll();
         for (var i = 0; i < matches.length; i++) {
           if (matches[i].getColumn() === sysCol) {
             var current = String(mSheet.getRange(matches[i].getRow(), payCol).getValue()).trim();
             if (current !== "已繳費 Paid") mSheet.getRange(matches[i].getRow(), payCol).setValue("已繳費 Paid");
+            if (expireCol > 0 && customExpiryDate) {
+              mSheet.getRange(matches[i].getRow(), expireCol).setValue(customExpiryDate);
+            }
             break;
           }
         }
@@ -4696,7 +4722,7 @@ function getUnpaidListAPI(ss, userId) {
             if (eIdIdx > -1 && String(eData[e][eIdIdx]).trim() === evId) {
               var costStr = eCostIdx > -1 ? String(eData[e][eCostIdx]) : "0";
               var cost = parseInt(costStr.replace(/\D/g, ''), 10) || 0;
-              if (cost > 0) {
+              if (cost >= 0) {
                 responseData.activities.push({
                   id: "act_" + evId,
                   name: "活動：" + (eNameIdx > -1 ? String(eData[e][eNameIdx]).replace(/[&=]/g, '') : "未知活動"),
@@ -4781,7 +4807,7 @@ function getUnpaidListAPI(ss, userId) {
           var costStr = lCostIdx > -1 ? String(lData[l][lCostIdx]) : "0";
           var cost = parseInt(costStr.replace(/\D/g, ''), 10) || 0;
           var orderId = lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : "未知訂單";
-          if (cost > 0) {
+          if (cost >= 0) {
             responseData.equipments.push({
               id: "eq_" + orderId,
               name: lNameIdx > -1 ? String(lData[l][lNameIdx]).trim() : "未知裝備",
@@ -4952,7 +4978,13 @@ function processPaymentSubmit(payload) {
   try {
     lock.waitLock(10000);
 
-    var selectedIds = details.selectedIds;
+    var rawSelectedIds = details.selectedIds || [];
+    var selectedIds = [];
+    for (var u = 0; u < rawSelectedIds.length; u++) {
+      if (selectedIds.indexOf(rawSelectedIds[u]) === -1) {
+        selectedIds.push(rawSelectedIds[u]);
+      }
+    }
 
     for (var k = 0; k < selectedIds.length; k++) {
       var itemId = selectedIds[k];
@@ -4963,7 +4995,11 @@ function processPaymentSubmit(payload) {
         for (var m = 1; m < mData.length; m++) {
           if (sysIdx > -1 && mData[m][sysIdx] === userId) {
             mSheet.getRange(m + 1, mPayIdx + 1).setValue("待確認 Checking");
-            confirmedItems.push("🔸 社籍與社費 (Membership Fee)");
+            var membershipLabel = "🔸 社籍與社費 (Membership Fee)";
+            if (details.membershipExpiryDate) {
+              membershipLabel += " (有效至 " + details.membershipExpiryDate + ")";
+            }
+            confirmedItems.push(membershipLabel);
             break;
           }
         }
@@ -5041,6 +5077,13 @@ function processPaymentSubmit(payload) {
         noteIdx = _fi(pHeaders, "備註");
       }
 
+      var expireIdx = _fi(pHeaders, "社籍到期日");
+      if (expireIdx === -1 && details.membershipExpiryDate) {
+        paySheet.getRange(1, paySheet.getLastColumn() + 1).setValue("社籍到期日");
+        pHeaders = paySheet.getRange(1, 1, 1, paySheet.getLastColumn()).getValues()[0];
+        expireIdx = _fi(pHeaders, "社籍到期日");
+      }
+
       var newRow = new Array(pHeaders.length).fill("");
 
       newRow[_fi(pHeaders, "時間")] = new Date();
@@ -5051,6 +5094,9 @@ function processPaymentSubmit(payload) {
       newRow[_fi(pHeaders, "帳號末5碼")] = details.last5Digits;
       if (noteIdx > -1) {
         newRow[noteIdx] = paymentNote;
+      }
+      if (expireIdx > -1 && details.membershipExpiryDate) {
+        newRow[expireIdx] = details.membershipExpiryDate;
       }
       newRow[_fi(pHeaders, "對帳狀態")] = "待核對";
 
@@ -5783,7 +5829,7 @@ function processSaveProfile(payload) {
         if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
           infoList.push("• 體能與登山證明：已上傳證明檔案");
         }
-        pushMsg = "🎉 歡迎加入野境戶外！您的個人資料已建立成功：\n\n" +
+        pushMsg = "🎉 歡迎加入台科大登山社！您的個人資料已建立成功：\n\n" +
           infoList.join("\n") + "\n\n" +
           "感謝您的填寫！";
       }
@@ -6015,8 +6061,9 @@ function getPaymentHistoryAPI(ss, userId) {
         status: status
       });
 
-      // 只有對帳狀態為「已確認無誤」或「已確認」或「已繳費」或「已核對」才加總
-      if (status.indexOf("確認") > -1 || status.indexOf("無誤") > -1 || status.indexOf("已繳") > -1 || status.indexOf("已核對") > -1) {
+      // 只有對帳狀態為「已確認無誤」或「已確認」或「已繳費」或「已核對」才加總 (排除「待確認」與「待核對」)
+      var isConfirmed = (status.indexOf("已確認") > -1 || status.indexOf("已核對") > -1 || status.indexOf("已繳") > -1 || status === "Paid") && status.indexOf("待確認") === -1 && status.indexOf("待核對") === -1 && status.indexOf("Checking") === -1;
+      if (isConfirmed) {
         totalSpent += amount;
       }
     }
