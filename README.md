@@ -3,11 +3,40 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.36` (v0.1.36)
+- **當前版本**：`0.1.37` (v0.1.37)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 137. 裝備預約防二次送單與購物車重設、已繳費裝備取消退款提醒與個人資料英文通知 (Phase 3) (v0.1.37)
+- **裝備預約防二次觸碰與表單抽屜重設清空 (Borrow Order Anti-Double Submit & Cart Reset)**：
+  - 在 `Borrow.tsx` 中新增 `isSubmittingOrder` 狀態管理。
+  - 當點擊「確認送出租借預約」按鈕時，按鈕立即被禁用 (`disabled`)，且按鈕文字即時動態切換為「送出預約中... / Submitting...」，杜絕網路延遲時使用者的二次重複連擊。
+  - 後端 API 回傳成功後：
+    - 自動關閉租借明細抽屜 (`setIsCartOpen(false)`)。
+    - 徹底清空租借購物車清單 (`cart: {}`) 與預訂單表單欄位（取件日、還件日、用途重設為預設社團出隊、其他用途清空）。
+    - 即時清除裝備快取，確保重新載入最新庫存。
+- **已繳費裝備取消退款提醒與修復多品項提早 Return 漏洞 (Paid Equipment Cancellation Refund Alert & Multi-item Fix)**：
+  - **修復多品項提前 return 錯誤**：修復 `gas.js` 之 `processLiffCancelLoan` 過去在比對到第一筆資料列時就提早 `return ContentService` 的邏輯漏洞，現在支援完整遍歷同一租借編號 (`targetId` / `orderId`) 下的所有項目，整筆訂單內所有裝備皆能完整取消並各自分別正確回補在庫庫存。
+  - **已繳費判定與狀態更新**：檢查該筆租借在 `Loan_Records` 中的「繳費狀態」，若為「已繳費 Paid」或「待確認 Checking」，將訂單狀態更新為「**已取消 (待退款)**」；若未繳費則更新為「已取消 Cancelled」。
+  - **幹部退款專屬提醒**：針對已完成繳費／待確認之租借預約，系統向幹部群組推播專屬退款提醒訊息：
+    `🔔 【幹部通知：裝備預約取消（需安排退款）】`
+    列出申請人、租借編號、所有取消之裝備清單，並明確提示幹部依社團退費規範安排退款（依規定不顯示具體金額，由幹部自行依時間比例結算）。
+  - **個人主頁 (Dashboard) 裝備退款追蹤**：
+    - `gas.js` 之 `getDashboardDataAPI` 允許回傳狀態為「已取消 (待退款)」之裝備紀錄。
+    - `Dashboard.tsx` 擴充 `getEquipmentStatusText` 與徽章配色，展示專屬橘色「已取消 (待退款)」徽章，並在進入此狀態後隱藏取消按鈕，讓社員清楚掌握退款進度。
+- **註冊與個人資料修改成功通知支援英文版 (English Profile Registration & Update Push Notifications)**：
+  - `Register.tsx` 送出 `save_profile` 時，於 payload 中主動帶入當前語系代碼 (`lang: i18n.language || 'zh'`)。
+  - `gas.js` 之 `processSaveProfile` 判讀 `payload.lang`：
+    - 當語系為英文 (`isEn`) 時，使用全英文欄位名稱對應（如 `Name`, `Gender`, `Department / Affiliation`, `Emergency Contact`, `Outdoor Experience`, `Fitness Description` 等）。
+    - 資料修改推播通知使用英文範本：
+      `✅ Your member profile has been successfully updated!`
+      若有修改欄位，以 `• [Field]: [Old] -> [New]` 列出修改清單；若重新上傳證明則顯示 `• Fitness & Hiking Proof: New file re-uploaded`。
+    - 新用戶註冊推播通知使用英文範本：
+      `🎉 Welcome to NTUST Mountaineering Club! Your profile has been successfully registered:`
+      完整列出填寫項目清單與感謝詞。
+    - API 回傳訊息亦提供流暢的英文反饋 (`Profile updated successfully!` / `Registration successful!`)。
 
 ### 136. 活動正備取狀態流轉、正取直開繳費 LIFF、退款提醒與備取意願登記 (Phase 2) (v0.1.36)
 - **正取推播通知直開繳費系統 (Direct LIFF Link in Accepted Notification)**：

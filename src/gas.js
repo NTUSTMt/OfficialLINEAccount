@@ -5533,7 +5533,7 @@ function getMyStatusAPI(ss, userId) {
     for (var l = 1; l < lData.length; l++) {
       if (lSysIdx > -1 && lData[l][lSysIdx] === userId) {
         var statusStr = String(lData[l][lStatusIdx] || "");
-        if (statusStr.indexOf("取消") === -1) {
+        if (statusStr.indexOf("取消") === -1 || statusStr.indexOf("待退款") > -1) {
           var pickupVal = lData[l][lPickupIdx];
           var returnVal = lData[l][lReturnIdx];
           var pickupStr = "";
@@ -5808,30 +5808,31 @@ function processSaveProfile(payload) {
       console.error("發送幹部群組意願通知失敗: " + err.toString());
     }
 
-    // 主動推送 LINE 通知確認信 (動態欄位修改偵測)
+    // 主動推送 LINE 通知確認信 (動態欄位修改偵測，支援中英雙語)
     try {
+      var isEn = (payload.lang === "en" || (payload.data && payload.data.lang === "en"));
       var pushMsg = "";
       var fieldMappings = [
-        { label: "姓名", value: data.name || "", oldVal: isUpdate ? oldValuesForCompare[nameIdx] : "" },
-        { label: "性別", value: data.gender || "", oldVal: isUpdate ? oldValuesForCompare[genderIdx] : "" },
-        { label: "LINE ID", value: data.realLineId || "", oldVal: isUpdate ? oldValuesForCompare[lineIdx] : "" },
-        { label: "聯絡信箱", value: data.email || "", oldVal: isUpdate ? oldValuesForCompare[emailIdx] : "" },
-        { label: "聯絡電話", value: data.phone || "", oldVal: isUpdate ? oldValuesForCompare[phoneIdx] : "" },
-        { label: "在校系所/校外單位", value: data.department || "", oldVal: isUpdate ? oldValuesForCompare[deptIdx] : "" },
-        { label: "身分狀態", value: data.identityStatus || "", oldVal: isUpdate ? oldValuesForCompare[identityIdx] : "" },
-        { label: "學號", value: data.studentId || "", oldVal: isUpdate ? oldValuesForCompare[studentIdIdx] : "" },
-        { label: "生日", value: data.birthday ? String(data.birthday).split("T")[0] : "", oldVal: isUpdate ? (oldValuesForCompare[birthdayIdx] instanceof Date ? Utilities.formatDate(oldValuesForCompare[birthdayIdx], "GMT+8", "yyyy-MM-dd") : String(oldValuesForCompare[birthdayIdx])) : "" },
-        { label: "身份證字號/護照號碼", value: data.idNumber || "", oldVal: isUpdate ? oldValuesForCompare[idNumberIdx] : "" },
-        { label: "聯絡地址", value: data.studentAddr || "", oldVal: isUpdate ? oldValuesForCompare[studentAddrIdx] : "" },
-        { label: "緊急聯絡人姓名", value: data.emerName || "", oldVal: isUpdate ? oldValuesForCompare[emerNameIdx] : "" },
-        { label: "關係", value: data.emerRel || "", oldVal: isUpdate ? oldValuesForCompare[emerRelIdx] : "" },
-        { label: "緊急聯絡人地址", value: data.emerAddr || "", oldVal: isUpdate ? oldValuesForCompare[emerAddrIdx] : "" },
-        { label: "緊急聯絡人電話", value: data.emerPhone || "", oldVal: isUpdate ? oldValuesForCompare[emerPhoneIdx] : "" },
-        { label: "登山/戶外經驗", value: data.exp || "", oldVal: isUpdate ? oldValuesForCompare[expIdx] : "" },
-        { label: "體能證明描述", value: data.strength || "", oldVal: isUpdate ? oldValuesForCompare[strengthIdx] : "" },
-        { label: "個人特殊病史或過敏", value: data.medicalHistory || "", oldVal: isUpdate ? oldValuesForCompare[medIdx] : "" },
-        { label: "加入社員意願", value: data.intendOfficial || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficialIdx] : "" },
-        { label: "擔任幹部意願", value: data.intendOfficer || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficerIdx] : "" }
+        { label: "姓名", enLabel: "Name", value: data.name || "", oldVal: isUpdate ? oldValuesForCompare[nameIdx] : "" },
+        { label: "性別", enLabel: "Gender", value: data.gender || "", oldVal: isUpdate ? oldValuesForCompare[genderIdx] : "" },
+        { label: "LINE ID", enLabel: "LINE ID", value: data.realLineId || "", oldVal: isUpdate ? oldValuesForCompare[lineIdx] : "" },
+        { label: "聯絡信箱", enLabel: "Email", value: data.email || "", oldVal: isUpdate ? oldValuesForCompare[emailIdx] : "" },
+        { label: "聯絡電話", enLabel: "Phone", value: data.phone || "", oldVal: isUpdate ? oldValuesForCompare[phoneIdx] : "" },
+        { label: "在校系所/校外單位", enLabel: "Department / Affiliation", value: data.department || "", oldVal: isUpdate ? oldValuesForCompare[deptIdx] : "" },
+        { label: "身分狀態", enLabel: "Status", value: data.identityStatus || "", oldVal: isUpdate ? oldValuesForCompare[identityIdx] : "" },
+        { label: "學號", enLabel: "Student ID", value: data.studentId || "", oldVal: isUpdate ? oldValuesForCompare[studentIdIdx] : "" },
+        { label: "生日", enLabel: "Birthday", value: data.birthday ? String(data.birthday).split("T")[0] : "", oldVal: isUpdate ? (oldValuesForCompare[birthdayIdx] instanceof Date ? Utilities.formatDate(oldValuesForCompare[birthdayIdx], "GMT+8", "yyyy-MM-dd") : String(oldValuesForCompare[birthdayIdx])) : "" },
+        { label: "身份證字號/護照號碼", enLabel: "ID / Passport No.", value: data.idNumber || "", oldVal: isUpdate ? oldValuesForCompare[idNumberIdx] : "" },
+        { label: "聯絡地址", enLabel: "Address", value: data.studentAddr || "", oldVal: isUpdate ? oldValuesForCompare[studentAddrIdx] : "" },
+        { label: "緊急聯絡人姓名", enLabel: "Emergency Contact", value: data.emerName || "", oldVal: isUpdate ? oldValuesForCompare[emerNameIdx] : "" },
+        { label: "關係", enLabel: "Relationship", value: data.emerRel || "", oldVal: isUpdate ? oldValuesForCompare[emerRelIdx] : "" },
+        { label: "緊急聯絡人地址", enLabel: "Emergency Contact Address", value: data.emerAddr || "", oldVal: isUpdate ? oldValuesForCompare[emerAddrIdx] : "" },
+        { label: "緊急聯絡人電話", enLabel: "Emergency Contact Phone", value: data.emerPhone || "", oldVal: isUpdate ? oldValuesForCompare[emerPhoneIdx] : "" },
+        { label: "登山/戶外經驗", enLabel: "Outdoor Experience", value: data.exp || "", oldVal: isUpdate ? oldValuesForCompare[expIdx] : "" },
+        { label: "體能證明描述", enLabel: "Fitness Description", value: data.strength || "", oldVal: isUpdate ? oldValuesForCompare[strengthIdx] : "" },
+        { label: "個人特殊病史或過敏", enLabel: "Medical History / Allergies", value: data.medicalHistory || "", oldVal: isUpdate ? oldValuesForCompare[medIdx] : "" },
+        { label: "加入社員意願", enLabel: "Join Club Membership", value: data.intendOfficial || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficialIdx] : "" },
+        { label: "擔任幹部意願", enLabel: "Officer Interest", value: data.intendOfficer || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficerIdx] : "" }
       ];
 
       if (isUpdate) {
@@ -5847,7 +5848,11 @@ function processSaveProfile(payload) {
           }
 
           if (newValStr !== oldValStr) {
-            changes.push("• " + item.label + "：" + (oldValStr || "(空)") + " -> " + (newValStr || "(空)"));
+            if (isEn) {
+              changes.push("• " + item.enLabel + ": " + (oldValStr || "(empty)") + " -> " + (newValStr || "(empty)"));
+            } else {
+              changes.push("• " + item.label + "：" + (oldValStr || "(空)") + " -> " + (newValStr || "(空)"));
+            }
           }
         });
 
@@ -5855,31 +5860,60 @@ function processSaveProfile(payload) {
         if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
           var oldProofStr = isUpdate ? String(oldValuesForCompare[strengthProofIdx]).trim() : "";
           if (data.strengthProof !== oldProofStr) {
-            changes.push("• 體能與登山證明：已重新上傳新檔案");
+            if (isEn) {
+              changes.push("• Fitness & Hiking Proof: New file re-uploaded");
+            } else {
+              changes.push("• 體能與登山證明：已重新上傳新檔案");
+            }
           }
         }
 
         if (changes.length > 0) {
-          pushMsg = "✅ 您的社員資料已成功更新！\n\n" +
-            "本次修改項目：\n" +
-            changes.join("\n") + "\n\n" +
-            "感謝您的填寫！";
+          if (isEn) {
+            pushMsg = "✅ Your member profile has been successfully updated!\n\n" +
+              "Modified items:\n" +
+              changes.join("\n") + "\n\n" +
+              "Thank you for keeping your profile updated!";
+          } else {
+            pushMsg = "✅ 您的社員資料已成功更新！\n\n" +
+              "本次修改項目：\n" +
+              changes.join("\n") + "\n\n" +
+              "感謝您的填寫！";
+          }
         } else {
-          pushMsg = "✅ 您的社員資料已成功更新（內容無變更）！";
+          if (isEn) {
+            pushMsg = "✅ Your member profile has been updated (no changes detected)!";
+          } else {
+            pushMsg = "✅ 您的社員資料已成功更新（內容無變更）！";
+          }
         }
       } else {
         var infoList = [];
         fieldMappings.forEach(function (item) {
           if (item.value && String(item.value).trim() !== "") {
-            infoList.push("• " + item.label + "：" + item.value);
+            if (isEn) {
+              infoList.push("• " + item.enLabel + ": " + item.value);
+            } else {
+              infoList.push("• " + item.label + "：" + item.value);
+            }
           }
         });
         if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
-          infoList.push("• 體能與登山證明：已上傳證明檔案");
+          if (isEn) {
+            infoList.push("• Fitness & Hiking Proof: Proof file uploaded");
+          } else {
+            infoList.push("• 體能與登山證明：已上傳證明檔案");
+          }
         }
-        pushMsg = "🎉 歡迎加入台科大登山社！您的個人資料已建立成功：\n\n" +
-          infoList.join("\n") + "\n\n" +
-          "感謝您的填寫！";
+        if (isEn) {
+          pushMsg = "🎉 Welcome to NTUST Mountaineering Club! Your profile has been successfully registered:\n\n" +
+            infoList.join("\n") + "\n\n" +
+            "Thank you for registering!";
+        } else {
+          pushMsg = "🎉 歡迎加入台科大登山社！您的個人資料已建立成功：\n\n" +
+            infoList.join("\n") + "\n\n" +
+            "感謝您的填寫！";
+        }
       }
 
       pushMessage(userId, pushMsg);
@@ -5889,7 +5923,7 @@ function processSaveProfile(payload) {
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
-      message: isUpdate ? "資料已成功更新！" : "註冊成功！"
+      message: isUpdate ? (isEn ? "Profile updated successfully!" : "資料已成功更新！") : (isEn ? "Registration successful!" : "註冊成功！")
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
@@ -6506,53 +6540,108 @@ function processLiffCancelLoan(payload) {
     var lEquipIdIdx = _fi(lH, "裝備代號");
     var lQtyIdx = _fi(lH, "數量");
     var lNameIdx = _fi(lH, "姓名");
+    var lPayIdx = _fi(lH, "繳費狀態");
+    var lEquipNameIdx = _fi(lH, "裝備名稱");
 
-    var foundRecord = false;
+    var cancelledItems = [];
+    var isAnyPaid = false;
+    var userName = "";
+    var hasFoundMatch = false;
+
     for (var i = 1; i < lData.length; i++) {
-      var isTarget = (lOrderIdx > -1 && lData[i][lOrderIdx] === targetId) || (lEquipIdIdx > -1 && lData[i][lEquipIdIdx] === targetId);
+      var isTarget = (lOrderIdx > -1 && String(lData[i][lOrderIdx]).trim() === String(targetId).trim()) || (lEquipIdIdx > -1 && String(lData[i][lEquipIdIdx]).trim() === String(targetId).trim());
 
       if (isTarget && lSysIdx > -1 && lData[i][lSysIdx] === userId) {
-        foundRecord = true;
+        hasFoundMatch = true;
         var currentStatus = lStatusIdx > -1 ? String(lData[i][lStatusIdx]) : "";
         if (currentStatus === "待領取 To Be Collected") {
-          loanSheet.getRange(i + 1, lStatusIdx + 1).setValue("已取消 Cancelled");
-
-          var equipId = lEquipIdIdx > -1 ? lData[i][lEquipIdIdx] : "";
-          var qty = lQtyIdx > -1 ? Number(lData[i][lQtyIdx]) : 0;
-          var userName = lNameIdx > -1 ? lData[i][lNameIdx] : "未知社員";
-          var equipName = "未知裝備";
-
-          var equipSheet = ss.getSheetByName("Equipments");
-          if (equipSheet && equipId) {
-            var eData = equipSheet.getDataRange().getValues();
-            var eH = eData[0];
-            var eIdIdx = _fi(eH, "裝備代號");
-            var eStockIdx = _fi(eH, "在庫數量");
-            var eNameIdx = _fi(eH, "裝備名稱");
-            for (var m = 1; m < eData.length; m++) {
-              if (eIdIdx > -1 && eData[m][eIdIdx] === equipId) {
-                if (eNameIdx > -1) equipName = eData[m][eNameIdx];
-                if (eStockIdx > -1) {
-                  var curStock = Number(eData[m][eStockIdx]);
-                  equipSheet.getRange(m + 1, eStockIdx + 1).setValue(curStock + qty);
-                }
-                break;
-              }
-            }
+          if (!userName && lNameIdx > -1) userName = String(lData[i][lNameIdx]);
+          var payStatus = lPayIdx > -1 ? String(lData[i][lPayIdx]).trim() : "";
+          if (payStatus === "已繳費 Paid" || payStatus === "待確認 Checking") {
+            isAnyPaid = true;
           }
-
-          // 推送幹部通知
-          pushAdminMessage("【幹部通知：裝備取消】\n申請人：" + userName + "\n裝備：" + equipName + "\n庫存已自動回補！");
-          return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "裝備預約已成功取消" })).setMimeType(ContentService.MimeType.JSON);
-        } else {
-          return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "該預約已非待領取狀態，無法取消" })).setMimeType(ContentService.MimeType.JSON);
+          var equipId = lEquipIdIdx > -1 ? String(lData[i][lEquipIdIdx]) : "";
+          var equipName = lEquipNameIdx > -1 && lData[i][lEquipNameIdx] ? String(lData[i][lEquipNameIdx]) : "";
+          var qty = lQtyIdx > -1 ? Number(lData[i][lQtyIdx]) : 1;
+          cancelledItems.push({
+            row: i + 1,
+            equipId: equipId,
+            equipName: equipName,
+            qty: qty
+          });
         }
       }
     }
 
-    if (!foundRecord) {
+    if (!hasFoundMatch) {
       return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆租借預約紀錄" })).setMimeType(ContentService.MimeType.JSON);
     }
+
+    if (cancelledItems.length === 0) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "該預約已非待領取狀態，無法取消" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var newStatus = isAnyPaid ? "已取消 (待退款)" : "已取消 Cancelled";
+    var equipSheet = ss.getSheetByName("Equipments");
+    var equipStockUpdates = {}; // equipId -> qty to add
+
+    for (var j = 0; j < cancelledItems.length; j++) {
+      var item = cancelledItems[j];
+      loanSheet.getRange(item.row, lStatusIdx + 1).setValue(newStatus);
+      if (item.equipId) {
+        equipStockUpdates[item.equipId] = (equipStockUpdates[item.equipId] || 0) + item.qty;
+      }
+    }
+
+    // 依序回補庫存
+    var cancelledEquipNames = [];
+    if (equipSheet && Object.keys(equipStockUpdates).length > 0) {
+      var eData = equipSheet.getDataRange().getValues();
+      var eH = eData[0];
+      var eIdIdx = _fi(eH, "裝備代號");
+      var eStockIdx = _fi(eH, "在庫數量");
+      var eNameIdx = _fi(eH, "裝備名稱");
+
+      for (var m = 1; m < eData.length; m++) {
+        var eId = eIdIdx > -1 ? String(eData[m][eIdIdx]) : "";
+        if (equipStockUpdates[eId]) {
+          var curStock = eStockIdx > -1 ? Number(eData[m][eStockIdx]) : 0;
+          var addQty = equipStockUpdates[eId];
+          equipSheet.getRange(m + 1, eStockIdx + 1).setValue(curStock + addQty);
+          var realName = eNameIdx > -1 ? String(eData[m][eNameIdx]) : eId;
+          cancelledEquipNames.push(realName + " x" + addQty);
+        }
+      }
+    }
+
+    if (cancelledEquipNames.length === 0) {
+      cancelledItems.forEach(function (ci) {
+        cancelledEquipNames.push((ci.equipName || ci.equipId || "裝備") + " x" + ci.qty);
+      });
+    }
+
+    // 推送幹部通知
+    if (isAnyPaid) {
+      var officerMsg = "🔔 【幹部通知：裝備預約取消（需安排退款）】\n" +
+        "─────────────\n" +
+        "申請人：" + (userName || "未知社員") + "\n" +
+        "租借編號：" + targetId + "\n" +
+        "取消裝備：\n• " + cancelledEquipNames.join("\n• ") + "\n\n" +
+        "⚠️ 該租借預約已繳費／待確認，請幹部依社團退費規範安排退款事宜！（庫存已自動回補）";
+      pushAdminMessage(officerMsg);
+    } else {
+      var officerMsgNormal = "【幹部通知：裝備取消】\n" +
+        "申請人：" + (userName || "未知社員") + "\n" +
+        "租借編號：" + targetId + "\n" +
+        "取消裝備：\n• " + cancelledEquipNames.join("\n• ") + "\n" +
+        "庫存已自動回補！";
+      pushAdminMessage(officerMsgNormal);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      message: isAnyPaid ? "裝備預約已取消，因您已繳費，幹部將為您安排退費！" : "裝備預約已成功取消"
+    })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
     console.error("取消裝備預約失敗:", err);

@@ -111,7 +111,7 @@ function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
 }
 
 function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boolean }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // ==========================================
   // 2. 狀態管理 (State Management)
   // ==========================================
@@ -120,6 +120,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isOfficial, setIsOfficial] = useState<boolean>(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
 
   // 幹部身分狀態
@@ -588,6 +589,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
     console.log('準備送出的資料:', orderPayload);
 
+    setIsSubmittingOrder(true);
     // 使用 fetch POST 將資料打回給 GAS
     try {
       const response = await fetch(GAS_API_URL, {
@@ -603,23 +605,32 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         alert(t('borrow.alert.systemError', { message: result.message }));
         return;
       }
-      // 送出預約成功後清除裝備快取，以利下回重新載入最新庫存
+      // 送出預約成功後清除裝備快取，關閉明細抽屜並清空租借車和預訂單
       removeCache(CACHE_KEY_EQUIPMENTS);
+      setIsCartOpen(false);
+      setForm({
+        cart: {},
+        pickupDate: '',
+        returnDate: '',
+        purpose: '社團出隊',
+        otherPurpose: ''
+      });
+
+      // 2. 在 LINE 聊天室印出確認訊息
+      if (liff.isInClient()) {
+        await liff.sendMessages([{
+          type: 'text',
+          text: t('borrow.alert.submitSuccess', { count: totalItems })
+        }]);
+        liff.closeWindow();
+      } else {
+        alert(t('borrow.alert.submitSuccessBrowser'));
+      }
     } catch (error) {
       console.error('API 請求失敗:', error);
       alert(t('borrow.alert.networkError'));
-      return;
-    }
-
-    // 2. 在 LINE 聊天室印出確認訊息
-    if (liff.isInClient()) {
-      await liff.sendMessages([{
-        type: 'text',
-        text: t('borrow.alert.submitSuccess', { count: totalItems })
-      }]);
-      liff.closeWindow();
-    } else {
-      alert(t('borrow.alert.submitSuccessBrowser'));
+    } finally {
+      setIsSubmittingOrder(false);
     }
   };
 
@@ -998,9 +1009,11 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
               <button
                 className="submit-checkout-btn"
                 onClick={submitForm}
-                disabled={totalItems === 0 || !form.pickupDate || !form.returnDate}
+                disabled={isSubmittingOrder || totalItems === 0 || !form.pickupDate || !form.returnDate}
               >
-                {t('borrow.drawer.submitBtn', { price: totalPrice })}
+                {isSubmittingOrder
+                  ? (i18n.language === 'en' ? 'Submitting...' : '送出預約中...')
+                  : t('borrow.drawer.submitBtn', { price: totalPrice })}
               </button>
             </div>
           )}

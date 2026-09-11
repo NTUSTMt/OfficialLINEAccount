@@ -80,6 +80,8 @@ function Dashboard({ userId }: { userId: string }) {
   };
 
   const getEquipmentStatusText = (status: string) => {
+    if (status.includes('待退款')) return t('dashboard.status.cancelledRefund', '已取消 (待退款)');
+    if (status.includes('已取消') || status.includes('Cancelled')) return t('dashboard.status.cancelled', '已取消');
     if (status.includes('已歸還')) return t('dashboard.status.returned');
     if (status.includes('使用中')) return t('dashboard.status.using');
     if (status.includes('待領取') || status.includes('To Be Collected')) return t('dashboard.status.toBeCollected');
@@ -640,8 +642,8 @@ function Dashboard({ userId }: { userId: string }) {
                         padding: '3px 8px',
                         borderRadius: '6px',
                         fontWeight: 'bold',
-                        color: eq.status.indexOf('已歸還') > -1 ? '#047857' : eq.status.indexOf('使用中') > -1 ? '#2563eb' : '#b45309',
-                        backgroundColor: eq.status.indexOf('已歸還') > -1 ? '#d1fae5' : eq.status.indexOf('使用中') > -1 ? '#dbeafe' : '#fef3c7'
+                        color: eq.status.indexOf('待退款') > -1 ? '#c2410c' : eq.status.indexOf('已歸還') > -1 ? '#047857' : eq.status.indexOf('使用中') > -1 ? '#2563eb' : '#b45309',
+                        backgroundColor: eq.status.indexOf('待退款') > -1 ? '#ffedd5' : eq.status.indexOf('已歸還') > -1 ? '#d1fae5' : eq.status.indexOf('使用中') > -1 ? '#dbeafe' : '#fef3c7'
                       }}
                     >
                       {getEquipmentStatusText(eq.status)}

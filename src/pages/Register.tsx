@@ -38,7 +38,7 @@ interface UploadedFile {
 }
 
 function Register({ userId }: { userId: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -364,10 +364,15 @@ function Register({ userId }: { userId: string }) {
 
     setIsSubmitting(true);
     try {
+      const currentLang = i18n.language?.startsWith('en') ? 'en' : 'zh';
       const payload = {
         action: 'save_profile',
         userId: userId || 'TEST_USER_ID',
-        data: formData,
+        lang: currentLang,
+        data: {
+          ...formData,
+          lang: currentLang,
+        },
         strengthProofFiles: strengthProofFiles.length > 0 ? strengthProofFiles : null,
       };
 
