@@ -2313,9 +2313,17 @@ function handleSignup(replyToken, userId, eventId, ss) {
     var signupSheet = ss.getSheetByName("Signups");
     if (!signupSheet) {
       signupSheet = ss.insertSheet("Signups");
-      signupSheet.appendRow(["活動編號", "系統識別碼", "專屬碼", "活動名稱", "姓名", "性別", "LINE ID", "聯絡信箱 Email", "聯絡電話", "生日", "證件號碼", "緊急聯絡人姓名", "爬山經驗", "緊急聯絡人聯絡地址", "體能測驗", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "聯絡地址", "緊急聯絡人電話"]);
+      signupSheet.appendRow(["活動編號", "系統識別碼", "專屬碼", "活動名稱", "姓名", "性別", "LINE ID", "聯絡信箱 Email", "聯絡電話", "生日", "證件號碼", "緊急聯絡人姓名", "與緊急聯絡人關係", "爬山經驗", "緊急聯絡人聯絡地址", "體能測驗", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "聯絡地址", "緊急聯絡人電話"]);
     }
     var sheetHeaders = signupSheet.getRange(1, 1, 1, signupSheet.getLastColumn()).getValues()[0];
+
+    // 確保「與緊急聯絡人關係」在表頭中存在，若無則自動在最右側建立新欄位
+    var relColIdx = sheetHeaders.findIndex(function (h) {
+      return String(h).includes("關係") || String(h).toLowerCase().includes("relation");
+    });
+    if (relColIdx === -1) {
+      relColIdx = getOrCreateColIdx(signupSheet, sheetHeaders, "與緊急聯絡人關係");
+    }
 
     // 防重複報名
     var existingData = signupSheet.getDataRange().getValues();
@@ -2357,17 +2365,43 @@ function handleSignup(replyToken, userId, eventId, ss) {
     placeData("性別", p.gender);
     placeData("LINE", p.realLineId);
     placeData("Email", p.email);
-    placeData("電話", p.phone);
+
+    // 本人聯絡電話（排除緊急）
+    var phoneIdx = sheetHeaders.findIndex(function (h) {
+      return String(h).includes("電話") && !String(h).includes("緊急");
+    });
+    if (phoneIdx > -1) rowData[phoneIdx] = p.phone ? "'" + String(p.phone) : "";
+
     placeData("生日", p.birthday);
     placeData("證件", p.idNumber);
-    placeData("地址", p.studentAddr);
+
+    // 本人聯絡地址（排除緊急，避免誤寫入緊急聯絡人地址欄位）
+    var studentAddrIdx = sheetHeaders.findIndex(function (h) {
+      return String(h).includes("地址") && !String(h).includes("緊急");
+    });
+    if (studentAddrIdx > -1) rowData[studentAddrIdx] = p.studentAddr;
+
+    // 緊急聯絡人姓名
     var emerNameIdx = sheetHeaders.findIndex(function (h) {
       return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
     });
     if (emerNameIdx > -1) rowData[emerNameIdx] = p.emerName;
-    placeData("關係", p.emerRel);
-    placeData("緊急聯絡人聯絡地址", p.emerAddr);
-    placeData("緊急聯絡人電話", p.emerPhone);
+
+    // 與緊急聯絡人關係
+    if (relColIdx > -1) rowData[relColIdx] = p.emerRel;
+
+    // 緊急聯絡人地址
+    var emerAddrIdx = sheetHeaders.findIndex(function (h) {
+      return String(h).includes("地址") && String(h).includes("緊急");
+    });
+    if (emerAddrIdx > -1) rowData[emerAddrIdx] = p.emerAddr;
+
+    // 緊急聯絡人電話
+    var emerPhoneIdx = sheetHeaders.findIndex(function (h) {
+      return String(h).includes("電話") && String(h).includes("緊急");
+    });
+    if (emerPhoneIdx > -1) rowData[emerPhoneIdx] = p.emerPhone ? "'" + String(p.emerPhone) : "";
+
     placeData("經驗", p.exp);
     placeData("體能", p.strength);
     placeData("體能證明", p.strengthProof);
@@ -2375,6 +2409,9 @@ function handleSignup(replyToken, userId, eventId, ss) {
     placeData("審核結果", "審核中 Checking");
     placeData("通知狀態", "");
     placeData("繳費狀態", "未繳費 Unpaid");
+    placeData("系所", p.department);
+    placeData("學號", p.studentId);
+    placeData("病史", p.medicalHistory);
     signupSheet.appendRow(rowData);
 
     replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n📍 活動 (Event)：\n" + eName + "\n🏷️ 代號 (Event ID)：" + eventId + "\n🎫 專屬碼 (Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的資料 (We have received your info)。\n\n⚠️ 【重要提醒 / Important】\n由於活動有人數限制及安全考量，此階段僅為「報名登記」。幹部將進行體能評估與篩選。最終是否錄取（正取/備取），將會透過本帳號個別推播通知您，請留意後續訊息！\n(This is only a registration. Final admission status will be notified to you individually through this account!)");
