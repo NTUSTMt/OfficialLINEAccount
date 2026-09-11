@@ -303,6 +303,10 @@ function doPost(e) {
       return processSendEventNotifications(msg);
     }
 
+    if (msg.action === 'update_equipment_images') {
+      return processUpdateEquipmentImages(msg);
+    }
+
     for (var i = 0; i < msg.events.length; i++) {
       var event = msg.events[i];
 
@@ -4483,12 +4487,41 @@ function getEquipmentsListAPI(ss) {
     description: headers.findIndex(function (h) { return String(h).includes("說明") || String(h).includes("詳細資訊") || String(h).includes("規格") || String(h).includes("備註"); })
   };
 
+  // 找出 5 欄照片網址欄位 (圖片網址1 ~ 圖片網址5，相容傳統「圖片網址」)
+  var imgColIndices = [];
+  for (var k = 1; k <= 5; k++) {
+    var cIdx = headers.findIndex(function (h) {
+      var s = String(h).trim();
+      return s === ("圖片網址" + k) || s === ("圖片網址 " + k);
+    });
+    if (cIdx === -1 && k === 1) {
+      cIdx = _fi(headers, "圖片網址");
+    }
+    imgColIndices.push(cIdx);
+  }
+
   var availableEquipments = [];
 
   for (var i = 1; i < data.length; i++) {
     var isBorrowable = hIdx.borrowable > -1 ? data[i][hIdx.borrowable] : "";
     var status = hIdx.status > -1 ? data[i][hIdx.status] : "";
     var remainQty = hIdx.remainQty > -1 ? parseInt(data[i][hIdx.remainQty], 10) : 0;
+
+    // 依序蒐集 1~5 欄中的所有圖片網址
+    var itemImgUrls = [];
+    imgColIndices.forEach(function (colIdx) {
+      if (colIdx > -1) {
+        var val = String(data[i][colIdx] || "").trim();
+        if (val) {
+          var subParts = val.split(/[\n,，;\s]+/).map(function (u) { return u.trim(); }).filter(function (u) { return u.startsWith("http"); });
+          subParts.forEach(function (u) {
+            if (itemImgUrls.indexOf(u) === -1 && itemImgUrls.length < 5) {
+              itemImgUrls.push(u);
+            }
+          });
+        }
+      }
+    });
 
     if (isBorrowable === "可外借" && remainQty > 0 && status !== "維修中" && status !== "報廢" && status !== "需汰換" && status !== "待測") {
       availableEquipments.push({
@@ -4497,7 +4530,7 @@ function getEquipmentsListAPI(ss) {
         remainQty: remainQty,
         price: hIdx.price2Days > -1 ? parseInt(data[i][hIdx.price2Days], 10) || 0 : 0,
         priceExtra: hIdx.priceExtra > -1 ? parseInt(data[i][hIdx.priceExtra], 10) || 0 : 0,
-        imageUrl: hIdx.imageUrl > -1 ? data[i][hIdx.imageUrl] : "",
+        imageUrl: itemImgUrls.join(","),
         description: hIdx.description > -1 ? data[i][hIdx.description] : ""
       });
     }
@@ -6897,5 +6930,135 @@ function processSendEventNotifications(payload) {
     status: "success",
     notifiedCount: notifiedCount,
     message: "已成功發送 " + notifiedCount + " 則審核推播通知！"
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ------------------------------------------------------------------
+// API: 幹部更新裝備照片 (POST action=update_equipment_images)
+// ------------------------------------------------------------------
+function processUpdateEquipmentImages(payload) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var officerCheck = checkOfficerInternal(ss, payload.userId);
+  if (!officerCheck.isOfficer) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足，僅限社團幹部操作" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var equipSheet = ss.getSheetByName("Equipments") || ss.getSheetByName("裝備清單") || ss.getSheetByName("裝備");
+  if (!equipSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到裝備試算表" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var data = equipSheet.getDataRange().getValues();
+  var headers = data[0];
+  var idIdx = _fi(headers, "裝備代號");
+  var nameIdx = _fi(headers, "裝備名稱");
+  var imgIdx = _fi(headers, "圖片網址");
+
+  if (idIdx === -1 || imgIdx === -1) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "試算表欄位缺失 (裝備代號或圖片網址)" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var equipId = String(payload.equipId || "").trim();
+  var equipName = String(payload.equipName || "").trim();
+  var targetRow = -1;
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIdx]).trim() === equipId) {
+      targetRow = i + 1;
+      if (!equipName && nameIdx > -1) {
+        equipName = String(data[i][nameIdx]).trim();
+      }
+      break;
+    }
+  }
+
+  if (targetRow === -1) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到指定的裝備資料" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var finalUrls = [];
+  // 1. 加入幹部保留的既有照片 URL
+  if (payload.keptUrls && Array.isArray(payload.keptUrls)) {
+    payload.keptUrls.forEach(function (u) {
+      var s = String(u || "").trim();
+      if (s.startsWith("http") && finalUrls.indexOf(s) === -1) {
+        finalUrls.push(s);
+      }
+    });
+  }
+
+  // 2. 上傳新照片至 Google Drive: LINE_Uploads/裝備照片/裝備名稱/
+  // 檔案命名格式：裝備名稱_YYYYMMDD_序號.jpg
+  if (payload.newPhotoFiles && Array.isArray(payload.newPhotoFiles) && payload.newPhotoFiles.length > 0) {
+    var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
+    var folderPath = "裝備照片/" + (equipName || "未命名裝備");
+
+    for (var f = 0; f < payload.newPhotoFiles.length; f++) {
+      if (finalUrls.length >= 5) break; // 最多 5 張
+      var fileObj = payload.newPhotoFiles[f];
+      if (fileObj && fileObj.base64) {
+        var ext = (fileObj.name && fileObj.name.split('.').pop()) || "jpg";
+        var fileName = (equipName || "裝備") + "_" + todayStr + "_" + (finalUrls.length + 1) + "." + ext;
+        var uploadedUrl = uploadFileToDrive(fileObj.base64, fileName, folderPath);
+        if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
+          var driveMatch = uploadedUrl.match(/(?:file\/d\/|id=)([^/&?]+)/);
+          if (driveMatch && driveMatch[1]) {
+            finalUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000");
+          } else {
+            finalUrls.push(uploadedUrl);
+          }
+        }
+      }
+    }
+  }
+
+  // 3. 截斷至最多 5 張
+  if (finalUrls.length > 5) {
+    finalUrls = finalUrls.slice(0, 5);
+  }
+
+  // 4. 取得或建立 5 欄照片欄位 (圖片網址1 ~ 圖片網址5)
+  var imgColIndices = [];
+  var currentHeaders = equipSheet.getRange(1, 1, 1, equipSheet.getLastColumn()).getValues()[0];
+
+  for (var k = 1; k <= 5; k++) {
+    var targetColName = "圖片網址" + k;
+    var foundIdx = currentHeaders.findIndex(function (h) {
+      var s = String(h).trim();
+      return s === targetColName || s === ("圖片網址 " + k);
+    });
+
+    if (foundIdx === -1 && k === 1) {
+      var legacyIdx = _fi(currentHeaders, "圖片網址");
+      if (legacyIdx > -1) {
+        equipSheet.getRange(1, legacyIdx + 1).setValue(targetColName);
+        currentHeaders[legacyIdx] = targetColName;
+        foundIdx = legacyIdx;
+      }
+    }
+
+    if (foundIdx === -1) {
+      foundIdx = getOrCreateColIdx(equipSheet, currentHeaders, targetColName);
+      currentHeaders = equipSheet.getRange(1, 1, 1, equipSheet.getLastColumn()).getValues()[0];
+    }
+    imgColIndices.push(foundIdx);
+  }
+
+  // 5. 將 5 張照片分別寫入對應獨立欄位 (一欄一個網址，未使用的欄位清空)
+  for (var c = 0; c < 5; c++) {
+    var cIdx = imgColIndices[c];
+    if (cIdx > -1) {
+      var cellVal = (c < finalUrls.length) ? finalUrls[c] : "";
+      equipSheet.getRange(targetRow, cIdx + 1).setValue(cellVal);
+    }
+  }
+
+  var finalUrlStr = finalUrls.join(",");
+
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "success",
+    message: "裝備照片更新成功",
+    imageUrl: finalUrlStr,
+    equipId: equipId
   })).setMimeType(ContentService.MimeType.JSON);
 }

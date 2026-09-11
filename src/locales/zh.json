@@ -273,14 +273,25 @@
       "title": "裝備詳細資訊",
       "codeLabel": "代號: ",
       "basePrice": "基本租金 (2天)：",
-      "extraPrice": "續租費用 (每加一天)：",
+      "extraPrice": "續租費用 (+1天)：",
       "descTitle": "裝備說明與規格",
       "noDesc": "目前無此裝備的詳細描述。若有疑問請洽本帳號。",
       "qtyLabel": "預約數量：",
       "remainStock": "剩餘數量：",
       "outOfStock": "庫存不足",
       "addToReservation": "加入預訂",
-      "addedToReservation": "已預約 {{count}} 件 (點擊加購)"
+      "addToCart": "加入租借車",
+      "close": "關閉",
+      "editPhotos": "編輯照片",
+      "cancel": "取消",
+      "save": "儲存",
+      "uploadPhoto": "上傳照片",
+      "deletePhoto": "刪除照片",
+      "savingPhotos": "儲存照片中...",
+      "maxPhotosReached": "已達 5 張照片上限",
+      "noPhotos": "目前無裝備照片",
+      "photoSaveSuccess": "裝備照片已成功更新！",
+      "photoSaveFailed": "照片更新失敗，請稍後再試。"
     }
   },
   "payment": {

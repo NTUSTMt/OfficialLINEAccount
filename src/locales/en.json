@@ -280,7 +280,18 @@
       "remainStock": "Remaining Stock: ",
       "outOfStock": "Out of Stock",
       "addToReservation": "Add to Reservation",
-      "addedToReservation": "{{count}} Reserved (Click to add more)"
+      "addToCart": "Add to Cart",
+      "close": "Close",
+      "editPhotos": "Edit Photos",
+      "cancel": "Cancel",
+      "save": "Save",
+      "uploadPhoto": "Upload Photo",
+      "deletePhoto": "Delete Photo",
+      "savingPhotos": "Saving...",
+      "maxPhotosReached": "Maximum 5 photos reached",
+      "noPhotos": "No gear photo yet",
+      "photoSaveSuccess": "Gear photos updated successfully!",
+      "photoSaveFailed": "Failed to update photos, please try again later."
     }
   },
   "payment": {

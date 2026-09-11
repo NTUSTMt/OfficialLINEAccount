@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { Tent, Moon, Package, Compass, Flame, Shield, Mountain, ShoppingCart, RotateCw } from 'lucide-react';
+import { Tent, Moon, Package, Compass, Flame, Shield, Mountain, ShoppingCart, RotateCw, Trash2, Camera, Plus, X, Save } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
@@ -95,7 +95,7 @@ function ProductImage({ name, imageUrl }: { name: string; imageUrl?: string }) {
   );
 }
 
-function Borrow({ userId }: { userId: string }) {
+function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boolean }) {
   const { t } = useTranslation();
   // ==========================================
   // 2. 狀態管理 (State Management)
@@ -106,6 +106,33 @@ function Borrow({ userId }: { userId: string }) {
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isOfficial, setIsOfficial] = useState<boolean>(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+
+  // 幹部身分狀態
+  const [officerStatus, setOfficerStatus] = useState<boolean>(isOfficer);
+
+  useEffect(() => {
+    setOfficerStatus(isOfficer);
+  }, [isOfficer]);
+
+  useEffect(() => {
+    if (!officerStatus && userId) {
+      try {
+        const cached = localStorage.getItem('officer_status_cache');
+        if (cached !== null) {
+          setOfficerStatus(JSON.parse(cached));
+        }
+      } catch (e) { }
+    }
+  }, [userId, officerStatus]);
+
+  // 裝備詳細彈窗狀態
+  const [modalPhotos, setModalPhotos] = useState<Array<{ url: string; isNew?: boolean; fileObj?: { base64: string; name: string } }>>([]);
+  const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
+  const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [modalQty, setModalQty] = useState<number>(0);
+  const [isSavingPhotos, setIsSavingPhotos] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const CACHE_KEY_EQUIPMENTS = 'borrow_equipments_list';
   const CACHE_KEY_OFFICIAL = 'user_is_official_';
@@ -219,6 +246,127 @@ function Borrow({ userId }: { userId: string }) {
 
       return { ...prevForm, cart: newCart };
     });
+  };
+
+  // 開啟裝備詳細彈窗
+  const openDetailModal = (equip: Equipment) => {
+    setSelectedEquipment(equip);
+    const urls = equip.imageUrl
+      ? equip.imageUrl.split(/[\n,，;\s]+/).map(u => u.trim()).filter(u => u.startsWith('http'))
+      : [];
+    setModalPhotos(urls.map(u => ({ url: u })));
+    setActivePhotoIdx(0);
+    setIsEditMode(false);
+    setIsLightboxOpen(false);
+    setModalQty(form.cart[equip.id] || 0);
+  };
+
+  // 刪除當前照片 (僅在編輯模式)
+  const handleDeleteCurrentPhoto = () => {
+    if (modalPhotos.length === 0) return;
+    setModalPhotos(prev => {
+      const next = prev.filter((_, i) => i !== activePhotoIdx);
+      if (activePhotoIdx >= next.length) {
+        setActivePhotoIdx(Math.max(0, next.length - 1));
+      }
+      return next;
+    });
+  };
+
+  // 上傳新照片 (壓縮並暫存於待儲存清單)
+  const handleUploadNewPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (modalPhotos.length >= 5) {
+      alert(t('borrow.modal.maxPhotosReached'));
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, width, height);
+        const base64 = canvas.toDataURL('image/jpeg', 0.75);
+        setModalPhotos(prev => {
+          const next = [...prev, { url: base64, isNew: true, fileObj: { base64, name: file.name } }];
+          setActivePhotoIdx(next.length - 1);
+          return next;
+        });
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // 批次儲存照片至後端與試算表
+  const handleSavePhotos = async () => {
+    if (!selectedEquipment) return;
+    setIsSavingPhotos(true);
+    try {
+      const keptUrls = modalPhotos.filter(p => !p.isNew).map(p => p.url);
+      const newPhotoFiles = modalPhotos.filter(p => p.isNew && p.fileObj).map(p => p.fileObj);
+      const res = await fetch(appendAuthToken(GAS_API_URL), {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(withAuthPayload({
+          action: 'update_equipment_images',
+          equipId: selectedEquipment.id,
+          equipName: selectedEquipment.name,
+          keptUrls,
+          newPhotoFiles,
+          userId
+        }))
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        const newImgUrl = data.imageUrl || '';
+        setSelectedEquipment(prev => prev ? { ...prev, imageUrl: newImgUrl } : null);
+        setEquipments(prev => prev.map(eq => eq.id === selectedEquipment.id ? { ...eq, imageUrl: newImgUrl } : eq));
+        const cached = getCache<Equipment[]>(CACHE_KEY_EQUIPMENTS);
+        if (cached) {
+          setCache(CACHE_KEY_EQUIPMENTS, cached.map(eq => eq.id === selectedEquipment.id ? { ...eq, imageUrl: newImgUrl } : eq), 300);
+        }
+        const updatedUrls = newImgUrl.split(/[\n,，;\s]+/).map((u: string) => u.trim()).filter((u: string) => u.startsWith('http'));
+        setModalPhotos(updatedUrls.map((u: string) => ({ url: u })));
+        setIsEditMode(false);
+        alert(t('borrow.modal.photoSaveSuccess'));
+      } else {
+        alert(data.message || t('borrow.modal.photoSaveFailed'));
+      }
+    } catch (err) {
+      console.error('儲存裝備照片失敗:', err);
+      alert(t('borrow.modal.photoSaveFailed'));
+    } finally {
+      setIsSavingPhotos(false);
+    }
+  };
+
+  // 取消照片編輯
+  const handleCancelPhotoEdit = () => {
+    if (!selectedEquipment) return;
+    const urls = selectedEquipment.imageUrl
+      ? selectedEquipment.imageUrl.split(/[\n,，;\s]+/).map(u => u.trim()).filter(u => u.startsWith('http'))
+      : [];
+    setModalPhotos(urls.map(u => ({ url: u })));
+    setActivePhotoIdx(0);
+    setIsEditMode(false);
   };
 
   // 計算已選裝備總數
@@ -438,7 +586,7 @@ function Borrow({ userId }: { userId: string }) {
               const isOutOfStock = item.remainQty <= 0;
 
               return (
-                <div key={item.id} className={`product-card ${currentQty > 0 ? 'selected' : ''}`} onClick={() => setSelectedEquipment(item)} style={{ cursor: 'pointer' }}>
+                <div key={item.id} className={`product-card ${currentQty > 0 ? 'selected' : ''}`} onClick={() => openDetailModal(item)} style={{ cursor: 'pointer' }}>
                   <ProductImage name={item.name} imageUrl={item.imageUrl} />
 
                   <div className="product-info">
@@ -738,33 +886,90 @@ function Borrow({ userId }: { userId: string }) {
         </div>
       </div>
 
-      {/* 裝備詳細資訊彈窗 */}
+      {/* 裝備詳細資訊彈窗 (無頂欄簡約設計、1:1 正方形相片輪播與幹部管理) */}
       {selectedEquipment && (
-        <div className="detail-modal-overlay" onClick={() => setSelectedEquipment(null)}>
-          <div className="detail-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="detail-modal-header">
-              <h3>{t('borrow.modal.title')}</h3>
-              <button className="close-modal-btn" onClick={() => setSelectedEquipment(null)}>&times;</button>
-            </div>
-            
+        <div className="detail-modal-overlay" onClick={() => !isSavingPhotos && setSelectedEquipment(null)}>
+          <div className="detail-modal" onClick={(e) => e.stopPropagation()} style={{ paddingTop: '16px' }}>
             <div className="detail-modal-content">
+              {/* 1:1 正方形相片輪播區 */}
               <div className="detail-modal-image-wrapper">
-                <ProductImage name={selectedEquipment.name} imageUrl={selectedEquipment.imageUrl} />
+                {/* 裝備代號懸浮膠囊 */}
+                {selectedEquipment.id && (
+                  <span className="equipment-code-capsule">
+                    {t('borrow.modal.codeLabel')}{selectedEquipment.id}
+                  </span>
+                )}
+
+                {modalPhotos.length > 0 ? (
+                  <img
+                    src={getDirectImageUrl(modalPhotos[activePhotoIdx]?.url, 1000) || modalPhotos[activePhotoIdx]?.url}
+                    alt={selectedEquipment.name}
+                    onClick={() => !isEditMode && setIsLightboxOpen(true)}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: isEditMode ? 'default' : 'zoom-in' }}
+                  />
+                ) : (
+                  <ProductImage name={selectedEquipment.name} imageUrl="" />
+                )}
+
+                {/* 編輯模式：當前照片右上角刪除按鈕 */}
+                {isEditMode && modalPhotos.length > 0 && (
+                  <button
+                    type="button"
+                    className="photo-delete-btn"
+                    onClick={handleDeleteCurrentPhoto}
+                    title={t('borrow.modal.deletePhoto')}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+
+                {/* 中央底部小圓點（頁碼指示） */}
+                {(modalPhotos.length > 1 || (isEditMode && modalPhotos.length < 5)) && (
+                  <div className="photo-carousel-dots">
+                    {modalPhotos.map((_, idx) => (
+                      <span
+                        key={idx}
+                        className={`carousel-dot ${idx === activePhotoIdx ? 'active' : ''}`}
+                        onClick={() => setActivePhotoIdx(idx)}
+                      />
+                    ))}
+                    {/* 編輯模式：圓點旁的新增照片按鈕 */}
+                    {isEditMode && modalPhotos.length < 5 && (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        title={t('borrow.modal.uploadPhoto')}
+                        style={{
+                          background: '#10b981',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '18px',
+                          height: '18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          cursor: 'pointer',
+                          marginLeft: '4px'
+                        }}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleUploadNewPhoto}
+                />
               </div>
               
               <div className="detail-modal-body">
                 <h2 className="detail-modal-title">{selectedEquipment.name}</h2>
-                
-                <div className="detail-modal-badges">
-                  {selectedEquipment.remainQty <= 0 ? (
-                    <span className="status-badge out-of-stock">{t('borrow.card.outOfStock')}</span>
-                  ) : selectedEquipment.remainQty <= 2 ? (
-                    <span className="status-badge low-stock">{t('borrow.card.lowStock', { count: selectedEquipment.remainQty })}</span>
-                  ) : (
-                    <span className="status-badge in-stock">{t('borrow.card.inStock', { count: selectedEquipment.remainQty })}</span>
-                  )}
-                  <span className="status-badge code-badge" style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}>{t('borrow.modal.codeLabel')}{selectedEquipment.id}</span>
-                </div>
 
                 <div className="detail-modal-section">
                   <div className="detail-price-list" style={{ display: 'flex', flexDirection: 'column', gap: '2px', margin: '12px 0 16px 0', alignItems: 'flex-end', width: '100%' }}>
@@ -789,96 +994,88 @@ function Borrow({ userId }: { userId: string }) {
             </div>
 
             <div className="detail-modal-footer" style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '14px' }}>
-              {/* 第一列：剩餘庫存與數量調整 */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
-                {/* 剩餘庫存標籤 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '500' }}>{t('borrow.modal.remainStock')}</span>
-                  {selectedEquipment.remainQty <= 0 ? (
-                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ef4444', backgroundColor: '#fee2e2', padding: '2px 8px', borderRadius: '6px' }}>
-                      {t('borrow.modal.outOfStock')}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: selectedEquipment.remainQty <= 2 ? '#d97706' : '#059669', backgroundColor: selectedEquipment.remainQty <= 2 ? '#fef3c7' : '#dcfce7', padding: '2px 8px', borderRadius: '6px' }}>
-                      {selectedEquipment.remainQty} {t('borrow.equip.qtyUnit', '件')}
-                    </span>
-                  )}
-                </div>
+              {/* 第一列：剩餘庫存與數量調整（僅在非編輯模式顯示） */}
+              {!isEditMode && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
+                  {/* 剩餘庫存標籤 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '500' }}>{t('borrow.modal.remainStock')}</span>
+                    {selectedEquipment.remainQty <= 0 ? (
+                      <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ef4444', backgroundColor: '#fee2e2', padding: '2px 8px', borderRadius: '6px' }}>
+                        {t('borrow.modal.outOfStock')}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: selectedEquipment.remainQty <= 2 ? '#d97706' : '#059669', backgroundColor: selectedEquipment.remainQty <= 2 ? '#fef3c7' : '#dcfce7', padding: '2px 8px', borderRadius: '6px' }}>
+                        {selectedEquipment.remainQty} {t('borrow.equip.qtyUnit', '件')}
+                      </span>
+                    )}
+                  </div>
 
-                {/* 數量調整器 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: '#475569', fontWeight: '600' }}>{t('borrow.modal.qtyLabel')}</span>
-                  <div className="quantity-controller" style={{ display: 'inline-flex', alignItems: 'center', border: '1.5px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden', height: '36px', backgroundColor: '#fff' }}>
-                    <button
-                      type="button"
-                      className="qty-btn"
-                      onClick={() => updateCart(selectedEquipment.id, -1, selectedEquipment.remainQty)}
-                      disabled={!(form.cart[selectedEquipment.id] > 0)}
-                      style={{ border: 'none', background: 'transparent', padding: '0 12px', height: '100%', cursor: (form.cart[selectedEquipment.id] > 0) ? 'pointer' : 'not-allowed', fontWeight: 'bold', fontSize: '16px', color: (form.cart[selectedEquipment.id] > 0) ? '#1e293b' : '#cbd5e1' }}
-                    >
-                      -
-                    </button>
-                    <span className="qty-number" style={{ padding: '0 10px', fontSize: '15px', minWidth: '28px', textAlign: 'center', fontWeight: 'bold', color: '#0f172a' }}>
-                      {form.cart[selectedEquipment.id] || 0}
-                    </span>
-                    <button
-                      type="button"
-                      className="qty-btn"
-                      onClick={() => updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty)}
-                      disabled={selectedEquipment.remainQty <= 0 || (form.cart[selectedEquipment.id] || 0) >= selectedEquipment.remainQty}
-                      style={{ border: 'none', background: 'transparent', padding: '0 12px', height: '100%', cursor: (selectedEquipment.remainQty > 0 && (form.cart[selectedEquipment.id] || 0) < selectedEquipment.remainQty) ? 'pointer' : 'not-allowed', fontWeight: 'bold', fontSize: '16px', color: (selectedEquipment.remainQty > 0 && (form.cart[selectedEquipment.id] || 0) < selectedEquipment.remainQty) ? '#1e293b' : '#cbd5e1' }}
-                    >
-                      +
-                    </button>
+                  {/* 數量調整器 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', color: '#475569', fontWeight: '600' }}>{t('borrow.modal.qtyLabel')}</span>
+                    <div className="quantity-controller" style={{ display: 'inline-flex', alignItems: 'center', border: '1.5px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden', height: '36px', backgroundColor: '#fff' }}>
+                      <button
+                        type="button"
+                        className="qty-btn"
+                        onClick={() => setModalQty(prev => Math.max(0, prev - 1))}
+                        disabled={modalQty <= 0}
+                        style={{ border: 'none', background: 'transparent', padding: '0 12px', height: '100%', cursor: modalQty > 0 ? 'pointer' : 'not-allowed', fontWeight: 'bold', fontSize: '16px', color: modalQty > 0 ? '#1e293b' : '#cbd5e1' }}
+                      >
+                        -
+                      </button>
+                      <span className="qty-number" style={{ padding: '0 10px', fontSize: '15px', minWidth: '28px', textAlign: 'center', fontWeight: 'bold', color: '#0f172a' }}>
+                        {modalQty}
+                      </span>
+                      <button
+                        type="button"
+                        className="qty-btn"
+                        onClick={() => setModalQty(prev => Math.min(selectedEquipment.remainQty, prev + 1))}
+                        disabled={selectedEquipment.remainQty <= 0 || modalQty >= selectedEquipment.remainQty}
+                        style={{ border: 'none', background: 'transparent', padding: '0 12px', height: '100%', cursor: (selectedEquipment.remainQty > 0 && modalQty < selectedEquipment.remainQty) ? 'pointer' : 'not-allowed', fontWeight: 'bold', fontSize: '16px', color: (selectedEquipment.remainQty > 0 && modalQty < selectedEquipment.remainQty) ? '#1e293b' : '#cbd5e1' }}
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* 第二列：主要操作大按鈕 */}
-              {(() => {
-                const currentQty = form.cart[selectedEquipment.id] || 0;
-                if (selectedEquipment.remainQty <= 0) {
-                  return (
-                    <button
-                      disabled
-                      style={{
-                        width: '100%',
-                        height: '46px',
-                        fontSize: '15px',
-                        borderRadius: '10px',
-                        backgroundColor: '#e2e8f0',
-                        color: '#94a3b8',
-                        border: 'none',
-                        cursor: 'not-allowed',
-                        fontWeight: 'bold',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px'
-                      }}
-                    >
-                      {t('borrow.modal.outOfStock')}
-                    </button>
-                  );
-                }
-
-                return (
+              {/* 第二列：操作按鈕群 */}
+              {isEditMode ? (
+                // 幹部編輯模式：左邊「取消」、右邊「儲存」
+                <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
                   <button
                     type="button"
-                    className="add-to-cart-btn modal-add-btn"
-                    onClick={() => {
-                      if (currentQty === 0) {
-                        updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty);
-                      } else if (currentQty < selectedEquipment.remainQty) {
-                        updateCart(selectedEquipment.id, 1, selectedEquipment.remainQty);
-                      }
-                    }}
+                    onClick={handleCancelPhotoEdit}
+                    disabled={isSavingPhotos}
                     style={{
-                      width: '100%',
+                      flex: 1,
                       height: '46px',
                       fontSize: '15px',
                       borderRadius: '10px',
-                      backgroundColor: 'var(--primary-color)',
+                      border: '1.5px solid #cbd5e1',
+                      color: '#475569',
+                      backgroundColor: 'white',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {t('borrow.modal.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePhotos}
+                    disabled={isSavingPhotos}
+                    style={{
+                      flex: 1.5,
+                      height: '46px',
+                      fontSize: '15px',
+                      borderRadius: '10px',
+                      backgroundColor: '#059669',
                       color: 'white',
                       border: 'none',
                       cursor: 'pointer',
@@ -886,22 +1083,116 @@ function Borrow({ userId }: { userId: string }) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '8px',
-                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
-                      transition: 'transform 0.1s ease, background-color 0.2s ease'
+                      gap: '6px',
+                      boxShadow: '0 2px 8px rgba(5, 150, 105, 0.25)'
                     }}
                   >
-                    <ShoppingCart size={18} />
-                    <span>
-                      {currentQty === 0
-                        ? t('borrow.modal.addToReservation')
-                        : t('borrow.modal.addedToReservation', { count: currentQty })}
-                    </span>
+                    <Save size={16} />
+                    <span>{isSavingPhotos ? t('borrow.modal.savingPhotos') : t('borrow.modal.save')}</span>
                   </button>
-                );
-              })()}
+                </div>
+              ) : (
+                // 一般模式
+                <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                  {officerStatus && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditMode(true)}
+                      style={{
+                        flex: '1',
+                        height: '46px',
+                        fontSize: '14px',
+                        borderRadius: '10px',
+                        border: '1.5px solid #059669',
+                        color: '#059669',
+                        backgroundColor: '#f0fdf4',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Camera size={16} />
+                      <span>{t('borrow.modal.editPhotos')}</span>
+                    </button>
+                  )}
+
+                  {modalQty === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedEquipment(null)}
+                      style={{
+                        flex: officerStatus ? 1 : '1 1 100%',
+                        height: '46px',
+                        fontSize: '15px',
+                        borderRadius: '10px',
+                        border: '1.5px solid #cbd5e1',
+                        color: '#475569',
+                        backgroundColor: 'white',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {t('borrow.modal.close')}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="add-to-cart-btn modal-add-btn"
+                      onClick={() => {
+                        const currentInCart = form.cart[selectedEquipment.id] || 0;
+                        updateCart(selectedEquipment.id, modalQty - currentInCart, selectedEquipment.remainQty);
+                        setSelectedEquipment(null);
+                      }}
+                      style={{
+                        flex: officerStatus ? 1.5 : '1 1 100%',
+                        height: '46px',
+                        fontSize: '15px',
+                        borderRadius: '10px',
+                        backgroundColor: 'var(--primary-color)',
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)'
+                      }}
+                    >
+                      <ShoppingCart size={18} />
+                      <span>{t('borrow.modal.addToCart')}</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 全螢幕照片放大 Lightbox */}
+      {isLightboxOpen && modalPhotos[activePhotoIdx] && (
+        <div className="photo-lightbox-overlay" onClick={() => setIsLightboxOpen(false)}>
+          <button
+            type="button"
+            style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer' }}
+            onClick={() => setIsLightboxOpen(false)}
+          >
+            <X size={30} />
+          </button>
+          <img
+            className="photo-lightbox-img"
+            src={getDirectImageUrl(modalPhotos[activePhotoIdx].url, 1600) || modalPhotos[activePhotoIdx].url}
+            alt={selectedEquipment?.name}
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

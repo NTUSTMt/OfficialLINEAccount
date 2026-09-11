@@ -434,7 +434,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
           <Route path="/index.html" element={<Navigate to={redirectPath} replace />} />
           <Route path="/borrow" element={
             <ProfileCheck userId={liffInit.userId}>
-              <Borrow userId={liffInit.userId} />
+              <Borrow userId={liffInit.userId} isOfficer={isOfficer} />
             </ProfileCheck>
           } />
           <Route path="/payment" element={
