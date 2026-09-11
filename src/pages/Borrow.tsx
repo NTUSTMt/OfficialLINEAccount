@@ -616,12 +616,16 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         otherPurpose: ''
       });
 
-      // 2. 在 LINE 聊天室印出確認訊息
+      // 2. 在 LINE 聊天室印出確認訊息 (隔離發話權限例外，避免中斷正常關閉流程)
       if (liff.isInClient()) {
-        await liff.sendMessages([{
-          type: 'text',
-          text: t('borrow.alert.submitSuccess', { count: totalItems })
-        }]);
+        try {
+          await liff.sendMessages([{
+            type: 'text',
+            text: t('borrow.alert.submitSuccess', { count: totalItems })
+          }]);
+        } catch (liffErr) {
+          console.warn('liff.sendMessages 略過 (可能未開通發話權限):', liffErr);
+        }
         liff.closeWindow();
       } else {
         alert(t('borrow.alert.submitSuccessBrowser'));

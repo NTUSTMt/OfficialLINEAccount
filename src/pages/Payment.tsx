@@ -357,10 +357,14 @@ function Payment({ userId }: { userId: string }) {
             selectedNames.map(n => `• ${n}`).join('\n') + `\n\n` +
             `${t('payment.msg.footer')}`;
 
-          await liff.sendMessages([{
-            type: 'text',
-            text: msgText
-          }]);
+          try {
+            await liff.sendMessages([{
+              type: 'text',
+              text: msgText
+            }]);
+          } catch (liffErr) {
+            console.warn('liff.sendMessages 略過 (可能未開通發話權限):', liffErr);
+          }
           liff.closeWindow();
         } else {
           setSubmitted(true);

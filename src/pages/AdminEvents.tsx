@@ -2040,16 +2040,18 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                 filteredSignups.map((s) => {
                   const cardId = String(s.rowNumber);
                   const isExpanded = expandedSignupCode === cardId;
+                  const isPaidConfirmed = s.reviewResult.indexOf('已繳費') > -1 || (s.reviewResult.indexOf('正取') > -1 && s.payStatus === '已繳費 Paid');
                   const isAccepted = s.reviewResult.indexOf('正取') > -1;
+                  const isWaitlistInterested = s.reviewResult.indexOf('有意願') > -1;
                   const isWaitlisted = s.reviewResult.indexOf('備取') > -1;
 
                   const borderColor = isWaitlisted
-                    ? (isExpanded ? '#ea580c' : '#fed7aa')
+                    ? (isExpanded ? '#ea580c' : isWaitlistInterested ? '#fde68a' : '#fed7aa')
                     : isAccepted
-                    ? (isExpanded ? '#059669' : '#bbf7d0')
+                    ? (isExpanded ? '#059669' : isPaidConfirmed ? '#86efac' : '#bbf7d0')
                     : (isExpanded ? '#059669' : '#e2e8f0');
 
-                  const bgColor = isAccepted ? '#f0fdf4' : isWaitlisted ? '#fff7ed' : '#ffffff';
+                  const bgColor = isPaidConfirmed ? '#f0fdf4' : isAccepted ? '#f0fdf4' : isWaitlisted ? '#fff7ed' : '#ffffff';
                   const boxShadow = isExpanded
                     ? (isWaitlisted ? '0 4px 12px rgba(234, 88, 12, 0.12)' : '0 4px 12px rgba(5, 150, 105, 0.08)')
                     : '0 1px 3px rgba(0,0,0,0.03)';
@@ -2104,11 +2106,11 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
                             padding: '2px 8px',
                             borderRadius: '12px',
                             fontWeight: 'bold',
-                            backgroundColor: isAccepted ? '#dcfce7' : isWaitlisted ? '#ffedd5' : '#f1f5f9',
-                            color: isAccepted ? '#15803d' : isWaitlisted ? '#c2410c' : '#64748b',
-                            border: `1px solid ${isAccepted ? '#bbf7d0' : isWaitlisted ? '#fed7aa' : '#cbd5e1'}`
+                            backgroundColor: isPaidConfirmed ? '#d1fae5' : isAccepted ? '#dcfce7' : isWaitlistInterested ? '#fef3c7' : isWaitlisted ? '#ffedd5' : '#f1f5f9',
+                            color: isPaidConfirmed ? '#047857' : isAccepted ? '#15803d' : isWaitlistInterested ? '#b45309' : isWaitlisted ? '#c2410c' : '#64748b',
+                            border: `1px solid ${isPaidConfirmed ? '#6ee7b7' : isAccepted ? '#bbf7d0' : isWaitlistInterested ? '#fde68a' : isWaitlisted ? '#fed7aa' : '#cbd5e1'}`
                           }}>
-                            {isAccepted ? '正取' : isWaitlisted ? '備取' : '待審'}
+                            {isPaidConfirmed ? '正取(已繳)' : isAccepted ? '正取' : isWaitlistInterested ? '備取(意願)' : isWaitlisted ? '備取' : '待審'}
                           </span>
 
                           {/* 通知狀態 */}

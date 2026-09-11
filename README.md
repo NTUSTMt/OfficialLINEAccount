@@ -3,11 +3,50 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.37` (v0.1.37)
+- **當前版本**：`0.1.39` (v0.1.39)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 139. 緊急聯絡人關係精準提取、正取直接開啟繳費、活動繳費對帳精準核銷與備取意願同步優化 (v0.1.39)
+- **緊急聯絡人關係與登山經驗精準隔離 (Emergency Contact Relation Extraction & Experience Disambiguation)**：
+  - 建立全域專用防呆查找函式 `_findEmerRelColIdx(headers)` 與 `_getEmerRelValue(headers, row)`。
+  - 嚴格過濾包含「經驗」、「登山」、「爬山」、「經歷」或「exp」之欄位，並優先鎖定同時包含「緊急」與「關係」之欄位。
+  - 全面更新 `_checkProfileComplete`、`processSignup`、`getMemberProfileAPI`、`processSaveProfile`、`syncProfileToSignups` 及 `getEventSignupsAPI`，徹底解決活動審核名單中「與緊急聯絡人關係」被誤植為登山百岳經歷之問題。
+- **正取通知「前往繳費系統」直接開啟連結 (Direct LIFF URI for Accepted Notice Pay Button)**：
+  - 修改 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中 `sendReviewNotifications` 之按鈕行為，由原先發送文字訊息 `繳費系統 Payment System`（會觸發文字回覆並需要再點一次連結）調整為 `type: "uri"` 直接導向 LIFF 繳費系統：`https://liff.line.me/2009217429-u7OCkmQO`。
+  - 錄取者收到正取錄取卡片後，點擊按鈕即可立即開啟繳費系統頁面，大幅提升操作流暢度。
+- **活動繳費對帳精準核銷與狀態連動 (Activity Payment Confirmation & Status Synchronization)**：
+  - **精準項目辨識**：在 `processPaymentSubmit` 中動態識別單選/多選項目的真實類別（若為活動則標註 `活動：<名稱>` 或 `activity`），幹部在審核對帳時，系統優先以 `Payments` 表中紀錄之「繳費項目」為準，避免純活動繳費被誤判為 `combined` 而推播「社籍與社費繳費成功」。
+  - **報名審核狀態同步更新**：當幹部審核通過活動繳費時，`processPaymentConfirmation` 自動將 `Signups` 報名表之「審核結果」更新為標準試算表下拉格式 `正取(已繳費) Confirmed(Paid)`，並即時執行 `SpreadsheetApp.flush()` 強制寫入。
+  - **前端相容與膠囊徽章**：在 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 與 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 中，擴展狀態文字辨識涵蓋 `已繳費` / `Paid`，並在活動管理名單中提供專屬深綠色 `正取(已繳)` 徽章。
+- **備取遞補意願標準化寫入與狀態即時更新 (Waitlist Intention Status Standardization & Immediate Flush)**：
+  - 在 `handlePostback` 之 `confirm_waitlist` 處理器中，將備取意願寫入狀態統一為試算表標準驗證字串 `備取(有意願) Waitlisted (Interested)`，並呼叫 `SpreadsheetApp.flush()` 確保試算表資料即時落盤。
+  - [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 支援彈性辨識 `有意願` 與 `interested`，消除空白字元差異導致仍顯示「備取」的顯示異常；[AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 亦同步提供專屬金黃色 `備取(意願)` 徽章。
+- **前端連線異常隔離與自動部署更新 (Frontend LIFF Isolation & Production Sync)**：
+  - 於 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 及 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx) 中將 `liff.sendMessages` 隔離於內部 `try/catch` 之中，防止因未授權 LINE 訊息發送權限引發未捕獲例外而跳出「連線失敗，請檢查網路狀態」彈窗。
+  - 完成本地自動化測試集 (`test/gas_simulation.test.mjs` 8項全數通過) 與前端編譯驗證，並推播至儲存庫觸發 Vercel 生產環境即時生效。
+
+### 138. 繳費申報連線修復、Members 社籍到期日自動更新、安全釋放鎖定與備取遞補雙軌相容 (v0.1.38)
+- **前端 `liff.sendMessages` 隔離例外防崩潰 (LIFF sendMessages Exception Isolation)**：
+  - 在 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 與 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx) 中，將 `await liff.sendMessages(...)` 獨立置於內部 `try/catch` 區塊中。
+  - 當用戶端 LIFF 處於不支援發話的視窗環境或未授權 `chat_message.write` 權限時，僅在 console 記錄警示，不再拋出未捕獲異常阻斷後續的成功流程，徹底杜絕跳出「連線失敗」的誤報提示，保證正常觸發 `liff.closeWindow()` 與關閉頁面。
+- **繳費申報 Payments 寫入修復與 Members 社籍到期日連動更新 (Payment Submission & Members Expiry Date Sync)**：
+  - 依照規範，`Payments` 試算表保持純對帳紀錄性質，不修改或擴充欄位（無須新增「社籍到期日」欄位）。
+  - 在 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 的 `processPaymentSubmit` 中，若有社籍繳費與到期日 (`details.membershipExpiryDate`)，透過幹部審核按鈕之 `postbackData` 帶入 `&expire=` 參數。
+  - 當幹部在 LINE 群組點擊「確認無誤並發送通知」時，`admin_confirm` 解析 `expire` 參數並傳入 `processPaymentConfirmation`。
+  - `processPaymentConfirmation` 自動至 `Members` 表搜尋該社員，若 Members 表尚未建立「社籍到期日」欄位則自動建立，並將其「社籍到期日」更新為繳費申報之到期日，繳費狀態更新為「已繳費 Paid」，完整實現社籍續約與到期日連動。
+- **全域鎖定安全釋放機制 (Global Safe Lock Release Mechanism)**：
+  - 建立全域輔助函式 `_safeReleaseLock(lock)`，嚴格檢查 `lock.hasLock()`，避免在鎖定逾期或未持鎖狀態下呼叫 `lock.releaseLock()` 引發未捕獲異常。
+  - 全面套用至 `processMultiLoan`、`processPaymentSubmit`、`processSaveProfile`、`processSubmitReflection`、`processLiffCancelEvent`、`processLiffCancelLoan` 及 `processAdminSaveEvent` 的 `finally` 區塊，徹底根除 GAS 後端拋出 500 HTML 造成前端 JSON 解析崩潰的「網路連線失敗」假象。
+- **正取活動取消邏輯強化 (Activity Cancellation & Payment Status Checking)**：
+  - 在 `processLiffCancelEvent` 中，將繳費判定擴充涵蓋 `已繳費 Paid`、`已繳費`、`待確認 Checking` 以及當前狀態包含 `已繳費` 之所有情形。
+  - 支援同時以活動專屬碼 (`targetId` / `code`) 與活動編號 (`eventId`) 比對報名紀錄；若 Signups 表缺少「備註」欄位則動態建立，確保已繳費待退款之註記與原因正確寫入試算表，幹部群組亦同步接收專屬正取取消退款推播。
+  - 在 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 取消活動時，若活動專屬碼不存在，自動以 `act.eventId` 作為 fallback，確保各類型活動報名紀錄皆能正常取消。
+- **備取意願登記雙軌相容與重複程式碼清除 (Waitlist Intention Dual-Target & Deduplication)**：
+  - 在 `handlePostback` 之 `confirm_waitlist` 處理器中，支援同時解析 `targetId`（專屬報名碼）與 `eventId`（活動編號），完美相容來自名單審核卡片與活動備取通知卡片的按鈕。
+  - 移除 line 685 之後的重複 dead code 區塊，解決點擊「我要遞補 Waitlist」時拋出「找不到該活動報名紀錄」的漏洞。
 
 ### 137. 裝備預約防二次送單與購物車重設、已繳費裝備取消退款提醒與個人資料英文通知 (Phase 3) (v0.1.37)
 - **裝備預約防二次觸碰與表單抽屜重設清空 (Borrow Order Anti-Double Submit & Cart Reset)**：

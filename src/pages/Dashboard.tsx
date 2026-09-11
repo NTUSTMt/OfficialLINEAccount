@@ -60,11 +60,11 @@ function Dashboard({ userId }: { userId: string }) {
   const [lineProfile, setLineProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(null);
 
   const getReviewStatusText = (status: string) => {
-    if (status.includes('正取 (已繳費)')) return t('dashboard.status.confirmedPaid', '正取 (已繳費)');
+    if (status.includes('已繳費') || status.includes('Paid')) return t('dashboard.status.confirmedPaid', '正取 (已繳費)');
     if (status.includes('正取')) return t('dashboard.status.confirmed');
-    if (status.includes('備取 (有意願)')) return t('dashboard.status.backupWilling', '備取 (有意願)');
+    if (status.includes('有意願') || status.toLowerCase().includes('interested')) return t('dashboard.status.backupWilling', '備取 (有意願)');
     if (status.includes('備取')) return t('dashboard.status.backup');
-    if (status.includes('已取消 (待退款)')) return t('dashboard.status.cancelledRefund', '已取消 (待退款)');
+    if (status.includes('待退款')) return t('dashboard.status.cancelledRefund', '已取消 (待退款)');
     if (status.includes('取消')) return t('dashboard.status.cancelled');
     if (status.includes('已結束')) return t('dashboard.status.ended');
     if (status.includes('審核')) return t('dashboard.status.reviewing');
@@ -168,7 +168,8 @@ function Dashboard({ userId }: { userId: string }) {
 
   // 點擊取消活動報名按鈕
   const handleCancelActivityClick = (act: ActivityData) => {
-    if (!act.code) {
+    const cancelTargetId = act.code || act.eventId;
+    if (!cancelTargetId) {
       alert(t('dashboard.alert.noEventCode'));
       return;
     }
@@ -177,14 +178,14 @@ function Dashboard({ userId }: { userId: string }) {
 
     if (isConfirmedUser) {
       // 正取：需要跳出填寫原因 Modal
-      setTargetActivity({ code: act.code, eventName: act.eventName });
+      setTargetActivity({ code: cancelTargetId, eventName: act.eventName });
       setCancelReason('');
       setShowCancelReasonModal(true);
     } else {
       // 備取或審核中：直接二次確認取消
       const confirmed = window.confirm(t('dashboard.confirm.cancelActivity', { name: act.eventName }));
       if (!confirmed) return;
-      submitActivityCancellationDirect(act.code);
+      submitActivityCancellationDirect(cancelTargetId);
     }
   };
 
