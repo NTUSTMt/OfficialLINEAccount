@@ -3,11 +3,24 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.39` (v0.1.39)
+- **當前版本**：`0.1.40` (v0.1.40)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 140. Google Sheets 資料驗證嚴格對齊 (全形括號修復)、已取消狀態防崩潰與單元測試更新 (v0.1.40)
+- **Signups 表審核結果全形括號精確校正 (Full-width Parentheses Data Validation Alignment)**：
+  - **問題根因**：Google Sheets 之 `Signups` 表 U 欄（審核結果）設定了嚴格的儲存格資料驗證規則（Data Validation），只允許 6 種指定值。其中「正取（已繳費）Confirmed(Paid)」與「備取（有意願）Waitlisted (Interested)」之中文字元包含**全形括號**（`（`：`\uFF08`，`）`：`\uFF09`）。先前系統寫入半形括號 `(` 與 `)`，導致幹部在 LINE 群組核對繳費按下確認時，GAS 拋出：`The data you entered in cell U2 violates the data validation rules set on this cell...` 致命異常中斷。
+  - **全面校準修復**：
+    - 在 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 的 `processPaymentConfirmation`（活動繳費對帳確認）中，狀態寫入字串全面修正為全形括號之 `正取（已繳費）Confirmed(Paid)`。
+    - 在 `confirm_waitlist`（社員在備取通知卡片點擊「我要遞補」）中，狀態寫入字串全面修正為全形括號之 `備取（有意願）Waitlisted (Interested)`。
+    - 在 `processUpdateSignupStatus`（幹部後台更新名冊審核狀態）中，正規化邏輯同步對齊為 `正取（已繳費）Confirmed(Paid)` 與 `備取（有意願）Waitlisted (Interested)`。
+- **已取消活動試算表防崩潰與前台雙軌相容 (Cancelled Activity Sheet Validation Compliance & Frontend Sync)**：
+  - 在 `processLiffCancelEvent` 中，若社員取消已繳費活動，過去曾嘗試將審核結果寫入非標準的「已取消 (待退款)」，這會觸發同樣的資料驗證錯誤。
+  - 現將 `sStatusIdx` 統一寫入驗證白名單內的 `已取消 Cancelled`，並在「備註」欄保留 `【已繳費待退款】`；在 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 與 `getDashboardDataAPI` 讀取時透過備註動態呈現「已取消 (待退款)」專屬徽章，既符合資料驗證規範又兼顧退款提醒。
+- **單元測試集擴展與全形編碼斷言 (Unit Test Suite Expansion & Unicode Hex Asserts)**：
+  - 在 [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 中新增對全形括號 Unicode 代碼點（`0xff08`、`0xff09`）與 6 類下拉選單集合的嚴格斷言，本地 8 項自動化單元測試全數 100% 綠燈通過。
 
 ### 139. 緊急聯絡人關係精準提取、正取直接開啟繳費、活動繳費對帳精準核銷與備取意願同步優化 (v0.1.39)
 - **緊急聯絡人關係與登山經驗精準隔離 (Emergency Contact Relation Extraction & Experience Disambiguation)**：

@@ -129,21 +129,39 @@ describe('2. 繳費申報 postback 與幹部對帳確認型態測試', () => {
     assert.equal(hasActivity, true);
   });
 
-  it('活動繳費確認後，寫入審核結果為標準格式「正取(已繳費) Confirmed(Paid)」', () => {
-    const expectedStatus = "正取(已繳費) Confirmed(Paid)";
-    assert.ok(expectedStatus.includes("正取"));
-    assert.ok(expectedStatus.includes("已繳費"));
+  it('活動繳費確認後，寫入審核結果為標準格式「正取（已繳費）Confirmed(Paid)」且符合 Google Sheets 資料驗證', () => {
+    const validDropdownOptions = [
+      "正取 Confirmed",
+      "正取（已繳費）Confirmed(Paid)",
+      "備取 Waitlisted",
+      "備取（有意願）Waitlisted (Interested)",
+      "審核中 Checking",
+      "已取消 Cancelled"
+    ];
+    const expectedStatus = "正取（已繳費）Confirmed(Paid)";
+    assert.ok(validDropdownOptions.includes(expectedStatus));
+    assert.equal(expectedStatus.charCodeAt(2), 0xff08); // 全形 （
+    assert.equal(expectedStatus.charCodeAt(6), 0xff09); // 全形 ）
   });
 });
 
 describe('3. 備取意願登記狀態與前端解析測試', () => {
-  it('備取確認寫入標準值「備取(有意願) Waitlisted (Interested)」', () => {
-    const waitlistStatus = "備取(有意願) Waitlisted (Interested)";
-    assert.ok(waitlistStatus.includes("備取"));
-    assert.ok(waitlistStatus.includes("有意願"));
+  it('備取確認寫入標準值「備取（有意願）Waitlisted (Interested)」且符合 Google Sheets 資料驗證', () => {
+    const validDropdownOptions = [
+      "正取 Confirmed",
+      "正取（已繳費）Confirmed(Paid)",
+      "備取 Waitlisted",
+      "備取（有意願）Waitlisted (Interested)",
+      "審核中 Checking",
+      "已取消 Cancelled"
+    ];
+    const waitlistStatus = "備取（有意願）Waitlisted (Interested)";
+    assert.ok(validDropdownOptions.includes(waitlistStatus));
+    assert.equal(waitlistStatus.charCodeAt(2), 0xff08); // 全形 （
+    assert.equal(waitlistStatus.charCodeAt(6), 0xff09); // 全形 ）
   });
 
-  it('Dashboard 格式化函式能正確辨識「正取(已繳費) Confirmed(Paid)」與「備取(有意願) Waitlisted (Interested)」', () => {
+  it('Dashboard 格式化函式能正確辨識「正取（已繳費）Confirmed(Paid)」與「備取（有意願）Waitlisted (Interested)」', () => {
     const formatReview = (status) => {
       if (status.includes('已繳費') || status.includes('Paid')) return '正取 (已繳費)';
       if (status.includes('正取')) return '正取';
@@ -152,9 +170,11 @@ describe('3. 備取意願登記狀態與前端解析測試', () => {
       return status;
     };
 
+    assert.equal(formatReview("正取（已繳費）Confirmed(Paid)"), "正取 (已繳費)");
     assert.equal(formatReview("正取(已繳費) Confirmed(Paid)"), "正取 (已繳費)");
     assert.equal(formatReview("正取 (已繳費)"), "正取 (已繳費)");
     assert.equal(formatReview("正取 Confirmed"), "正取");
+    assert.equal(formatReview("備取（有意願）Waitlisted (Interested)"), "備取 (有意願)");
     assert.equal(formatReview("備取(有意願) Waitlisted (Interested)"), "備取 (有意願)");
     assert.equal(formatReview("備取 (有意願)"), "備取 (有意願)");
     assert.equal(formatReview("備取 Waitlisted"), "備取");

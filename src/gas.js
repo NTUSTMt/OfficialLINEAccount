@@ -511,13 +511,13 @@ function handlePostback(replyToken, userId, postbackData) {
         var eventName = _getEventName(ss, actEventId);
         var currentStatus = sStatusIdx > -1 ? String(sData[i][sStatusIdx]) : "";
         if (currentStatus.indexOf("備取 (有意願)") > -1 || currentStatus.indexOf("有意願") > -1) {
-          replyMessage(replyToken, "您先前已確認過備取意願！\n活動：" + eventName + "\n審核狀態為：【備取 (有意願)】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist interest!\nEvent: " + eventName + "\nStatus: [Waitlist (Interested)]. Officers will contact you if a spot opens up.");
+          replyMessage(replyToken, "您先前已確認過備取意願！\n活動：" + eventName + "\n審核狀態為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist interest!\nEvent: " + eventName + "\nStatus: [Waitlist (Interested)]. Officers will contact you if a spot opens up.");
           return;
         }
         if (currentStatus.indexOf("備取") > -1) {
-          sSheet.getRange(i + 1, sStatusIdx + 1).setValue("備取(有意願) Waitlisted (Interested)");
+          sSheet.getRange(i + 1, sStatusIdx + 1).setValue("備取（有意願）Waitlisted (Interested)");
           SpreadsheetApp.flush();
-          replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取 (有意願)】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nYour waitlist interest has been confirmed! Your status is updated to [Waitlist (Interested)]. Officers will contact you if a spot opens up.");
+          replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nYour waitlist interest has been confirmed! Your status is updated to [Waitlist (Interested)]. Officers will contact you if a spot opens up.");
           return;
         } else {
           replyMessage(replyToken, "您的活動報名狀態為【" + currentStatus + "】，無需變更備取意願。\n─────────────\nYour current status is [" + currentStatus + "], no update needed.");
@@ -4074,7 +4074,7 @@ function processPaymentConfirmation(userId, paymentType, ss, customExpiryDate, i
               }
               if (isEventMatched) {
                 sSheet.getRange(row, payCol).setValue("已繳費 Paid");
-                sSheet.getRange(row, statCol).setValue("正取(已繳費) Confirmed(Paid)");
+                sSheet.getRange(row, statCol).setValue("正取（已繳費）Confirmed(Paid)");
               }
             }
           }
@@ -5568,6 +5568,12 @@ function getMyStatusAPI(ss, userId) {
         var payStatus = String(sData[s][sPayIdx]).trim();
         var codeVal = sCodeIdx > -1 ? String(sData[s][sCodeIdx]).trim() : "";
 
+        var sNoteIdx = _fi(sData[0], "備註");
+        var noteVal = sNoteIdx > -1 ? String(sData[s][sNoteIdx] || "") : "";
+        if (reviewStatus.indexOf("已取消") > -1 && (noteVal.indexOf("待退款") > -1 || payStatus.indexOf("已繳費") > -1 || payStatus.indexOf("待確認") > -1)) {
+          reviewStatus = "已取消 (待退款)";
+        }
+
         // 找出活動詳情
         var eventName = "未知活動";
         var eventDate = "";
@@ -6564,9 +6570,9 @@ function processLiffCancelEvent(payload) {
             return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "正取資格取消必須填寫取消原因" })).setMimeType(ContentService.MimeType.JSON);
           }
 
-          var newStatus = isPaid ? "已取消 (待退款)" : "已取消 Cancelled";
+          var newStatus = "已取消 Cancelled";
 
-          // 寫入已取消狀態與取消原因
+          // 寫入已取消狀態與取消原因 (嚴格遵從試算表資料驗證規範)
           if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue(newStatus);
           if (sNoteIdx === -1) {
             signupSheet.getRange(1, signupSheet.getLastColumn() + 1).setValue("備註");
@@ -7346,20 +7352,20 @@ function processUpdateSignupStatus(payload) {
       var rawResult = String(payload.reviewResult || "").trim();
       var finalResult = rawResult;
       if (rawResult.indexOf("正取") > -1) {
-        if (rawResult.indexOf("已繳費") > -1) {
-          finalResult = "正取(已繳費) Confirmed(Paid)";
+        if (rawResult.indexOf("已繳費") > -1 || rawResult.indexOf("Paid") > -1) {
+          finalResult = "正取（已繳費）Confirmed(Paid)";
         } else {
           finalResult = "正取 Confirmed";
         }
       } else if (rawResult.indexOf("備取") > -1) {
-        if (rawResult.indexOf("有意願") > -1) {
-          finalResult = "備取(有意願) Waitlisted (Interested)";
+        if (rawResult.indexOf("有意願") > -1 || rawResult.indexOf("Interested") > -1) {
+          finalResult = "備取（有意願）Waitlisted (Interested)";
         } else {
           finalResult = "備取 Waitlisted";
         }
-      } else if (rawResult.indexOf("審核中") > -1) {
+      } else if (rawResult.indexOf("審核中") > -1 || rawResult.indexOf("Checking") > -1) {
         finalResult = "審核中 Checking";
-      } else if (rawResult.indexOf("取消") > -1) {
+      } else if (rawResult.indexOf("取消") > -1 || rawResult.indexOf("Cancelled") > -1) {
         finalResult = "已取消 Cancelled";
       }
 
