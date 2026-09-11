@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { Check } from 'lucide-react';
+import { Check, ShieldCheck } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { getDirectImageUrl } from '../utils/image';
 import '../App.css';
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -559,6 +560,11 @@ function Register({ userId }: { userId: string }) {
           <div className="form-step-content animate-fade-in">
             <h2 className="step-title">{t('register.step2.title')}</h2>
 
+            <div className="privacy-banner">
+              <ShieldCheck size={18} className="privacy-banner-icon" />
+              <span>{t('register.privacyBanner')}</span>
+            </div>
+
             <div className="form-group">
               <label>{t('register.step2.genderLabel')}</label>
               <select name="gender" value={formData.gender} onChange={handleChange}>
@@ -599,6 +605,17 @@ function Register({ userId }: { userId: string }) {
                 placeholder={t('register.step2.addressPlaceholder')}
               />
             </div>
+
+            <div className="form-group">
+              <label>{t('register.step2.medicalHistoryLabel')}</label>
+              <textarea
+                name="medicalHistory"
+                value={formData.medicalHistory}
+                onChange={handleChange}
+                placeholder={t('register.step2.medicalHistoryPlaceholder')}
+                rows={3}
+              />
+            </div>
           </div>
         )}
 
@@ -606,6 +623,11 @@ function Register({ userId }: { userId: string }) {
         {step === 3 && (
           <div className="form-step-content animate-fade-in">
             <h2 className="step-title">{t('register.step3.title')}</h2>
+
+            <div className="privacy-banner">
+              <ShieldCheck size={18} className="privacy-banner-icon" />
+              <span>{t('register.privacyBanner')}</span>
+            </div>
 
             <div className="form-group">
               <label>{t('register.step3.emerNameLabel')}</label>
@@ -648,17 +670,6 @@ function Register({ userId }: { userId: string }) {
                 value={formData.emerAddr}
                 onChange={handleChange}
                 placeholder={t('register.step3.emerAddrPlaceholder')}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>{t('register.step3.medicalHistoryLabel')}</label>
-              <textarea
-                name="medicalHistory"
-                value={formData.medicalHistory}
-                onChange={handleChange}
-                placeholder={t('register.step3.medicalHistoryPlaceholder')}
-                rows={3}
               />
             </div>
           </div>
@@ -732,19 +743,44 @@ function Register({ userId }: { userId: string }) {
 
               {/* 顯示已上傳的舊檔案連結 */}
               {formData.strengthProof && formData.strengthProof.trim() !== '' && (
-                <div className="existing-files-list" style={{ marginTop: '12px' }}>
-                  <p style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>{t('register.step4.uploadedFiles')}</p>
-                  {formData.strengthProof.split(',').map((url, idx) => {
-                    const cleanUrl = url.trim();
-                    if (!cleanUrl.startsWith('http')) return null;
-                    return (
-                      <p key={idx} className="file-link" style={{ margin: '4px 0' }}>
-                        <a href={cleanUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px' }}>
-                          {t('register.step4.viewUploaded', { num: idx + 1 })}
-                        </a>
-                      </p>
-                    );
-                  })}
+                <div className="proof-history-card">
+                  <p className="proof-history-title">{t('register.step4.uploadedFiles')}</p>
+                  <div className="proof-item-list">
+                    {formData.strengthProof
+                      .split(',')
+                      .map((u) => u.trim())
+                      .filter((u) => u.startsWith('http'))
+                      .slice(-5)
+                      .map((url, idx) => {
+                        const directThumb = getDirectImageUrl(url, 200);
+                        return (
+                          <a
+                            key={idx}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="proof-item-row"
+                          >
+                            <img
+                              src={directThumb || url}
+                              alt={`proof-${idx + 1}`}
+                              className="proof-thumb"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                            <div className="proof-info">
+                              <span className="proof-name">
+                                {t('register.step4.viewUploaded', { num: idx + 1 })}
+                              </span>
+                              <span className="proof-link-text">
+                                點擊另開原始檔案 (View full image)
+                              </span>
+                            </div>
+                          </a>
+                        );
+                      })}
+                  </div>
                 </div>
               )}
             </div>

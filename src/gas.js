@@ -2414,7 +2414,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
     placeData("病史", p.medicalHistory);
     signupSheet.appendRow(rowData);
 
-    replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n📍 活動 (Event)：\n" + eName + "\n🏷️ 代號 (Event ID)：" + eventId + "\n🎫 專屬碼 (Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的資料 (We have received your info)。\n\n⚠️ 【重要提醒 / Important】\n由於活動有人數限制及安全考量，此階段僅為「報名登記」。幹部將進行體能評估與篩選。最終是否錄取（正取/備取），將會透過本帳號個別推播通知您，請留意後續訊息！\n(This is only a registration. Final admission status will be notified to you individually through this account!)");
+    replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n活動 (Event)：\n" + eName + "\n活動代號 (Event ID)：" + eventId + "\n報名專屬碼 (Signup Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的資料 (We have received your info)。\n\n⚠️ 【重要提醒 / Important】\n由於活動有人數限制及安全考量，此階段僅為「報名登記」。幹部將進行體能評估與篩選。最終是否錄取（正取/備取），將會透過本帳號個別推播通知您，請留意後續訊息！\n(This is only a registration. Final admission status will be notified to you individually through this account!)");
 
   } catch (err) {
     console.error("活動報名失敗:", err);
@@ -2433,7 +2433,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
 // 這樣社員就不需要自己去查一長串複雜的 ID，系統也能百分之百保證資料不會對錯人！
 function sendRegisterForm(replyToken, userId) {
   var liffUrl = "https://liff.line.me/2009217429-AhPRqAHg";
-  replyMessage(replyToken, "📝 登山社資料填寫 / Club Registration\n\n請點擊下方專屬連結填寫或更新您的個人資料：\nPlease click the link below to fill out or update your profile:\n\n" + liffUrl);
+  replyMessage(replyToken, "登山社資料填寫 / Club Registration\n\n請點擊下方專屬連結填寫或更新您的個人資料：\nPlease click the link below to fill out or update your profile:\n\n" + liffUrl);
 }
 
 // ⭐️ 輔助函式：判定活動報名截止日是否已過 (當天 23:59:59 截止)
@@ -3648,7 +3648,7 @@ function handleEventCancelReason(replyToken, userId, reasonText, signupCode) {
 
       replyMessage(replyToken, "✅ 【" + eventName + "】報名已取消成功！\n\n您的報名狀態已更新為「已取消」，我們期待在未來的社團活動與您相見。\n─────────────\n✅ Your registration for [" + eventName + "] has been cancelled.\nWe look forward to seeing you at future events!");
 
-      pushAdminMessage("🔔 【幹部緊急通知：正取棄權】\n\n❗ 活動：" + eventName + "\n❗ 棄權社員：" + userName + "\n\n📝 取消原因：\n" + reasonText + "\n\n👉 建議幹部檢視備取名單，聯繫有遞補意願的社員！");
+      pushAdminMessage("【幹部緊急通知：正取棄權】\n\n❗ 活動：" + eventName + "\n❗ 棄權社員：" + userName + "\n\n取消原因：\n" + reasonText + "\n\n建議幹部檢視備取名單，聯繫有遞補意願的社員！");
       return;
     }
   }
@@ -4098,7 +4098,7 @@ function dailySystemCheck() {
   });
 
   if (missingSheets.length > 0) {
-    pushAdminMessage("🔔 【每日系統健檢通知】\n\n⚠️ 偵測到以下分頁缺失：\n" + missingSheets.join("\n") + "\n\n請盡速建立以上分頁，否則相關功能將無法正常運作！");
+    pushAdminMessage("【每日系統健檢通知】\n\n⚠️ 偵測到以下分頁缺失：\n" + missingSheets.join("\n") + "\n\n請盡速建立以上分頁，否則相關功能將無法正常運作！");
     return;
   }
 
@@ -4132,7 +4132,7 @@ function dailySystemCheck() {
 
   // 若有自動關閉之活動，推播告知幹部群組
   if (closedCount > 0) {
-    var adminNotice = "🔔 【系統自動巡檢：活動截止自動關閉】\n\n" +
+    var adminNotice = "【系統自動巡檢：活動截止自動關閉】\n\n" +
       "系統已自動將下列 " + closedCount + " 場已過截止日之活動狀態切換為「關閉」：\n\n" +
       closedEvents.map(function (item) { return "• " + item; }).join("\n") +
       "\n\n社員將無法再進行報名，幹部可於管理中心進行後續名冊審核。";
@@ -4297,10 +4297,10 @@ function getClubKnowledgeFromDoc() {
 function sendFeedbackLink(replyToken) {
   var googleFormUrl = "https://forms.gle/bCT7fjVP3bSrReF96";
 
-  var msg = "📢 【意見與回饋 / Feedback & Suggestions】\n\n" +
+  var msg = "【意見與回饋 / Feedback & Suggestions】\n\n" +
     "無論是想對社團說的話、活動建議、問題詢問，還是回報系統錯誤 (可附截圖)，都歡迎透過下方表單告訴我們！\n\n" +
     "Whether you have suggestions, questions, or want to report a bug (screenshots supported), please let us know!\n\n" +
-    "👉 點此填寫回饋表單 Click here to fill out the feedback form：\n" + googleFormUrl + "\n\n" +
+    "點此填寫回饋表單 Click here to fill out the feedback form：\n" + googleFormUrl + "\n\n" +
     "收到您的回饋後，幹部會盡快查看並處理喔！After receiving your feedback, the club officers will review and handle it as soon as possible!🏔️";
 
   replyMessage(replyToken, msg);
@@ -4336,14 +4336,14 @@ function onFeedbackSubmit(e) {
     var feedback = (feedbackIdx > -1 && rowData[feedbackIdx]) ? String(rowData[feedbackIdx]).trim() : "無內容";
     var fileUrl = (fileIdx > -1 && rowData[fileIdx]) ? String(rowData[fileIdx]).trim() : "無附件";
 
-    var subject = "🔔 【社團意見回饋】收到來自 " + name + " 的新訊息";
+    var subject = "【社團意見回饋】收到來自 " + name + " 的新訊息";
     var body = "幹部您好，\n\n" +
       "系統剛剛收到了一筆新的意見與回饋，詳細內容如下：\n" +
       "──────────────────────\n" +
-      "👤 姓名：" + name + "\n" +
-      "📧 聯絡信箱：" + email + "\n" +
-      "💬 想說的話：\n" + feedback + "\n\n" +
-      "📎 附檔連結：" + fileUrl + "\n" +
+      "姓名：" + name + "\n" +
+      "聯絡信箱：" + email + "\n" +
+      "想說的話：\n" + feedback + "\n\n" +
+      "附檔連結：" + fileUrl + "\n" +
       "──────────────────────\n\n" +
       "請幹部盡快查閱並評估是否需要回覆喔！🏕️\n" +
       "(此信件由系統自動發送)";
@@ -4778,7 +4778,7 @@ function processMultiLoan(payload) {
   if (purposeStrForAdmin === "其他用途" && details.otherPurpose) {
     purposeStrForAdmin = "其他：" + details.otherPurpose;
   }
-  var adminMsg = "🔔 【幹部通知：新裝備預約 (多選合併)】\n\n申請人：" + userName + " (" + isOfficial + "社員)\n用途：" + purposeStrForAdmin + "\n訂單編號：" + orderId + "\n領取：" + details.pickupDate + "\n歸還：" + details.returnDate + "\n\n📦 借用明細：\n" + summaryText.join("\n") + "\n\n💰 總金額：$" + totalCost;
+  var adminMsg = "【幹部通知：新裝備預約 (多選合併)】\n\n申請人：" + userName + " (" + isOfficial + "社員)\n用途：" + purposeStrForAdmin + "\n訂單編號：" + orderId + "\n領取：" + details.pickupDate + "\n歸還：" + details.returnDate + "\n\n借用明細：\n" + summaryText.join("\n") + "\n\n總金額：$" + totalCost;
   if (typeof pushAdminMessage === "function") pushAdminMessage(adminMsg);
 
   // 4. 回傳成功狀態給 LIFF 前端
@@ -4906,19 +4906,19 @@ function processPaymentSubmit(payload) {
   }
 
   // 4. 發送推播通知幹部對帳 Flex Message
-  var altText = "🔔 收到一筆新對帳申報！";
+  var altText = "收到一筆新對帳申報！";
   var postbackData = "action=admin_confirm&row=" + insertedRowIndex + "&userId=" + userId + "&type=combined";
 
   var bodyContents = [
     {
       "type": "text",
-      "text": "👤 申報人：" + userName,
+      "text": "申報人：" + userName,
       "weight": "bold",
       "size": "md"
     },
     {
       "type": "text",
-      "text": "💵 申報金額：$" + details.totalAmount,
+      "text": "申報金額：$" + details.totalAmount,
       "weight": "bold",
       "size": "md",
       "color": "#059669",
@@ -4926,7 +4926,7 @@ function processPaymentSubmit(payload) {
     },
     {
       "type": "text",
-      "text": "🔢 帳號末5碼：" + details.last5Digits,
+      "text": "帳號末5碼：" + details.last5Digits,
       "weight": "bold",
       "size": "md",
       "margin": "sm"
@@ -4936,7 +4936,7 @@ function processPaymentSubmit(payload) {
   if (paymentNote) {
     bodyContents.push({
       "type": "text",
-      "text": "📝 備註：" + paymentNote,
+      "text": "備註：" + paymentNote,
       "wrap": true,
       "size": "sm",
       "color": "#d97706",
@@ -4951,7 +4951,7 @@ function processPaymentSubmit(payload) {
     },
     {
       "type": "text",
-      "text": "📋 申報明細：\n" + confirmedItems.join("\n"),
+      "text": "申報明細：\n" + confirmedItems.join("\n"),
       "wrap": true,
       "size": "sm",
       "color": "#475569",
@@ -4967,7 +4967,7 @@ function processPaymentSubmit(payload) {
       "contents": [
         {
           "type": "text",
-          "text": "💰 繳費核對申請",
+          "text": "繳費核對申請",
           "weight": "bold",
           "size": "lg",
           "color": "#ffffff"
@@ -5417,7 +5417,7 @@ function processSaveProfile(payload) {
       }
 
       if (shouldNotifyOfficer) {
-        var officerNotifyMsg = "📢 幹部意願新通知\n" +
+        var officerNotifyMsg = "幹部意願新通知\n" +
           "─────────────\n" +
           "有社員表達擔任幹部意願！\n\n" +
           "姓名：" + (data.name || "未填") + "\n" +
@@ -5900,7 +5900,7 @@ function processSubmitReflection(payload) {
     }
 
     // 推送給幹部群組 (通知有新心得)
-    var alertMsg = "🏕️ 【社員心得回饋通知】\n\n👤 社員：" + userName + "\n⛰️ 活動：" + details.eventName + "\n⭐ 路線難易：" + "★".repeat(details.difficulty) + "\n⭐ 風景推薦：" + "★".repeat(details.beauty) + "\n📝 心得內容：\n" + details.content;
+    var alertMsg = "【社員心得回饋通知】\n\n👤 社員：" + userName + "\n活動：" + details.eventName + "\n路線難易：" + "★".repeat(details.difficulty) + "\n風景推薦：" + "★".repeat(details.beauty) + "\n心得內容：\n" + details.content;
     pushAdminMessage(alertMsg);
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -6052,7 +6052,7 @@ function processLiffCancelLoan(payload) {
           }
 
           // 推送幹部通知
-          pushAdminMessage("🔔 【幹部通知：裝備取消】\n申請人：" + userName + "\n裝備：" + equipName + "\n庫存已自動回補！");
+          pushAdminMessage("【幹部通知：裝備取消】\n申請人：" + userName + "\n裝備：" + equipName + "\n庫存已自動回補！");
           return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "裝備預約已成功取消" })).setMimeType(ContentService.MimeType.JSON);
         } else {
           return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "該預約已非待領取狀態，無法取消" })).setMimeType(ContentService.MimeType.JSON);

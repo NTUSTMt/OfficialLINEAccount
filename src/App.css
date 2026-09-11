@@ -991,6 +991,7 @@ input[type="date"]::-webkit-date-and-time-value {
   background-color: var(--bg-primary);
   min-height: 100vh;
   padding-bottom: 40px;
+  text-align: left;
 }
 
 .register-welcome-card {
@@ -1002,6 +1003,7 @@ input[type="date"]::-webkit-date-and-time-value {
   border-radius: var(--radius-md);
   padding: 16px;
   margin-bottom: 24px;
+  text-align: left;
 }
 
 .welcome-avatar {
@@ -1039,64 +1041,61 @@ input[type="date"]::-webkit-date-and-time-value {
 .progress-track {
   position: absolute;
   top: 15px;
-  left: 30px;
-  right: 30px;
-  height: 4px;
+  left: 20px;
+  right: 20px;
+  height: 3px;
   background-color: var(--border-color);
   z-index: 1;
-  border-radius: 2px;
 }
 
 .progress-fill {
   height: 100%;
   background-color: var(--primary-color);
-  border-radius: 2px;
   transition: width 0.3s ease;
 }
 
 .step-dot-wrapper {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  z-index: 2;
-  position: relative;
+  gap: 6px;
 }
 
 .step-dot {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background-color: #ffffff;
+  background-color: var(--bg-secondary);
   border: 2px solid var(--border-color);
-  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
   font-size: 14px;
+  font-weight: bold;
+  color: var(--text-tertiary);
   transition: var(--transition);
 }
 
 .step-dot-wrapper.active .step-dot {
-  border-color: var(--primary-color);
   background-color: var(--primary-color);
-  color: #ffffff;
+  border-color: var(--primary-color);
+  color: white;
 }
 
 .step-dot-wrapper.current .step-dot {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 0 4px var(--primary-light);
 }
 
 .step-label {
   font-size: 12px;
   color: var(--text-secondary);
-  margin-top: 6px;
   font-weight: 500;
 }
 
 .step-dot-wrapper.active .step-label {
-  color: var(--text-primary);
+  color: var(--primary-hover);
   font-weight: 700;
 }
 
@@ -1107,6 +1106,113 @@ input[type="date"]::-webkit-date-and-time-value {
   padding: 20px;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.register-form-card .form-group {
+  margin-bottom: 20px;
+  gap: 8px;
+}
+
+.register-form-card .form-group label {
+  margin-bottom: 2px;
+  text-align: left;
+}
+
+/* 個資安全隱私標語 Banner */
+.privacy-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 22px;
+  color: #065f46;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.privacy-banner-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #059669;
+}
+
+/* 歷史上傳證明卡片 */
+.proof-history-card {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 14px;
+  text-align: left;
+}
+
+.proof-history-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.proof-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proof-item-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  transition: var(--transition);
+}
+
+.proof-item-row:hover {
+  border-color: var(--primary-color);
+  background-color: #f0fdf4;
+}
+
+.proof-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+  background-color: #f3f4f6;
+}
+
+.proof-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+  text-align: left;
+}
+
+.proof-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proof-link-text {
+  font-size: 12px;
+  color: var(--primary-color);
+  text-decoration: underline;
 }
 
 .step-title {

@@ -58,6 +58,7 @@
       "lineIdLabel": "Real LINE ID",
       "lineIdPlaceholder": "For officers to create event contact groups"
     },
+    "privacyBanner": "The club will never disclose your personal information. All data is strictly used for event insurance, park/mountain entry permits, and emergency contact only.",
     "step2": {
       "title": "Basic Info (Optional)",
       "genderLabel": "Gender",
@@ -68,7 +69,9 @@
       "idNumberLabel": "ID Card / Passport Number",
       "idNumberPlaceholder": "For mountain entry permits and travel insurance",
       "addressLabel": "Correspondence Address",
-      "addressPlaceholder": "Please enter your contact or current address"
+      "addressPlaceholder": "Please enter your contact or current address",
+      "medicalHistoryLabel": "Medical History / Allergies",
+      "medicalHistoryPlaceholder": "e.g., asthma, severe altitude sickness, allergies. Confidential & only for leader to ensure safety."
     },
     "step3": {
       "title": "Safety & Emergency Info (Optional)",
@@ -79,9 +82,7 @@
       "emerPhoneLabel": "Emergency Contact Phone",
       "emerPhonePlaceholder": "Contact phone number during trips",
       "emerAddrLabel": "Emergency Contact Address",
-      "emerAddrPlaceholder": "Please enter emergency contact's address",
-      "medicalHistoryLabel": "Medical History / Allergies",
-      "medicalHistoryPlaceholder": "e.g., asthma, severe altitude sickness, allergies. Confidential & only for leader to ensure safety."
+      "emerAddrPlaceholder": "Please enter emergency contact's address"
     },
     "step4": {
       "title": "Experience & Upload (Optional)",
@@ -93,14 +94,14 @@
       "uploadTip": "Tip: Re-uploading will overwrite old proof files. Max 5 images.",
       "selectedFiles": "Selected files to upload ({{count}}/5):",
       "remove": "Remove",
-      "uploadedFiles": "Uploaded proof files:",
+      "uploadedFiles": "Uploaded Fitness & Hiking Proof:",
       "viewUploaded": "View Uploaded Proof #{{num}}",
       "privacyConsent": "I agree to use my personal data for event insurance, entry permits, and emergency contact.",
       "intendOfficialTitle": "Join Club Membership",
       "intendOfficialYes": "I want to become a member (50% off gear rental)",
       "intendOfficialNo": "I do not want to become a member at this moment",
       "intendOfficerTitle": "Officer Interest (Optional)",
-      "intendOfficerCheckbox": "I am interested in becoming a club officer (No club fee, decide event content, and other benefits)"
+      "intendOfficerCheckbox": "I am interested in becoming a club officer (Exchange student is not able to become an officer, sorry >_<)"
     },
     "nav": {
       "prev": "Back",

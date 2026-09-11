@@ -3,11 +3,23 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.16` (v0.1.16)
+- **當前版本**：`0.1.17` (v0.1.17)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 117. 資料註冊頁面重構、個資隱私安全保證與歷史證明縮圖卡片 (v0.1.17)
+- **個人特殊病史移轉至基本選填資料 (Medical History Relocation)**：
+  - 將「個人特殊病史或過敏（medicalHistory）」從「步驟 3：緊急聯絡人資訊」移至「步驟 2：基本選填資料」，符合個人身心狀況與選填性質歸類。
+- **全頁文字靠左與問題題距留白優化 (Left-Aligned Layout & Form Spacing)**：
+  - 覆寫全域置中樣式，將資料填寫頁面的標題、描述、輸入框全面設置為靠左對齊（`text-align: left`）。
+  - 加大輸入框標題（`label`）與輸入元件之距離（提升至 8px~10px），並調整題與題之間外距為 20px，提供舒適易讀之視覺呼吸感。
+- **個資隱私安全保護標語 (Data Privacy & Security Banners)**：
+  - 於「步驟 2：基本選填資料」與「步驟 3：緊急聯絡人資訊」頂部加入隱私安全提示框（採用 Lucide 向量 `ShieldCheck` 圖示，無 Emoji），向社員明確保證社團絕不散布個人資訊，資料僅嚴格用於平安保險、入山申請及緊急聯絡。
+- **已上傳的舊體能與登山證明縮圖外框卡片 (Uploaded Proofs Boxed Card with Thumbnails)**：
+  - 更新多語系標題為「已上傳的舊體能與登山證明 (Uploaded Fitness & Hiking Proof)」。
+  - 獨立外框卡片呈現，並透過 Google Drive 官方 CDN 直連（`getDirectImageUrl`）載入最多最近 5 張歷史證明之方格縮圖，支援點擊另開分頁檢視原始圖檔。
 
 ### 116. 幹部活動管理活動清單預設排序調整為截止時間降冪 (v0.1.16)
 - **預設排序方式優化 (Default Sorting Optimization)**：

@@ -58,6 +58,7 @@
       "lineIdLabel": "真實 LINE ID",
       "lineIdPlaceholder": "方便幹部建立出隊聯絡群組"
     },
+    "privacyBanner": "社團絕不散布個人資訊，所有資料僅用於活動平安保險、入山入園申請及緊急聯絡使用，敬請安心填寫。",
     "step2": {
       "title": "基本選填資料",
       "genderLabel": "性別",
@@ -68,7 +69,9 @@
       "idNumberLabel": "身分證字號 / 護照號碼",
       "idNumberPlaceholder": "辦理入山與平安保險",
       "addressLabel": "聯絡地址",
-      "addressPlaceholder": "請輸入聯絡或現居地址"
+      "addressPlaceholder": "請輸入聯絡或現居地址",
+      "medicalHistoryLabel": "個人特殊病史或過敏",
+      "medicalHistoryPlaceholder": "如氣喘、嚴重高山症病史、過敏藥物等。此資訊僅供嚮導掌握隊員安全狀況，完全保密。"
     },
     "step3": {
       "title": "緊急聯絡人資訊",
@@ -79,9 +82,7 @@
       "emerPhoneLabel": "緊急聯絡人電話",
       "emerPhonePlaceholder": "出隊期間留守聯絡電話",
       "emerAddrLabel": "緊急聯絡人地址",
-      "emerAddrPlaceholder": "請輸入緊急聯絡人居住地址",
-      "medicalHistoryLabel": "個人特殊病史或過敏",
-      "medicalHistoryPlaceholder": "如氣喘、嚴重高山症病史、過敏藥物等。此資訊僅供嚮導掌握隊員安全狀況，完全保密。"
+      "emerAddrPlaceholder": "請輸入緊急聯絡人居住地址"
     },
     "step4": {
       "title": "登山經驗與體能 (Experience & Upload)",
@@ -93,14 +94,14 @@
       "uploadTip": "提示：重新上傳將會覆蓋舊的體能證明，可多選或分次選取，上限 5 張。",
       "selectedFiles": "已選取待上傳檔案 ({{count}}/5)：",
       "remove": "移除",
-      "uploadedFiles": "已上傳的舊體能證明：",
+      "uploadedFiles": "已上傳的舊體能與登山證明：",
       "viewUploaded": "查看已上傳證明 #{{num}}",
       "privacyConsent": "我同意將個人資料用於社團活動保險、入山申請及緊急聯繫使用。",
       "intendOfficialTitle": "加入社員意願",
       "intendOfficialYes": "我有意願成為社員 (享個人借裝 5 折)",
       "intendOfficialNo": "我目前沒有意願成為社員",
       "intendOfficerTitle": "幹部意願調查 (選填)",
-      "intendOfficerCheckbox": "我有意願成為社團幹部（免繳社費、決定活動內容等等福利）"
+      "intendOfficerCheckbox": "我有意願成為社團幹部（享免繳社費、決定活動內容、活動優先卡位等等福利。不需要很有經驗或體能很好之類的條件，但當然也是要經過社團審查，不過不管怎樣多多參加活動就很有機會！）"
     },
     "nav": {
       "prev": "上一步",
