@@ -147,9 +147,12 @@
     },
     "status": {
       "confirmed": "Confirmed",
+      "confirmedPaid": "Confirmed (Paid)",
       "backup": "Waitlisted",
+      "backupWilling": "Waitlisted (Interested)",
       "reviewing": "Checking",
       "cancelled": "Cancelled",
+      "cancelledRefund": "Cancelled (Refund Pending)",
       "ended": "Ended",
       "paid": "Paid",
       "checking": "Checking",

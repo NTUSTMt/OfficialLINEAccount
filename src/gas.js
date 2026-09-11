@@ -412,6 +412,51 @@ function handlePostback(replyToken, userId, postbackData) {
     return;
   }
 
+  // 📌 動作：確認備取意願 (無 emoji，中英雙語，不通知幹部)
+  if (action === "confirm_waitlist") {
+    var paramsMap = {};
+    params.forEach(function (p) {
+      var kv = p.split("=");
+      paramsMap[kv[0]] = kv[1];
+    });
+    var eventId = paramsMap["eventId"];
+    var sSheet = ss.getSheetByName("Signups");
+    if (!sSheet) {
+      replyMessage(replyToken, "系統錯誤：找不到報名資料表。\n─────────────\nSystem Error: Signups sheet not found.");
+      return;
+    }
+    var sData = sSheet.getDataRange().getValues();
+    var sH = sData[0];
+    var sSysIdx = _fi(sH, "系統識別碼");
+    var sEventIdIdx = _fi(sH, "活動編號");
+    var sStatusIdx = _fi(sH, "審核結果");
+    var eventName = _getEventName(ss, eventId);
+
+    var found = false;
+    for (var i = 1; i < sData.length; i++) {
+      if (sSysIdx > -1 && sData[i][sSysIdx] === userId && sEventIdIdx > -1 && String(sData[i][sEventIdIdx]).trim() === eventId) {
+        found = true;
+        var currentStatus = sStatusIdx > -1 ? String(sData[i][sStatusIdx]) : "";
+        if (currentStatus.indexOf("備取 (有意願)") > -1) {
+          replyMessage(replyToken, "您先前已確認過備取意願！\n活動：" + eventName + "\n審核狀態為：【備取 (有意願)】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist interest!\nEvent: " + eventName + "\nStatus: [Waitlist (Interested)]. Officers will contact you if a spot opens up.");
+          return;
+        }
+        if (currentStatus.indexOf("備取") > -1) {
+          sSheet.getRange(i + 1, sStatusIdx + 1).setValue("備取 (有意願)");
+          replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取 (有意願)】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nYour waitlist interest has been confirmed! Your status is updated to [Waitlist (Interested)]. Officers will contact you if a spot opens up.");
+          return;
+        } else {
+          replyMessage(replyToken, "您的活動報名狀態為【" + currentStatus + "】，無需變更備取意願。\n─────────────\nYour current status is [" + currentStatus + "], no update needed.");
+          return;
+        }
+      }
+    }
+    if (!found) {
+      replyMessage(replyToken, "找不到該活動報名紀錄。\n─────────────\nSignup record not found.");
+    }
+    return;
+  }
+
   // 📌 動作：借用裝備
   if (action === "borrow_form") {
     var profileCheck = _checkProfileComplete(userId, ss, "borrow");
@@ -3955,7 +4000,10 @@ function processPaymentConfirmation(userId, paymentType, ss, customExpiryDate) {
                   break;
                 }
               }
-              if (targetEventName === "ALL" || targetEventName === eName) sSheet.getRange(row, payCol).setValue("已繳費 Paid");
+              if (targetEventName === "ALL" || targetEventName === eName) {
+                sSheet.getRange(row, payCol).setValue("已繳費 Paid");
+                sSheet.getRange(row, statCol).setValue("正取 (已繳費)");
+              }
             }
           }
         }
@@ -6385,21 +6433,31 @@ function processLiffCancelEvent(payload) {
         var userName = sNameIdx > -1 ? sData[k][sNameIdx] : "未知社員";
         var currentStatus = sStatusIdx > -1 ? String(sData[k][sStatusIdx]) : "";
 
+        var sPayIdx = _fi(sH, "繳費狀態");
+        var payStatus = sPayIdx > -1 ? String(sData[k][sPayIdx]).trim() : "";
+        var isPaid = (payStatus === "已繳費 Paid" || payStatus === "已繳費" || currentStatus.indexOf("已繳費") > -1);
+
         // 如果是正取，必須提供取消原因
         if (currentStatus.indexOf("正取") > -1) {
           if (!reason.trim()) {
             return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "正取資格取消必須填寫取消原因" })).setMimeType(ContentService.MimeType.JSON);
           }
 
+          var newStatus = isPaid ? "已取消 (待退款)" : "已取消 Cancelled";
+
           // 寫入已取消狀態與取消原因
-          if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
+          if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue(newStatus);
           if (sNoteIdx > -1) {
             var oldNote = sData[k][sNoteIdx] ? String(sData[k][sNoteIdx]) + " | " : "";
-            signupSheet.getRange(k + 1, sNoteIdx + 1).setValue(oldNote + "取消原因: " + reason);
+            signupSheet.getRange(k + 1, sNoteIdx + 1).setValue(oldNote + (isPaid ? "【已繳費待退款】" : "") + "取消原因: " + reason);
           }
 
           // 推送 LINE 給幹部
-          pushAdminMessage("🔔 【幹部通知：正取取消】\n申請人：" + userName + "\n活動：" + eventName + "\n原因：" + reason + "\n請幹部儘速進行備取遞補！");
+          if (isPaid) {
+            pushAdminMessage("🔔 【幹部通知：正取取消（需安排替補與退費）】\n申請人：" + userName + "\n活動：" + eventName + "\n取消原因：" + reason + "\n⚠️ 該正取者已完成繳費，請幹部安排備取遞補與退費事宜！");
+          } else {
+            pushAdminMessage("🔔 【幹部通知：正取取消】\n申請人：" + userName + "\n活動：" + eventName + "\n原因：" + reason + "\n請幹部儘速進行備取遞補！");
+          }
         } else {
           // 備取或審核中直接取消
           if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
@@ -7228,7 +7286,11 @@ function processSendEventNotifications(payload) {
               "type": "button",
               "style": "primary",
               "color": "#1DB446",
-              "action": { "type": "message", "label": "前往繳費系統 Pay", "text": "繳費系統 Payment System" }
+              "action": {
+                "type": "uri",
+                "label": "前往繳費系統 Pay",
+                "uri": "https://liff.line.me/2009217429-u7OCkmQO"
+              }
             }]
           }
         };
@@ -7247,8 +7309,22 @@ function processSendEventNotifications(payload) {
               { "type": "text", "text": "審核結果為 Result：", "margin": "md", "size": "sm" },
               { "type": "text", "text": "【 " + result + " 】", "weight": "bold", "color": "#FF9800", "size": "lg", "align": "center", "margin": "md" },
               { "type": "separator", "margin": "md" },
-              { "type": "text", "text": "目前為備取狀態，若有正取人員釋出名額，幹部將第一時間主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you immediately if a spot opens up!", "wrap": true, "margin": "md", "size": "xs", "color": "#666666" }
+              { "type": "text", "text": "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!", "wrap": true, "margin": "md", "size": "xs", "color": "#666666" }
             ]
+          },
+          "footer": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [{
+              "type": "button",
+              "style": "primary",
+              "color": "#FF9800",
+              "action": {
+                "type": "postback",
+                "label": "確認備取意願 Confirm Waitlist",
+                "data": "action=confirm_waitlist&eventId=" + rowEventId + "&userId=" + targetUid
+              }
+            }]
           }
         };
         pushFlexMessage(targetUid, "【活動備取通知 Waitlist】", waitlistFlex);

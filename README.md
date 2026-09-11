@@ -3,13 +3,31 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.35` (v0.1.35)
+- **當前版本**：`0.1.36` (v0.1.36)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
 
-### 135. 繳費系統核心帳務修復、歷史紀錄待確認判定與社籍到期日聯動更新 (Phase 1) (v0.1.35)
+### 136. 活動正備取狀態流轉、正取直開繳費 LIFF、退款提醒與備取意願登記 (Phase 2) (v0.1.36)
+- **正取推播通知直開繳費系統 (Direct LIFF Link in Accepted Notification)**：
+  - 在 `gas.js` 之 `processSendEventNotifications` 中，將活動正取推播卡片之「前往繳費系統 Pay」按鈕動作由原本傳送文字訊息改為直接開啟 LIFF 繳費網址（`https://liff.line.me/2009217429-u7OCkmQO`）。
+  - 社員點擊按鈕即可立即開啟多選繳費表單，消除發送聊天文字之繁瑣操作。
+- **正取已繳費狀態流轉與取消退款提醒 (Confirmed (Paid) Flow & Refund Safeguard)**：
+  - **繳費確認狀態同步**：幹部於 LINE 確認活動款項無誤後，`processPaymentConfirmation` 自動將該社員在 `Signups` 表中的「審核結果」更新為「**正取 (已繳費)**」，確保活動名冊之繳費與錄取狀態一目了然。
+  - **已繳費取消退款推播**：當已繳費之正取社員因故於個人主頁取消報名時，`processLiffCancelEvent` 將審核結果標記為「**已取消 (待退款)**」，並在備註註記「【已繳費待退款】」，同時向幹部群組推播專屬提醒：
+    `【幹部通知：正取取消（需安排替補與退費）】`
+    明確提醒幹部安排備取遞補與退費事宜，且不顯示具體金額，由幹部依取消時間比例自行結算處理。
+- **備取意願確認按鈕與狀態更新 (Waitlist Confirmation & Status Update)**：
+  - 在活動備取推播卡片下方新增「**確認備取意願 Confirm Waitlist**」按鈕（純文字無 emoji）。
+  - 社員點擊後發送 Postback 動作 (`confirm_waitlist`)：
+    - `handlePostback` 自動將 `Signups` 表中之審核結果更新為「**備取 (有意願)**」。
+    - 於 LINE 聊天室回覆中英雙語確認訊息（完全不帶 emoji，不通知幹部）：
+      `已成功確認您的備取意願！審核狀態已更新為：【備取 (有意願)】。若有正取名額釋出，幹部將主動與您聯絡！`
+    - 若社員重複點擊，系統亦貼心提醒已完成登記，杜絕狀態錯亂。
+- **個人主頁 (Dashboard) 狀態徽章全面擴充 (Dashboard Badges & i18n)**：
+  - `Dashboard.tsx` 擴充支援「正取 (已繳費)」（專屬深綠高彩徽章）、「備取 (有意願)」（橘黃色徽章）與「已取消 (待退款)」（醒目橘紅待退款徽章）。
+  - 同步於 `zh.json` 與 `en.json` 補齊雙語鍵值。
 - **歷史紀錄狀態判定與明細展開修復 (Payment History Status & Expandable Details Fix)**：
   - 修復 `History.tsx` 中 `getStatusStyle` 因判斷 `status.indexOf('確認') > -1` 導致「待確認 Checking」被誤判為「已確認無誤」綠色徽章之重大邏輯 Bug。
   - 將「待確認 / 待核對 / Checking / 審核中」等狀態優先判定為黃色「待確認」徽章，僅嚴格符合「已確認無誤 / 已確認 / 已繳費 / 已核對」者方判定為綠色徽章。

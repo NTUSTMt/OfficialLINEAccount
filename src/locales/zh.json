@@ -147,9 +147,12 @@
     },
     "status": {
       "confirmed": "正取",
+      "confirmedPaid": "正取 (已繳費)",
       "backup": "備取",
+      "backupWilling": "備取 (有意願)",
       "reviewing": "審核中",
       "cancelled": "已取消",
+      "cancelledRefund": "已取消 (待退款)",
       "ended": "已結束",
       "paid": "已繳費",
       "checking": "待確認",

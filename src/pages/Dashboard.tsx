@@ -60,11 +60,14 @@ function Dashboard({ userId }: { userId: string }) {
   const [lineProfile, setLineProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(null);
 
   const getReviewStatusText = (status: string) => {
+    if (status.includes('正取 (已繳費)')) return t('dashboard.status.confirmedPaid', '正取 (已繳費)');
     if (status.includes('正取')) return t('dashboard.status.confirmed');
+    if (status.includes('備取 (有意願)')) return t('dashboard.status.backupWilling', '備取 (有意願)');
     if (status.includes('備取')) return t('dashboard.status.backup');
-    if (status.includes('審核')) return t('dashboard.status.reviewing');
+    if (status.includes('已取消 (待退款)')) return t('dashboard.status.cancelledRefund', '已取消 (待退款)');
     if (status.includes('取消')) return t('dashboard.status.cancelled');
     if (status.includes('已結束')) return t('dashboard.status.ended');
+    if (status.includes('審核')) return t('dashboard.status.reviewing');
     return status;
   };
 
@@ -501,8 +504,24 @@ function Dashboard({ userId }: { userId: string }) {
                           padding: '4px 8px',
                           borderRadius: '6px',
                           fontWeight: 'bold',
-                          color: act.reviewStatus.indexOf('正取') > -1 ? '#047857' : act.reviewStatus.indexOf('備取') > -1 ? '#b45309' : act.reviewStatus.indexOf('審核') > -1 ? '#2563eb' : '#64748b',
-                          backgroundColor: act.reviewStatus.indexOf('正取') > -1 ? '#d1fae5' : act.reviewStatus.indexOf('備取') > -1 ? '#fef3c7' : act.reviewStatus.indexOf('審核') > -1 ? '#dbeafe' : '#f1f5f9'
+                          color: act.reviewStatus.indexOf('已取消 (待退款)') > -1
+                            ? '#c2410c'
+                            : act.reviewStatus.indexOf('正取') > -1 
+                            ? '#047857' 
+                            : act.reviewStatus.indexOf('備取') > -1 
+                            ? '#b45309' 
+                            : act.reviewStatus.indexOf('審核') > -1 
+                            ? '#2563eb' 
+                            : '#64748b',
+                          backgroundColor: act.reviewStatus.indexOf('已取消 (待退款)') > -1 
+                            ? '#ffedd5' 
+                            : act.reviewStatus.indexOf('正取') > -1 
+                            ? '#d1fae5' 
+                            : act.reviewStatus.indexOf('備取') > -1 
+                            ? '#fef3c7' 
+                            : act.reviewStatus.indexOf('審核') > -1 
+                            ? '#dbeafe' 
+                            : '#f1f5f9'
                         }}
                       >
                         {getReviewStatusText(act.reviewStatus)}
