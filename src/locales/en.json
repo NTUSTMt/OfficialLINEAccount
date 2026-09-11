@@ -260,7 +260,7 @@
       "fullPriceApplied": " (Full Price)",
       "estimatedTotal": "Estimated Total ({{purpose}})",
       "trialLabel": "Calculation: ",
-      "summaryTip": "* Actual rental fee will be calculated by officers at pickup based on usage days and rules.",
+      "summaryTip": "* If you have any questions about the fees, please contact this LINE account directly.",
       "submitBtn": "Confirm Reservation (${{price}})"
     },
     "formula": {
@@ -291,7 +291,10 @@
       "maxPhotosReached": "Maximum 5 photos reached",
       "noPhotos": "No gear photo yet",
       "photoSaveSuccess": "Gear photos updated successfully!",
-      "photoSaveFailed": "Failed to update photos, please try again later."
+      "photoSaveFailed": "Failed to update photos, please try again later.",
+      "confirmDeletePhoto": "Are you sure you want to delete this photo?",
+      "confirmDeleteLastPhoto": "⚠️ This is the last photo for this gear. Deleting it will leave no photos displayed. Are you sure?",
+      "confirmSaveEmptyPhotos": "⚠️ No photos retained. Saving will remove all photos for this gear. Are you sure you want to proceed?"
     }
   },
   "payment": {
@@ -345,7 +348,6 @@
       "graduationValue": "Undergraduate $800 / Master $400",
       "selectLabel": "Select your membership scheme:",
       "optionThisSem": "1 Semester - Current {{sem}} ($200, Expiry date: {{date}})",
-      "optionNextSem": "1 Semester - Next {{sem}} ($200, Expiry date: {{date}})",
       "optionUndergrad": "Until Graduation - Undergrad ($800, Expiry date: {{date}})",
       "optionMaster": "Until Graduation - Master ($400, Expiry date: {{date}})"
     },
@@ -353,7 +355,10 @@
       "dateLabel": "Rental Period:",
       "itemsLabel": "Itemized Details:",
       "qtyUnit": "pcs",
-      "modifyTip": "Tip: If you need to modify your order, please go to your Profile to cancel it and rent again."
+      "modifyTip": "Tip: If you need to modify your order, please go to your Profile to cancel it and rent again.",
+      "discountBadge": "Member 50% OFF",
+      "discountTip": "💡 Select membership fee above to save ${{save}} (50% off) on this rental!",
+      "discountApplied": "Member 50% discount applied"
     },
     "form": {
       "title": "Enter Payment Info",

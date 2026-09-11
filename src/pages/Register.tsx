@@ -188,6 +188,11 @@ function Register({ userId }: { userId: string }) {
     }
   }, [formData, userId, loading, isSubmitting]);
 
+  // 切換步驟時自動平滑滾動至頁面頂端
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [step]);
+
   // 清除草稿重設表單
   const clearDraft = () => {
     const draftKey = 'register_draft_' + (userId || 'guest');

@@ -14,6 +14,7 @@ interface UnpaidItem {
   returnDate?: string;
   qty?: number;
   purpose?: string;
+  isOfficial?: string;
 }
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
@@ -33,7 +34,7 @@ function Payment({ userId }: { userId: string }) {
   const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [membershipOption, setMembershipOption] = useState<'thisSem' | 'nextSem' | 'undergrad' | 'master'>('thisSem');
+  const [membershipOption, setMembershipOption] = useState<'thisSem' | 'undergrad' | 'master'>('thisSem');
 
   const handleCopyAccount = async () => {
     try {
@@ -66,19 +67,6 @@ function Payment({ userId }: { userId: string }) {
     const thisSemStr = `${rocYear}-${semester}`;
     const thisSemEndDate = semester === 1 ? `${year + 1}/01/31` : `${year}/07/31`;
 
-    let nextRocYear = rocYear;
-    let nextSem = 1;
-    let nextYear = year;
-    if (semester === 1) {
-      nextSem = 2;
-    } else {
-      nextRocYear = rocYear + 1;
-      nextSem = 1;
-      nextYear = year + 1;
-    }
-    const nextSemStr = `${nextRocYear}-${nextSem}`;
-    const nextSemEndDate = nextSem === 1 ? `${nextYear + 1}/01/31` : `${nextYear}/07/31`;
-
     const undergradGradYear = year + 4;
     const undergradGradDate = `${undergradGradYear}/06/30`;
 
@@ -88,8 +76,6 @@ function Payment({ userId }: { userId: string }) {
     return {
       thisSemStr,
       thisSemEndDate,
-      nextSemStr,
-      nextSemEndDate,
       undergradGradDate,
       masterGradDate
     };
@@ -97,12 +83,6 @@ function Payment({ userId }: { userId: string }) {
 
   const membershipDetails = useMemo(() => {
     switch (membershipOption) {
-      case 'nextSem':
-        return {
-          amount: 200,
-          name: `${semesterInfo.nextSemStr} 學期社費 (Membership Fee - Next Semester)`,
-          expiryDate: semesterInfo.nextSemEndDate
-        };
       case 'undergrad':
         return {
           amount: 800,
@@ -135,13 +115,12 @@ function Payment({ userId }: { userId: string }) {
         const result = await res.json();
         if (result.status === 'success') {
           setUnpaidList(result.data);
-          // 預設全選
-          const allIds = [
-            ...result.data.membership.map((item: UnpaidItem) => item.id),
+          // 預設勾選活動與裝備，社費預設為未勾選
+          const initialSelectedIds = [
             ...result.data.activities.map((item: UnpaidItem) => item.id),
             ...result.data.equipments.map((item: UnpaidItem) => item.id)
           ];
-          setSelectedIds(allIds);
+          setSelectedIds(initialSelectedIds);
         } else {
           setError(result.message || t('payment.error.loadFailed'));
         }
@@ -164,31 +143,46 @@ function Payment({ userId }: { userId: string }) {
           { id: 'act_E02', name: '合歡群峰出隊費 (交通與入園保險)', amount: 1500 }
         ],
         equipments: [
-          { id: 'eq_R0720141530', name: '雙人高山帳篷', amount: 100, orderId: 'R0720141530', qty: 1, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用' },
-          { id: 'eq_R0720141530', name: '黑冰 Z400 羽絨睡袋', amount: 120, orderId: 'R0720141530', qty: 2, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用' }
+          { id: 'eq_R0720141530', name: '雙人高山帳篷', amount: 100, orderId: 'R0720141530', qty: 1, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用', isOfficial: '否' },
+          { id: 'eq_R0720141530', name: '黑冰 Z400 羽絨睡袋', amount: 120, orderId: 'R0720141530', qty: 2, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用', isOfficial: '否' }
         ]
       });
-      setSelectedIds(['fee_membership', 'act_E01', 'eq_R0720141530']);
+      setSelectedIds(['act_E01', 'eq_R0720141530']);
       setLoading(false);
     }
   }, [userId]);
 
-  // 所有項目的扁平化清單 (社費部分動態計算金額與名稱)
+  // 所有項目的扁平化清單 (社費部分動態計算金額與名稱，裝備部分若同時繳社費享 5 折)
   const allItemsFlat = useMemo(() => {
+    const hasMembershipSelected = selectedIds.includes('fee_membership');
+
     // 依據 orderId 分組裝備
-    const equipGroups: { [orderId: string]: { id: string; orderId: string; purpose: string; amount: number; pickupDate: string; returnDate: string; items: { name: string; qty: number; amount: number }[] } } = {};
+    const equipGroups: { 
+      [orderId: string]: { 
+        id: string; 
+        orderId: string; 
+        purpose: string; 
+        isOfficial: string;
+        amount: number; 
+        pickupDate: string; 
+        returnDate: string; 
+        items: { name: string; qty: number; amount: number }[] 
+      } 
+    } = {};
     
     unpaidList.equipments.forEach(item => {
       const orderId = item.orderId || 'unknown';
       const purpose = item.purpose || '個人使用';
       const isClubOuting = purpose === '社團出隊' || purpose === '社團出團';
       const amount = isClubOuting ? 0 : item.amount;
+      const isOfficial = item.isOfficial || '否';
 
       if (!equipGroups[orderId]) {
         equipGroups[orderId] = {
           id: item.id, // eq_orderId
           orderId: orderId,
           purpose: purpose,
+          isOfficial: isOfficial,
           amount: 0,
           pickupDate: item.pickupDate || '',
           returnDate: item.returnDate || '',
@@ -205,16 +199,40 @@ function Payment({ userId }: { userId: string }) {
 
     const groupedEquips = Object.values(equipGroups).map(group => {
       const namesList = group.items.map(it => `${it.name} x${it.qty}`).join(', ');
+      const isClubOuting = group.purpose === '社團出隊' || group.purpose === '社團出團';
+      // 判斷是否可享 5 折：非社團出隊且租借時非社員（若租借時已是社員，已於租借時折算）
+      const canDiscount = !isClubOuting && group.isOfficial !== '是' && group.amount > 0;
+      const isDiscounted = canDiscount && hasMembershipSelected;
+      const originalAmount = group.amount;
+      const finalAmount = isDiscounted ? Math.round(originalAmount * 0.5) : originalAmount;
+      const discountDiff = originalAmount - Math.round(originalAmount * 0.5);
+
+      const processedItems = group.items.map(it => {
+        const itemOrigAmount = it.amount;
+        const itemFinalAmount = isDiscounted ? Math.round(itemOrigAmount * 0.5) : itemOrigAmount;
+        return {
+          ...it,
+          originalAmount: itemOrigAmount,
+          amount: itemFinalAmount,
+          isDiscounted: isDiscounted && itemOrigAmount > 0
+        };
+      });
+
       return {
         id: group.id,
         orderId: group.orderId,
         purpose: group.purpose,
+        isOfficial: group.isOfficial,
         name: namesList,
-        amount: group.amount,
+        amount: finalAmount,
+        originalAmount: originalAmount,
+        discountDiff: discountDiff,
+        canDiscount: canDiscount,
+        isDiscounted: isDiscounted,
         pickupDate: group.pickupDate,
         returnDate: group.returnDate,
-        items: group.items,
-        type: 'equipment',
+        items: processedItems,
+        type: 'equipment' as const,
         typeLabel: t('payment.type.equipment')
       };
     });
@@ -224,27 +242,37 @@ function Payment({ userId }: { userId: string }) {
         ...item,
         name: membershipDetails.name,
         amount: membershipDetails.amount,
-        type: 'membership',
+        type: 'membership' as const,
         typeLabel: t('payment.type.membership'),
         orderId: undefined,
         pickupDate: undefined,
         returnDate: undefined,
         items: undefined,
-        purpose: undefined
+        purpose: undefined,
+        isOfficial: undefined,
+        originalAmount: membershipDetails.amount,
+        discountDiff: 0,
+        canDiscount: false,
+        isDiscounted: false
       })),
       ...unpaidList.activities.map(item => ({
         ...item,
-        type: 'activity',
+        type: 'activity' as const,
         typeLabel: t('payment.type.activity'),
         orderId: undefined,
         pickupDate: undefined,
         returnDate: undefined,
         items: undefined,
-        purpose: undefined
+        purpose: undefined,
+        isOfficial: undefined,
+        originalAmount: item.amount,
+        discountDiff: 0,
+        canDiscount: false,
+        isDiscounted: false
       })),
       ...groupedEquips
     ];
-  }, [unpaidList, membershipDetails]);
+  }, [unpaidList, membershipDetails, selectedIds, t]);
 
   // 計算已勾選的總金額
   const totalAmount = useMemo(() => {
@@ -294,9 +322,15 @@ function Payment({ userId }: { userId: string }) {
       if (result.status === 'success') {
         // 發送 LINE 明細訊息並關閉 LIFF
         if (liff.isInClient()) {
-          const selectedNames = allItemsFlat
-            .filter(item => selectedIds.includes(item.id))
-            .map(item => item.name);
+          const selectedItems = allItemsFlat
+            .filter(item => selectedIds.includes(item.id));
+
+          const selectedNames = selectedItems.map(item => {
+            if (item.type === 'equipment' && item.isDiscounted) {
+              return `${item.name} (${t('payment.equip.discountApplied')})`;
+            }
+            return item.name;
+          });
             
           const msgText = `【${t('payment.msg.title')}】\n\n` +
             `${t('payment.msg.success')}\n` +
@@ -460,10 +494,22 @@ function Payment({ userId }: { userId: string }) {
                     />
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#e2e8f0', color: '#475569', fontWeight: 'bold' }}>
-                          {item.typeLabel}
-                        </span>
-                        <strong style={{ color: 'var(--primary-color)', fontSize: '14px' }}>${item.amount}</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#e2e8f0', color: '#475569', fontWeight: 'bold' }}>
+                            {item.typeLabel}
+                          </span>
+                          {item.type === 'equipment' && item.isDiscounted && (
+                            <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#dcfce7', color: '#15803d', fontWeight: 'bold' }}>
+                              {t('payment.equip.discountBadge')}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          {item.type === 'equipment' && item.isDiscounted && (
+                            <del style={{ color: '#94a3b8', marginRight: '6px', fontSize: '13px' }}>${item.originalAmount}</del>
+                          )}
+                          <strong style={{ color: 'var(--primary-color)', fontSize: '14px' }}>${item.amount}</strong>
+                        </div>
                       </div>
                       <p style={{ fontSize: '13px', marginTop: '4px', color: 'var(--text-primary)', fontWeight: '500' }}>
                         {item.type === 'equipment' 
@@ -510,7 +556,6 @@ function Payment({ userId }: { userId: string }) {
                         }}
                       >
                         <option value="thisSem">{t('payment.membership.optionThisSem', { sem: semesterInfo.thisSemStr, date: semesterInfo.thisSemEndDate })}</option>
-                        <option value="nextSem">{t('payment.membership.optionNextSem', { sem: semesterInfo.nextSemStr, date: semesterInfo.nextSemEndDate })}</option>
                         <option value="undergrad">{t('payment.membership.optionUndergrad', { date: semesterInfo.undergradGradDate })}</option>
                         <option value="master">{t('payment.membership.optionMaster', { date: semesterInfo.masterGradDate })}</option>
                       </select>
@@ -543,10 +588,21 @@ function Payment({ userId }: { userId: string }) {
                         {item.items?.map((sub, idx) => (
                           <li key={idx} style={{ color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span><strong>{sub.name}</strong> × {sub.qty} {t('payment.equip.qtyUnit')}</span>
-                            <span style={{ color: '#64748b' }}>${sub.amount}</span>
+                            <span style={{ color: '#64748b' }}>
+                              {sub.isDiscounted && (
+                                <del style={{ color: '#94a3b8', marginRight: '6px', fontSize: '12px' }}>${sub.originalAmount}</del>
+                              )}
+                              ${sub.amount}
+                            </span>
                           </li>
                         ))}
                       </ul>
+
+                      {unpaidList.membership.length > 0 && item.canDiscount && !item.isDiscounted && (
+                        <div style={{ fontSize: '11.5px', color: '#0369a1', backgroundColor: '#e0f2fe', padding: '6px 10px', borderRadius: '6px', fontWeight: '600', marginBottom: '8px', display: 'block', width: '100%', boxSizing: 'border-box' }}>
+                          {t('payment.equip.discountTip', { save: item.discountDiff })}
+                        </div>
+                      )}
                       
                       <div style={{ fontSize: '11px', color: '#dc2626', backgroundColor: '#fef2f2', padding: '6px 10px', borderRadius: '6px', fontWeight: 'bold', display: 'inline-block', width: '100%', boxSizing: 'border-box' }}>
                         {t('payment.equip.modifyTip')}

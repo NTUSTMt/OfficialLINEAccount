@@ -3,11 +3,82 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.28` (v0.1.28)
+- **當前版本**：`0.1.34` (v0.1.34)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 134. 繳費系統社費與個人借裝費用合併繳納 5 折優惠機制 (v0.1.34)
+- **社費與個人借裝費用動態折算 5 折 (Dynamic 50% Rental Discount with Membership Fee)**：
+  - 在繳費系統 (`Payment.tsx`) 中，當使用者同時勾選「社籍與社費」以及「個人用途裝備租借」時，該筆原為非社員全額的個人借裝費用自動享有 **5 折優惠** (`Math.round(金額 * 0.5)`)。
+  - 介面即時回饋：
+    - 裝備卡片頂端即時顯示原價劃線與折算價格（例如 `~~$220~~ $110`），並帶有綠色高彩「`社員5折優惠`」徽章。
+    - 展開之子項明細亦同步顯示各單項原價劃線與折抵後費用。
+    - 結帳總金額 (`totalAmount`) 動態扣減折扣費用。
+    - 若使用者取消勾選社費，裝備費用即刻即時還原為原始全額，動態切換平滑流暢。
+- **未勾選社費時之貼心試算省錢提示 (Smart Savings Tip when Unchecked)**：
+  - 當使用者有待繳之個人借裝款項但尚未勾選社費時，裝備卡片下方自動跳出專屬藍色貼心提示：
+    `💡 同時勾選上方社費，此裝備租借費享 5 折現省 ${{save}}！`
+    主動提醒社員享有之權益與省錢優勢。
+- **GAS 後端試算與記帳完整同步 (GAS Unpaid API & Payment Submit Synchronization)**：
+  - `getUnpaidListAPI`：於查詢 `Loan_Records` 時增加 `是否為社員` 欄位解析並回傳至前端 `equipments` 清單中，避免在借裝時已是正式社員者發生重複折算問題。
+  - `processPaymentSubmit`：當判定使用者申報項目包含 `fee_membership` 時，針對用途非出隊且尚未具有社員身分之個人借裝訂單：
+    - 將 `Loan_Records` 工作表中該訂單之「應繳費用」即時更新為 5 折折算金額。
+    - 將該筆借用紀錄之「是否為社員」欄位同步更新為「`是`」。
+    - 寫入 `Payments` 對帳表與推播幹部通知時，明細明確標記 `(社員5折)`，確保 Google Sheets 帳目金額、社員紀錄與使用者實際轉帳金額 100% 吻合一致。
+- **LIFF 申報通知明細對齊 (LIFF Message Details Alignment)**：
+  - 申報完成透過 LINE LIFF 傳送個人對帳訊息時，若借裝項目享有折扣，於項目後標記 `(含社員5折優惠)`。
+- **多國語言支援 (i18n Support)**：
+  - 同步於 `zh.json` 與 `en.json` 新增折扣徽章、省錢提示與申報註記之雙語鍵值。
+
+### 133. 雲端硬碟根目錄資料夾全面升級為「系統圖庫」 (v0.1.33)
+- **根目錄結構現代化重命名 (Root Folder Upgrade to 系統圖庫)**：
+  - 將 Google 雲端硬碟中儲存所有上傳檔案（包含體能登山證明、活動封面、裝備相片、活動心得照片）之預設根目錄資料夾由原先的 `LINE_Uploads` 全面升級更名為「**系統圖庫**」。
+- **自動平滑過渡遷移機制 (Seamless Migration & Backward Compatibility)**：
+  - 在 `uploadFileToDrive` 建立與存取資料夾時：
+    1. 優先搜尋雲端硬碟中名為「系統圖庫」之資料夾。
+    2. 若未發現「系統圖庫」，但存在過去建立之 `LINE_Uploads`，系統將自動將其更名為「系統圖庫」，確保過往上傳的所有相片、子資料夾階層（如 `體能登山證明/`、`裝備照片/`、`活動封面/`、`心得照片/`）與外部公開連結完全不中斷且無縫過渡。
+    3. 若皆不存在，則自動新建「系統圖庫」根目錄資料夾。
+  - 在 `getMemberProfileAPI` 智慧檢索體能證明歷史檔案時，同步支援優先自「系統圖庫」檢索，並兼顧相容既有目錄。
+
+### 132. 裝備照片刪除防呆確認、輪播索引校正與冒泡事件阻斷 (v0.1.32)
+- **輪播軌道安全索引重置 (Carousel Index Reset on Save)**：
+  - 修復幹部在 `Borrow.tsx` 編輯裝備照片時，若刪除其中照片並按下儲存，因輪播索引 `activePhotoIdx` 未歸零導致輪播軌道偏移至超出邊界的完全空白區域問題。
+  - 在 `handleSavePhotos` 儲存成功時主動執行 `setActivePhotoIdx(0)`，確保輪播視窗精準錨定在第一張有效照片上，消除「儲存後照片全都未顯示」的視覺異常。
+- **照片刪除防呆確認與事件隔離 (Safe Photo Deletion & Stop Propagation)**：
+  - 在 `handleDeleteCurrentPhoto` 中加入確認對話框（`window.confirm`）：
+    - 刪除一般照片時提示「確定要刪除這張照片嗎？」。
+    - 刪除最後一張照片時跳出高風險警告「⚠️ 這是此裝備最後一張照片，刪除並儲存後將無照片展示，確定要刪除嗎？」。
+    - 若幹部清空所有照片並點擊儲存，進行二次確認「⚠️ 目前未保留任何照片，儲存後此裝備將無照片展示，確定要儲存嗎？」，杜絕意外清空。
+  - 在相片刪除按鈕（`.photo-delete-btn`）上完整阻斷 `onClick`、`onMouseDown` 與 `onTouchStart` 的事件冒泡（`e.stopPropagation()`），徹底防止誤觸背景輪播軌道的拖曳滑動事件。
+- **GAS 後端健全保護 (GAS Try-Catch Guard)**：
+  - 在 `gas.js` 之 `processUpdateEquipmentImages` 中加入全區 `try...catch` 捕捉與錯誤日誌，避免試算表操作異常時靜默失敗，並回傳清楚的錯誤提示。
+
+### 131. 裝備預約結算費用疑慮提示英文語系同步更新 (v0.1.31)
+- **裝備預訂總結提示英文語系對齊 (English Summary Tip Alignment)**：
+  - 同步更新英文語系 `en.json` 之 `borrow.summary.summaryTip`，將原先較為生硬的幹部核算說明改為更加友善之聯絡指引：
+    `"* If you have any questions about the fees, please contact this LINE account directly."`
+  - 與中文版本「* 若對費用有疑慮，請直接聯絡本 LINE 帳號」保持一致。
+
+### 130. 資料填寫步驟切換自動平滑滾動至頁面最上方 (v0.1.30)
+- **步驟切換自動回頂 (Auto Scroll to Top on Step Change)**：
+  - 在資料填寫表單（`Register.tsx`）中新增對 `step` 狀態的自動監聽機制。
+  - 當使用者點擊「下一步」、「上一步」或在鍵盤按 Enter 進入下一階段時，自動執行 `window.scrollTo({ top: 0, behavior: 'smooth' })`。
+  - 確保進入新步驟時，頁面自動平滑滾動至最頂端，使用者能第一時間檢視並依序填寫該步驟的最上方題目，大幅提升手機行動端填表體驗。
+
+### 129. 繳費系統社費預設未勾選、補齊畢業價格與移除預繳方案 (v0.1.29)
+- **社費項目改為預設未勾選 (Default Uncheck Membership Fee)**：
+  - 進入繳費系統讀取待繳清單時，預設僅自動勾選「活動」與「裝備」項目，將「社籍與社費」排除在初始勾選陣列之外。
+  - 需由社員依個人意願主動勾選，才計入社費項目與結帳金額，徹底消除非自願繳費之疑慮。
+- **補齊社費說明「直到畢業」價格標籤 (Graduation Fee Price Label Fix)**：
+  - 修復 `zh.json` 中 `payment.membership.graduationValue` 僅有「大學部 / 研究所」而遺漏價格的問題，補齊為完整之「**大學部 $800 / 研究所 $400**」，與英文版及選單價格保持一致。
+- **移除預繳下一學期社費方案 (Remove Next Semester Pre-Payment Scheme)**：
+  - 全面移除繳費方案中的「下一學期 (`nextSem`)」預繳選項，簡化收費制度並降低跨學期管理複雜度。
+  - 社費方案下拉選單精簡為三個明確選項：
+    1. 當前學期 ($200)
+    2. 直到畢業 - 大學部 ($800)
+    3. 直到畢業 - 研究所 ($400)
 
 ### 128. 社籍到期推播通知語氣優化為感恩祝福 (v0.1.28)
 - **移除催繳社費與繳費系統引導 (Remove Payment Reminders from Expiration Message)**：

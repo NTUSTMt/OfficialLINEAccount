@@ -371,16 +371,19 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
     setModalQty(form.cart[equip.id] || 0);
   };
 
-  // 刪除當前照片 (僅在編輯模式)
+  // 刪除當前照片 (僅在編輯模式，具備防呆確認與安全索引校正)
   const handleDeleteCurrentPhoto = () => {
     if (modalPhotos.length === 0) return;
-    setModalPhotos(prev => {
-      const next = prev.filter((_, i) => i !== activePhotoIdx);
-      if (activePhotoIdx >= next.length) {
-        setActivePhotoIdx(Math.max(0, next.length - 1));
-      }
-      return next;
-    });
+    const isLast = modalPhotos.length === 1;
+    const confirmMsg = isLast
+      ? t('borrow.modal.confirmDeleteLastPhoto')
+      : t('borrow.modal.confirmDeletePhoto');
+    if (!window.confirm(confirmMsg)) return;
+
+    const nextPhotos = modalPhotos.filter((_, i) => i !== activePhotoIdx);
+    setModalPhotos(nextPhotos);
+    const nextIdx = Math.max(0, Math.min(activePhotoIdx, nextPhotos.length - 1));
+    setActivePhotoIdx(nextIdx);
   };
 
   // 上傳新照片 (壓縮並暫存於待儲存清單)
@@ -428,10 +431,17 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
   // 批次儲存照片至後端與試算表
   const handleSavePhotos = async () => {
     if (!selectedEquipment) return;
+    const keptUrls = modalPhotos.filter(p => !p.isNew).map(p => p.url);
+    const newPhotoFiles = modalPhotos.filter(p => p.isNew && p.fileObj).map(p => p.fileObj);
+
+    if (keptUrls.length === 0 && newPhotoFiles.length === 0) {
+      if (!window.confirm(t('borrow.modal.confirmSaveEmptyPhotos'))) {
+        return;
+      }
+    }
+
     setIsSavingPhotos(true);
     try {
-      const keptUrls = modalPhotos.filter(p => !p.isNew).map(p => p.url);
-      const newPhotoFiles = modalPhotos.filter(p => p.isNew && p.fileObj).map(p => p.fileObj);
       const res = await fetch(appendAuthToken(GAS_API_URL), {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -455,6 +465,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         }
         const updatedUrls = newImgUrl.split(/[\n,，;\s]+/).map((u: string) => u.trim()).filter((u: string) => u.startsWith('http'));
         setModalPhotos(updatedUrls.map((u: string) => ({ url: u })));
+        setActivePhotoIdx(0); // 強制重置輪播索引至 0，杜絕超出邊界白畫面
         setIsEditMode(false);
         alert(t('borrow.modal.photoSaveSuccess'));
       } else {
@@ -1058,7 +1069,12 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
                   <button
                     type="button"
                     className="photo-delete-btn"
-                    onClick={handleDeleteCurrentPhoto}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteCurrentPhoto();
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     title={t('borrow.modal.deletePhoto')}
                   >
                     <Trash2 size={16} />

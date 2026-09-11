@@ -260,7 +260,7 @@
       "fullPriceApplied": " (非社員全額)",
       "estimatedTotal": "本單預估總租金 ({{purpose}})",
       "trialLabel": "試算: ",
-      "summaryTip": "* 實際租金以取貨時，幹部依實際使用天數與規則核算為準",
+      "summaryTip": "* 若對費用有疑慮，請直接聯絡本 LINE 帳號",
       "submitBtn": "確認送出預訂單 (${{price}})"
     },
     "formula": {
@@ -291,7 +291,10 @@
       "maxPhotosReached": "已達 5 張照片上限",
       "noPhotos": "目前無裝備照片",
       "photoSaveSuccess": "裝備照片已成功更新！",
-      "photoSaveFailed": "照片更新失敗，請稍後再試。"
+      "photoSaveFailed": "照片更新失敗，請稍後再試。",
+      "confirmDeletePhoto": "確定要刪除這張照片嗎？",
+      "confirmDeleteLastPhoto": "⚠️ 這是此裝備最後一張照片，刪除並儲存後將無照片展示，確定要刪除嗎？",
+      "confirmSaveEmptyPhotos": "⚠️ 目前未保留任何照片，儲存後此裝備將無照片展示，確定要儲存嗎？"
     }
   },
   "payment": {
@@ -342,10 +345,9 @@
       "title": "社費說明：",
       "semesterLabel": "一學期：",
       "graduationLabel": "直到畢業 (until graduation)：",
-      "graduationValue": "大學部 / 研究所",
+      "graduationValue": "大學部 $800 / 研究所 $400",
       "selectLabel": "請選擇您的社費方案：",
       "optionThisSem": "一學期 - 當前學期 {{sem}} ($200，預計到期 {{date}})",
-      "optionNextSem": "一學期 - 下一學期 {{sem}} ($200，預計到期 {{date}})",
       "optionUndergrad": "直到畢業 - 大學部 ($800，預計到期 {{date}})",
       "optionMaster": "直到畢業 - 研究所 ($400，預計到期 {{date}})"
     },
@@ -353,7 +355,10 @@
       "dateLabel": "租借日期：",
       "itemsLabel": "租借項目明細：",
       "qtyUnit": "件",
-      "modifyTip": "貼心提醒：需要修改訂單的話，請到個人頁面取消訂單再重新租借一次。"
+      "modifyTip": "貼心提醒：需要修改訂單的話，請到個人頁面取消訂單再重新租借一次。",
+      "discountBadge": "社員5折優惠",
+      "discountTip": "💡 同時勾選上方社費，此裝備租借費享 5 折現省 ${{save}}！",
+      "discountApplied": "含社員5折優惠"
     },
     "form": {
       "title": "填寫匯款資料",
