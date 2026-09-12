@@ -10,13 +10,19 @@
 -- 0. 資料表結構自我修復與自動遷移 (Self-healing Schema Migration)
 -- ------------------------------------------------------------------------------
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS target_type TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS target_id TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS bank_last5 TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS proof_image_url TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS officer_notes TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed_by TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE reflections ADD COLUMN IF NOT EXISTS name TEXT;
+
+-- 自 members 自動回填姓名
+UPDATE payments p 
+SET name = m.name 
+FROM members m 
+WHERE p.line_user_id = m.line_user_id AND (p.name IS NULL OR p.name = '');
+
+UPDATE reflections r 
+SET name = m.name 
+FROM members m 
+WHERE r.line_user_id = m.line_user_id AND (r.name IS NULL OR r.name = '');
 
 -- ------------------------------------------------------------------------------
 -- 1. 取得個人歷史繳費紀錄 RPC (get_my_payment_history)
@@ -38,85 +44,7 @@ BEGIN
         );
     END IF;
 
-    -- 1. 自癒修復舊資料中 amount 為 0 的 payments 紀錄
-    -- A. 純社費修復 (Membership Fee, 預設 200)
-    UPDATE payments
-    SET amount = 200, updated_at = NOW()
-    WHERE line_user_id = p_line_user_id
-      AND (amount IS NULL OR amount = 0)
-      AND (type ILIKE '%社費%' OR type ILIKE '%社籍%' OR type ILIKE '%Membership%')
-      AND type NOT ILIKE '%活動%' AND type NOT ILIKE '%裝備%';
-
-    -- B. 活動費用修復 (從 events 表提取費用)
-    UPDATE payments p
-    SET amount = COALESCE((
-        SELECT e.fee 
-        FROM events e 
-        WHERE (p.type ILIKE '%' || e.title || '%' OR p.type ILIKE '%' || e.id || '%')
-          AND e.fee > 0
-        LIMIT 1
-    ), 0),
-    updated_at = NOW()
-    WHERE p.line_user_id = p_line_user_id
-      AND (p.amount IS NULL OR p.amount = 0)
-      AND p.type ILIKE '%活動%'
-      AND p.type NOT ILIKE '%裝備%';
-
-    -- C. 裝備租借費用 (從 loans 及 loan_items 提取)
-    UPDATE payments p
-    SET amount = COALESCE((
-        SELECT l.total_rent 
-        FROM loans l 
-        WHERE l.line_user_id = p_line_user_id
-          AND l.total_rent > 0
-          AND (
-            p.type ILIKE '%' || l.id || '%' 
-            OR EXISTS (
-                SELECT 1 FROM loan_items li 
-                JOIN equipments eq ON li.equipment_id = eq.id 
-                WHERE li.loan_id = l.id AND p.type ILIKE '%' || eq.name || '%'
-            )
-          )
-        ORDER BY l.created_at DESC
-        LIMIT 1
-    ), 0),
-    updated_at = NOW()
-    WHERE p.line_user_id = p_line_user_id
-      AND (p.amount IS NULL OR p.amount = 0)
-      AND p.type ILIKE '%裝備%'
-      AND p.type NOT ILIKE '%活動%';
-
-    -- D. 複合申報項目 (活動 + 裝備 或 + 社費)
-    UPDATE payments p
-    SET amount = (
-        COALESCE(CASE WHEN (p.type ILIKE '%社費%' OR p.type ILIKE '%社籍%' OR p.type ILIKE '%Membership%') THEN 200 ELSE 0 END, 0) +
-        COALESCE((
-            SELECT SUM(e.fee) 
-            FROM events e 
-            WHERE (p.type ILIKE '%' || e.title || '%' OR p.type ILIKE '%' || e.id || '%')
-              AND e.fee > 0
-        ), 0) +
-        COALESCE((
-            SELECT SUM(l.total_rent) 
-            FROM loans l 
-            WHERE l.line_user_id = p_line_user_id
-              AND l.total_rent > 0
-              AND (
-                p.type ILIKE '%' || l.id || '%' 
-                OR EXISTS (
-                    SELECT 1 FROM loan_items li 
-                    JOIN equipments eq ON li.equipment_id = eq.id 
-                    WHERE li.loan_id = l.id AND p.type ILIKE '%' || eq.name || '%'
-                )
-              )
-        ), 0)
-    ),
-    updated_at = NOW()
-    WHERE p.line_user_id = p_line_user_id
-      AND (p.amount IS NULL OR p.amount = 0)
-      AND ((p.type ILIKE '%活動%' AND p.type ILIKE '%裝備%') OR (p.type ILIKE '%社費%' AND (p.type ILIKE '%活動%' OR p.type ILIKE '%裝備%')));
-
-    -- 2. 查詢該用戶之所有繳費紀錄並按時間降冪排序
+    -- 查詢該用戶之所有繳費紀錄並按時間降冪排序 (直接讀取 payments.amount，不自動推算或覆寫)
     SELECT 
         COALESCE(jsonb_agg(h), '[]'::jsonb),
         COALESCE(SUM(
@@ -140,6 +68,7 @@ BEGIN
             END,
             'title', COALESCE(type, '未命名項目'),
             'amount', display_amount,
+            'name', COALESCE(name, ''),
             'last5Digits', COALESCE(bank_last5, ''),
             'note', COALESCE(officer_notes, ''),
             'status', COALESCE(status, '待確認 Checking')
@@ -151,6 +80,7 @@ BEGIN
                 id,
                 created_at,
                 type,
+                name,
                 bank_last5,
                 officer_notes,
                 status,
@@ -255,6 +185,7 @@ DECLARE
     v_beauty INTEGER;
     v_content TEXT;
     v_image_url TEXT;
+    v_member_name TEXT;
     v_photo_urls JSONB;
 BEGIN
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
@@ -277,9 +208,16 @@ BEGIN
         v_photo_urls := '[]'::jsonb;
     END IF;
 
+    -- 取得社員姓名
+    v_member_name := COALESCE(p_details->>'userName', '');
+    IF v_member_name = '' THEN
+        SELECT name INTO v_member_name FROM members WHERE line_user_id = p_line_user_id;
+    END IF;
+
     INSERT INTO reflections (
         event_id,
         line_user_id,
+        name,
         difficulty_rating,
         beauty_rating,
         content,
@@ -288,6 +226,7 @@ BEGIN
     ) VALUES (
         v_event_id,
         p_line_user_id,
+        v_member_name,
         v_difficulty,
         v_beauty,
         v_content,
@@ -296,6 +235,7 @@ BEGIN
     )
     ON CONFLICT (event_id, line_user_id)
     DO UPDATE SET
+        name = COALESCE(EXCLUDED.name, reflections.name),
         difficulty_rating = EXCLUDED.difficulty_rating,
         beauty_rating = EXCLUDED.beauty_rating,
         content = EXCLUDED.content,

@@ -74,3 +74,58 @@ DROP TRIGGER IF EXISTS trg_sync_payments ON payments;
 CREATE TRIGGER trg_sync_payments
 AFTER INSERT OR UPDATE OR DELETE ON payments
 FOR EACH ROW EXECUTE FUNCTION trg_fn_enqueue_sync();
+
+-- ------------------------------------------------------------------------------
+-- 3. 社員姓名自動帶入觸發器 (Auto-fill Member Name on Insert/Update)
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION trg_fn_auto_fill_member_name()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.name IS NULL OR trim(NEW.name) = '' THEN
+        SELECT name INTO NEW.name FROM members WHERE line_user_id = NEW.line_user_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_auto_name_payments ON payments;
+CREATE TRIGGER trg_auto_name_payments
+BEFORE INSERT OR UPDATE ON payments
+FOR EACH ROW EXECUTE FUNCTION trg_fn_auto_fill_member_name();
+
+DROP TRIGGER IF EXISTS trg_auto_name_loans ON loans;
+CREATE TRIGGER trg_auto_name_loans
+BEFORE INSERT OR UPDATE ON loans
+FOR EACH ROW EXECUTE FUNCTION trg_fn_auto_fill_member_name();
+
+DROP TRIGGER IF EXISTS trg_auto_name_signups ON event_signups;
+CREATE TRIGGER trg_auto_name_signups
+BEFORE INSERT OR UPDATE ON event_signups
+FOR EACH ROW EXECUTE FUNCTION trg_fn_auto_fill_member_name();
+
+DROP TRIGGER IF EXISTS trg_auto_name_reflections ON reflections;
+CREATE TRIGGER trg_auto_name_reflections
+BEFORE INSERT OR UPDATE ON reflections
+FOR EACH ROW EXECUTE FUNCTION trg_fn_auto_fill_member_name();
+
+-- ------------------------------------------------------------------------------
+-- 4. 社員更名連動更新子資料表觸發器 (Cascade Update Member Name)
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION trg_fn_sync_member_name_to_children()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.name IS DISTINCT FROM OLD.name THEN
+        UPDATE payments SET name = NEW.name WHERE line_user_id = NEW.line_user_id;
+        UPDATE loans SET name = NEW.name WHERE line_user_id = NEW.line_user_id;
+        UPDATE event_signups SET name = NEW.name WHERE line_user_id = NEW.line_user_id;
+        UPDATE reflections SET name = NEW.name WHERE line_user_id = NEW.line_user_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_member_name ON members;
+CREATE TRIGGER trg_sync_member_name
+AFTER UPDATE OF name ON members
+FOR EACH ROW EXECUTE FUNCTION trg_fn_sync_member_name_to_children();
+

@@ -9,13 +9,13 @@
 -- 0. 資料表結構自我修復與自動遷移 (Self-healing Schema Migration)
 -- ------------------------------------------------------------------------------
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS target_type TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS target_id TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS bank_last5 TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS proof_image_url TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS officer_notes TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed_by TEXT;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS name TEXT;
+
+-- 自 members 自動回填姓名
+UPDATE payments p 
+SET name = m.name 
+FROM members m 
+WHERE p.line_user_id = m.line_user_id AND (p.name IS NULL OR p.name = '');
 
 -- ------------------------------------------------------------------------------
 -- 1. 取得個人待繳清單 RPC (get_unpaid_payments)
@@ -170,6 +170,7 @@ DECLARE
     v_expiry TEXT;
     v_calc_fee INTEGER;
     v_calc_rent INTEGER;
+    v_member_name TEXT;
     i INTEGER;
 BEGIN
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
@@ -182,6 +183,12 @@ BEGIN
     v_note := COALESCE(p_details->>'note', '');
     v_expiry := p_details->>'membershipExpiryDate';
 
+    -- 取得社員姓名 (優先從 details 讀取，若無則查詢 members 表)
+    v_member_name := COALESCE(p_details->>'userName', '');
+    IF v_member_name = '' THEN
+        SELECT name INTO v_member_name FROM members WHERE line_user_id = p_line_user_id;
+    END IF;
+
     -- 生成唯一繳費單號 PAY_YYYYMMDD_HH24MISS_xxx
     v_payment_id := 'PAY_' || to_char(NOW(), 'YYYYMMDD_HH24MISS_') || lpad(floor(random() * 1000)::text, 3, '0');
 
@@ -192,29 +199,6 @@ BEGIN
             EXIT;
         END IF;
     END LOOP;
-
-    -- 若傳入之 totalAmount 為 0 但有選取項目，自動以原項目費用計算兜底金額
-    IF v_total_amount <= 0 AND jsonb_array_length(v_selected_ids) > 0 THEN
-        v_total_amount := 0;
-        FOR i IN 0 .. (jsonb_array_length(v_selected_ids) - 1) LOOP
-            v_item_id := v_selected_ids->>i;
-            IF v_item_id = 'fee_membership' THEN
-                v_total_amount := v_total_amount + 200;
-            ELSIF v_item_id LIKE 'act_%' THEN
-                v_event_id := substring(v_item_id from 5);
-                SELECT COALESCE(fee, 0) INTO v_calc_fee FROM events WHERE id = v_event_id;
-                v_total_amount := v_total_amount + COALESCE(v_calc_fee, 0);
-            ELSIF v_item_id LIKE 'eq_%' THEN
-                v_loan_id := substring(v_item_id from 4);
-                SELECT COALESCE(total_rent, 0) INTO v_calc_rent FROM loans WHERE id = v_loan_id;
-                IF v_has_membership THEN
-                    v_total_amount := v_total_amount + ROUND(COALESCE(v_calc_rent, 0) * 0.5);
-                ELSE
-                    v_total_amount := v_total_amount + COALESCE(v_calc_rent, 0);
-                END IF;
-            END IF;
-        END LOOP;
-    END IF;
 
     -- 逐項處理已勾選項目與狀態更新
     FOR i IN 0 .. (jsonb_array_length(v_selected_ids) - 1) LOOP
@@ -272,6 +256,7 @@ BEGIN
     INSERT INTO payments (
         id,
         line_user_id,
+        name,
         type,
         amount,
         bank_last5,
@@ -282,6 +267,7 @@ BEGIN
     ) VALUES (
         v_payment_id,
         p_line_user_id,
+        v_member_name,
         array_to_string(v_item_labels, ', '),
         v_total_amount,
         v_last5,

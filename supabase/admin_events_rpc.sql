@@ -3,6 +3,15 @@
 -- 目的：極速聚合後台活動清單、報名名單與即時審核狀態變更，落實最高規格幹部個資防護
 -- ==============================================================================
 
+-- 0. 資料表結構自我修復與自動遷移 (Self-healing Schema Migration)
+ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS name TEXT;
+
+-- 自 members 自動回填姓名
+UPDATE event_signups s 
+SET name = m.name 
+FROM members m 
+WHERE s.line_user_id = m.line_user_id AND (s.name IS NULL OR s.name = '');
+
 -- 1. 建立幹部資料表 (officers)
 CREATE TABLE IF NOT EXISTS officers (
     id BIGSERIAL PRIMARY KEY,
@@ -171,7 +180,7 @@ BEGIN
             'rowNumber', ROW_NUMBER() OVER (ORDER BY s.created_at ASC),
             'signupCode', s.id,
             'userId', s.line_user_id,
-            'name', COALESCE(m.name, '未知報名者'),
+            'name', COALESCE(s.name, m.name, '未知報名者'),
             'gender', COALESCE(m.gender, ''),
             'phone', COALESCE(m.phone, ''),
             'lineId', COALESCE(m.line_id, ''),

@@ -228,6 +228,7 @@ function _etlSignupsV2(ss, url, key) {
 
   var eidIdx = _findCol(h, ["活動編號", "eventid", "活動代號"]);
   var uidIdx = _findCol(h, ["系統識別碼", "userid", "帳號", "line_id"]);
+  var nameIdx = _findCol(h, ["姓名", "名稱", "name"]);
   var sidIdx = _findCol(h, ["專屬碼", "報名代碼", "code", "id"]);
   var stIdx = _findCol(h, ["審核結果", "狀態", "status"]);
   var isMemIdx = _findCol(h, ["是否為社員", "社員"]);
@@ -245,6 +246,7 @@ function _etlSignupsV2(ss, url, key) {
       id: sid,
       event_id: eid,
       line_user_id: uid,
+      name: nameIdx > -1 ? data[i][nameIdx].trim() : "",
       status: stIdx > -1 && data[i][stIdx] ? data[i][stIdx].trim() : "審核中 Checking",
       is_official_member_snapshot: isMemIdx > -1 ? (data[i][isMemIdx].indexOf("是") > -1) : false,
       cancel_reason: reasonIdx > -1 ? data[i][reasonIdx].trim() : "",
@@ -332,6 +334,7 @@ function _etlLoansV2(ss, url, key) {
 
   var ordIdx = _findCol(h, ["租借單號", "訂單編號", "單號", "orderid", "id"]);
   var uidIdx = _findCol(h, ["系統識別碼", "userid", "帳號", "line_id"]);
+  var nameIdx = _findCol(h, ["姓名", "名稱", "name"]);
   var sIdx = _findCol(h, ["領取日期", "借用日期", "取件", "start"]);
   var eIdx = _findCol(h, ["歸還日期", "還件日期", "歸還", "end"]);
   var daysIdx = _findCol(h, ["天數", "借用天數", "days"]);
@@ -360,6 +363,7 @@ function _etlLoansV2(ss, url, key) {
       loansMap[ordId] = {
         id: ordId,
         line_user_id: uid,
+        name: nameIdx > -1 ? data[i][nameIdx].trim() : "",
         start_date: sDate,
         end_date: eDate,
         days: daysIdx > -1 ? (parseInt(data[i][daysIdx], 10) || 1) : 1,
@@ -396,46 +400,13 @@ function _etlPaymentsV2(ss, url, key) {
 
   var pidIdx = _findCol(h, ["繳費單號", "單號", "編號", "id"]);
   var uidIdx = _findCol(h, ["系統識別碼", "userid", "帳號", "line_id"]);
+  var nameIdx = _findCol(h, ["姓名", "名稱", "name"]);
   var tIdx = _findCol(h, ["繳費項目", "項目", "type"]);
   var aIdx = _findCol(h, ["金額", "費用", "總額", "應繳金額", "amount", "fee", "cost"]);
   var bIdx = _findCol(h, ["帳號後五碼", "後五碼", "末五碼", "帳號", "last5"]);
   var imgIdx = _findCol(h, ["匯款證明", "證明", "收據", "相片", "照片", "proof"]);
   var stIdx = _findCol(h, ["審核狀態", "狀態", "status"]);
   var noIdx = _findCol(h, ["幹部備註", "備註", "notes"]);
-
-  // 取得活動費用對照表
-  var evSheet = ss.getSheetByName("Events") || ss.getSheetByName("活動");
-  var eventCosts = {};
-  if (evSheet) {
-    var eData = evSheet.getDataRange().getDisplayValues();
-    if (eData.length > 1) {
-      var eNameCol = _findCol(eData[0], ["活動名稱", "名稱", "title"]);
-      var eFeeCol = _findCol(eData[0], ["預計費用", "費用", "fee", "金額"]);
-      for (var e = 1; e < eData.length; e++) {
-        var en = eNameCol > -1 ? eData[e][eNameCol].trim() : "";
-        var ef = eFeeCol > -1 ? (parseInt(String(eData[e][eFeeCol]).replace(/\D/g, ''), 10) || 0) : 0;
-        if (en && ef > 0) eventCosts[en] = ef;
-      }
-    }
-  }
-
-  // 取得裝備租金對照表
-  var lnSheet = ss.getSheetByName("Loan_Records") || ss.getSheetByName("租借紀錄");
-  var loanCosts = {};
-  if (lnSheet) {
-    var lData = lnSheet.getDataRange().getDisplayValues();
-    if (lData.length > 1) {
-      var lUserCol = _findCol(lData[0], ["系統識別碼", "userid", "帳號"]);
-      var lEqCol = _findCol(lData[0], ["裝備名稱", "裝備", "器材"]);
-      var lCostCol = _findCol(lData[0], ["應繳費用", "費用", "租金", "金額"]);
-      for (var l = 1; l < lData.length; l++) {
-        var lu = lUserCol > -1 ? lData[l][lUserCol].trim() : "";
-        var leq = lEqCol > -1 ? lData[l][lEqCol].trim() : "";
-        var lc = lCostCol > -1 ? (parseInt(String(lData[l][lCostCol]).replace(/\D/g, ''), 10) || 0) : 0;
-        if (lu && leq && lc > 0) loanCosts[lu + "_" + leq] = lc;
-      }
-    }
-  }
 
   var records = [];
   for (var i = 1; i < data.length; i++) {
@@ -446,27 +417,10 @@ function _etlPaymentsV2(ss, url, key) {
     var typeStr = tIdx > -1 && data[i][tIdx] ? data[i][tIdx].trim() : "繳交社費";
     var parsedAmount = aIdx > -1 ? (parseInt(String(data[i][aIdx]).replace(/\D/g, ''), 10) || 0) : 0;
 
-    // 若金額為 0，進行智慧推算補齊
-    if (parsedAmount <= 0) {
-      if (typeStr.indexOf("社費") > -1 || typeStr.indexOf("社籍") > -1 || typeStr.indexOf("Membership") > -1) {
-        parsedAmount += 200;
-      }
-      for (var evKey in eventCosts) {
-        if (typeStr.indexOf(evKey) > -1) {
-          parsedAmount += eventCosts[evKey];
-        }
-      }
-      for (var lnKey in loanCosts) {
-        var parts = lnKey.split("_");
-        if (parts[0] === uid && typeStr.indexOf(parts[1]) > -1) {
-          parsedAmount += loanCosts[lnKey];
-        }
-      }
-    }
-
     records.push({
       id: pid,
       line_user_id: uid,
+      name: nameIdx > -1 ? data[i][nameIdx].trim() : "",
       type: typeStr,
       amount: parsedAmount,
       bank_last5: bIdx > -1 ? data[i][bIdx].trim() : "",
@@ -487,6 +441,7 @@ function _etlReflectionsV2(ss, url, key) {
   var h = data[0];
 
   var uidIdx = _findCol(h, ["系統識別碼", "userid", "帳號", "line_id"]);
+  var nameIdx = _findCol(h, ["姓名", "名稱", "name"]);
   var eidIdx = _findCol(h, ["活動編號", "eventid", "編號"]);
   var diffIdx = _findCol(h, ["難易度評分", "難度", "評分", "difficulty"]);
   var viewIdx = _findCol(h, ["風景評分", "景色", "風景", "beauty"]);
@@ -507,6 +462,7 @@ function _etlReflectionsV2(ss, url, key) {
     records.push({
       event_id: eid,
       line_user_id: uid,
+      name: nameIdx > -1 ? data[i][nameIdx].trim() : "",
       difficulty_rating: diffIdx > -1 ? (parseInt(data[i][diffIdx], 10) || 3) : 3,
       beauty_rating: viewIdx > -1 ? (parseInt(data[i][viewIdx], 10) || 3) : 3,
       content: cIdx > -1 ? data[i][cIdx].trim() : "",

@@ -3,11 +3,51 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.56` (v0.1.56)
+- **當前版本**：`0.1.58` (v0.1.58)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 158. 全域 line_user_id 關聯表增補 name 欄位與自動同步自癒機制 (v0.1.58)
+- **需求背景與體驗升級 (Human-Readable Tables in Supabase Dashboard)**：
+  - 管理者在 Supabase Table Editor 檢視資料表時，先前僅有 `line_user_id`（如 `U123456789...`），不易立即辨識資料所屬社員。
+  - 為所有具備 `line_user_id` 的資料表（`payments`、`loans`、`event_signups`、`reflections`）全面增設 `name`（社員姓名）欄位，達成後台直觀識別。
+- **資料庫結構自動升級與歷史自癒回填 (Schema & Self-Healing Migration)**：
+  - 於 [`supabase/schema.sql`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/schema.sql) 以及 RPC 腳本最頂部加入自癒遷移語句，自動增補 `name TEXT` 欄位。
+  - 內建歷史紀錄自動回填語句，執行時自動自 `members` 表批次補齊既有資料的社員姓名。
+- **自動化觸發器雙向聯防 (Database Triggers)**：
+  - 於 [`supabase/triggers.sql`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/triggers.sql) 實作：
+    1. `trg_fn_auto_fill_member_name`：在 `payments`、`loans`、`event_signups`、`reflections` 新增或修改紀錄時，若未帶姓名，自動自 `members` 根據 `line_user_id` 查出姓名並填入。
+    2. `trg_fn_sync_member_name_to_children`：當社員於 `members` 表變更個人姓名時，自動連動批次更新其名下所有歷史繳費、租借、報名與心得紀錄之 `name`。
+- **RPC 與工具層全面對齊**：
+  - [`supabase/payment_rpc.sql`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/payment_rpc.sql)：`submit_payment_rpc` 寫入時主動記錄 `name`。
+  - [`supabase/history_achievements_rpc.sql`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/history_achievements_rpc.sql)：`submit_reflection_rpc` 寫入時主動記錄 `name`，`get_my_payment_history` 查詢亦包含 `name` 欄位。
+  - [`supabase/admin_events_rpc.sql`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql)：`get_admin_event_signups_rpc` 優先採用 `s.name`。
+  - [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js)：`_syncPaymentToSupabase` 自動附加 `userName`。
+  - [`supabase/etl_v2.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/etl_v2.js)：清洗匯入時一併提取 Google Sheets 的 `姓名` 欄位。
+- **自動化測試與代碼品質**：
+  - 更新 [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs)，全套 17 組套件、46 項單元測試 **100% 綠燈通過**。
+  - 執行 `pnpm run lint` 0 錯誤、`pnpm run build` Vite 建置成功。
+
+### 157. 支援手動維護金額：移除自動比對推算舊付款金額邏輯與簡化 Supabase Schema (v0.1.57)
+- **使用者自主維護金額架構 (Manual Amount Input Support)**：
+  - **移除自動推算與猜測**：因使用者規劃直接在 Supabase 資料庫 `payments` 表中手動輸入與校對真實繳費金額，系統徹底刪除先前的舊資料自動比對與智慧推算引擎（包含 Events 活動費用、Loan_Records 裝備租金、預設社費 $200 及文字正則擷取），確保系統忠實呈現使用者輸入之數據，杜絕自動計算造成的非預期覆寫。
+- **Supabase RPC 預存程序淨化 (RPC Cleanup)**：
+  - [supabase/history_achievements_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/history_achievements_rpc.sql)：
+    - 刪除 `get_my_payment_history` 中所有 `UPDATE payments SET amount = ...` 自動修改舊資料的區塊。
+    - 查詢直接採用 `COALESCE(amount, 0) AS display_amount`，使用者於 Supabase 輸入的金額將即時且正確地呈現於個人繳費歷史與成就總累計（`total_spent`）。
+    - 結構自動遷移（Self-healing Schema Migration）僅保留必要的 `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;`，不產生未規劃欄位。
+  - [supabase/payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/payment_rpc.sql)：
+    - 簡化結構遷移，僅新增 `amount` 欄位；移除 `submit_payment_rpc` 中金額為 0 時的自動兜底計算邏輯，直接採用前端傳入之真實金額。
+- **GAS 後端代碼淨化 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+  - 徹底移除 `_inferPaymentAmount` 函式。
+  - 淨化 `getPaymentHistoryAPI`：移除 `amount <= 0` 時的推算與嘗試回填邏輯，直接讀取原始資料。
+- **ETL 匯入工具同步簡化 ([supabase/etl_v2.js](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/etl_v2.js))**：
+  - 移除 `_etlPaymentsV2` 中針對 `eventCosts`、`loanCosts` 與推算補齊之程式碼，匯入時忠實保留試算表數據。
+- **自動化測試與驗證 (Verification)**：
+  - 更新 [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 之 Suite 11，全套 17 組套件、44 項單元測試 **100% 通過**。
+  - 執行 `pnpm run lint` 0 錯誤、`pnpm run build` Vite 建置成功。
 
 ### 156. Supabase RPC 腳本資料表結構自癒自動遷移 (Self-healing Schema Migration) (v0.1.56)
 - **歷史緣由與技術債排查 (Why Amount Column Was Missing Originally)**：

@@ -3,6 +3,14 @@
 -- 目的：以 50ms 極速聚合會員數位社員證、已報名活動與租借中裝備
 -- ==============================================================================
 
+-- 0. 資料表結構自我修復與自動遷移 (Self-healing Schema Migration)
+ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS name TEXT;
+
+-- 自 members 自動回填姓名
+UPDATE event_signups s SET name = m.name FROM members m WHERE s.line_user_id = m.line_user_id AND (s.name IS NULL OR s.name = '');
+UPDATE loans l SET name = m.name FROM members m WHERE l.line_user_id = m.line_user_id AND (l.name IS NULL OR l.name = '');
+
 CREATE OR REPLACE FUNCTION get_my_dashboard(p_line_user_id TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql

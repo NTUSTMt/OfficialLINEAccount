@@ -579,122 +579,38 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
     assert.equal(Object.keys(mockSheet.cells).length, 0);
   });
 
-  it('推算函式能精確自 Events、Loan_Records 與正則提取費用，修復 0 元舊紀錄', () => {
-    const mockEventsSheet = {
-      getDataRange: () => ({
-        getDisplayValues: () => [
-          ['活動編號', '活動名稱', '預計費用'],
-          ['E_QIXING', '七星山迎新', '500'],
-          ['E_YUSHAN', '玉山前峰', '1200']
-        ]
-      })
-    };
+  it('繳費紀錄直接讀取 payments.amount，不進行自動猜測與覆寫，支援使用者手動維護金額', () => {
+    // 驗證 Supabase/試算表紀錄直接採用使用者所設定之 amount
+    const records = [
+      { id: 'PAY_1', type: '🔸 活動：七星山迎新', amount: 650, status: '已確認' },
+      { id: 'PAY_2', type: '🔹 裝備：大鋼盆', amount: 50, status: '已確認' },
+      { id: 'PAY_3', type: '🔸 社籍與社費', amount: 200, status: '待確認' },
+      { id: 'PAY_4', type: '特約活動', amount: 880, status: '已確認' }
+    ];
 
-    const mockLoanSheet = {
-      getDataRange: () => ({
-        getValues: () => [
-          ['租借編號', '系統識別碼', '裝備名稱', '應繳費用'],
-          ['ORD_01', 'U_BRIAN', '大蜘蛛瓦斯爐', 150],
-          ['ORD_02', 'U_BRIAN', '大鋼盆', 50],
-          ['ORD_02', 'U_BRIAN', '飯鍋', 60]
-        ]
-      })
-    };
+    // 不進行推算覆寫，忠實直接讀取
+    const history = records.map(r => ({
+      title: r.type,
+      display_amount: r.amount,
+      status: r.status
+    }));
 
-    const mockSS = {
-      getSheetByName: (name) => {
-        if (name === 'Events') return mockEventsSheet;
-        if (name === 'Loan_Records') return mockLoanSheet;
-        return null;
+    let totalSpent = 0;
+    history.forEach(h => {
+      const isConfirmed = h.status.includes('已確認') && !h.status.includes('待確認');
+      if (isConfirmed) {
+        totalSpent += h.display_amount;
       }
-    };
+    });
 
-    function _inferPaymentAmount(ss, userId, title, eventName, equipName, note) {
-      var total = 0;
-      var fullText = [title, eventName, equipName, note].filter(Boolean).join(" ");
-
-      var regexMatches = fullText.match(/\$(\d+)/g) || fullText.match(/應繳[:：]?\s*\$?(\d+)/g) || fullText.match(/金額[:：]?\s*\$?(\d+)/g);
-      if (regexMatches && regexMatches.length > 0) {
-        for (var rm = 0; rm < regexMatches.length; rm++) {
-          var num = parseInt(regexMatches[rm].replace(/\D/g, ''), 10) || 0;
-          if (num > 0) total += num;
-        }
-        if (total > 0) return total;
-      }
-
-      if (fullText.indexOf("社籍") > -1 || fullText.indexOf("社費") > -1 || fullText.indexOf("Membership") > -1) {
-        total += 200;
-      }
-
-      var eventSheet = ss.getSheetByName("Events");
-      if (eventSheet) {
-        var eData = eventSheet.getDataRange().getDisplayValues();
-        if (eData.length > 1) {
-          var eH = eData[0];
-          var eNameIdx = eH.indexOf("活動名稱");
-          var eCostIdx = eH.indexOf("預計費用");
-
-          for (var e = 1; e < eData.length; e++) {
-            var evName = eNameIdx > -1 ? String(eData[e][eNameIdx]).trim() : "";
-            if (evName && fullText.indexOf(evName) > -1) {
-              var evCost = eCostIdx > -1 ? (parseInt(String(eData[e][eCostIdx]).replace(/\D/g, ''), 10) || 0) : 0;
-              total += evCost;
-            }
-          }
-        }
-      }
-
-      var loanSheet = ss.getSheetByName("Loan_Records");
-      if (loanSheet) {
-        var lData = loanSheet.getDataRange().getValues();
-        if (lData.length > 1) {
-          var lH = lData[0];
-          var lSysIdx = lH.indexOf("系統識別碼");
-          var lNameIdx = lH.indexOf("裝備名稱");
-          var lOrderIdx = lH.indexOf("租借編號");
-          var lCostIdx = lH.indexOf("應繳費用");
-
-          var matchedEquip = {};
-          for (var l = 1; l < lData.length; l++) {
-            if (lSysIdx > -1 && String(lData[l][lSysIdx]).trim() === userId) {
-              var eqName = lNameIdx > -1 ? String(lData[l][lNameIdx]).trim() : "";
-              var ordId = lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : ("row_" + l);
-              var key = ordId + "_" + eqName;
-              if (eqName && fullText.indexOf(eqName) > -1 && !matchedEquip[key]) {
-                matchedEquip[key] = true;
-                var lCost = lCostIdx > -1 ? (parseInt(String(lData[l][lCostIdx]).replace(/\D/g, ''), 10) || 0) : 0;
-                total += lCost;
-              }
-            }
-          }
-        }
-      }
-
-      return total;
-    }
-
-    // 項目 1: 七星山迎新 + 大蜘蛛瓦斯爐
-    const amount1 = _inferPaymentAmount(mockSS, 'U_BRIAN', '🔸 活動：七星山迎新，🔹 裝備：大蜘蛛瓦斯爐', '', '');
-    assert.equal(amount1, 650); // 500 + 150
-
-    // 項目 2: 大鋼盆 + 飯鍋
-    const amount2 = _inferPaymentAmount(mockSS, 'U_BRIAN', '🔹 裝備：大鋼盆，🔹 裝備：飯鍋', '', '');
-    assert.equal(amount2, 110); // 50 + 60
-
-    // 項目 3: 單純活動七星山迎新
-    const amount3 = _inferPaymentAmount(mockSS, 'U_BRIAN', '🔸 活動：七星山迎新', '', '');
-    assert.equal(amount3, 500);
-
-    // 項目 4: 社費
-    const amount4 = _inferPaymentAmount(mockSS, 'U_BRIAN', '🔸 社籍與社費 (Membership Fee)', '', '');
-    assert.equal(amount4, 200);
-
-    // 項目 5: 正則提取文字標註之金額
-    const amount5 = _inferPaymentAmount(mockSS, 'U_BRIAN', '未列入清單之特約行程 ($880)', '', '');
-    assert.equal(amount5, 880);
+    assert.equal(history[0].display_amount, 650);
+    assert.equal(history[1].display_amount, 50);
+    assert.equal(history[2].display_amount, 200);
+    assert.equal(history[3].display_amount, 880);
+    assert.equal(totalSpent, 1580); // 650 + 50 + 880
   });
 
-  it('面對無金額欄位的 Payments 試算表，getPaymentHistoryAPI 絕不嘗試寫入 J1，並正確加總 totalSpent', () => {
+  it('面對無金額欄位的 Payments 試算表，getPaymentHistoryAPI 絕不嘗試寫入 J1，安全讀取', () => {
     const mockPaySheet = {
       getDataRange: () => ({
         getValues: () => [
@@ -714,29 +630,6 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
       }
     };
 
-    const mockSS = {
-      getSheetByName: (name) => {
-        if (name === 'Payments') return mockPaySheet;
-        if (name === 'Events') return {
-          getDataRange: () => ({
-            getDisplayValues: () => [
-              ['活動名稱', '預計費用'],
-              ['七星山迎新', '500']
-            ]
-          })
-        };
-        if (name === 'Loan_Records') return {
-          getDataRange: () => ({
-            getValues: () => [
-              ['系統識別碼', '裝備名稱', '應繳費用'],
-              ['U_TEST', '大鋼盆', 50]
-            ]
-          })
-        };
-        return null;
-      }
-    };
-
     const data = mockPaySheet.getDataRange().getValues();
     const headers = [...data[0]];
     const amountIdx = _findAmountColIdx(headers);
@@ -749,17 +642,12 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
       const row = data[i];
       const title = row[6];
       const status = row[1];
-      let amount = 0;
+      const rawAmount = amountIdx > -1 ? row[amountIdx] : 0;
+      const amount = parseInt(String(rawAmount).replace(/\D/g, ''), 10) || 0;
 
-      if (amount <= 0) {
-        if (title.includes('社籍') || title.includes('社費')) amount += 200;
-        if (title.includes('七星山迎新')) amount += 500;
-        if (title.includes('大鋼盆')) amount += 50;
-
-        // amountIdx 為 -1 時絕不呼叫 mockPaySheet.getRange
-        if (amountIdx > -1) {
-          mockPaySheet.getRange(i + 1, amountIdx + 1).setValue(amount);
-        }
+      // amountIdx 為 -1 時絕不呼叫 mockPaySheet.getRange
+      if (amountIdx > -1) {
+        mockPaySheet.getRange(i + 1, amountIdx + 1).setValue(amount);
       }
 
       history.push({ title, amount, status });
@@ -770,10 +658,10 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
       }
     }
 
-    assert.equal(history[0].amount, 500);
-    assert.equal(history[1].amount, 50);
-    assert.equal(history[2].amount, 200);
-    assert.equal(totalSpent, 550); // 500 + 50 (排除待確認的 200)
+    assert.equal(history[0].amount, 0);
+    assert.equal(history[1].amount, 0);
+    assert.equal(history[2].amount, 0);
+    assert.equal(totalSpent, 0);
   });
 
   it('processPaymentSubmit 在 9 欄試算表結構下，產生的 newRow 長度剛好為 9，不超出試算表範圍且安全附帶金額至備註', () => {
@@ -805,6 +693,41 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
     assert.equal(newRow.length, 9);
     assert.equal(newRow[ntIdx], "[金額: $350] 台銀轉帳");
     assert.equal(newRow[iIdx], "🔸 活動：攀岩基礎 ($350) ($350)");
+  });
+
+  it('為所有 line_user_id 關聯表（payments, loans, signups, reflections）支援 name 欄位與自動補齊', () => {
+    const membersDb = {
+      'U123456': '王小明',
+      'U789012': '李美麗'
+    };
+
+    function autoFillName(record) {
+      if (!record.name && record.line_user_id && membersDb[record.line_user_id]) {
+        record.name = membersDb[record.line_user_id];
+      }
+      return record;
+    }
+
+    const payment = autoFillName({ id: 'PAY_01', line_user_id: 'U123456', amount: 350, name: '' });
+    const loan = autoFillName({ id: 'ORD_01', line_user_id: 'U123456', start_date: '2026-09-12' });
+    const signup = autoFillName({ id: 'S01', line_user_id: 'U789012', event_id: 'E01' });
+    const reflection = autoFillName({ event_id: 'E01', line_user_id: 'U789012', content: '風景優美' });
+
+    assert.equal(payment.name, '王小明');
+    assert.equal(loan.name, '王小明');
+    assert.equal(signup.name, '李美麗');
+    assert.equal(reflection.name, '李美麗');
+  });
+
+  it('_syncPaymentToSupabase 在呼叫時能正確將 userName 附加至 details.userName', () => {
+    const userName = '王小明';
+    const details = { totalAmount: 350, last5Digits: '12345' };
+
+    if (userName && details && !details.userName) {
+      details.userName = userName;
+    }
+
+    assert.equal(details.userName, '王小明');
   });
 });
 

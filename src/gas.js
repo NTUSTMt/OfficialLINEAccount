@@ -228,85 +228,6 @@ function _ensurePaymentAmountCol(sheet, headers) {
   return _findAmountColIdx(headers);
 }
 
-// 智慧推算繳費金額 (針對歷史舊紀錄中缺少或金額為 0 之補齊機制，純記憶體運算)
-function _inferPaymentAmount(ss, userId, title, eventName, equipName, note) {
-  var total = 0;
-  var fullText = [title, eventName, equipName, note].filter(Boolean).join(" ");
-
-  // A. 正則提取文字中標示之金額 (如 $350、應繳: $200、500元)
-  var regexMatches = fullText.match(/\$(\d+)/g) || fullText.match(/應繳[:：]?\s*\$?(\d+)/g) || fullText.match(/金額[:：]?\s*\$?(\d+)/g);
-  if (regexMatches && regexMatches.length > 0) {
-    for (var rm = 0; rm < regexMatches.length; rm++) {
-      var num = parseInt(regexMatches[rm].replace(/\D/g, ''), 10) || 0;
-      if (num > 0) total += num;
-    }
-    if (total > 0) return total;
-  }
-
-  // 1. 社費 (Membership Fee - 預設一學期 $200)
-  if (fullText.indexOf("社籍") > -1 || fullText.indexOf("社費") > -1 || fullText.indexOf("Membership") > -1) {
-    total += 200;
-  }
-
-  // 2. 活動費用 (Events)
-  if (ss) {
-    var eventSheet = ss.getSheetByName("Events");
-    if (eventSheet) {
-      var eData = eventSheet.getDataRange().getDisplayValues();
-      if (eData.length > 1) {
-        var eH = eData[0];
-        var eNameIdx = _fi(eH, "活動名稱");
-        var eIdIdx = _fi(eH, "活動編號");
-        var eCostIdx = eH.findIndex(function (h) {
-          var s = String(h);
-          return s.includes("預計費用") || s.includes("費用") || s.includes("金額");
-        });
-
-        for (var e = 1; e < eData.length; e++) {
-          var evName = eNameIdx > -1 ? String(eData[e][eNameIdx]).trim() : "";
-          var evId = eIdIdx > -1 ? String(eData[e][eIdIdx]).trim() : "";
-          if ((evName && fullText.indexOf(evName) > -1) || (evId && fullText.indexOf(evId) > -1)) {
-            var evCost = eCostIdx > -1 ? (parseInt(String(eData[e][eCostIdx]).replace(/\D/g, ''), 10) || 0) : 0;
-            total += evCost;
-          }
-        }
-      }
-    }
-
-    // 3. 裝備租借費用 (Loan_Records)
-    var loanSheet = ss.getSheetByName("Loan_Records");
-    if (loanSheet) {
-      var lData = loanSheet.getDataRange().getValues();
-      if (lData.length > 1) {
-        var lH = lData[0];
-        var lSysIdx = _fi(lH, "系統識別碼");
-        var lNameIdx = _fi(lH, "裝備名稱");
-        var lOrderIdx = _fi(lH, "租借編號");
-        var lCostIdx = lH.findIndex(function (h) {
-          var s = String(h);
-          return s.includes("應繳費用") || s.includes("費用") || s.includes("金額");
-        });
-
-        var matchedEquip = {};
-        for (var l = 1; l < lData.length; l++) {
-          if (lSysIdx > -1 && String(lData[l][lSysIdx]).trim() === userId) {
-            var eqName = lNameIdx > -1 ? String(lData[l][lNameIdx]).trim() : "";
-            var ordId = lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : ("row_" + l);
-            var key = ordId + "_" + eqName;
-            if (eqName && fullText.indexOf(eqName) > -1 && !matchedEquip[key]) {
-              matchedEquip[key] = true;
-              var lCost = lCostIdx > -1 ? (parseInt(String(lData[l][lCostIdx]).replace(/\D/g, ''), 10) || 0) : 0;
-              total += lCost;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return total;
-}
-
 // ⚡ Supabase 連線整合核心 (REST API / RPC)
 function _fetchPaymentHistoryFromSupabase(userId) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !userId) return null;
@@ -340,6 +261,9 @@ function _fetchPaymentHistoryFromSupabase(userId) {
 function _syncPaymentToSupabase(userId, details, userName) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !userId) return false;
   try {
+    if (userName && details && !details.userName) {
+      details.userName = userName;
+    }
     var url = SUPABASE_URL + "/rest/v1/rpc/submit_payment_rpc";
     var res = UrlFetchApp.fetch(url, {
       method: "post",
@@ -6532,21 +6456,6 @@ function getPaymentHistoryAPI(ss, userId) {
       var status = statusIdx > -1 ? String(data[i][statusIdx]).trim() : "待確認";
       var last5Digits = proofIdx > -1 ? String(data[i][proofIdx]).trim() : "";
       var note = noteIdx > -1 ? String(data[i][noteIdx]).trim() : "";
-
-      // 智慧推算舊資料缺失之金額 (純記憶體推算，若工作表無金額欄位絕不回填寫入 J1)
-      if (amount <= 0) {
-        var inferred = _inferPaymentAmount(ss, userId, title, eventName, equipName, note);
-        if (inferred > 0) {
-          amount = inferred;
-          if (amountIdx > -1 && paySheet) {
-            try {
-              paySheet.getRange(i + 1, amountIdx + 1).setValue(amount);
-            } catch (errSet) {
-              console.warn("回填金額失敗", errSet);
-            }
-          }
-        }
-      }
 
       // 判斷類型 (社費、活動、裝備)
       var type = "全部";

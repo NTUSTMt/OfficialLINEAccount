@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS event_signups (
     id TEXT PRIMARY KEY, -- 報名專屬碼，如 S123456
     event_id TEXT NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
     line_user_id TEXT NOT NULL REFERENCES members(line_user_id) ON DELETE RESTRICT,
+    name TEXT,                           -- 社員姓名 (方便後台直觀辨識)
     status TEXT NOT NULL DEFAULT '審核中 Checking', 
     -- 正取 Confirmed / 正取（已繳費）Confirmed(Paid) / 備取 Waitlisted / 備取（有意願）Waitlisted (Interested) / 審核中 Checking / 已取消 Cancelled
     is_official_member_snapshot BOOLEAN NOT NULL DEFAULT FALSE,
@@ -106,6 +107,7 @@ CREATE TABLE IF NOT EXISTS reflections (
     id BIGSERIAL PRIMARY KEY,
     event_id TEXT NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
     line_user_id TEXT NOT NULL REFERENCES members(line_user_id) ON DELETE RESTRICT,
+    name TEXT,                           -- 社員姓名 (方便後台直觀辨識)
     difficulty_rating INTEGER CHECK (difficulty_rating >= 1 AND difficulty_rating <= 5),
     beauty_rating INTEGER CHECK (beauty_rating >= 1 AND beauty_rating <= 5),
     content TEXT,
@@ -149,6 +151,7 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TABLE IF NOT EXISTS loans (
     id TEXT PRIMARY KEY, -- 租借單號，如 ORD_20260912_01
     line_user_id TEXT NOT NULL REFERENCES members(line_user_id) ON DELETE RESTRICT,
+    name TEXT,                           -- 社員姓名 (方便後台直觀辨識)
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     days INTEGER NOT NULL DEFAULT 1,
@@ -196,6 +199,7 @@ CREATE INDEX IF NOT EXISTS idx_loan_items_equipment_id ON loan_items(equipment_i
 CREATE TABLE IF NOT EXISTS payments (
     id TEXT PRIMARY KEY, -- 繳費單號，如 PAY_20260912_01
     line_user_id TEXT NOT NULL REFERENCES members(line_user_id) ON DELETE RESTRICT,
+    name TEXT,                           -- 社員姓名 (方便後台直觀辨識)
     type TEXT NOT NULL, -- 繳交社費 / 活動：<名稱> / 裝備租借 / combined
     target_type TEXT,   -- membership / event / loan / multi
     target_id TEXT,     -- event_id 或 loan_id 或 NULL
