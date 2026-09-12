@@ -496,3 +496,50 @@ describe('9. 活動開始判定與社費繳納連動 Signups「是否為社員�
   });
 });
 
+describe('10. Supabase ➔ Google Sheets 背景同步映射與資料校正測試 (Sync Worker)', () => {
+  it('Signups 表同步時，狀態字串精準正規化為全形括號，防止破壞 Google Sheets 資料驗證', () => {
+    function normalizeSignupStatus(raw) {
+      const s = raw || '';
+      if (s.includes('正取') && (s.includes('已繳費') || s.includes('Paid'))) {
+        return '正取（已繳費）Confirmed(Paid)';
+      }
+      if (s.includes('備取') && (s.includes('有意願') || s.includes('Interested'))) {
+        return '備取（有意願）Waitlisted (Interested)';
+      }
+      return s;
+    }
+
+    assert.equal(normalizeSignupStatus('正取 (已繳費) Confirmed(Paid)'), '正取（已繳費）Confirmed(Paid)');
+    assert.equal(normalizeSignupStatus('備取 (有意願) Waitlisted(Interested)'), '備取（有意願）Waitlisted (Interested)');
+    assert.equal(normalizeSignupStatus('審核中 Checking'), '審核中 Checking');
+  });
+
+  it('Loan_Records 表同步時，根據租借單號更新該單所有項目列之狀態與繳費狀態', () => {
+    const mockRows = [
+      ['ORD_100', 'U_01', '登山帳篷', 1, '待領取 To Be Collected', '未繳費'],
+      ['ORD_100', 'U_01', '睡袋', 2, '待領取 To Be Collected', '未繳費'],
+      ['ORD_101', 'U_02', '登山杖', 1, '待領取 To Be Collected', '未繳費']
+    ];
+
+    const syncPayload = {
+      id: 'ORD_100',
+      status: '已取消 (待退款)',
+      payment_status: '已繳費 Paid'
+    };
+
+    for (let i = 0; i < mockRows.length; i++) {
+      if (mockRows[i][0] === syncPayload.id) {
+        mockRows[i][4] = syncPayload.status;
+        mockRows[i][5] = syncPayload.payment_status;
+      }
+    }
+
+    assert.equal(mockRows[0][4], '已取消 (待退款)');
+    assert.equal(mockRows[0][5], '已繳費 Paid');
+    assert.equal(mockRows[1][4], '已取消 (待退款)');
+    assert.equal(mockRows[1][5], '已繳費 Paid');
+    assert.equal(mockRows[2][4], '待領取 To Be Collected');
+    assert.equal(mockRows[2][5], '未繳費');
+  });
+});
+

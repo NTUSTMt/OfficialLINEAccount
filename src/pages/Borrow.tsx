@@ -5,6 +5,7 @@ import { ShoppingCart, RotateCw } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
+import { fetchEquipmentsFromSupabase } from '../utils/supabaseClient';
 import type { Equipment } from '../types/equipment';
 import { EquipmentCard } from '../components/borrow/EquipmentCard';
 import { BorrowCartDrawer } from '../components/borrow/BorrowCartDrawer';
@@ -81,11 +82,26 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
     async function loadData() {
       try {
-        const response = await fetch(GAS_API_URL, { redirect: 'follow' });
-        const resData: ApiResponse = await response.json();
-        if (!ignore && resData.status === 'success' && Array.isArray(resData.data)) {
-          setEquipments(resData.data);
-          setCache(CACHE_KEY_EQUIPMENTS, resData.data, 300);
+        let loadedEquipments: Equipment[] | null = null;
+        try {
+          loadedEquipments = await fetchEquipmentsFromSupabase();
+        } catch (sbErr) {
+          console.warn('[Borrow] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
+          loadedEquipments = null;
+        }
+
+        if (loadedEquipments && loadedEquipments.length > 0) {
+          if (!ignore) {
+            setEquipments(loadedEquipments);
+            setCache(CACHE_KEY_EQUIPMENTS, loadedEquipments, 300);
+          }
+        } else {
+          const response = await fetch(GAS_API_URL, { redirect: 'follow' });
+          const resData: ApiResponse = await response.json();
+          if (!ignore && resData.status === 'success' && Array.isArray(resData.data)) {
+            setEquipments(resData.data);
+            setCache(CACHE_KEY_EQUIPMENTS, resData.data, 300);
+          }
         }
       } catch (err) {
         console.error('裝備清單載入失敗:', err);
@@ -122,11 +138,24 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
     removeCache(CACHE_KEY_EQUIPMENTS);
 
     try {
-      const response = await fetch(GAS_API_URL, { redirect: 'follow' });
-      const resData: ApiResponse = await response.json();
-      if (resData.status === 'success' && Array.isArray(resData.data)) {
-        setEquipments(resData.data);
-        setCache(CACHE_KEY_EQUIPMENTS, resData.data, 300);
+      let loadedEquipments: Equipment[] | null = null;
+      try {
+        loadedEquipments = await fetchEquipmentsFromSupabase();
+      } catch (sbErr) {
+        console.warn('[Borrow] Supabase 重新整理例外，啟用 GAS 備援:', sbErr);
+        loadedEquipments = null;
+      }
+
+      if (loadedEquipments && loadedEquipments.length > 0) {
+        setEquipments(loadedEquipments);
+        setCache(CACHE_KEY_EQUIPMENTS, loadedEquipments, 300);
+      } else {
+        const response = await fetch(GAS_API_URL, { redirect: 'follow' });
+        const resData: ApiResponse = await response.json();
+        if (resData.status === 'success' && Array.isArray(resData.data)) {
+          setEquipments(resData.data);
+          setCache(CACHE_KEY_EQUIPMENTS, resData.data, 300);
+        }
       }
     } catch (err) {
       console.error('裝備清單重新整理失敗:', err);

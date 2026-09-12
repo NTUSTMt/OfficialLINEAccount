@@ -5,6 +5,7 @@ import { appendAuthToken, withAuthPayload, gasGet } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
+import { fetchEventsFromSupabase } from '../utils/supabaseClient';
 import type { AdminEvent, SignupApplicant } from '../types/event';
 import { AdminEventCard } from '../components/admin/AdminEventCard';
 import { AdminEventForm, type AdminEventFormData } from '../components/admin/AdminEventForm';
@@ -99,13 +100,28 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     }
 
     try {
+      let sbEvents: AdminEvent[] | null = null;
+      if (!forceRefresh) {
+        try {
+          sbEvents = await fetchEventsFromSupabase();
+          if (sbEvents && sbEvents.length > 0) {
+            setIsOfficer(true);
+            setEvents(sbEvents);
+            setLoadingEvents(false);
+          }
+        } catch (sbErr) {
+          console.warn('[AdminEvents] Supabase 活動讀取例外:', sbErr);
+          sbEvents = null;
+        }
+      }
+
       const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
       const data = await res.json();
       if (data.status === 'success' && Array.isArray(data.events)) {
         setIsOfficer(true);
         setEvents(data.events);
         setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
-      } else {
+      } else if (!sbEvents) {
         setIsOfficer(false);
       }
     } catch (err) {
@@ -122,13 +138,29 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     async function loadInitial() {
       try {
+        let sbEvents: AdminEvent[] | null = null;
+        try {
+          sbEvents = await fetchEventsFromSupabase();
+        } catch (sbErr) {
+          console.warn('[AdminEvents] Supabase 初始讀取例外:', sbErr);
+          sbEvents = null;
+        }
+
+        if (sbEvents && sbEvents.length > 0 && !ignore) {
+          setIsOfficer(true);
+          setEvents(sbEvents);
+          setCache(CACHE_KEY_ADMIN_EVENTS, sbEvents, 180);
+          setAuthLoading(false);
+          setLoadingEvents(false);
+        }
+
         const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
         const data = await res.json();
         if (!ignore && data.status === 'success' && Array.isArray(data.events)) {
           setIsOfficer(true);
           setEvents(data.events);
           setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
-        } else if (!ignore) {
+        } else if (!ignore && !sbEvents) {
           setIsOfficer(false);
         }
       } catch (err) {

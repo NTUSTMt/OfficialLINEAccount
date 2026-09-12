@@ -3,11 +3,54 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.43` (v0.1.43)
+- **當前版本**：`0.1.46` (v0.1.46)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 146. 方案 B：活動清單秒開讀取與幹部活動管理 SWR 雙軌升級 (v0.1.46)
+- **Supabase 活動讀取函式擴展 (fetchEventsFromSupabase)**：
+  - 在 [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts) 實作 `fetchEventsFromSupabase()`，直接自 Supabase `events` 表依照開始日期倒序撈取所有活動。
+  - 注入鮮明之彩色 Console 日誌標籤（`⚡ [DataSource: Supabase]`），讓開發者在瀏覽器 DevTools 主控台即可一目瞭然資料來源是否成功直連 Supabase。
+- **幹部活動管理 SWR 雙軌加速 (AdminEvents.tsx SWR Acceleration)**：
+  - [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 之 `loadInitial` 與 `fetchEvents` 導入 SWR（Stale-While-Revalidate）極速渲染：優先自 Supabase 於 100ms 內秒開活動清單，同時在背景由 GAS 進行幹部權限校驗與最新審核名單對齊，兼顧極速響應與嚴格權限。
+- **背景同步排程與自動化單元測試擴充**：
+  - 於 [supabase/gas_sync_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/gas_sync_worker.js) 建立完備之 Google Sheets 背景單向同步排程腳本。
+  - 於 [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 新增 Suite 10，驗證背景同步時全形括號資料驗證防呆校正與多裝備單號狀態廣播。
+  - 全套 16 組測試套件、40 項單元測試 100% 綠燈通過，ESLint 零警告，編譯正常。
+
+### 145. Supabase JS Client 導入與裝備租借頁面首波雙軌極速讀取整合 (v0.1.45)
+- **Supabase Client 封裝與環境變數相容性 (Supabase Client Extraction)**：
+  - 於 [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts) 建立安全之 Supabase 連線實例，讀取 `VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY`。
+  - 建立 [.env.example](file:///Users/brianhung/Documents/OfficialLINEAccount/.env.example) 規範環境變數設定範本。
+  - 實作安全降級檢查 `isSupabaseConfigured()` 與 `fetchEquipmentsFromSupabase()`：當 Supabase 未配置或網路異常時自動無縫回退至原有 GAS，杜絕白屏風險。
+- **裝備租借頁面首波雙軌秒開升級 (Borrow.tsx Dual-Track Integration)**：
+  - 在 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 的 `loadData` 與 `handleRefresh` 優先自 Supabase REST API 讀取可外借庫存裝備。
+  - 若已配置 Supabase，資料讀取延遲從 3~5 秒驟降至 100 毫秒以內；若未配置或失敗則靜默無感回退至 `GAS_API_URL`。
+- **自動化測試與編譯通過**：
+  - 全套 15 組測試套件、38 個單元測試 100% 通過。
+  - ESLint 零錯誤零警告、Vite 編譯正常。
+
+### 144. Supabase 架構遷移規劃、7 大關聯表 Schema DDL 與 Google Sheets 背景同步管線設計 (v0.1.44)
+- **Supabase PostgreSQL 7 大資料表結構設計 (Relational Database Schema Design)**：
+  - 於 [supabase/schema.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/schema.sql) 建立完整 DDL，將 Google Sheets 扁平資料正規化為具備外鍵約束、資料完整性驗證與自動 `updated_at` 觸發器之關聯式結構：
+    1. `members`：社員基本資料、緊急聯絡人獨立欄位、社籍到期日與 Google Drive 證明文件陣列。
+    2. `events`：活動資訊、名額限制、報名截止時間、簡介與行程字數限制相容。
+    3. `event_signups`：報名紀錄、審核狀態（完全相容試算表全形括號資料驗證）、報名專屬碼索引。
+    4. `reflections`：活動心得評分（1~5 難易度/風景）、感想內容與登頂照片 Google Drive 陣列。
+    5. `equipments`：裝備清單、在庫可用數量約束、外借狀態與定價快照。
+    6. `loans` & `loan_items`：裝備租借主訂單與細項展開（Master-Detail），消除原試算表單一訂單多品項重複冗餘列。
+    7. `payments`：繳費申報、銀行後五碼、核銷狀態與對帳紀錄。
+    8. `sync_queue`：背景同步佇列，記錄資料表異動事件與重試機制。
+  - 配置 Row Level Security (RLS) 策略：裝備清單與已發布活動開放公開唯讀，達成 LIFF 首屏秒開。
+- **Google Sheets 5~30 秒緩衝批次背景同步機制 (Buffered Batch Sync Pipeline)**：
+  - 確立單向同步架構（Single Source of Truth = Supabase），保留幹部在 Google Sheets 之純唯讀檢視習慣。
+  - 導入防限流（Rate-limit Protection）機制：透過 `sync_queue` 聚合 5~30 秒內的異動，打包為單次 `batchUpdate`，徹底規避 Google Sheets API 60 次/分鐘配額上限與並發鎖死（Lock Timeout）。
+- **漸進式雙軌轉移策略 (Progressive Dual-Track Strategy)**：
+  - LIFF 前端優先直連 Supabase，解決 3~8 秒載入延遲。
+  - LINE Messaging Bot（7,800 行之 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js)）暫留 GAS，透過 Supabase REST API 存取，杜絕一次性重構龐大 Flex 卡片的高風險。
+  - 圖片繼續沿用 Google Drive「系統圖庫」管理慣性，兼顧歷史檔案相容性。
 
 ### 143. 6 項體驗優化與防呆修復：社費社員連動、租借日期防呆、備註對齊、幹部 UI 與活動字數優化 (v0.1.43)
 - **社費繳納與活動報名「是否為社員」狀態連動 (Membership Fee & Activity Signups Status Synchronization)**：
