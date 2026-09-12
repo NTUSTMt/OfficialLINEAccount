@@ -3,11 +3,26 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.62` (v0.1.62)
+- **當前版本**：`0.1.63` (v0.1.63)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 163. 活動報名全面直寫 Supabase (`event_signups` & `members`) 與取消報名雙向同步 (v0.1.63)
+- **活動報名全面即時寫入 Supabase 資料庫 (Instant Supabase Dual-Write Engine)**：
+  - **問題修復**：先前社員透過 LINE 機器人「我要報名」登記活動時，後端 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 僅寫入 Google 試算表（全域 Signups 表與活動專屬名冊表），未同步至 Supabase `event_signups`，導致後台管理系統查無報名者、繳費系統無法自動抓取正取待繳費用。
+  - **核心實作 (`_syncSignupToSupabase`)**：
+    1. **Upsert `members` 表**：自動將報名者姓名、性別、電話、Email、地址、生日、證件號碼、緊急聯絡人姓名/電話/關係/地址、爬山經驗、體能及正式社員狀態，透過 `POST /rest/v1/members?on_conflict=line_user_id`（`Prefer: resolution=merge-duplicates`）完成同步更新，確保外鍵相依完整且個資最新。
+    2. **Insert/Upsert `event_signups` 表**：即時寫入報名專屬碼（`id`）、活動編號（`event_id`）、LINE 使用者識別碼（`line_user_id`）、姓名（`name`）、初始審核狀態（`status: "審核中 Checking"`）及正式社員快照（`is_official_member_snapshot`）。
+    3. **主流程不卡頓**：採用獨立 `try...catch` 包覆，即便雲端網路波動亦不阻斷 LINE 回覆與專屬試算表追加。
+- **取消報名全面連動 Supabase (`_syncSignupCancelToSupabase`)**：
+  - 當社員透過 LIFF 個人主頁取消活動（`processLiffCancelEvent`）或於 LINE 對話中完成取消流程（`handleEventCancelReason` / `cancel_event`）時，自動發送 PATCH 請求將該筆報名之 `status` 更新為 `已取消 Cancelled` 並寫入 `cancel_reason`。
+- **測試與驗證 (Verification)**：
+  - [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 新增報名與取消同步至 Supabase 之單元測試。
+  - 執行 `pnpm test`：57 項單元測試 100% 綠燈通過。
+  - 執行 `pnpm run lint`：0 錯誤。
+  - 執行 `pnpm run build`：Vite 生產環境建置成功。
 
 ### 162. 試算表 22 欄全規格表頭對齊、Script Properties 金鑰安全架構與容器腳本容錯升級 (v0.1.62)
 - **22 欄標準名冊表頭完全對齊 (22-Column Standard Roster Integration)**：

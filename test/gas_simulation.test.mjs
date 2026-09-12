@@ -1120,6 +1120,109 @@ describe('12. 活動專屬 Google Drive 資料夾與專屬試算表差異比對�
     assert.equal(res2.url, 'https://fallback.supabase.co');
     assert.equal(res2.key, 'fallback-key-456');
   });
+
+  it('活動報名即時寫入 Supabase (members upsert 與 event_signups insert) 模擬測試', () => {
+    let memberReq = null;
+    let signupReq = null;
+
+    function fakeSyncSignupToSupabase(url, key, userId, eventId, signupCode, p, signupStatus) {
+      if (!url || !key || !userId || !eventId || !signupCode) return false;
+      const isOfficial = (p.isOfficial === '是' || p.isOfficial === true);
+
+      memberReq = {
+        url: url + '/rest/v1/members?on_conflict=line_user_id',
+        payload: {
+          line_user_id: userId,
+          name: p.name || '社員',
+          gender: p.gender || null,
+          line_id: p.lineId || null,
+          email: p.email || null,
+          phone: p.phone || null,
+          is_official_member: isOfficial,
+          birthday: p.birthday || null,
+          id_card: p.idCard || null
+        }
+      };
+
+      signupReq = {
+        url: url + '/rest/v1/event_signups?on_conflict=id',
+        payload: {
+          id: signupCode,
+          event_id: eventId,
+          line_user_id: userId,
+          name: p.name || '',
+          status: signupStatus || '審核中 Checking',
+          is_official_member_snapshot: isOfficial,
+          notes: ''
+        }
+      };
+
+      return true;
+    }
+
+    const success = fakeSyncSignupToSupabase(
+      'https://xyz.supabase.co',
+      'test-service-key',
+      'U1234567890',
+      'EVT-2026-0920',
+      'S0913022203',
+      {
+        name: '王大明',
+        gender: '男',
+        phone: '0912345678',
+        email: 'wang@example.com',
+        isOfficial: '是',
+        birthday: '1995-05-20',
+        idCard: 'A123456789'
+      },
+      '審核中 Checking'
+    );
+
+    assert.equal(success, true);
+    assert.ok(memberReq.url.includes('/rest/v1/members'));
+    assert.equal(memberReq.payload.name, '王大明');
+    assert.equal(memberReq.payload.is_official_member, true);
+
+    assert.ok(signupReq.url.includes('/rest/v1/event_signups'));
+    assert.equal(signupReq.payload.id, 'S0913022203');
+    assert.equal(signupReq.payload.event_id, 'EVT-2026-0920');
+    assert.equal(signupReq.payload.status, '審核中 Checking');
+    assert.equal(signupReq.payload.is_official_member_snapshot, true);
+  });
+
+  it('活動取消報名狀態同步 Supabase (event_signups patch) 模擬測試', () => {
+    let cancelReq = null;
+
+    function fakeSyncSignupCancelToSupabase(url, key, userId, eventId, targetCode, reason) {
+      if (!url || !key || !userId) return false;
+      const query = targetCode
+        ? 'id=eq.' + encodeURIComponent(targetCode)
+        : 'event_id=eq.' + encodeURIComponent(eventId) + '&line_user_id=eq.' + encodeURIComponent(userId);
+
+      cancelReq = {
+        url: url + '/rest/v1/event_signups?' + query,
+        payload: {
+          status: '已取消 Cancelled',
+          cancel_reason: reason || ''
+        }
+      };
+      return true;
+    }
+
+    const success = fakeSyncSignupCancelToSupabase(
+      'https://xyz.supabase.co',
+      'test-service-key',
+      'U1234567890',
+      'EVT-2026-0920',
+      'S0913022203',
+      '因私事無法參加'
+    );
+
+    assert.equal(success, true);
+    assert.equal(cancelReq.url, 'https://xyz.supabase.co/rest/v1/event_signups?id=eq.S0913022203');
+    assert.equal(cancelReq.payload.status, '已取消 Cancelled');
+    assert.equal(cancelReq.payload.cancel_reason, '因私事無法參加');
+  });
 });
 
 

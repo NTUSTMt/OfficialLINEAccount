@@ -854,6 +854,11 @@ function handlePostback(replyToken, userId, postbackData) {
         // 情境 B：備取或審核中 -> 直接取消
         else {
           if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
+          try {
+            _syncSignupCancelToSupabase(userId, sEventIdIdx > -1 ? sData[k][sEventIdIdx] : "", targetId, "自願取消");
+          } catch (sbCancelErr) {
+            console.warn("取消報名同步至 Supabase 失敗:", sbCancelErr);
+          }
           replyMessage(replyToken, "✅ 【" + eventName + "】報名已成功取消！\n期待在未來的社團活動與您相見。\n─────────────\n✅ Registration successfully cancelled!\nHope to see you in our future activities.");
         }
         return;
@@ -2687,6 +2692,13 @@ function handleSignup(replyToken, userId, eventId, ss) {
     placeData("病史", p.medicalHistory);
     signupSheet.appendRow(rowData);
 
+    // ⚡ 即時同步寫入 Supabase (單一信任來源：members 與 event_signups 表)
+    try {
+      _syncSignupToSupabase(userId, eventId, signupCode, p, "審核中 Checking");
+    } catch (sbErr) {
+      console.warn("同步報名至 Supabase 例外 (略過不影響主流程):", sbErr);
+    }
+
     // ⚡ 異步寫入活動專屬試算表 (完全不卡頓報名主流程)
     try {
       _asyncAppendToEventSpreadsheet(eventId, {
@@ -3970,6 +3982,11 @@ function handleEventCancelReason(replyToken, userId, reasonText, signupCode) {
     if (sCodeIdx > -1 && sSysIdx > -1 && sData[i][sCodeIdx].toString() === signupCode.toString() && sData[i][sSysIdx].toString() === userId.toString()) {
       if (sStatIdx > -1) signupSheet.getRange(i + 1, sStatIdx + 1).setValue("已取消 Cancelled");
       if (sNotifyIdx > -1) signupSheet.getRange(i + 1, sNotifyIdx + 1).setValue("取消原因：" + reasonText);
+      try {
+        _syncSignupCancelToSupabase(userId, sEventIdIdx > -1 ? sData[i][sEventIdIdx] : "", signupCode, reasonText);
+      } catch (sbCancelErr) {
+        console.warn("取消報名同步至 Supabase 失敗:", sbCancelErr);
+      }
       CacheService.getUserCache().remove(userId + "_canceling_event");
       var eventName = _getEventName(ss, sEventIdIdx > -1 ? sData[i][sEventIdIdx] : "");
       var userName = sNameIdx > -1 ? sData[i][sNameIdx] : "社員";
@@ -6863,6 +6880,13 @@ function processLiffCancelEvent(payload) {
             signupSheet.getRange(k + 1, sNoteIdx + 1).setValue(oldNote + (isPaid ? "【已繳費待退款】" : "") + "取消原因: " + reason);
           }
 
+          // 同步取消報名至 Supabase
+          try {
+            _syncSignupCancelToSupabase(userId, rowEvtId, rowCode, reason);
+          } catch (sbCancelErr) {
+            console.warn("LIFF 取消報名同步至 Supabase 失敗:", sbCancelErr);
+          }
+
           // 推送 LINE 給幹部
           if (isPaid) {
             pushAdminMessage("🔔 【幹部通知：正取取消（需安排替補與退費）】\n申請人：" + userName + "\n活動：" + eventName + "\n取消原因：" + reason + "\n⚠️ 該正取者已完成繳費／待對帳，請幹部安排備取遞補與退費事宜！");
@@ -6872,6 +6896,11 @@ function processLiffCancelEvent(payload) {
         } else {
           // 備取或審核中直接取消
           if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
+          try {
+            _syncSignupCancelToSupabase(userId, rowEvtId, rowCode, "自願取消");
+          } catch (sbCancelErr) {
+            console.warn("LIFF 取消報名同步至 Supabase 失敗:", sbCancelErr);
+          }
         }
 
         return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "活動報名已成功取消" })).setMimeType(ContentService.MimeType.JSON);
@@ -7558,6 +7587,133 @@ function _syncEventDriveUrlsToSupabase(eventId, driveFolderUrl, spreadsheetUrl, 
   } catch (err) {
     console.warn("同步活動雲端連結至 Supabase 失敗:", err);
   }
+}
+
+/**
+ * 將活動報名紀錄同步寫入 Supabase (包含 upsert members 與 insert/upsert event_signups)
+ */
+function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !userId || !eventId || !signupCode) return false;
+  try {
+    p = p || {};
+    var isOfficial = (p.isOfficial === "是" || p.isOfficial === true);
+
+    // 1. 先 Upsert members 表，確保外鍵約束滿足且個資為最新
+    var memberPayload = {
+      line_user_id: userId,
+      name: p.name || "社員",
+      gender: p.gender || null,
+      line_id: p.lineId || p.realLineId || null,
+      email: p.email || null,
+      phone: p.phone || null,
+      department: p.department || null,
+      student_id: p.studentId || null,
+      birthday: p.birthday || null,
+      id_card: p.idNumber || p.idCard || null,
+      address: p.studentAddr || p.address || null,
+      outdoor_experience: p.exp || null,
+      fitness_desc: p.strength || null,
+      emergency_contact_name: p.emerName || null,
+      emergency_contact_rel: p.emerRel || null,
+      emergency_contact_phone: p.emerPhone || null,
+      emergency_contact_address: p.emerAddr || null,
+      medical_history: p.medicalHistory || null,
+      is_official_member: isOfficial,
+      updated_at: new Date().toISOString()
+    };
+
+    var memberUrl = SUPABASE_URL + "/rest/v1/members?on_conflict=line_user_id";
+    UrlFetchApp.fetch(memberUrl, {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+        "Prefer": "resolution=merge-duplicates,return=minimal"
+      },
+      payload: JSON.stringify(memberPayload),
+      muteHttpExceptions: true
+    });
+
+    // 2. 寫入或更新 event_signups 表
+    var signupPayload = {
+      id: signupCode,
+      event_id: eventId,
+      line_user_id: userId,
+      name: p.name || "",
+      status: signupStatus || "審核中 Checking",
+      is_official_member_snapshot: isOfficial,
+      notes: "",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    var signupUrl = SUPABASE_URL + "/rest/v1/event_signups?on_conflict=id";
+    var res = UrlFetchApp.fetch(signupUrl, {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+        "Prefer": "resolution=merge-duplicates,return=minimal"
+      },
+      payload: JSON.stringify(signupPayload),
+      muteHttpExceptions: true
+    });
+
+    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
+      console.log("⚡ [Supabase] 報名資料已成功寫入 Supabase event_signups: " + signupCode);
+      return true;
+    } else {
+      console.warn("寫入 Supabase event_signups 失敗 (HTTP " + res.getResponseCode() + "): " + res.getContentText());
+      return false;
+    }
+  } catch (err) {
+    console.warn("同步報名至 Supabase 拋出例外:", err);
+    return false;
+  }
+}
+
+/**
+ * 同步取消報名狀態至 Supabase event_signups
+ */
+function _syncSignupCancelToSupabase(userId, eventId, targetCode, reason) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !userId) return false;
+  try {
+    var query = "";
+    if (targetCode) {
+      query = "id=eq." + encodeURIComponent(targetCode);
+    } else if (eventId) {
+      query = "event_id=eq." + encodeURIComponent(eventId) + "&line_user_id=eq." + encodeURIComponent(userId);
+    } else {
+      return false;
+    }
+
+    var url = SUPABASE_URL + "/rest/v1/event_signups?" + query;
+    var res = UrlFetchApp.fetch(url, {
+      method: "patch",
+      contentType: "application/json",
+      headers: {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+        "Prefer": "return=minimal"
+      },
+      payload: JSON.stringify({
+        status: "已取消 Cancelled",
+        cancel_reason: reason || "",
+        updated_at: new Date().toISOString()
+      }),
+      muteHttpExceptions: true
+    });
+
+    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
+      console.log("⚡ [Supabase] 報名已成功標記為取消: " + (targetCode || eventId));
+      return true;
+    }
+  } catch (err) {
+    console.warn("同步取消報名至 Supabase 拋出例外:", err);
+  }
+  return false;
 }
 
 /**
