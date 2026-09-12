@@ -3,11 +3,54 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.63` (v0.1.63)
+- **當前版本**：`0.1.66` (v0.1.66)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 166. 新活動雙筆重複建立徹底根治、雲端試算表連結全欄位 Upsert 與 Google Drive 智慧搜尋備援 (v0.1.66)
+- **新活動雙筆重複紀錄根治 (Dual Event ID Collision Fix)**：
+  - **根本原因排查**：幹部於後台建立新活動時，[`src/pages/AdminEvents.tsx`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 為了提速，在未確定活動編號（`formData.eventId` 為空）的情況下**平行發送** Supabase RPC 與 GAS 請求。Supabase 的 `save_admin_event_rpc` 收到空 ID 自動生成了帶時間戳的 ID（如 `E20260912_184732`）；GAS 的 `processSaveEvent` 則自動生成社團標準序號（如 `E2609-02`），導致同場活動在 Supabase 出現兩筆重複活動。
+  - **流程全面梳理**：於 [`src/pages/AdminEvents.tsx`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 中區分「新活動建立」與「舊活動編輯」：
+    1. **新活動**：先由 GAS 統一建立活動、生成 Google Drive 資料夾與名冊試算表，取得一致的社團 ID（如 `E2609-02`）與確定之雲端連結後，再同步確認寫入前端與 Supabase，徹底杜絕幽靈時間戳 ID。
+    2. **舊活動**：維持既有秒級直接更新 Supabase。
+- **雲端欄位全量 Upsert 持久化 (`_syncEventToSupabase`)**：
+  - **PATCH 失敗修復**：先前 GAS 建立試算表後採用 `PATCH /rest/v1/events?id=eq.` 更新雲端連結，若該活動尚未預存於 Supabase，PostgREST 會因找不到紀錄而直接略過（更新 0 筆），導致 `drive_folder_url`、`spreadsheet_url`、`spreadsheet_id` 遺漏。
+  - **實作完整 Upsert**：於 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 新增 `_syncEventToSupabase`，改用 `POST /rest/v1/events?on_conflict=id` 搭配 `resolution=merge-duplicates`，在 GAS 建立雲端資源後將活動資訊連同 `drive_folder_url`、`spreadsheet_url`、`spreadsheet_id` 一次性全量寫入；並強化 `_syncEventDriveUrlsToSupabase`，在無原紀錄時自動觸發補全 Upsert。
+- **Google Drive 智慧檔名搜尋備援 (DriveApp Smart Search Fallback)**：
+  - 在 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `_asyncAppendToEventSpreadsheet` 中，若 Supabase 與主試算表歷史資料均查無試算表 ID，自動透過 `DriveApp.searchFiles` 於 Google 雲端硬碟智慧搜尋符合活動名稱的名冊試算表，成功定位後立即追加報名列，並自動回寫修補 Supabase 之 `spreadsheet_id` 與 `spreadsheet_url`，達成系統自我修復。
+- **測試與驗證 (Verification)**：
+  - [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 新增新活動 Upsert 與 Google Drive 智慧搜尋單元測試。
+  - 執行 `pnpm test`：59 項單元測試全數 100% 綠燈通過。
+  - 執行 `pnpm run lint`：0 錯誤。
+  - 執行 `pnpm run build`：Vite 生產環境打包編譯通過。
+
+### 165. 活動專屬試算表追加引擎健全化、未宣告變數修復與獨立試算表診斷工具 (v0.1.65)
+- **活動專屬試算表追加引擎異常修復 (`_asyncAppendToEventSpreadsheet`)**：
+  - **未宣告變數 ReferenceError 根治**：在 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `handleSignup` 報名主流程中，先前傳入活動專屬試算表之個資物件含有未定義之 `userProfile` 變數存取，導致拋出 `ReferenceError: userProfile is not defined` 並被 catch 阻斷，使得 `_asyncAppendToEventSpreadsheet` 未能順利執行。已全面校正為使用通過檢核之 `p` 物件（`p.realLineId`、`p.studentAddr`、`p.idNumber` 等）。
+  - **智慧試算表 ID 解析與 URL 正規化 (`_extractSpreadsheetId`)**：新增 `_extractSpreadsheetId` 輔助函式，支援直接貼入之 Google 試算表完整網址（`https://docs.google.com/spreadsheets/d/<ID>/edit`），自動安全提取純 44 碼試算表 ID，杜絕 `SpreadsheetApp.openById` 傳入網址時拋出之例外。
+  - **彈性欄位索引支援**：於 Supabase 查詢時同時撈取 `spreadsheet_id` 與 `spreadsheet_url`；於主試算表 `Events` 表中支援包含「試算表ID」、「試算表 ID」、「報名名冊網址」、「試算表網址」等多種常見表頭別名。
+- **專屬試算表寫入專用診斷工具 (`testEventSpreadsheetAppend`)**：
+  - 於 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 提供 `testEventSpreadsheetAppend()` 函式，幹部可直接在 Apps Script 編輯器執行，快速檢驗系統能否自 Supabase 或主試算表正確解析出專屬試算表 ID 並寫入測試名冊列。
+- **測試與驗證 (Verification)**：
+  - [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 測試全數通過。
+  - 執行 `pnpm test`：57 項單元測試 100% 綠燈。
+  - 執行 `pnpm run lint`：0 錯誤。
+  - 執行 `pnpm run build`：Vite 生產環境建置成功。
+
+### 164. 活動報名 Supabase 外鍵約束自動防護與一鍵連線診斷工具 (v0.1.64)
+- **活動報名 Supabase 外鍵防護強化 (`events` & `members` 自動預防)**：
+  - **外鍵衝突根治**：當報名社員在 LINE 點擊報名時，若該活動尚未預先同步至 Supabase `events` 表，PostgreSQL 外鍵約束（`event_signups_event_id_fkey`）會導致寫入失敗。於 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `_syncSignupToSupabase` 中加入前置 `events` 自動保全機制（`POST /rest/v1/events?on_conflict=id`，`resolution=ignore-duplicates`），確保活動記錄存在且外鍵 100% 滿足。
+  - **參數傳遞完善**：於 `handleSignup` 呼叫時主動傳遞 `eName` 活動名稱，提供更完整的活動關聯。
+  - **連線與錯誤日誌可視化**：當 `SUPABASE_URL` 或 `SUPABASE_SERVICE_ROLE_KEY` 遺漏，或 PostgREST 回傳 HTTP 錯誤時，以 `console.error` 明確輸出失敗原因與狀態碼，杜絕靜默失敗。
+- **一鍵連線診斷工具 (`testSupabaseSignupSync`)**：
+  - 於 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 增設診斷函數 `testSupabaseSignupSync()`。幹部可直接在 Apps Script 編輯器下拉選取並點擊「▷ 執行」，系統會即時檢測 Script Properties 配置狀態，並模擬一筆報名寫入 `members` 與 `event_signups`，直觀輸出診斷報告。
+- **測試與驗證 (Verification)**：
+  - [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 測試全數通過。
+  - 執行 `pnpm test`：57 項單元測試 100% 綠燈。
+  - 執行 `pnpm run lint`：0 錯誤。
+  - 執行 `pnpm run build`：Vite 生產環境建置成功。
 
 ### 163. 活動報名全面直寫 Supabase (`event_signups` & `members`) 與取消報名雙向同步 (v0.1.63)
 - **活動報名全面即時寫入 Supabase 資料庫 (Instant Supabase Dual-Write Engine)**：

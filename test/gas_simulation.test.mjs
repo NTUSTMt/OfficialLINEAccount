@@ -1122,12 +1122,23 @@ describe('12. 活動專屬 Google Drive 資料夾與專屬試算表差異比對�
   });
 
   it('活動報名即時寫入 Supabase (members upsert 與 event_signups insert) 模擬測試', () => {
+    let eventReq = null;
     let memberReq = null;
     let signupReq = null;
 
-    function fakeSyncSignupToSupabase(url, key, userId, eventId, signupCode, p, signupStatus) {
+    function fakeSyncSignupToSupabase(url, key, userId, eventId, signupCode, p, signupStatus, eventName) {
       if (!url || !key || !userId || !eventId || !signupCode) return false;
       const isOfficial = (p.isOfficial === '是' || p.isOfficial === true);
+
+      eventReq = {
+        url: url + '/rest/v1/events?on_conflict=id',
+        payload: {
+          id: eventId,
+          title: eventName || eventId,
+          fee: 0,
+          status: '開放'
+        }
+      };
 
       memberReq = {
         url: url + '/rest/v1/members?on_conflict=line_user_id',
@@ -1175,10 +1186,14 @@ describe('12. 活動專屬 Google Drive 資料夾與專屬試算表差異比對�
         birthday: '1995-05-20',
         idCard: 'A123456789'
       },
-      '審核中 Checking'
+      '審核中 Checking',
+      '陽明山大縱走'
     );
 
     assert.equal(success, true);
+    assert.ok(eventReq.url.includes('/rest/v1/events'));
+    assert.equal(eventReq.payload.title, '陽明山大縱走');
+
     assert.ok(memberReq.url.includes('/rest/v1/members'));
     assert.equal(memberReq.payload.name, '王大明');
     assert.equal(memberReq.payload.is_official_member, true);
@@ -1222,6 +1237,79 @@ describe('12. 活動專屬 Google Drive 資料夾與專屬試算表差異比對�
     assert.equal(cancelReq.url, 'https://xyz.supabase.co/rest/v1/event_signups?id=eq.S0913022203');
     assert.equal(cancelReq.payload.status, '已取消 Cancelled');
     assert.equal(cancelReq.payload.cancel_reason, '因私事無法參加');
+  });
+
+  it('新活動發布完整 Upsert 至 Supabase (含 drive_folder_url, spreadsheet_url, spreadsheet_id) 模擬測試', () => {
+    let upsertReq = null;
+
+    function fakeSyncEventToSupabase(eventData) {
+      if (!eventData || !eventData.id) return false;
+      const costNum = parseInt(String(eventData.cost || 0).replace(/[^\d]/g, ''), 10) || 0;
+      const payload = {
+        id: eventData.id,
+        title: eventData.name || eventData.title,
+        fee: costNum,
+        start_date: eventData.startDate ? String(eventData.startDate).replace(/\//g, '-').split(' ')[0] : null,
+        end_date: eventData.endDate ? String(eventData.endDate).replace(/\//g, '-').split(' ')[0] : null,
+        status: eventData.status || '未來開放',
+        summary: eventData.shortDesc || '',
+        itinerary: eventData.fullDesc || '',
+        cover_image_url: eventData.imageUrl || '',
+        drive_folder_url: eventData.driveFolderUrl || null,
+        spreadsheet_url: eventData.spreadsheetUrl || null,
+        spreadsheet_id: eventData.spreadsheetId || null,
+        updated_at: new Date().toISOString()
+      };
+
+      upsertReq = {
+        url: 'https://xyz.supabase.co/rest/v1/events?on_conflict=id',
+        payload: payload
+      };
+      return true;
+    }
+
+    const success = fakeSyncEventToSupabase({
+      id: 'E2609-02',
+      name: '2026/09/20_七星山登頂',
+      startDate: '2026/09/20',
+      endDate: '2026/09/20',
+      cost: '350',
+      status: '開放',
+      shortDesc: '秋季迎新',
+      driveFolderUrl: 'https://drive.google.com/drive/folders/folder_xyz_123',
+      spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/sheet_abc_456/edit',
+      spreadsheetId: 'sheet_abc_456'
+    });
+
+    assert.equal(success, true);
+    assert.equal(upsertReq.payload.id, 'E2609-02');
+    assert.equal(upsertReq.payload.fee, 350);
+    assert.equal(upsertReq.payload.drive_folder_url, 'https://drive.google.com/drive/folders/folder_xyz_123');
+    assert.equal(upsertReq.payload.spreadsheet_url, 'https://docs.google.com/spreadsheets/d/sheet_abc_456/edit');
+    assert.equal(upsertReq.payload.spreadsheet_id, 'sheet_abc_456');
+  });
+
+  it('當 Supabase 與主試算表均缺失試算表 ID 時，Google Drive 智慧檔名搜尋備援能成功定位試算表', () => {
+    // 模擬 Drive 檔案清單
+    const driveFiles = [
+      { id: 'sheet_999', name: '2026/09/20_七星山登頂_報名名冊', url: 'https://docs.google.com/spreadsheets/d/sheet_999/edit' },
+      { id: 'file_888', name: '2026/09/20_七星山登頂_封面.jpg', url: 'https://drive.google.com/file_888' }
+    ];
+
+    function fakeDriveSearch(eventName) {
+      const cleanName = eventName.replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '').trim();
+      for (const f of driveFiles) {
+        if (f.name.includes(cleanName) && (f.name.includes('名冊') || f.name.includes('報名'))) {
+          return { id: f.id, url: f.url, name: f.name };
+        }
+      }
+      return null;
+    }
+
+    const found = fakeDriveSearch('七星山登頂');
+    assert.ok(found);
+    assert.equal(found.id, 'sheet_999');
+    assert.equal(found.url, 'https://docs.google.com/spreadsheets/d/sheet_999/edit');
   });
 });
 

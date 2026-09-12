@@ -306,23 +306,26 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     setSubmittingForm(true);
     try {
-      // ⚡ 1. 優先極速寫入 Supabase (< 50ms)
-      saveEventToSupabase(userId || 'TEST_USER_ID', {
-        eventId: formData.eventId,
-        name: formData.name.trim(),
-        startDate: formData.startDate,
-        endDate: formData.endDate || formData.startDate,
-        deadline: formData.deadline,
-        cost: formData.cost.trim(),
-        status: formData.status,
-        shortDesc: formData.shortDesc.trim(),
-        fullDesc: formData.fullDesc.trim(),
-        imageUrl: formData.imageUrl
-      }).catch(sbErr => {
-        console.warn('[AdminEvents] Supabase 儲存活動例外:', sbErr);
-      });
+      // ⚡ 若為「編輯舊活動」(formData.eventId 已存在)，才可在背景立即更新 Supabase
+      // 若為「新活動建立」(formData.eventId 為空)，不可在未確定 ID 時發送 RPC，避免產生 E20260912_... 時間戳重複紀錄
+      if (formData.eventId) {
+        saveEventToSupabase(userId || 'TEST_USER_ID', {
+          eventId: formData.eventId,
+          name: formData.name.trim(),
+          startDate: formData.startDate,
+          endDate: formData.endDate || formData.startDate,
+          deadline: formData.deadline,
+          cost: formData.cost.trim(),
+          status: formData.status,
+          shortDesc: formData.shortDesc.trim(),
+          fullDesc: formData.fullDesc.trim(),
+          imageUrl: formData.imageUrl
+        }).catch(sbErr => {
+          console.warn('[AdminEvents] Supabase 儲存活動例外:', sbErr);
+        });
+      }
 
-      // 2. 平行發送 GAS 請求處理 Google Drive 圖片上傳與幹部群組推播
+      // 2. 發送 GAS 請求處理 Google Drive 資料夾建立、試算表範本複製、圖片上傳與幹部群組推播
       const payload = {
         action: 'save_event',
         userId: userId || 'TEST_USER_ID',
@@ -349,6 +352,26 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const result = await res.json();
 
       if (result.status === 'success') {
+        // 若為新活動建立，GAS 會自動完成 Drive/Sheet 建立並將統一 eventId (如 E2609-02) 完整 Upsert 至 Supabase
+        // 前端再次以確定之 eventId 及雲端連結呼叫 saveEventToSupabase，確保本地狀態與 Supabase 完全同步
+        if (!formData.eventId && result.eventId) {
+          saveEventToSupabase(userId || 'TEST_USER_ID', {
+            eventId: result.eventId,
+            name: formData.name.trim(),
+            startDate: formData.startDate,
+            endDate: formData.endDate || formData.startDate,
+            deadline: formData.deadline,
+            cost: formData.cost.trim(),
+            status: formData.status,
+            shortDesc: formData.shortDesc.trim(),
+            fullDesc: formData.fullDesc.trim(),
+            imageUrl: result.imageUrl || formData.imageUrl,
+            driveFolderUrl: result.driveFolderUrl,
+            spreadsheetUrl: result.spreadsheetUrl,
+            spreadsheetId: result.spreadsheetId
+          }).catch(err => console.warn('[AdminEvents] 前端確認同步 Supabase 警告:', err));
+        }
+
         alert(t('adminEvents.alerts.saveSuccess'));
         resetFormForCreate();
         setActiveTab('list');

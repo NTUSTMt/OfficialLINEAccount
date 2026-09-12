@@ -2694,7 +2694,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
 
     // ⚡ 即時同步寫入 Supabase (單一信任來源：members 與 event_signups 表)
     try {
-      _syncSignupToSupabase(userId, eventId, signupCode, p, "審核中 Checking");
+      _syncSignupToSupabase(userId, eventId, signupCode, p, "審核中 Checking", eName);
     } catch (sbErr) {
       console.warn("同步報名至 Supabase 例外 (略過不影響主流程):", sbErr);
     }
@@ -2702,16 +2702,17 @@ function handleSignup(replyToken, userId, eventId, ss) {
     // ⚡ 異步寫入活動專屬試算表 (完全不卡頓報名主流程)
     try {
       _asyncAppendToEventSpreadsheet(eventId, {
+        eventName: eName,
         userId: userId,
         signupCode: signupCode,
         name: p.name || "",
         gender: p.gender || "",
-        lineId: p.lineId || (userProfile && userProfile.lineId) || "",
-        email: p.email || (userProfile && userProfile.email) || "",
+        lineId: p.realLineId || p.lineId || "",
+        email: p.email || "",
         phone: p.phone || "",
-        address: p.address || (userProfile && userProfile.address) || "",
+        address: p.studentAddr || p.address || "",
         birthday: p.birthday || "",
-        idCard: p.idCard || "",
+        idCard: p.idNumber || p.idCard || "",
         emerName: p.emerName || "",
         emerPhone: p.emerPhone || "",
         emerAddr: p.emerAddr || "",
@@ -2724,7 +2725,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
         notifyStatus: "",
         payStatus: "未繳費 Unpaid",
         notes: ""
-      });
+      }, eName);
     } catch (sheetErr) {
       console.warn("寫入活動專屬試算表例外 (略過不影響主流程):", sheetErr);
     }
@@ -7561,28 +7562,60 @@ function _createEventDriveFolderAndSheet(payload, eventId) {
 }
 
 /**
- * 將活動雲端資料夾與試算表連結同步至 Supabase events 表
+ * 將活動雲端資料夾與試算表連結同步至 Supabase events 表 (若紀錄尚不存在則自動補全 Upsert)
  */
 function _syncEventDriveUrlsToSupabase(eventId, driveFolderUrl, spreadsheetUrl, spreadsheetId) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !eventId) return;
   try {
+    var updatePayload = {
+      updated_at: new Date().toISOString()
+    };
+    if (driveFolderUrl) updatePayload.drive_folder_url = driveFolderUrl;
+    if (spreadsheetUrl) updatePayload.spreadsheet_url = spreadsheetUrl;
+    if (spreadsheetId) updatePayload.spreadsheet_id = spreadsheetId;
+
     var url = SUPABASE_URL + "/rest/v1/events?id=eq." + encodeURIComponent(eventId);
-    UrlFetchApp.fetch(url, {
+    var res = UrlFetchApp.fetch(url, {
       method: "patch",
       contentType: "application/json",
       headers: {
         "apikey": SUPABASE_SERVICE_ROLE_KEY,
         "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-        "Prefer": "return=minimal"
+        "Prefer": "return=representation"
       },
-      payload: JSON.stringify({
-        drive_folder_url: driveFolderUrl || "",
-        spreadsheet_url: spreadsheetUrl || "",
-        spreadsheet_id: spreadsheetId || "",
-        updated_at: new Date().toISOString()
-      }),
+      payload: JSON.stringify(updatePayload),
       muteHttpExceptions: true
     });
+
+    var updated = [];
+    try {
+      if (res.getResponseCode() === 200) {
+        updated = JSON.parse(res.getContentText());
+      }
+    } catch (parseErr) {}
+
+    // 若 PATCH 發現無此 row (更新筆數為 0，尚未建立該活動)，改用 POST upsert 自動補齊
+    if (!updated || updated.length === 0) {
+      var upsertUrl = SUPABASE_URL + "/rest/v1/events?on_conflict=id";
+      updatePayload.id = eventId;
+      if (!updatePayload.title) updatePayload.title = eventId;
+      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
+      updatePayload.fee = 0;
+      updatePayload.start_date = todayStr;
+      updatePayload.end_date = todayStr;
+      updatePayload.status = "開放";
+      UrlFetchApp.fetch(upsertUrl, {
+        method: "post",
+        contentType: "application/json",
+        headers: {
+          "apikey": SUPABASE_SERVICE_ROLE_KEY,
+          "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+          "Prefer": "resolution=merge-duplicates,return=minimal"
+        },
+        payload: JSON.stringify(updatePayload),
+        muteHttpExceptions: true
+      });
+    }
     console.log("⚡ [Supabase] 已成功將活動雲端連結同步至 Supabase events 表: " + eventId);
   } catch (err) {
     console.warn("同步活動雲端連結至 Supabase 失敗:", err);
@@ -7590,13 +7623,119 @@ function _syncEventDriveUrlsToSupabase(eventId, driveFolderUrl, spreadsheetUrl, 
 }
 
 /**
+ * 將活動完整資料 (包含雲端資料夾與試算表 ID/URL) 同步/Upsert 至 Supabase events 表
+ */
+function _syncEventToSupabase(eventData) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !eventData || !eventData.id) return;
+  try {
+    var url = SUPABASE_URL + "/rest/v1/events?on_conflict=id";
+    var costNum = 0;
+    if (eventData.cost !== undefined && eventData.cost !== null) {
+      costNum = parseInt(String(eventData.cost).replace(/[^\d]/g, ""), 10) || 0;
+    }
+
+    var startStr = null;
+    if (eventData.startDate) {
+      startStr = String(eventData.startDate).replace(/\//g, "-").split(" ")[0].split("T")[0];
+    }
+    var endStr = null;
+    if (eventData.endDate) {
+      endStr = String(eventData.endDate).replace(/\//g, "-").split(" ")[0].split("T")[0];
+    } else {
+      endStr = startStr;
+    }
+    var deadlineIso = null;
+    if (eventData.deadline) {
+      var dStr = String(eventData.deadline).replace(/\//g, "-").trim();
+      deadlineIso = dStr.includes("T") ? dStr : (dStr + "T23:59:59Z");
+    }
+
+    var payload = {
+      id: eventData.id,
+      title: eventData.name || eventData.title || eventData.id,
+      fee: costNum,
+      start_date: startStr,
+      end_date: endStr,
+      deadline: deadlineIso,
+      status: eventData.status || "未來開放",
+      summary: eventData.shortDesc || "",
+      itinerary: eventData.fullDesc || "",
+      cover_image_url: eventData.imageUrl || "",
+      drive_folder_url: eventData.driveFolderUrl || null,
+      spreadsheet_url: eventData.spreadsheetUrl || null,
+      spreadsheet_id: eventData.spreadsheetId || null,
+      updated_at: new Date().toISOString()
+    };
+
+    var res = UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+        "Prefer": "resolution=merge-duplicates,return=representation"
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code >= 200 && code < 300) {
+      console.log("⚡ [Supabase] 已成功 Upsert 活動至 events 表: " + eventData.id + " (試算表 ID: " + (eventData.spreadsheetId || "無") + ")");
+    } else {
+      console.warn("⚠️ [Supabase] Upsert 活動失敗 (" + code + "): " + res.getContentText());
+    }
+  } catch (err) {
+    console.warn("同步活動至 Supabase 例外:", err);
+  }
+}
+
+/**
  * 將活動報名紀錄同步寫入 Supabase (包含 upsert members 與 insert/upsert event_signups)
  */
-function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !userId || !eventId || !signupCode) return false;
+function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus, eventName) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("❌ [Supabase] 尚未配置指令碼屬性 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY，無法寫入報名資料至 Supabase！");
+    return false;
+  }
+  if (!userId || !eventId || !signupCode) {
+    console.warn("❌ [Supabase] 缺少必要參數: userId=" + userId + ", eventId=" + eventId + ", signupCode=" + signupCode);
+    return false;
+  }
   try {
     p = p || {};
     var isOfficial = (p.isOfficial === "是" || p.isOfficial === true);
+
+    // 0. 確保 events 表有此活動紀錄 (避免外鍵約束失敗)
+    try {
+      var eventUrl = SUPABASE_URL + "/rest/v1/events?on_conflict=id";
+      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
+      var deadlineIso = new Date(Date.now() + 30 * 86400000).toISOString();
+      var evRes = UrlFetchApp.fetch(eventUrl, {
+        method: "post",
+        contentType: "application/json",
+        headers: {
+          "apikey": SUPABASE_SERVICE_ROLE_KEY,
+          "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+          "Prefer": "resolution=ignore-duplicates,return=minimal"
+        },
+        payload: JSON.stringify({
+          id: eventId,
+          title: eventName || eventId,
+          fee: 0,
+          start_date: todayStr,
+          end_date: todayStr,
+          deadline: deadlineIso,
+          status: "開放",
+          updated_at: new Date().toISOString()
+        }),
+        muteHttpExceptions: true
+      });
+      if (evRes.getResponseCode() >= 400) {
+        console.warn("⚠️ [Supabase] 確保 events 記錄回應 (" + evRes.getResponseCode() + "): " + evRes.getContentText());
+      }
+    } catch (evErr) {
+      console.warn("⚠️ [Supabase] 確保 events 記錄例外:", evErr);
+    }
 
     // 1. 先 Upsert members 表，確保外鍵約束滿足且個資為最新
     var memberPayload = {
@@ -7623,7 +7762,7 @@ function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus) {
     };
 
     var memberUrl = SUPABASE_URL + "/rest/v1/members?on_conflict=line_user_id";
-    UrlFetchApp.fetch(memberUrl, {
+    var mRes = UrlFetchApp.fetch(memberUrl, {
       method: "post",
       contentType: "application/json",
       headers: {
@@ -7634,6 +7773,9 @@ function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus) {
       payload: JSON.stringify(memberPayload),
       muteHttpExceptions: true
     });
+    if (mRes.getResponseCode() >= 400) {
+      console.warn("⚠️ [Supabase] Upsert members 回應失敗 (HTTP " + mRes.getResponseCode() + "): " + mRes.getContentText());
+    }
 
     // 2. 寫入或更新 event_signups 表
     var signupPayload = {
@@ -7665,12 +7807,44 @@ function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus) {
       console.log("⚡ [Supabase] 報名資料已成功寫入 Supabase event_signups: " + signupCode);
       return true;
     } else {
-      console.warn("寫入 Supabase event_signups 失敗 (HTTP " + res.getResponseCode() + "): " + res.getContentText());
+      console.error("❌ [Supabase] 寫入 event_signups 失敗 (HTTP " + res.getResponseCode() + "): " + res.getContentText());
       return false;
     }
   } catch (err) {
-    console.warn("同步報名至 Supabase 拋出例外:", err);
+    console.error("❌ [Supabase] 同步報名至 Supabase 拋出例外:", err);
     return false;
+  }
+}
+
+/**
+ * 🛠️ 測試 Supabase 報名同步連線 (可在 GAS 編輯器直接按「執行」測試)
+ */
+function testSupabaseSignupSync() {
+  console.log("=== 正在測試 Supabase 連線與報名寫入 ===");
+  console.log("SUPABASE_URL 配置狀態:", SUPABASE_URL ? "已設定 (" + SUPABASE_URL + ")" : "❌ 尚未設定！請在專案設定新增 SUPABASE_URL");
+  console.log("SUPABASE_SERVICE_ROLE_KEY 配置狀態:", SUPABASE_SERVICE_ROLE_KEY ? "已設定 (長度: " + (SUPABASE_SERVICE_ROLE_KEY ? SUPABASE_SERVICE_ROLE_KEY.length : 0) + ")" : "❌ 尚未設定！請在專案設定新增 SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("請先在 Apps Script 的「專案設定 ➔ 指令碼屬性」中加入 SUPABASE_URL 與 SUPABASE_SERVICE_ROLE_KEY！");
+  }
+
+  var testUserId = "U_TEST_DIAGNOSTIC";
+  var testEventId = "EVT_TEST_DIAGNOSTIC";
+  var testCode = "S_TEST_" + new Date().getTime();
+  var testProfile = {
+    name: "測試報名社員",
+    gender: "男",
+    phone: "0900000000",
+    email: "test@example.com",
+    isOfficial: "是"
+  };
+
+  console.log("正在執行 _syncSignupToSupabase 測試寫入...");
+  var result = _syncSignupToSupabase(testUserId, testEventId, testCode, testProfile, "審核中 Checking", "測試診斷活動");
+  if (result) {
+    console.log("🎉 測試成功！資料已成功寫入 Supabase members 與 event_signups 表！");
+  } else {
+    console.error("❌ 測試失敗，請檢查上方日誌中的錯誤細節。");
   }
 }
 
@@ -7717,17 +7891,34 @@ function _syncSignupCancelToSupabase(userId, eventId, targetCode, reason) {
 }
 
 /**
+ * 安全自文字或網址中提取 Google 試算表 ID
+ */
+function _extractSpreadsheetId(input) {
+  if (!input) return "";
+  var str = String(input).trim();
+  var match = str.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  if (str.indexOf("/") === -1 && str.length > 20) {
+    return str;
+  }
+  return str;
+}
+
+/**
  * 非同步將報名資料同步寫入該活動之專屬試算表
  */
-function _asyncAppendToEventSpreadsheet(eventId, signupData) {
+function _asyncAppendToEventSpreadsheet(eventId, signupData, eventName) {
   if (!eventId || !signupData) return;
   try {
     var ssId = "";
+    var evtName = eventName || (signupData && signupData.eventName) || "";
 
-    // 1. 優先從 Supabase 快速取得專屬試算表 ID
+    // 1. 優先從 Supabase 快速取得專屬試算表 ID (支援 spreadsheet_id 與 spreadsheet_url)
     if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       try {
-        var url = SUPABASE_URL + "/rest/v1/events?id=eq." + encodeURIComponent(eventId) + "&select=spreadsheet_id";
+        var url = SUPABASE_URL + "/rest/v1/events?id=eq." + encodeURIComponent(eventId) + "&select=title,spreadsheet_id,spreadsheet_url";
         var res = UrlFetchApp.fetch(url, {
           method: "get",
           headers: {
@@ -7738,8 +7929,10 @@ function _asyncAppendToEventSpreadsheet(eventId, signupData) {
         });
         if (res.getResponseCode() === 200) {
           var evts = JSON.parse(res.getContentText());
-          if (evts && evts.length > 0 && evts[0].spreadsheet_id) {
-            ssId = evts[0].spreadsheet_id;
+          if (evts && evts.length > 0) {
+            if (evts[0].spreadsheet_id) ssId = _extractSpreadsheetId(evts[0].spreadsheet_id);
+            if (!ssId && evts[0].spreadsheet_url) ssId = _extractSpreadsheetId(evts[0].spreadsheet_url);
+            if (!evtName && evts[0].title) evtName = evts[0].title;
           }
         }
       } catch (sbErr) {
@@ -7747,32 +7940,74 @@ function _asyncAppendToEventSpreadsheet(eventId, signupData) {
       }
     }
 
-    // 2. 若 Supabase 未查到，由主試算表 Events 表備援查找
-    if (!ssId) {
-      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-      var eSheet = ss.getSheetByName("Events");
-      if (eSheet) {
-        var eData = eSheet.getDataRange().getValues();
-        var headers = eData[0];
-        var idCol = _fi(headers, "活動編號");
-        var sidCol = _fi(headers, "試算表ID");
-        if (idCol > -1 && sidCol > -1) {
-          for (var r = 1; r < eData.length; r++) {
-            if (String(eData[r][idCol]).trim() === String(eventId).trim()) {
-              ssId = String(eData[r][sidCol]).trim();
-              break;
+    // 2. 若 Supabase 未查到，由主試算表 Events 表備援查找 (相容多種試算表欄位名稱與完整 URL)
+    if (!ssId && SPREADSHEET_ID) {
+      try {
+        var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        var eSheet = ss.getSheetByName("Events");
+        if (eSheet) {
+          var eData = eSheet.getDataRange().getValues();
+          var headers = eData[0];
+          var idCol = _fi(headers, "活動編號");
+          var nameCol = _fi(headers, "活動名稱");
+          var sidCol = headers.findIndex(function (h) {
+            var s = String(h);
+            return s.includes("試算表ID") || s.includes("試算表 ID") || s.includes("報名名冊網址") || s.includes("試算表網址") || s.includes("試算表連結") || s.includes("試算表");
+          });
+          if (idCol > -1) {
+            for (var r = 1; r < eData.length; r++) {
+              if (String(eData[r][idCol]).trim() === String(eventId).trim()) {
+                if (sidCol > -1 && eData[r][sidCol]) {
+                  ssId = _extractSpreadsheetId(eData[r][sidCol]);
+                }
+                if (!evtName && nameCol > -1 && eData[r][nameCol]) {
+                  evtName = String(eData[r][nameCol]).trim();
+                }
+                break;
+              }
             }
           }
         }
+      } catch (eErr) {
+        console.warn("從主試算表 Events 查找專屬試算表失敗:", eErr);
+      }
+    }
+
+    // 3. 若仍未查到試算表 ID，啟動 Google Drive 智慧檔名搜尋備援 (DriveApp.searchFiles)
+    if (!ssId && evtName) {
+      try {
+        // 清理活動名稱 (去除括號註記如 (測試) 或日期前綴)，以核心活動名搜尋
+        var cleanName = evtName.replace(/\(.*?\)/g, "").replace(/\[.*?\]/g, "").trim();
+        if (cleanName) {
+          var query = "title contains '" + cleanName.replace(/'/g, "\\'") + "' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false";
+          var files = DriveApp.searchFiles(query);
+          while (files.hasNext()) {
+            var f = files.next();
+            var fn = f.getName();
+            // 優先挑選包含「名冊」或「報名」的試算表
+            if (fn.includes("名冊") || fn.includes("報名") || !ssId) {
+              ssId = f.getId();
+              var foundUrl = f.getUrl();
+              console.log("⚡ [EventSheet] 透過 Google Drive 智慧搜尋找到專屬試算表: " + fn + " (" + ssId + ")");
+              // 自動回寫修補 Supabase 試算表 ID 與網址，供日後秒開
+              _syncEventDriveUrlsToSupabase(eventId, "", foundUrl, ssId);
+              if (fn.includes("名冊") || fn.includes("報名")) break;
+            }
+          }
+        }
+      } catch (driveErr) {
+        console.warn("DriveApp 搜尋專屬試算表失敗:", driveErr);
       }
     }
 
     if (!ssId) {
-      console.log("此活動未配置專屬試算表 (可能為舊活動)，略過專屬試算表同步: " + eventId);
+      console.warn("⚠️ [EventSheet] 此活動尚未關聯專屬試算表 ID (eventId=" + eventId + ")，略過專屬試算表追加。");
       return;
     }
 
-    // 3. 開啟活動專屬試算表並動態對齊欄位寫入 (相容 16 欄與 17 欄結構)
+    console.log("⚡ [EventSheet] 正在開啟活動試算表 (" + ssId + ") 進行寫入...");
+
+    // 3. 開啟活動專屬試算表並動態對齊欄位寫入 (相容 16 欄、17 欄與 22 欄結構)
     var eventSS = SpreadsheetApp.openById(ssId);
     var sheet = eventSS.getSheetByName("報名名冊") || eventSS.getSheets()[0];
     var phoneStr = signupData.phone ? ("'" + String(signupData.phone)) : "";
@@ -7848,6 +8083,53 @@ function _asyncAppendToEventSpreadsheet(eventId, signupData) {
   } catch (err) {
     console.warn("寫入活動專屬試算表失敗:", err);
   }
+}
+
+/**
+ * 🛠️ 測試活動專屬試算表寫入 (可在 GAS 編輯器直接按「執行」測試)
+ */
+function testEventSpreadsheetAppend() {
+  console.log("=== 正在測試活動專屬試算表追加寫入 ===");
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var eSheet = ss.getSheetByName("Events");
+  var testEvtId = "";
+  if (eSheet) {
+    var eData = eSheet.getDataRange().getValues();
+    if (eData.length > 1) {
+      var idCol = _fi(eData[0], "活動編號");
+      if (idCol > -1 && eData[1][idCol]) {
+        testEvtId = String(eData[1][idCol]).trim();
+      }
+    }
+  }
+  console.log("使用測試活動編號 (可手動於程式中指定):", testEvtId);
+
+  var testSignup = {
+    userId: "U_TEST_SHEET",
+    signupCode: "S_TEST_" + new Date().getTime(),
+    name: "測試試算表寫入",
+    gender: "男",
+    lineId: "test_line_id",
+    email: "test@example.com",
+    phone: "0911222333",
+    address: "台北市信義區忠孝東路五段",
+    birthday: "1998-08-08",
+    idCard: "B123456789",
+    emerName: "測試聯絡人",
+    emerPhone: "0922333444",
+    emerAddr: "台北市大安區",
+    emerRel: "父子",
+    exp: "初級百岳",
+    strength: "良好",
+    strengthProof: "",
+    isOfficial: "是",
+    status: "審核中 Checking",
+    notifyStatus: "",
+    payStatus: "未繳費 Unpaid",
+    notes: "系統診斷測試列"
+  };
+
+  _asyncAppendToEventSpreadsheet(testEvtId, testSignup);
 }
 
 // API: 儲存或新增活動 (POST)
@@ -7969,6 +8251,27 @@ function processSaveEvent(payload) {
       eventSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
     } else {
       eventSheet.appendRow(rowValues);
+    }
+
+    // ⚡ 即時完整同步至 Supabase events 表 (包含 drive_folder_url, spreadsheet_url, spreadsheet_id)
+    try {
+      _syncEventToSupabase({
+        id: eventId,
+        name: payload.name,
+        startDate: payload.startDate,
+        endDate: payload.endDate,
+        deadline: payload.deadline,
+        cost: payload.cost,
+        status: payload.status,
+        shortDesc: payload.shortDesc,
+        fullDesc: payload.fullDesc,
+        imageUrl: imageUrl,
+        driveFolderUrl: driveFolderUrl,
+        spreadsheetUrl: spreadsheetUrl,
+        spreadsheetId: spreadsheetId
+      });
+    } catch (sbSyncErr) {
+      console.warn("同步活動資料至 Supabase 警告:", sbSyncErr);
     }
 
     // 若有勾選推播至幹部群組
