@@ -39,8 +39,8 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
 }) => {
   const { t } = useTranslation();
 
-  const SHORT_DESC_LIMIT = 200;
-  const FULL_DESC_LIMIT = 1300;
+  const SHORT_DESC_LIMIT = 1000;
+  const FULL_DESC_LIMIT = 700;
   const TOTAL_DESC_LIMIT = 1400;
 
   const shortDescCount = useMemo(() => formData.shortDesc.trim().length, [formData.shortDesc]);
@@ -50,7 +50,8 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
   const isShortDescOver = shortDescCount > SHORT_DESC_LIMIT;
   const isFullDescOver = fullDescCount > FULL_DESC_LIMIT;
   const isTotalDescOver = totalDescCount > TOTAL_DESC_LIMIT;
-  const isDescOverLimit = isShortDescOver || isFullDescOver || isTotalDescOver;
+  // 只要總字數不要超過上限 (<= 1400) 即可送出
+  const isDescOverLimit = isTotalDescOver;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
@@ -328,7 +329,7 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
               {t('adminEvents.shortDescLabel')}
             </label>
             <span style={{ fontSize: '11px', color: isShortDescOver ? '#ef4444' : '#64748b' }}>
-              （建議 200 字以內）
+              （上限 1,000 字）
             </span>
           </div>
           <textarea
@@ -370,7 +371,7 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
               {t('adminEvents.fullDescLabel')}
             </label>
             <span style={{ fontSize: '11px', color: isFullDescOver ? '#ef4444' : '#64748b' }}>
-              （建議 1,300 字以內）
+              （上限 700 字）
             </span>
           </div>
           <textarea
@@ -498,17 +499,19 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
 
           {/* 卡片主體 */}
           <div style={{ padding: '16px', textAlign: 'left' }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 'bold', color: '#111111', lineHeight: '1.3' }}>
+              {formData.name || '未命名活動名稱'}
+            </h3>
+
             <span style={{
+              display: 'inline-block',
+              marginBottom: '10px',
               fontSize: '12px',
               fontWeight: 'bold',
               color: formData.status === '開放' ? '#1DB446' : formData.status === '未來開放' ? '#FF9800' : '#888888'
             }}>
               {formData.status === '開放' ? '開放 Open' : formData.status === '未來開放' ? '未來開放 Coming Soon' : '已關閉 Closed'}
             </span>
-
-            <h3 style={{ margin: '6px 0 10px', fontSize: '18px', fontWeight: 'bold', color: '#111111', lineHeight: '1.3' }}>
-              {formData.name || '未命名活動名稱'}
-            </h3>
 
             <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 'bold', color: '#666666' }}>
               費用 Cost: {formData.cost || '尚未訂定'}

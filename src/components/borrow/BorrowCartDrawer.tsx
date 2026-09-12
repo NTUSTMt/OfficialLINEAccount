@@ -18,6 +18,7 @@ interface BorrowCartDrawerProps {
   isSubmittingOrder: boolean;
   pickupDate: string;
   returnDate: string;
+  isInvalidDateRange?: boolean;
   purpose: string;
   otherPurpose: string;
   todayStr: string;
@@ -41,6 +42,7 @@ export function BorrowCartDrawer({
   isSubmittingOrder,
   pickupDate,
   returnDate,
+  isInvalidDateRange = false,
   purpose,
   otherPurpose,
   todayStr,
@@ -148,24 +150,41 @@ export function BorrowCartDrawer({
 
                   {pickupDate && returnDate && (
                     <div className="form-group full-width animate-fade-in" style={{ marginTop: '-4px' }}>
-                      <div style={{
-                        padding: '8px 12px',
-                        backgroundColor: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '8px',
-                        color: '#1d4ed8',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}>
-                        <span>
-                          {rentalDays > 2
-                            ? t('borrow.drawer.durationBadge', { days: rentalDays, extra: rentalDays - 2 })
-                            : t('borrow.drawer.durationBaseOnly', { days: rentalDays })}
-                        </span>
-                      </div>
+                      {isInvalidDateRange ? (
+                        <div style={{
+                          padding: '8px 12px',
+                          backgroundColor: '#fee2e2',
+                          border: '1px solid #fca5a5',
+                          borderRadius: '8px',
+                          color: '#b91c1c',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <span>⚠️ {t('borrow.drawer.invalidDateRange', '歸還日期不能早於領取日期！')}</span>
+                        </div>
+                      ) : (
+                        <div style={{
+                          padding: '8px 12px',
+                          backgroundColor: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: '8px',
+                          color: '#1d4ed8',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <span>
+                            {rentalDays > 2
+                              ? t('borrow.drawer.durationBadge', { days: rentalDays, extra: rentalDays - 2 })
+                              : t('borrow.drawer.durationBaseOnly', { days: rentalDays })}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -256,11 +275,17 @@ export function BorrowCartDrawer({
             <button
               className="submit-checkout-btn"
               onClick={onSubmitForm}
-              disabled={isSubmittingOrder || totalItems === 0 || !pickupDate || !returnDate}
+              disabled={isSubmittingOrder || totalItems === 0 || !pickupDate || !returnDate || isInvalidDateRange}
+              style={{
+                backgroundColor: isInvalidDateRange ? '#94a3b8' : undefined,
+                cursor: isInvalidDateRange ? 'not-allowed' : undefined
+              }}
             >
               {isSubmittingOrder
                 ? (i18n.language === 'en' ? 'Submitting...' : '送出預約中...')
-                : t('borrow.drawer.submitBtn', { price: totalPrice })}
+                : isInvalidDateRange
+                  ? (i18n.language === 'en' ? 'Invalid Return Date' : '請選擇正確歸還日期')
+                  : t('borrow.drawer.submitBtn', { price: totalPrice })}
             </button>
           </div>
         )}

@@ -14,7 +14,6 @@ import { openExternalUrl, parseProofUrls } from '../utils/applicantUtils';
 import {
   Search,
   RotateCw,
-  Plus,
   Lock,
   Mountain,
   ArrowUpDown,
@@ -617,63 +616,55 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       {/* 頁籤切換 */}
       <div style={{
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: '20px',
         backgroundColor: 'white',
         padding: '6px',
         borderRadius: '12px',
         border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+        gap: '6px'
       }}>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <button
-            type="button"
-            onClick={() => setActiveTab('list')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
-              border: 'none',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              cursor: 'pointer',
-              background: activeTab === 'list' ? '#059669' : 'transparent',
-              color: activeTab === 'list' ? 'white' : '#475569',
-              transition: 'all 0.2s'
-            }}
-          >
-            {t('adminEvents.tabList')}
-          </button>
-          <button
-            type="button"
-            onClick={resetFormForCreate}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
-              border: 'none',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              cursor: 'pointer',
-              background: activeTab === 'create' ? '#059669' : 'transparent',
-              color: activeTab === 'create' ? 'white' : '#475569',
-              transition: 'all 0.2s'
-            }}
-          >
-            {isEditing ? t('adminEvents.tabEdit') : t('adminEvents.tabCreate')}
-          </button>
-        </div>
-
-        {activeTab === 'list' && (
-          <button
-            type="button"
-            onClick={resetFormForCreate}
-            className="btn btn-primary"
-            style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}
-          >
-            <Plus size={14} />
-            <span>{t('adminEvents.publishNew')}</span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setActiveTab('list')}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: '8px',
+            border: 'none',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            cursor: 'pointer',
+            background: activeTab === 'list' ? '#059669' : 'transparent',
+            color: activeTab === 'list' ? 'white' : '#475569',
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap',
+            textAlign: 'center'
+          }}
+        >
+          {t('adminEvents.tabList', '活動總覽與審核')}
+        </button>
+        <button
+          type="button"
+          onClick={resetFormForCreate}
+          style={{
+            flex: 1,
+            padding: '10px 14px',
+            borderRadius: '8px',
+            border: 'none',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            cursor: 'pointer',
+            background: activeTab === 'create' ? '#059669' : 'transparent',
+            color: activeTab === 'create' ? 'white' : '#475569',
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap',
+            textAlign: 'center'
+          }}
+        >
+          {isEditing ? t('adminEvents.tabEdit', '編輯活動') : `+ ${t('adminEvents.tabCreate', '發布新活動')}`}
+        </button>
       </div>
 
       {/* 區塊一：活動列表與審核總覽 (Tab: list) */}

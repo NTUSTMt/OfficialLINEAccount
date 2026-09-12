@@ -398,3 +398,101 @@ describe('8. 統一 JSON 回應封裝 (_jsonResponse, _errorResponse, _successRe
   });
 });
 
+describe('9. 活動開始判定與社費繳納連動 Signups「是否為社員」及租借防呆', () => {
+  function _isEventStarted(startDateVal) {
+    if (!startDateVal) return false;
+    try {
+      var now = new Date();
+      if (startDateVal instanceof Date) {
+        var d = new Date(startDateVal.getTime());
+        d.setHours(0, 0, 0, 0);
+        return now.getTime() >= d.getTime();
+      }
+      var str = String(startDateVal).trim();
+      if (!str) return false;
+      var cleanStr = str.replace(/[\/\.]/g, "-");
+      var parts = cleanStr.split(" ")[0].split("-");
+      if (parts.length >= 3) {
+        var year = parseInt(parts[0], 10);
+        var month = parseInt(parts[1], 10) - 1;
+        var day = parseInt(parts[2], 10);
+        var eventStartDate = new Date(year, month, day, 0, 0, 0, 0);
+        return now.getTime() >= eventStartDate.getTime();
+      }
+    } catch (e) {
+      return false;
+    }
+    return false;
+  }
+
+  it('_isEventStarted: 未來活動回傳 false，過去活動回傳 true', () => {
+    const futureDate = '2099-12-31';
+    const pastDate = '2020-01-01';
+    assert.equal(_isEventStarted(futureDate), false);
+    assert.equal(_isEventStarted(pastDate), true);
+  });
+
+  it('社費繳納後，若活動尚未開始，Signups 中「是否為社員」由「否」連動更新為「是」', () => {
+    const signups = [
+      { userId: 'U111', eventId: 'E_FUTURE', isOfficial: '否' },
+      { userId: 'U111', eventId: 'E_PAST', isOfficial: '否' }
+    ];
+    const eventDateMap = {
+      'E_FUTURE': '2099-10-01',
+      'E_PAST': '2020-05-01'
+    };
+
+    // 模擬繳納社費後遍歷
+    signups.forEach(row => {
+      const startDate = eventDateMap[row.eventId];
+      if (!_isEventStarted(startDate) && row.isOfficial !== '是') {
+        row.isOfficial = '是';
+      }
+    });
+
+    assert.equal(signups[0].isOfficial, '是', '未開始之活動應被更新為是');
+    assert.equal(signups[1].isOfficial, '否', '已開始/結束之活動應維持原樣');
+  });
+
+  it('裝備表頭同時存在「備註」與「規格」時，優先以備註作為裝備說明 (description)', () => {
+    const headers = ['裝備代號', '裝備名稱', '規格', '備註', '是否外借', '剩餘數量'];
+    const row = ['EQ01', '帳篷', '二人帳', '附營釘8支，請於歸還前清潔', '可外借', '5'];
+
+    const remarkCol = headers.findIndex(h => h.includes('備註') || h.includes('備注'));
+    const descCol = headers.findIndex(h => h.includes('說明') || h.includes('詳細資訊') || h.includes('規格'));
+
+    let itemDesc = '';
+    if (remarkCol > -1 && row[remarkCol]) {
+      itemDesc = row[remarkCol];
+    } else if (descCol > -1 && row[descCol]) {
+      itemDesc = row[descCol];
+    }
+
+    assert.equal(itemDesc, '附營釘8支，請於歸還前清潔');
+  });
+
+  it('多品項租借防呆：歸還日期早於領取日期時應阻擋並回傳錯誤訊息', () => {
+    function validateLoanDates(pickupDate, returnDate) {
+      if (!pickupDate || !returnDate) {
+        return { valid: false, message: '缺少領取或歸還日期' };
+      }
+      const pDate = new Date(String(pickupDate).replace(/-/g, '/'));
+      const rDate = new Date(String(returnDate).replace(/-/g, '/'));
+      if (rDate.getTime() < pDate.getTime()) {
+        return { valid: false, message: '歸還日期不得早於領取日期' };
+      }
+      return { valid: true };
+    }
+
+    const invalidCheck = validateLoanDates('2026-09-15', '2026-09-12');
+    assert.equal(invalidCheck.valid, false);
+    assert.equal(invalidCheck.message, '歸還日期不得早於領取日期');
+
+    const validCheck = validateLoanDates('2026-09-12', '2026-09-15');
+    assert.equal(validCheck.valid, true);
+
+    const sameDayCheck = validateLoanDates('2026-09-12', '2026-09-12');
+    assert.equal(sameDayCheck.valid, true);
+  });
+});
+

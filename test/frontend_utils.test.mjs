@@ -268,4 +268,62 @@ describe('前端工具函式與純邏輯自動化測試 (Frontend Utils Test Sui
       assert.equal(result.totalDiscount, 0);
     });
   });
+
+  describe('5. 租借日期合法性判定與活動字數限制規則', () => {
+    function isInvalidDateRange(pickupDate, returnDate) {
+      return Boolean(pickupDate && returnDate && returnDate < pickupDate);
+    }
+
+    it('歸還日期早於領取日期判定為不合法 (true)', () => {
+      assert.equal(isInvalidDateRange('2026-09-12', '2026-09-10'), true);
+      assert.equal(isInvalidDateRange('2026-09-15', '2026-09-14'), true);
+    });
+
+    it('歸還日期晚於或等於領取日期判定為合法 (false)', () => {
+      assert.equal(isInvalidDateRange('2026-09-10', '2026-09-12'), false);
+      assert.equal(isInvalidDateRange('2026-09-12', '2026-09-12'), false);
+      assert.equal(isInvalidDateRange('', '2026-09-12'), false);
+      assert.equal(isInvalidDateRange('2026-09-10', ''), false);
+    });
+
+    it('活動編輯字數限制：簡介 1000、詳細 700、總計 1400', () => {
+      const SHORT_DESC_LIMIT = 1000;
+      const FULL_DESC_LIMIT = 700;
+      const TOTAL_DESC_LIMIT = 1400;
+
+      function checkDescLimits(shortDesc, fullDesc) {
+        const shortCount = (shortDesc || '').length;
+        const fullCount = (fullDesc || '').length;
+        const totalCount = shortCount + fullCount;
+
+        const isShortOver = shortCount > SHORT_DESC_LIMIT;
+        const isFullOver = fullCount > FULL_DESC_LIMIT;
+        const isTotalOver = totalCount > TOTAL_DESC_LIMIT;
+
+        // 送出阻擋條件：總字數不超過 1400
+        const isBlocked = isTotalOver;
+
+        return { shortCount, fullCount, totalCount, isShortOver, isFullOver, isTotalOver, isBlocked };
+      }
+
+      // 案例 1: 簡介 850 字、詳細 500 字，總計 1350 字 <= 1400 -> 可送出
+      const c1 = checkDescLimits('A'.repeat(850), 'B'.repeat(500));
+      assert.equal(c1.totalCount, 1350);
+      assert.equal(c1.isShortOver, false);
+      assert.equal(c1.isFullOver, false);
+      assert.equal(c1.isBlocked, false);
+
+      // 案例 2: 簡介 950 字、詳細 650 字，總計 1600 字 > 1400 -> 阻擋不可送出
+      const c2 = checkDescLimits('A'.repeat(950), 'B'.repeat(650));
+      assert.equal(c2.totalCount, 1600);
+      assert.equal(c2.isTotalOver, true);
+      assert.equal(c2.isBlocked, true);
+
+      // 案例 3: 簡介 1000 字、詳細 400 字，總計 1400 字剛好滿額 -> 可送出
+      const c3 = checkDescLimits('A'.repeat(1000), 'B'.repeat(400));
+      assert.equal(c3.totalCount, 1400);
+      assert.equal(c3.isBlocked, false);
+    });
+  });
 });
+

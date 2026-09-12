@@ -218,6 +218,11 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
     return baseFormula;
   }, [form.cart, equipments, rentalDays, form.purpose, isOfficial, t]);
 
+  const isInvalidDateRange = useMemo(() => {
+    if (!form.pickupDate || !form.returnDate) return false;
+    return form.returnDate < form.pickupDate;
+  }, [form.pickupDate, form.returnDate]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm(prev => {
@@ -232,6 +237,9 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
   const submitForm = async () => {
     if (totalItems === 0) return alert(t('borrow.alert.emptyCart'));
     if (!form.pickupDate || !form.returnDate) return alert(t('borrow.alert.noDates'));
+    if (isInvalidDateRange) {
+      return alert(t('borrow.drawer.invalidDateRange', '歸還日期不能早於領取日期！'));
+    }
     if (form.purpose === '其他用途' && !form.otherPurpose?.trim()) {
       return alert(t('borrow.alert.noOtherPurpose'));
     }
@@ -402,23 +410,23 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
             <span className="floating-badge">{totalItems}</span>
             <div className="floating-price-desc" style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', color: 'white' }}>
-                <span className="floating-total-label" style={{ fontSize: '11px', opacity: 0.8 }}>{t('borrow.floating.basicLabel')}</span>
+                <span className="floating-total-label" style={{ fontSize: '11px', opacity: 0.8 }}>{t('borrow.floating.basicLabel', '基本:')}</span>
                 <span className="floating-price" style={{ fontSize: '14px', fontWeight: 'bold' }}>${basePrice}</span>
-                <span style={{ fontSize: '11px', opacity: 0.7 }}>({rentalDays} {t('borrow.floating.daysUnit')})</span>
+                <span style={{ fontSize: '11px', opacity: 0.7 }}>({rentalDays} {t('borrow.floating.daysUnit', '天')})</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '12px', color: '#6ee7b7', fontWeight: 'bold' }}>
                   {form.purpose === '社團出隊'
-                    ? t('borrow.floating.estFree')
-                    : `${t('borrow.floating.estPrice')}$${totalPrice}${isOfficial ? ` (${t('borrow.floating.halfPrice')})` : ''}`}
+                    ? t('borrow.floating.estFree', '社團出隊免費')
+                    : `${t('borrow.floating.estPrice', '預估: ')}$${totalPrice}${isOfficial ? ` (${t('borrow.floating.halfPrice', '社員5折')})` : ''}`}
                 </span>
                 <span style={{ fontSize: '10px', color: '#94a3b8' }}>• {form.purpose}</span>
               </div>
             </div>
           </div>
-          <button className="view-cart-btn" onClick={() => setIsCartOpen(true)}>
+          <button className="view-cart-btn" onClick={() => setIsCartOpen(true)} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
             <ShoppingCart size={18} />
-            <span>{t('borrow.floating.viewDetail')}</span>
+            <span>{t('borrow.floating.viewDetail', '查看預訂單')}</span>
           </button>
         </div>
       )}
@@ -439,6 +447,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         isSubmittingOrder={isSubmittingOrder}
         pickupDate={form.pickupDate}
         returnDate={form.returnDate}
+        isInvalidDateRange={isInvalidDateRange}
         purpose={form.purpose}
         otherPurpose={form.otherPurpose || ''}
         todayStr={todayStr}

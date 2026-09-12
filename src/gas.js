@@ -2616,6 +2616,33 @@ function _isEventExpired(deadlineVal) {
   return false;
 }
 
+// ⭐️ 輔助函式：判定活動是否已經開始 (活動開始日 00:00:00 起算)
+function _isEventStarted(startDateVal) {
+  if (!startDateVal) return false;
+  try {
+    var now = new Date();
+    if (startDateVal instanceof Date) {
+      var d = new Date(startDateVal.getTime());
+      d.setHours(0, 0, 0, 0);
+      return now.getTime() >= d.getTime();
+    }
+    var str = String(startDateVal).trim();
+    if (!str) return false;
+    var cleanStr = str.replace(/[\/\.]/g, "-");
+    var parts = cleanStr.split(" ")[0].split("-");
+    if (parts.length >= 3) {
+      var year = parseInt(parts[0], 10);
+      var month = parseInt(parts[1], 10) - 1;
+      var day = parseInt(parts[2], 10);
+      var eventStartDate = new Date(year, month, day, 0, 0, 0, 0);
+      return now.getTime() >= eventStartDate.getTime();
+    }
+  } catch (e) {
+    console.error("解析活動開始日期失敗:", startDateVal, e);
+  }
+  return false;
+}
+
 // ⭐️ 產生最新活動卡片 (100% 全動態對應最新欄位版 / 雙語升級)
 // 【函式說明】
 // 當社員點擊「最新活動」時，這個函式會去「Events (活動資訊)」分頁，
@@ -2876,17 +2903,17 @@ function sendEventDetail(replyToken, eventId, ss) {
 
   var detailContents = [{
     "type": "text",
-    "text": "活動詳情 Event Details",
-    "weight": "bold",
-    "color": "#1DB446",
-    "size": "sm"
-  }, {
-    "type": "text",
     "text": eventName,
     "weight": "bold",
     "size": "xxl",
-    "margin": "md",
     "wrap": true
+  }, {
+    "type": "text",
+    "text": "活動詳情 Event Details",
+    "weight": "bold",
+    "color": "#1DB446",
+    "size": "sm",
+    "margin": "xs"
   }, {
     "type": "box",
     "layout": "vertical",
@@ -4059,6 +4086,53 @@ function processPaymentConfirmation(userId, paymentType, ss, customExpiryDate, i
       }
       SpreadsheetApp.flush();
     }
+
+    // ⭐️ 連動 Signups：若社員已繳納社費，且其先前報名之活動尚未開始，將原本「是否為社員」由「否」更新為「是」
+    var sSheetForMem = ss.getSheetByName("Signups");
+    var eSheetForMem = ss.getSheetByName("Events");
+    if (sSheetForMem && eSheetForMem) {
+      var sDataMem = sSheetForMem.getDataRange().getDisplayValues();
+      if (sDataMem.length > 1) {
+        var sHMem = sDataMem[0];
+        var sSysIdxMem = _fi(sHMem, "系統識別碼");
+        var sEvtIdIdxMem = _fi(sHMem, "活動編號");
+        var sOfficialIdxMem = _fi(sHMem, "是否為社員");
+
+        if (sSysIdxMem > -1 && sEvtIdIdxMem > -1 && sOfficialIdxMem > -1) {
+          // 建立活動開始日期映射表
+          var eventDateMap = {};
+          var eDataMem = eSheetForMem.getDataRange().getDisplayValues();
+          if (eDataMem.length > 1) {
+            var eHMem = eDataMem[0];
+            var eIdColMem = _fi(eHMem, "活動編號");
+            var eStartColMem = _fi(eHMem, "活動開始日期");
+            if (eStartColMem === -1) eStartColMem = _fi(eHMem, "開始日期");
+            if (eStartColMem === -1) eStartColMem = _fi(eHMem, "活動日期");
+            if (eIdColMem > -1 && eStartColMem > -1) {
+              for (var em = 1; em < eDataMem.length; em++) {
+                var evId = String(eDataMem[em][eIdColMem]).trim();
+                if (evId) eventDateMap[evId] = eDataMem[em][eStartColMem];
+              }
+            }
+          }
+
+          var memMatches = sSheetForMem.createTextFinder(userId).matchEntireCell(true).findAll();
+          for (var sm = 0; sm < memMatches.length; sm++) {
+            if (memMatches[sm].getColumn() === (sSysIdxMem + 1)) {
+              var sRow = memMatches[sm].getRow();
+              var curEvtId = String(sSheetForMem.getRange(sRow, sEvtIdIdxMem + 1).getValue()).trim();
+              var curOfficial = String(sSheetForMem.getRange(sRow, sOfficialIdxMem + 1).getValue()).trim();
+              var evStartDate = eventDateMap[curEvtId] || "";
+              // 前提：活動尚未開始
+              if (!_isEventStarted(evStartDate) && curOfficial !== "是") {
+                sSheetForMem.getRange(sRow, sOfficialIdxMem + 1).setValue("是");
+              }
+            }
+          }
+        }
+      }
+      SpreadsheetApp.flush();
+    }
   }
 
   // 2. 活動
@@ -4708,7 +4782,14 @@ function getEquipmentsListAPI(ss) {
     priceExtra: _fi(headers, "+1天"),
     status: _fi(headers, "狀態"),
     imageUrl: _fi(headers, "圖片網址"),
-    description: headers.findIndex(function (h) { return String(h).includes("說明") || String(h).includes("詳細資訊") || String(h).includes("規格") || String(h).includes("備註"); })
+    remarkCol: headers.findIndex(function (h) {
+      var s = String(h).trim();
+      return s.includes("備註") || s.includes("備注");
+    }),
+    descCol: headers.findIndex(function (h) {
+      var s = String(h).trim();
+      return s.includes("說明") || s.includes("詳細資訊") || s.includes("規格");
+    })
   };
 
   // 找出 5 欄照片網址欄位 (圖片網址1 ~ 圖片網址5，相容傳統「圖片網址」)
@@ -4747,6 +4828,14 @@ function getEquipmentsListAPI(ss) {
       }
     });
 
+    // 優先對應備註欄位，其次為說明/規格欄位
+    var itemDesc = "";
+    if (hIdx.remarkCol > -1 && String(data[i][hIdx.remarkCol] || "").trim()) {
+      itemDesc = String(data[i][hIdx.remarkCol]).trim();
+    } else if (hIdx.descCol > -1 && String(data[i][hIdx.descCol] || "").trim()) {
+      itemDesc = String(data[i][hIdx.descCol]).trim();
+    }
+
     if (isBorrowable === "可外借" && remainQty > 0 && status !== "維修中" && status !== "報廢" && status !== "需汰換" && status !== "待測") {
       availableEquipments.push({
         id: hIdx.id > -1 ? data[i][hIdx.id] : "",
@@ -4755,7 +4844,7 @@ function getEquipmentsListAPI(ss) {
         price: hIdx.price2Days > -1 ? parseInt(data[i][hIdx.price2Days], 10) || 0 : 0,
         priceExtra: hIdx.priceExtra > -1 ? parseInt(data[i][hIdx.priceExtra], 10) || 0 : 0,
         imageUrl: itemImgUrls.join(","),
-        description: hIdx.description > -1 ? data[i][hIdx.description] : ""
+        description: itemDesc
       });
     }
   }
@@ -4961,6 +5050,16 @@ function processMultiLoan(payload) {
 
   var userId = payload.userId;
   var details = payload.details;
+
+  // 日期合理性防呆驗證
+  if (!details || !details.pickupDate || !details.returnDate) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少領取或歸還日期" })).setMimeType(ContentService.MimeType.JSON);
+  }
+  var pDate = new Date(String(details.pickupDate).replace(/-/g, "/"));
+  var rDate = new Date(String(details.returnDate).replace(/-/g, "/"));
+  if (rDate.getTime() < pDate.getTime()) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "歸還日期不得早於領取日期" })).setMimeType(ContentService.MimeType.JSON);
+  }
 
   // 1. 取得社員基本資料
   var mData = mSheet.getDataRange().getValues();
@@ -5212,7 +5311,7 @@ function processPaymentSubmit(payload) {
       if (aIdx > -1) newRow[aIdx] = details.totalAmount;
       if (pIdx > -1) newRow[pIdx] = details.last5Digits;
       if (ntIdx > -1) newRow[ntIdx] = paymentNote;
-      if (stIdx > -1) newRow[stIdx] = "待核對";
+      if (stIdx > -1) newRow[stIdx] = "待確認";
 
       paySheet.appendRow(newRow);
       insertedRowIndex = paySheet.getLastRow();
@@ -6958,7 +7057,32 @@ function getEventSignupsAPI(ss, eventId, userId) {
     return ContentService.createTextOutput(JSON.stringify({ status: "success", signups: [] })).setMimeType(ContentService.MimeType.JSON);
   }
 
-  // 建立 Members 快取，提取體能證明、系所、學號、病史、緊急聯絡人關係
+  // 檢查該活動是否尚未開始
+  var eventSheet = ss.getSheetByName("Events");
+  var isEventNotStarted = true;
+  if (eventSheet) {
+    var eData = eventSheet.getDataRange().getDisplayValues();
+    if (eData.length > 1) {
+      var eH = eData[0];
+      var eIdCol = _fi(eH, "活動編號");
+      var eStartCol = _fi(eH, "活動開始日期");
+      if (eStartCol === -1) eStartCol = _fi(eH, "開始日期");
+      if (eStartCol === -1) eStartCol = _fi(eH, "活動日期");
+      if (eIdCol > -1 && eStartCol > -1) {
+        for (var ei = 1; ei < eData.length; ei++) {
+          if (String(eData[ei][eIdCol]).trim() === String(eventId).trim()) {
+            var evStartVal = eData[ei][eStartCol];
+            if (evStartVal && _isEventStarted(evStartVal)) {
+              isEventNotStarted = false;
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // 建立 Members 快取，提取體能證明、系所、學號、病史、緊急聯絡人關係、繳費與社籍狀態
   var mSheet = ss.getSheetByName("Members") || ss.getSheetByName("社員資料");
   var memberMap = {};
   if (mSheet) {
@@ -6978,17 +7102,26 @@ function getEventSignupsAPI(ss, eventId, userId) {
       var mMedIdx = mH.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
       var mRelIdx = _findEmerRelColIdx(mH);
       var mPhoneIdx = _fi(mH, "電話");
+      var mPayIdx = _fi(mH, "繳費狀態");
+      var mExpIdx = _fi(mH, "社籍到期日");
+      if (mExpIdx === -1) {
+        mExpIdx = mH.findIndex(function (h) { return String(h).includes("到期日") || String(h).includes("社籍"); });
+      }
 
       if (mSysIdx > -1 || mPhoneIdx > -1) {
         for (var m = 1; m < mData.length; m++) {
           var mUid = (mSysIdx > -1) ? String(mData[m][mSysIdx] || "").trim() : "";
           var mPhone = (mPhoneIdx > -1) ? String(mData[m][mPhoneIdx] || "").trim().replace(/[^0-9]/g, "") : "";
+          var mPay = (mPayIdx > -1) ? String(mData[m][mPayIdx] || "").trim() : "";
+          var mExp = (mExpIdx > -1) ? String(mData[m][mExpIdx] || "").trim() : "";
+          var isPaidMem = (mPay === "已繳費 Paid" || mPay === "已繳費" || mPay === "已繳" || mPay === "是") && (!mExp || !_isEventExpired(mExp));
           var memberInfo = {
             proof: (mProofIdx > -1) ? String(mData[m][mProofIdx] || "").trim() : "",
             department: (mDeptIdx > -1) ? String(mData[m][mDeptIdx] || "").trim() : "",
             studentId: (mStuIdx > -1) ? String(mData[m][mStuIdx] || "").trim() : "",
             medicalHistory: (mMedIdx > -1) ? String(mData[m][mMedIdx] || "").trim() : "",
-            emerRel: _getEmerRelValue(mH, mData[m])
+            emerRel: _getEmerRelValue(mH, mData[m]),
+            isOfficial: isPaidMem ? "是" : "否"
           };
           if (mUid) memberMap[mUid] = memberInfo;
           if (mPhone) memberMap["phone_" + mPhone] = memberInfo;
@@ -7042,6 +7175,19 @@ function getEventSignupsAPI(ss, eventId, userId) {
         relVal = memberMap["phone_" + rawPhone].emerRel;
       }
 
+      // 若活動尚未開始且該社員已具備社員資格，將原本為否動態更新為是
+      var curOfficial = (sOfficialIdx > -1) ? String(row[sOfficialIdx] || "").trim() : "";
+      if (isEventNotStarted && mem.isOfficial === "是" && curOfficial !== "是") {
+        curOfficial = "是";
+        if (sOfficialIdx > -1) {
+          try {
+            sSheet.getRange(i + 1, sOfficialIdx + 1).setValue("是");
+          } catch (e) {
+            console.error("即時更新 Signups 是否為社員失敗", e);
+          }
+        }
+      }
+
       signups.push({
         rowNumber: i + 1,
         signupCode: (sCodeIdx > -1) ? row[sCodeIdx] : "",
@@ -7064,7 +7210,7 @@ function getEventSignupsAPI(ss, eventId, userId) {
         department: mem.department || "",
         studentId: mem.studentId || "",
         medicalHistory: mem.medicalHistory || "",
-        isOfficial: (sOfficialIdx > -1) ? row[sOfficialIdx] : "",
+        isOfficial: curOfficial,
         reviewResult: (sResultIdx > -1) ? row[sResultIdx] : "",
         notifyStatus: (sNotifyIdx > -1) ? row[sNotifyIdx] : "",
         payStatus: (sPayIdx > -1) ? row[sPayIdx] : "",

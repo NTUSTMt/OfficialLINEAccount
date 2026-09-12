@@ -392,7 +392,7 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
 
               <div className="detail-modal-section">
                 <h4 style={{ margin: '18px 0 6px 0', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' }}>{t('borrow.modal.descTitle')}</h4>
-                <p className="detail-description" style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6', margin: '6px 0', textAlign: 'left', minHeight: '60px' }}>
+                <p className="detail-description" style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6', margin: '6px 0', textAlign: 'left', minHeight: '60px', whiteSpace: 'pre-wrap' }}>
                   {equipment.description ? equipment.description : t('borrow.modal.noDesc')}
                 </p>
               </div>

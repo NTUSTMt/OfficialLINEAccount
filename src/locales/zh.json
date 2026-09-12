@@ -232,7 +232,12 @@
       "basicLabel": "基本:",
       "personalLabel": "個人使用:",
       "memberTip": "(社員可享 5 折)",
-      "nextBtn": "下一步"
+      "nextBtn": "下一步",
+      "daysUnit": "天",
+      "estFree": "社團出隊免費",
+      "estPrice": "預估: ",
+      "halfPrice": "社員5折",
+      "viewDetail": "查看預訂單"
     },
     "drawer": {
       "title": "租借預訂單明細",
@@ -247,6 +252,7 @@
       "detailsTitle": "選擇預約詳情",
       "pickupDate": "領取日期",
       "returnDate": "歸還日期",
+      "invalidDateRange": "歸還日期不能早於領取日期！",
       "durationBadge": "出隊天數：{{days}} 天 (2 天基本 + {{extra}} 天加成)",
       "durationBaseOnly": "出隊天數：{{days}} 天 (基本 2 天內)",
       "purpose": "出隊目的 / 用途",
@@ -456,6 +462,7 @@
     "tabList": "活動總覽與審核",
     "tabCreate": "發布新活動",
     "tabEdit": "編輯活動",
+    "publishNew": "發布新活動",
     "refresh": "重新整理",
     "refreshing": "更新中...",
     "verifying": "驗證幹部身分中，請稍候...",

@@ -3,11 +3,36 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.42` (v0.1.42)
+- **當前版本**：`0.1.43` (v0.1.43)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 143. 6 項體驗優化與防呆修復：社費社員連動、租借日期防呆、備註對齊、幹部 UI 與活動字數優化 (v0.1.43)
+- **社費繳納與活動報名「是否為社員」狀態連動 (Membership Fee & Activity Signups Status Synchronization)**：
+  - 當社員繳納社費並經核銷確認後，後端 [gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 的 `processPaymentConfirmation` 自動比對其於 `Signups` 表中已報名之活動；若該活動「尚未開始」（依開始日期 00:00:00 起算），將報名名冊中原本「是否為社員」由「否」自動更新為「是」。
+  - 在幹部名單審核 API（`getEventSignupsAPI`）中增加動態校準與落盤機制，若活動尚未開始且該社員在 `Members` 表中具備有效社籍，即時校準回傳 `isOfficial: "是"` 並同步更新至 Google Sheets。
+- **裝備租借底部懸浮購物車列文字顯示修復 (Floating Cart Bar i18n & Overflow Fix)**：
+  - 補齊繁中 [zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json) 與英文 [en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json) 語系檔案中缺失的 `borrow.floating` 翻譯鍵值（`daysUnit`, `estFree`, `estPrice`, `halfPrice`, `viewDetail`），徹底解決手機版底欄顯示原始語系鍵名（如 `borrow.floating.daysUnit`）之問題。
+  - 針對預估金額與操作按鈕增加 `whiteSpace: 'nowrap'`，確保在各尺寸手機螢幕下整齊排版不折行。
+- **租借明細歸還日期防呆與前後端雙重校驗 (Borrow Return Date Validation & Auto-Shift)**：
+  - 前端 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 加入日期連動邏輯：當使用者挑選或調整領取日期且晚於現有歸還日期時，自動將歸還日期同步推移至與領取日期相同。
+  - 前端新增 `isInvalidDateRange` 即時檢驗：若歸還日期早於領取日期，[BorrowCartDrawer.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/borrow/BorrowCartDrawer.tsx) 於日期輸入框下方以紅字警示提醒，並立即禁用「確認送出預訂單」按鈕，防止送出無效表單。
+  - 後端 `processMultiLoan` 新增日期防呆校驗：若歸還日期小於領取日期，立即拒絕並回傳友善錯誤訊息 `"歸還日期不得早於領取日期"`。
+- **裝備詳細資訊彈窗對應試算表備註欄位 (Equipment Remark / Notes Alignment)**：
+  - 後端 `getEquipmentsListAPI` 調整欄位對齊優先順序，優先匹配試算表 `Equipments` 表頭之「備註」或「備注」欄位內容，其次才對齊「說明」或「規格」，精準呈現裝備特色與注意事項。
+  - 前端 [EquipmentDetailModal.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/borrow/EquipmentDetailModal.tsx) 於裝備說明區塊保留多行換行格式（`whiteSpace: 'pre-wrap'`），支援段落排版與條列式說明。
+- **幹部系統頂部切換 UI 跑版修復 (Admin Events Top Tab Mobile Layout Optimization)**：
+  - 重構 [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 頂部頁籤切換結構，將各頁籤按鈕設定為自適應寬度（`flex: 1`）並加入 `whiteSpace: 'nowrap'`，文字置中且間距自適應。
+  - 移除多餘且重疊擠壓排版的右側按鈕，徹底根除手機直向窄螢幕（如 iPhone 375px~390px）下中文字被擠壓為單字直排的跑版問題。
+- **幹部活動編輯字數上限更新與詳細卡片頂部活動名稱 (Event Description Character Limits & Card Header Optimization)**：
+  - [AdminEventForm.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventForm.tsx) 字數上限彈性調整：活動簡介上限 1,000 字、詳細行程上限 700 字，總字數上限設定為 1,400 字；送出表單檢核改以「總字數不超過 1,400 字」為唯一阻擋條件，賦予幹部撰寫內容更多彈性。
+  - 前端即時預覽卡片與後端 LINE Flex 詳細活動卡片（`sendEventDetail`）統一將活動名稱（`eventName`）置於最頂端大字體展示，下方緊接綠色標籤「活動詳情 Event Details」，大幅提升使用者閱讀體驗與辨識度。
+- **單元測試集擴展 (Automated Test Suite Expansion)**：
+  - [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 新增 Suite 9：涵蓋活動開始日期判斷、社費繳納連動 Signups 是否為社員、裝備備註欄位優先回傳、租借歸還日期防呆。
+  - [test/frontend_utils.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/frontend_utils.test.mjs) 新增 Suite 5：涵蓋租借日期合法性驗證與活動編輯字數 1000/700/1400 規則驗證。
+  - 全專案 15 組測試套件、38 個單元測試 100% 綠燈通過。
 
 ### 142. 前後端架構模組化拆分、重構與全自動化測試套件導入 (Architecture Modularization & Automated Test Suite) (v0.1.42)
 - **龐大單體組件模組化拆分 (Large Monolith Component Modularization)**：

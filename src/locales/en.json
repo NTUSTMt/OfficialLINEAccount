@@ -232,7 +232,12 @@
       "basicLabel": "Basic:",
       "personalLabel": "Personal:",
       "memberTip": "(50% off for Members)",
-      "nextBtn": "Next"
+      "nextBtn": "Next",
+      "daysUnit": "days",
+      "estFree": "Free for club trip",
+      "estPrice": "Est: ",
+      "halfPrice": "50% off for member",
+      "viewDetail": "View Cart"
     },
     "drawer": {
       "title": "Reservation Details",
@@ -247,6 +252,7 @@
       "detailsTitle": "Select Rental Details",
       "pickupDate": "Pickup Date",
       "returnDate": "Return Date",
+      "invalidDateRange": "Return date cannot be earlier than pickup date!",
       "durationBadge": "Duration: {{days}} days (2 base + {{extra}} extra)",
       "durationBaseOnly": "Duration: {{days}} days (Standard 2 days)",
       "purpose": "Trip Purpose / Usage",
@@ -453,9 +459,10 @@
     }
   },
   "adminEvents": {
-    "tabList": "Events & Signups",
-    "tabCreate": "Create Event",
+    "tabList": "Events Overview",
+    "tabCreate": "New Event",
     "tabEdit": "Edit Event",
+    "publishNew": "Publish Event",
     "refresh": "Refresh",
     "refreshing": "Refreshing...",
     "verifying": "Verifying officer permissions, please wait...",
