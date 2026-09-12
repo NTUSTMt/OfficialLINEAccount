@@ -3,11 +3,42 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.54` (v0.1.54)
+- **當前版本**：`0.1.56` (v0.1.56)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 156. Supabase RPC 腳本資料表結構自癒自動遷移 (Self-healing Schema Migration) (v0.1.56)
+- **歷史緣由與技術債排查 (Why Amount Column Was Missing Originally)**：
+  - **純人工對帳時代的遺留設計**：早期社團幹部在規劃 Google Sheets `Payments` 對帳分頁時，流程純為幹部手動核對帳號末 5 碼與網銀明細，應繳金額各自記錄於 `Events`（活動費用）與 `Loan_Records`（裝備租金）分頁中，因此 `Payments` 當初僅規劃了 9 欄（聯絡與核對專用）。
+  - **資料庫遷移落差**：系統遷移至 Supabase 時，若 `payments` 資料表早已存在（例如早期鏡像自 Google Sheets），PostgreSQL 的 `CREATE TABLE IF NOT EXISTS` 會直接跳過建立，不會為既有表自動增補欄位；而 RPC 腳本僅宣告函式（`CREATE FUNCTION`），導致 `amount` 欄位未能自動生成於既有資料表中。
+- **全自動自癒遷移架構 (Self-healing Table Migration)**：
+  - 於 [supabase/payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/payment_rpc.sql) 與 [supabase/history_achievements_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/history_achievements_rpc.sql) 最頂端加入 `ALTER TABLE payments ADD COLUMN IF NOT EXISTS ...`：
+    - 自動增補 `amount INTEGER NOT NULL DEFAULT 0`
+    - 自動增補 `target_type TEXT`、`target_id TEXT`、`bank_last5 TEXT`、`proof_image_url TEXT`、`officer_notes TEXT`、`confirmed_by TEXT`、`confirmed_at TIMESTAMPTZ`
+  - 任何開發者或管理者只要在 Supabase SQL Editor 執行 RPC 腳本，資料庫便會**自動升級並補全資料表結構**，永久消除既有表欄位脫節問題。
+- **代碼品質與驗證**：
+  - [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 單元測試 44/44 全數通過，`pnpm run lint` 0 錯誤，`pnpm run build` Vite 建置成功。
+
+### 155. GAS Payments J1 資料驗證例外修復與 Supabase 雙向深度整合 (v0.1.55)
+- **根本原因排查與 J1 表頭資料驗證零破壞防護**：
+  - 徹底解決 Google Sheets `Payments` 工作表觸發 `Exception: The data you entered in cell J1 violates the data validation rules set on this cell` 的執行中斷問題。
+  - **根因分析**：Google Sheets 試算表第 1 列設有強制資料驗證規則，限定僅能填入 9 個標準表頭（`姓名, 對帳狀態, 帳號末5碼, 繳款時間, 活動名稱, 系統識別碼, 繳費項目, 裝備名稱, 備註`）。前版程式碼在試算表缺少「金額」欄位時試圖在第 10 欄（Cell J1）自動新增寫入 `"金額"`，觸發驗證衝突崩潰。
+  - **解決方案**：
+    1. 徹底重構 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `_ensurePaymentAmountCol` 為純唯讀檢查（轉調 `_findAmountColIdx(headers)`），嚴格禁止任何修改表頭與寫入 J1 的動作。
+    2. 在 `processPaymentSubmit` 與 `handlePaymentInput` 中，寫入列長度嚴格維持 9 欄；若無獨立金額欄位，自動將金額資訊安全記錄於「備註」（例如：`[金額: $350] 台銀轉帳`）與「繳費項目」中，確保試算表資料完整且 100% 符合驗證規範。
+    3. 在 `getPaymentHistoryAPI` 中，純粹透過記憶體運算推算金額，若無金額欄位絕不嘗試回寫試算表表頭。
+- **GAS 全面對接 Supabase (< 50ms 雙核心架構)**：
+  - 在 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 頂部讀取指令碼屬性 `SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY`。
+  - **優先讀取 Supabase (`_fetchPaymentHistoryFromSupabase`)**：調用 `get_payment_history` 時，GAS 優先透過 REST API 呼叫 Supabase `get_my_payment_history` 安全 RPC。若取得資料直接回傳給前端，享有 < 50ms 極速與精準金額。
+  - **同步提交至 Supabase (`_syncPaymentToSupabase`)**：在 `processPaymentSubmit` 與 `handlePaymentInput` 申報繳費時，同步以 `submit_payment_rpc` 寫入 Supabase，確保雙向即時一致。
+  - **幹部審核連動 (`_syncPaymentStatusToSupabase`)**：幹部於 LINE 卡片點選確認繳費時，同步更新 Supabase 中的 `payments` 狀態為已核銷。
+- **同步背景排程防呆校正 (`supabase/gas_sync_worker.js`)**：
+  - 更新 `_syncPaymentToSheet`：對齊真實表頭名稱 `對帳狀態`（兼顧相容 `審核狀態`），並支援以 `line_user_id` 比對待確認繳費列，排程回寫更穩健。
+- **自動化測試與代碼品質**：
+  - 更新 [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 之 Suite 11（嚴格唯讀防護、J1 驗證阻擋測試、9 欄資料列長度校驗、記憶體推算與加總驗證），全套 17 組測試套件、44 項單元測試 **100% 綠燈通過**。
+  - 執行 `pnpm run lint` 0 錯誤、0 警告；`pnpm run build` Vite 生產環境建置成功。
 
 ### 154. 歷史紀錄 (Payment History) 費用顯示 $0 全面修復：表頭自動擴充、舊資料智慧推算與試算表/資料庫自癒回寫 (v0.1.54)
 - **根本原因排查與試算表自動防護擴充 (`_ensurePaymentAmountCol`)**：

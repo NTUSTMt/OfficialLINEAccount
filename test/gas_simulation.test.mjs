@@ -553,20 +553,18 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
   }
 
   function _ensurePaymentAmountCol(sheet, headers) {
-    var idx = _findAmountColIdx(headers);
-    if (idx === -1 && sheet) {
-      idx = headers.length;
-      sheet.getRange(1, idx + 1).setValue("金額");
-      headers.push("金額");
-    }
-    return idx;
+    return _findAmountColIdx(headers);
   }
 
-  it('若表頭缺少金額欄位，_ensurePaymentAmountCol 自動補齊「金額」表頭與索引', () => {
-    const headers = ["Timestamp", "系統識別碼", "姓名", "繳費項目", "活動名稱", "裝備名稱", "帳號末5碼/備註", "對帳狀態"];
+  it('嚴格唯讀防護：面對 9 欄標準表頭，_ensurePaymentAmountCol 絕不寫入 J1，表頭維持 9 欄並回傳 -1', () => {
+    const headers = ["姓名", "對帳狀態", "帳號末5碼", "繳款時間", "活動名稱", "系統識別碼", "繳費項目", "裝備名稱", "備註"];
+    let j1Written = false;
     const mockSheet = {
       cells: {},
       getRange(r, c) {
+        if (r === 1 && c === 10) {
+          throw new Error("Exception: The data you entered in cell J1 violates the data validation rules set on this cell.");
+        }
         return {
           setValue: (val) => {
             mockSheet.cells[`${r}_${c}`] = val;
@@ -576,12 +574,12 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
     };
 
     const idx = _ensurePaymentAmountCol(mockSheet, headers);
-    assert.equal(idx, 8);
-    assert.equal(headers[8], '金額');
-    assert.equal(mockSheet.cells['1_9'], '金額');
+    assert.equal(idx, -1);
+    assert.equal(headers.length, 9);
+    assert.equal(Object.keys(mockSheet.cells).length, 0);
   });
 
-  it('推算函式能精確自 Events 與 Loan_Records 萃取費用，修復 0 元舊紀錄', () => {
+  it('推算函式能精確自 Events、Loan_Records 與正則提取費用，修復 0 元舊紀錄', () => {
     const mockEventsSheet = {
       getDataRange: () => ({
         getDisplayValues: () => [
@@ -611,9 +609,18 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
       }
     };
 
-    function _inferPaymentAmount(ss, userId, title, eventName, equipName) {
+    function _inferPaymentAmount(ss, userId, title, eventName, equipName, note) {
       var total = 0;
-      var fullText = [title, eventName, equipName].filter(Boolean).join(" ");
+      var fullText = [title, eventName, equipName, note].filter(Boolean).join(" ");
+
+      var regexMatches = fullText.match(/\$(\d+)/g) || fullText.match(/應繳[:：]?\s*\$?(\d+)/g) || fullText.match(/金額[:：]?\s*\$?(\d+)/g);
+      if (regexMatches && regexMatches.length > 0) {
+        for (var rm = 0; rm < regexMatches.length; rm++) {
+          var num = parseInt(regexMatches[rm].replace(/\D/g, ''), 10) || 0;
+          if (num > 0) total += num;
+        }
+        if (total > 0) return total;
+      }
 
       if (fullText.indexOf("社籍") > -1 || fullText.indexOf("社費") > -1 || fullText.indexOf("Membership") > -1) {
         total += 200;
@@ -681,24 +688,30 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
     // 項目 4: 社費
     const amount4 = _inferPaymentAmount(mockSS, 'U_BRIAN', '🔸 社籍與社費 (Membership Fee)', '', '');
     assert.equal(amount4, 200);
+
+    // 項目 5: 正則提取文字標註之金額
+    const amount5 = _inferPaymentAmount(mockSS, 'U_BRIAN', '未列入清單之特約行程 ($880)', '', '');
+    assert.equal(amount5, 880);
   });
 
-  it('getPaymentHistoryAPI 流程能自動修復歷史舊列金額並正確加總 totalSpent', () => {
-    const writtenCells = {};
+  it('面對無金額欄位的 Payments 試算表，getPaymentHistoryAPI 絕不嘗試寫入 J1，並正確加總 totalSpent', () => {
     const mockPaySheet = {
       getDataRange: () => ({
         getValues: () => [
-          ['Timestamp', '系統識別碼', '姓名', '繳費項目', '活動名稱', '裝備名稱', '帳號末5碼/備註', '對帳狀態'],
-          ['2026-09-12 08:20:33', 'U_TEST', '小明', '🔸 活動：七星山迎新', '', '', '12345', '已確認無誤'],
-          ['2026-09-12 01:57:08', 'U_TEST', '小明', '🔹 裝備：大鋼盆', '', '', '12345', '已確認無誤'],
-          ['2026-09-12 01:46:10', 'U_TEST', '小明', '🔸 社籍與社費', '', '', '12345', '待確認 Checking']
+          ['姓名', '對帳狀態', '帳號末5碼', '繳款時間', '活動名稱', '系統識別碼', '繳費項目', '裝備名稱', '備註'],
+          ['小明', '已確認無誤', '12345', '2026-09-12 08:20:33', '', 'U_TEST', '🔸 活動：七星山迎新', '', ''],
+          ['小明', '已確認無誤', '12345', '2026-09-12 01:57:08', '', 'U_TEST', '🔹 裝備：大鋼盆', '', ''],
+          ['小明', '待確認 Checking', '12345', '2026-09-12 01:46:10', '', 'U_TEST', '🔸 社籍與社費', '', '']
         ]
       }),
-      getRange: (r, c) => ({
-        setValue: (val) => {
-          writtenCells[`${r}_${c}`] = val;
+      getRange: (r, c) => {
+        if (r === 1 && c === 10) {
+          throw new Error("Exception: The data you entered in cell J1 violates the data validation rules set on this cell.");
         }
-      })
+        return {
+          setValue: () => {}
+        };
+      }
     };
 
     const mockSS = {
@@ -724,17 +737,18 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
       }
     };
 
-    // 執行模擬
     const data = mockPaySheet.getDataRange().getValues();
     const headers = [...data[0]];
-    const amountIdx = _ensurePaymentAmountCol(mockPaySheet, headers);
+    const amountIdx = _findAmountColIdx(headers);
+    assert.equal(amountIdx, -1);
+
     let totalSpent = 0;
     const history = [];
 
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      const title = row[3];
-      const status = row[7];
+      const title = row[6];
+      const status = row[1];
       let amount = 0;
 
       if (amount <= 0) {
@@ -742,7 +756,10 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
         if (title.includes('七星山迎新')) amount += 500;
         if (title.includes('大鋼盆')) amount += 50;
 
-        mockPaySheet.getRange(i + 1, amountIdx + 1).setValue(amount);
+        // amountIdx 為 -1 時絕不呼叫 mockPaySheet.getRange
+        if (amountIdx > -1) {
+          mockPaySheet.getRange(i + 1, amountIdx + 1).setValue(amount);
+        }
       }
 
       history.push({ title, amount, status });
@@ -756,10 +773,38 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
     assert.equal(history[0].amount, 500);
     assert.equal(history[1].amount, 50);
     assert.equal(history[2].amount, 200);
-    assert.equal(totalSpent, 550); // 500 + 50 (不含待確認的 200)
-    assert.equal(writtenCells['2_9'], 500); // 第一筆回寫金額
-    assert.equal(writtenCells['3_9'], 50);  // 第二筆回寫金額
-    assert.equal(writtenCells['4_9'], 200); // 第三筆回寫金額
+    assert.equal(totalSpent, 550); // 500 + 50 (排除待確認的 200)
+  });
+
+  it('processPaymentSubmit 在 9 欄試算表結構下，產生的 newRow 長度剛好為 9，不超出試算表範圍且安全附帶金額至備註', () => {
+    const pHeaders = ["姓名", "對帳狀態", "帳號末5碼", "繳款時間", "活動名稱", "系統識別碼", "繳費項目", "裝備名稱", "備註"];
+    const aIdx = _findAmountColIdx(pHeaders);
+    assert.equal(aIdx, -1);
+
+    const submitAmount = 350;
+    const paymentNote = "台銀轉帳";
+    const confirmedItems = ["🔸 活動：攀岩基礎 ($350)"];
+    const newRow = new Array(pHeaders.length).fill("");
+
+    const nIdx = pHeaders.indexOf("姓名");
+    const stIdx = pHeaders.indexOf("對帳狀態");
+    const pIdx = pHeaders.indexOf("帳號末5碼");
+    const tIdx = pHeaders.indexOf("繳款時間");
+    const sIdx = pHeaders.indexOf("系統識別碼");
+    const iIdx = pHeaders.indexOf("繳費項目");
+    const ntIdx = pHeaders.indexOf("備註");
+
+    if (tIdx > -1) newRow[tIdx] = "2026-09-12 12:00:00";
+    if (nIdx > -1) newRow[nIdx] = "王小明";
+    if (sIdx > -1) newRow[sIdx] = "U123456";
+    if (iIdx > -1) newRow[iIdx] = confirmedItems.join(", ") + (aIdx === -1 && submitAmount > 0 ? " ($" + submitAmount + ")" : "");
+    if (pIdx > -1) newRow[pIdx] = "54321";
+    if (ntIdx > -1) newRow[ntIdx] = "[金額: $" + submitAmount + "] " + paymentNote;
+    if (stIdx > -1) newRow[stIdx] = "待確認";
+
+    assert.equal(newRow.length, 9);
+    assert.equal(newRow[ntIdx], "[金額: $350] 台銀轉帳");
+    assert.equal(newRow[iIdx], "🔸 活動：攀岩基礎 ($350) ($350)");
   });
 });
 

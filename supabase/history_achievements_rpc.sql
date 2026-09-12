@@ -7,6 +7,18 @@
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
+-- 0. 資料表結構自我修復與自動遷移 (Self-healing Schema Migration)
+-- ------------------------------------------------------------------------------
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS target_type TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS target_id TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS bank_last5 TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS proof_image_url TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS officer_notes TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed_by TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+
+-- ------------------------------------------------------------------------------
 -- 1. 取得個人歷史繳費紀錄 RPC (get_my_payment_history)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_my_payment_history(p_line_user_id TEXT)

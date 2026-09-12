@@ -229,10 +229,20 @@ function _syncPaymentToSheet(ss, p) {
   var data = sheet.getDataRange().getValues();
   var headers = data[0];
   var pidIdx = _fi(headers, "繳費單號");
-  var stCol = _fi(headers, "審核狀態");
+  var uidIdx = _fi(headers, "系統識別碼");
+  var stCol = _fi(headers, "對帳狀態") > -1 ? _fi(headers, "對帳狀態") : _fi(headers, "審核狀態");
 
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][pidIdx]).trim() === String(p.id).trim()) {
+    var isMatch = false;
+    if (pidIdx > -1 && String(data[i][pidIdx]).trim() === String(p.id).trim()) {
+      isMatch = true;
+    } else if (pidIdx === -1 && uidIdx > -1 && String(data[i][uidIdx]).trim() === String(p.line_user_id).trim()) {
+      var curSt = stCol > -1 ? String(data[i][stCol]).trim() : "";
+      if (curSt.indexOf("待確認") > -1 || curSt.indexOf("Checking") > -1) {
+        isMatch = true;
+      }
+    }
+    if (isMatch) {
       if (stCol > -1 && p.status) sheet.getRange(i + 1, stCol + 1).setValue(p.status);
       break;
     }
