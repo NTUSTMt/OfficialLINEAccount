@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --success: #16a34a;
+      --warning: #ea580c;
+      --danger: #dc2626;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .btn-refresh {
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-refresh:hover {
+      background: #e2e8f0;
+      color: var(--text-main);
+    }
+
+    .status-banner {
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      font-size: 12.5px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .banner-info {
+      background-color: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+    }
+
+    .banner-success {
+      background-color: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
+    .banner-warning {
+      background-color: #fff7ed;
+      border: 1px solid #fed7aa;
+      color: #9a3412;
+    }
+
+    .banner-danger {
+      background-color: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+
+    .loading-container {
+      text-align: center;
+      padding: 40px 10px;
+      color: var(--text-muted);
+    }
+
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border: 3px solid #e2e8f0;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .diff-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .diff-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .diff-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .applicant-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-main);
+    }
+
+    .signup-code {
+      font-family: monospace;
+      font-size: 11px;
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+
+    .change-item {
+      background: #f8fafc;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .field-name {
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 2px;
+    }
+
+    .val-compare {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      flex-wrap: wrap;
+    }
+
+    .val-old {
+      color: #94a3b8;
+      text-decoration: line-through;
+    }
+
+    .val-arrow {
+      color: var(--text-muted);
+    }
+
+    .val-new {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .actions {
+      position: sticky;
+      bottom: 0;
+      background: var(--bg);
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn-sync {
+      width: 100%;
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+
+    .btn-sync:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-sync:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .notice {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">報名差異比對與同步</div>
+    <button class="btn-refresh" id="refreshBtn" onclick="loadDiffs()">重新整理</button>
+  </div>
+
+  <div id="loading" class="loading-container">
+    <div class="spinner"></div>
+    <div>正在讀取試算表與比對 Supabase...</div>
+  </div>
+
+  <div id="content" style="display: none;">
+    <div id="bannerContainer"></div>
+    <div id="diffContainer" class="diff-list"></div>
+
+    <div class="actions" id="actionsContainer" style="display: none;">
+      <button class="btn-sync" id="syncBtn" onclick="commitSync()">
+        確認同步至 Supabase
+      </button>
+      <div class="notice">
+        同步操作僅更新資料庫，絕不發送任何 LINE 通知給社員
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var currentDiffs = [];
+
+    function setBanner(type, message) {
+      var container = document.getElementById('bannerContainer');
+      var cls = 'banner-info';
+      if (type === 'success') cls = 'banner-success';
+      if (type === 'warning') cls = 'banner-warning';
+      if (type === 'danger') cls = 'banner-danger';
+      container.innerHTML = '<div class="status-banner ' + cls + '">' + message + '</div>';
+    }
+
+    function loadDiffs() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('content').style.display = 'none';
+      document.getElementById('refreshBtn').disabled = true;
+
+      google.script.run
+        .withSuccessHandler(onDiffsLoaded)
+        .withFailureHandler(onDiffsFailed)
+        .getSignupsDiff();
+    }
+
+    function onDiffsLoaded(res) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+      document.getElementById('refreshBtn').disabled = false;
+
+      if (!res || res.status === 'error') {
+        setBanner('danger', res ? res.message : '載入失敗');
+        document.getElementById('diffContainer').innerHTML = '';
+        document.getElementById('actionsContainer').style.display = 'none';
+        return;
+      }
+
+      currentDiffs = res.diffs || [];
+      var container = document.getElementById('diffContainer');
+      var actions = document.getElementById('actionsContainer');
+
+      if (currentDiffs.length === 0) {
+        setBanner('success', '✅ 試算表與 Supabase 完全一致，無待同步項目。');
+        container.innerHTML = '<div style="text-align:center; padding:30px 10px; color:#64748b;">所有已具備專屬碼的報名者資料皆為最新版本。</div>';
+        actions.style.display = 'none';
+        return;
+      }
+
+      setBanner('warning', '⚠️ 發現 ' + currentDiffs.length + ' 筆待同步差異');
+      actions.style.display = 'block';
+      document.getElementById('syncBtn').disabled = false;
+      document.getElementById('syncBtn').innerText = '確認同步至 Supabase (' + currentDiffs.length + ' 筆)';
+
+      var html = '';
+      for (var i = 0; i < currentDiffs.length; i++) {
+        var d = currentDiffs[i];
+        html += '<div class="diff-card">';
+        html += '  <div class="diff-card-header">';
+        html += '    <span class="applicant-name">' + escapeHtml(d.name || '未填姓名') + '</span>';
+        html += '    <span class="signup-code">' + escapeHtml(d.code) + '</span>';
+        html += '  </div>';
+
+        if (d.changes && d.changes.length > 0) {
+          for (var c = 0; c < d.changes.length; c++) {
+            var ch = d.changes[c];
+            html += '  <div class="change-item">';
+            html += '    <div class="field-name">' + escapeHtml(ch.field) + '</div>';
+            html += '    <div class="val-compare">';
+            html += '      <span class="val-old">' + escapeHtml(ch.oldVal || '(空)') + '</span>';
+            html += '      <span class="val-arrow">➔</span>';
+            html += '      <span class="val-new">' + escapeHtml(ch.newVal || '(空)') + '</span>';
+            html += '    </div>';
+            html += '  </div>';
+          }
+        }
+        html += '</div>';
+      }
+      container.innerHTML = html;
+    }
+
+    function onDiffsFailed(err) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+      document.getElementById('refreshBtn').disabled = false;
+      setBanner('danger', '比對過程發生錯誤：' + (err.message || err));
+    }
+
+    function commitSync() {
+      if (!currentDiffs || currentDiffs.length === 0) return;
+
+      var btn = document.getElementById('syncBtn');
+      btn.disabled = true;
+      btn.innerText = '正在寫入 Supabase...';
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.innerText = '同步完成';
+          setBanner('success', '🎉 ' + (res.message || '已成功同步至 Supabase！'));
+          document.getElementById('diffContainer').innerHTML = '<div style="text-align:center; padding:20px; color:#166534; font-weight:600;">資料已更新完成</div>';
+          document.getElementById('actionsContainer').style.display = 'none';
+          // 重新自動比對
+          setTimeout(loadDiffs, 1500);
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          btn.innerText = '確認同步至 Supabase';
+          setBanner('danger', '寫入失敗：' + (err.message || err));
+        })
+        .commitDiffsToSupabase(currentDiffs);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // 頁面載入時自動執行比對
+    window.onload = function() {
+      loadDiffs();
+    };
+  </script>
+</body>
+</html>

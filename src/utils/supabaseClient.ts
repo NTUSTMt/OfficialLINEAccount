@@ -711,6 +711,9 @@ export const saveEventToSupabase = async (
     shortDesc?: string;
     fullDesc?: string;
     imageUrl?: string;
+    driveFolderUrl?: string;
+    spreadsheetUrl?: string;
+    spreadsheetId?: string;
   }
 ): Promise<{ success: boolean; eventId?: string }> => {
   if (!supabase || !userId) return { success: false };

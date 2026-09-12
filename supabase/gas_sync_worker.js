@@ -256,10 +256,16 @@ function _syncEventToSheet(ss, p) {
   var headers = data[0];
   var idIdx = _fi(headers, "活動編號");
   var stCol = _fi(headers, "狀態");
+  var dfCol = _fi(headers, "雲端資料夾網址");
+  var suCol = _fi(headers, "報名名冊網址");
+  var siCol = _fi(headers, "試算表ID");
 
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][idIdx]).trim() === String(p.id).trim()) {
       if (stCol > -1 && p.status) sheet.getRange(i + 1, stCol + 1).setValue(p.status);
+      if (dfCol > -1 && p.drive_folder_url) sheet.getRange(i + 1, dfCol + 1).setValue(p.drive_folder_url);
+      if (suCol > -1 && p.spreadsheet_url) sheet.getRange(i + 1, suCol + 1).setValue(p.spreadsheet_url);
+      if (siCol > -1 && p.spreadsheet_id) sheet.getRange(i + 1, siCol + 1).setValue(p.spreadsheet_id);
       break;
     }
   }

@@ -5,6 +5,9 @@
 
 -- 0. 資料表結構自我修復與自動遷移 (Self-healing Schema Migration)
 ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS drive_folder_url TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS spreadsheet_url TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS spreadsheet_id TEXT;
 
 -- 自 members 自動回填姓名
 UPDATE event_signups s 
@@ -128,6 +131,9 @@ BEGIN
             'shortDesc', COALESCE(e.summary, ''),
             'fullDesc', COALESCE(e.itinerary, ''),
             'imageUrl', COALESCE(e.cover_image_url, ''),
+            'driveFolderUrl', COALESCE(e.drive_folder_url, ''),
+            'spreadsheetUrl', COALESCE(e.spreadsheet_url, ''),
+            'spreadsheetId', COALESCE(e.spreadsheet_id, ''),
             'stats', jsonb_build_object(
                 'total', COUNT(s.id) FILTER (WHERE s.status NOT LIKE '%取消%' AND s.status NOT LIKE '%Cancelled%'),
                 'accepted', COUNT(s.id) FILTER (WHERE s.status LIKE '%正取%'),
@@ -138,7 +144,7 @@ BEGIN
         ) AS evt
         FROM events e
         LEFT JOIN event_signups s ON e.id = s.event_id
-        GROUP BY e.id, e.title, e.start_date, e.end_date, e.deadline, e.fee, e.status, e.summary, e.itinerary, e.cover_image_url
+        GROUP BY e.id, e.title, e.start_date, e.end_date, e.deadline, e.fee, e.status, e.summary, e.itinerary, e.cover_image_url, e.drive_folder_url, e.spreadsheet_url, e.spreadsheet_id
         ORDER BY e.start_date DESC
     ) sub;
 
@@ -362,6 +368,9 @@ BEGIN
         summary,
         itinerary,
         cover_image_url,
+        drive_folder_url,
+        spreadsheet_url,
+        spreadsheet_id,
         updated_at
     )
     VALUES (
@@ -375,6 +384,9 @@ BEGIN
         COALESCE(p_event_data->>'shortDesc', ''),
         COALESCE(p_event_data->>'fullDesc', ''),
         COALESCE(p_event_data->>'imageUrl', ''),
+        NULLIF(trim(COALESCE(p_event_data->>'driveFolderUrl', '')), ''),
+        NULLIF(trim(COALESCE(p_event_data->>'spreadsheetUrl', '')), ''),
+        NULLIF(trim(COALESCE(p_event_data->>'spreadsheetId', '')), ''),
         NOW()
     )
     ON CONFLICT (id) DO UPDATE
@@ -387,6 +399,9 @@ BEGIN
         summary = EXCLUDED.summary,
         itinerary = EXCLUDED.itinerary,
         cover_image_url = CASE WHEN EXCLUDED.cover_image_url != '' THEN EXCLUDED.cover_image_url ELSE events.cover_image_url END,
+        drive_folder_url = COALESCE(EXCLUDED.drive_folder_url, events.drive_folder_url),
+        spreadsheet_url = COALESCE(EXCLUDED.spreadsheet_url, events.spreadsheet_url),
+        spreadsheet_id = COALESCE(EXCLUDED.spreadsheet_id, events.spreadsheet_id),
         updated_at = NOW();
 
     -- 排入 sync_queue 佇列

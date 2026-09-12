@@ -3,11 +3,83 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.58` (v0.1.58)
+- **當前版本**：`0.1.61` (v0.1.61)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 161. 範本試算表自動複製機制與試算表「一鍵推播正備取通知」引擎 (v0.1.61)
+- **需求背景與幹部體驗升級 (Template Auto-Copy & One-Click Admission Notification)**：
+  - **自帶按鈕與選單**：為讓每一次發布新活動時自動生成的試算表皆「100% 內建頂部自訂選單與側邊欄」，無需幹部手動複製貼上 Apps Script 腳本，正式導入「Google Drive 範本複製機制」。
+  - **試算表直發錄取推播**：幹部於試算表中完成審核後，可直接在試算表頂部選單點擊「📢 一鍵推播正備取錄取通知」，系統自動發送 LINE Flex 錄取通知卡片並回標「已通知」，免去在多個系統間切換。
+- **範本自動複製與動態綁定 (Template Copy Engine)**：
+  - 在 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `_createEventDriveFolderAndSheet` 中，支援讀取 Script Properties 中的 `EVENT_SHEET_TEMPLATE_ID`。
+  - 當設定範本 ID 時，自動在活動資料夾中透過 `makeCopy()` 複製範本，確保產生的試算表立即內嵌完整 Apps Script 腳本。
+  - 自動於新試算表的 `_CONFIG` 工作表動態寫入本次活動的 `EVENT_ID` 與 `EVENT_NAME`，無縫完成綁定。
+  - 若尚未設定範本 ID，自動平滑回退（Fallback）為程式化生成，保證建立流程 100% 穩定不中斷。
+- **試算表專屬綁定腳本雙核心升級 ([supabase/event_sheet_script.js](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/event_sheet_script.js))**：
+  - **頂部自訂選單**：
+    1. `🔄 比對差異並同步至 Supabase`：啟動側邊欄進行無害安全差異比對與資料庫覆寫。
+    2. `📢 一鍵推播正備取錄取通知`：執行錄取名單智慧推播。
+  - **防呆確認對話框**：發送前統計並提示「待通知總人數、正取人數、備取人數」，幹部確認後始進行推播。
+  - **官方 Flex 卡片發送**：
+    - 正取隊員：發送綠色系錄取卡片，包含活動名稱、出隊須知與「前往繳費系統」一鍵跳轉按鈕。
+    - 備取隊員：發送橘色系備取卡片，附帶「確認備取意願」互動按鈕。
+  - **防止重複推播**：發送成功後，自動在該隊員列之「通知狀態」欄位寫入「`已通知`」。
+- **名冊表頭 17 欄對齊與動態對稱寫入**：
+  - 表頭增補「通知狀態」欄位，標準結構為：`[報名專屬碼, 審核狀態, 通知狀態, 繳費狀態, 姓名, 性別, 身分證字號, 出生年月日, 手機電話, 緊急聯絡人, 關係, 聯絡人電話, 登山經驗與體能, 特殊病史與過敏, 飲食習慣, 系統識別碼, 備註]`。
+  - `_asyncAppendToEventSpreadsheet` 改採表頭動態檢索填入（Dynamic Header Matching），相容 16 欄與 17 欄試算表。
+- **測試與驗證 (Verification)**：
+  - 更新 [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs)，全套 18 組套件、53 項單元測試 **100% 綠燈通過**。
+  - 執行 `pnpm run lint`：0 錯誤。
+  - 執行 `pnpm run build`：Vite 生產環境建置成功。
+
+### 160. 核心資料庫結構腳本冪等性全面升級與自我修復強化 (v0.1.60)
+- **問題分析與修復 (Idempotent DDL & Error 42710 Fix)**：
+  - 在既有 Supabase 資料庫重新執行 [`supabase/schema.sql`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/schema.sql) 時，因 PostgreSQL 觸發器已存在，拋出 `ERROR: 42710: trigger "trg_members_updated_at" for relation "members" already exists`。
+  - 為所有 Trigger 加入前置 `DROP TRIGGER IF EXISTS <trigger_name> ON <table_name>`，消除重複建立時之衝突。
+  - 為所有 RLS 安全政策（`CREATE POLICY`）全面增設 `DROP POLICY IF EXISTS "<policy_name>" ON <table_name>`，確保政策更新時平滑覆蓋不中斷。
+- **欄位自癒修復 (Self-Healing Column Migration)**：
+  - 增設 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 語句，確保已建立之既有資料庫在執行時自動補齊：
+    - `events`：`drive_folder_url`、`spreadsheet_url`、`spreadsheet_id`
+    - `event_signups`、`loans`、`reflections`、`payments`：`name`（社員姓名直觀辨識）
+    - `payments`：`amount`（手動維護金額支援）
+  - 達成隨時可在 Supabase SQL Editor 完整重新執行而 100% 綠燈成功。
+- **測試與驗證 (Verification)**：
+  - 執行 `pnpm test`：50 項單元測試全數通過。
+  - 執行 `pnpm run lint`：0 錯誤。
+  - 執行 `pnpm run build`：Vite 生產環境建置成功。
+
+### 159. 活動專屬 Google Drive 資料夾與報名試算表自動化、側邊欄差異比對同步 (v0.1.59)
+- **需求背景與入山證行政效率革新 (Automated Mountain Permit Sheet & Folder)**：
+  - 幹部在申請國家公園入園證、警政署入山證與辦理登山平安保險時，需要單一活動所有報名人員之完整檢核資料（含身分證字號、出生年月日、手機、緊急聯絡人姓名/關係/電話、登山經驗、體能與特殊病史等）。
+  - 原先所有活動之報名資料全數混雜於全域資料表中，難以迅速篩選與匯出；藉由本次更新，幹部新增活動時自動化一鍵建妥專屬作業空間。
+- **自動化 Google Drive 資料夾與名冊試算表建立 (Google Drive & Sheets Integration)**：
+  - **資料夾命名規範**：於 Google Drive 根目錄自動建立格式為 `YYYY/MM/DD_活動名稱`（例如 `2026/09/20_七星山主東峰`）之專屬資料夾。
+  - **試算表初始化**：在該資料夾內自動建立 `YYYY/MM/DD_活動名稱_報名名冊` 專屬試算表。
+  - **專業表頭與版面美化**：工作表命名為「報名名冊」，自動填入 16 欄入山險標準規格表頭（置頂凍結第 1 列、藍色背景高對比樣式），並自動建立隱藏之 `_CONFIG` 工作表儲存 `EVENT_ID`，供後續雙向同步綁定。
+- **後台直觀操作介面 (Clean UI Without Emoji)**：
+  - 於 [`src/components/admin/AdminEventCard.tsx`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx) 為具備雲端資源的活動增設純文字無表情符號按鈕：`[開啟活動資料夾]` 與 `[開啟報名試算表]`，支援點擊一鍵直達 Google 雲端作業空間。
+- **超高速報名寫入與非同步名冊追加 (Ultra-Fast Registration & Async Append)**：
+  - 社員透過 LINE LIFF 登記活動時，Supabase 資料庫於 < 0.1s 內完成寫入並立即回應。
+  - 於 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 透過 `_asyncAppendToEventSpreadsheet` 在背景非同步將報名資料附加至該活動專屬試算表，完全不造成報名流程延遲卡頓。
+- **試算表側邊欄差異比對與同步引擎 (Diff & Sync Engine)**：
+  - 於 [`supabase/event_sheet_script.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/event_sheet_script.js) 與 [`supabase/event_sheet_sidebar.html`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/event_sheet_sidebar.html) 提供試算表內嵌之 Apps Script 腳本與現代化側邊欄：
+    1. 頂部自訂選單：「🏔️ 社團系統 ➔ 比對差異並同步至 Supabase」。
+    2. **嚴格過濾保護**：僅比對具備有效「報名專屬碼」（`S` 開頭）之正式報名列；幹部在表格下方自行補充之車輛接駁安排、伙食採買、待辦事項等雜項註記自動略過，避免破壞系統資料庫。
+    3. **直觀差異預覽**：側邊欄自動以卡片對比列出「原先值 ➔ 試算表值」，清楚標示異動欄位。
+    4. **幹部確認後批次回寫**：經幹部檢閱無誤後點擊「確認同步至 Supabase」，自動透過 REST API 覆寫 `event_signups` 與 `members` 之對應個資欄位。
+- **嚴格零 LINE 訊息干擾規範 (Strict Zero LINE Push Notification Policy)**：
+  - 依使用者明確要求，試算表向 Supabase 執行同步時，**絕對不發送任何 LINE 訊息**給社員或幹部，僅在當前試算表以側邊欄介面與 `SpreadsheetApp.toast` 提供完成提示。
+- **資料庫與工具鏈全面升級**：
+  - [`supabase/schema.sql`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/schema.sql) & [`supabase/admin_events_rpc.sql`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql)：`events` 資料表擴充 `drive_folder_url`、`spreadsheet_url`、`spreadsheet_id` 欄位與自癒遷移。
+  - [`src/types/event.ts`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/types/event.ts)：`AdminEvent` 型別增補雲端連結屬性。
+  - [`src/utils/supabaseClient.ts`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts)：`saveEventToSupabase` 完整持久化雲端資源屬性。
+  - [`supabase/gas_sync_worker.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/gas_sync_worker.js)：支援活動雲端網址同步回主試算表。
+- **自動化測試與驗證 (Verification)**：
+  - 更新 [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs)，新增 Suite 12 專屬測試，全套 18 組套件、50 項單元測試 **100% 綠燈通過**。
+  - 執行 `pnpm run lint` 0 錯誤、`pnpm run build` Vite 建置成功。
 
 ### 158. 全域 line_user_id 關聯表增補 name 欄位與自動同步自癒機制 (v0.1.58)
 - **需求背景與體驗升級 (Human-Readable Tables in Supabase Dashboard)**：

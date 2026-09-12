@@ -9,6 +9,8 @@ export interface AdminEvent {
   shortDesc: string;
   fullDesc: string;
   imageUrl: string;
+  driveFolderUrl?: string;
+  spreadsheetUrl?: string;
   stats: {
     total: number;
     accepted: number;

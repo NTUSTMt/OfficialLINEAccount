@@ -10,7 +10,9 @@ import {
   AlertCircle,
   Pencil,
   ClipboardCheck,
-  ImageIcon
+  ImageIcon,
+  Folder,
+  FileSpreadsheet
 } from 'lucide-react';
 import type { AdminEvent } from '../../types/event';
 import { getDirectImageUrl } from '../../utils/image';
@@ -325,12 +327,74 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
         </div>
       </div>
 
+      {/* 雲端資料夾與名冊試算表快捷連結 (純文字乾淨按鈕) */}
+      {(evt.driveFolderUrl || evt.spreadsheetUrl) && (
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          borderTop: '1px solid #f1f5f9',
+          paddingTop: '10px',
+          paddingBottom: '2px'
+        }}>
+          {evt.driveFolderUrl && (
+            <a
+              href={evt.driveFolderUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                flex: 1,
+                padding: '7px 10px',
+                borderRadius: '8px',
+                border: '1px solid #94a3b8',
+                backgroundColor: '#f8fafc',
+                color: '#334155',
+                fontSize: '12px',
+                fontWeight: '600',
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px'
+              }}
+            >
+              <Folder size={13} />
+              <span>開啟活動資料夾</span>
+            </a>
+          )}
+          {evt.spreadsheetUrl && (
+            <a
+              href={evt.spreadsheetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                flex: 1,
+                padding: '7px 10px',
+                borderRadius: '8px',
+                border: '1px solid #0284c7',
+                backgroundColor: '#f0f9ff',
+                color: '#0369a1',
+                fontSize: '12px',
+                fontWeight: '600',
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px'
+              }}
+            >
+              <FileSpreadsheet size={13} />
+              <span>開啟報名試算表</span>
+            </a>
+          )}
+        </div>
+      )}
+
       {/* 5. 卡片底部操作按鈕組 */}
       <div style={{
         display: 'flex',
         gap: '8px',
-        borderTop: '1px solid #f1f5f9',
-        paddingTop: '12px'
+        borderTop: (evt.driveFolderUrl || evt.spreadsheetUrl) ? 'none' : '1px solid #f1f5f9',
+        paddingTop: (evt.driveFolderUrl || evt.spreadsheetUrl) ? '6px' : '12px'
       }}>
         <button
           type="button"

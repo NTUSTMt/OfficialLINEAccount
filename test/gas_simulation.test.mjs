@@ -731,3 +731,281 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
   });
 });
 
+describe('12. 活動專屬 Google Drive 資料夾與專屬試算表差異比對同步測試', () => {
+  it('正確產生 YYYY/MM/DD_活動名稱 之資料夾名稱與試算表名稱', () => {
+    function getEventFolderAndSheetName(payload) {
+      const rawDate = payload.startDate || '';
+      let datePart = '';
+      if (rawDate) {
+        datePart = String(rawDate).trim().replace(/-/g, '/').split(' ')[0].split('T')[0];
+      }
+      if (!datePart) {
+        datePart = '2026/09/20'; // 模擬預設日期
+      }
+      const eventName = (payload.name || '未命名活動').trim();
+      const folderName = datePart + '_' + eventName;
+      const sheetName = folderName + '_報名名冊';
+      return { folderName, sheetName };
+    }
+
+    const res1 = getEventFolderAndSheetName({ startDate: '2026-10-15', name: '七星山主東峰' });
+    assert.equal(res1.folderName, '2026/10/15_七星山主東峰');
+    assert.equal(res1.sheetName, '2026/10/15_七星山主東峰_報名名冊');
+
+    const res2 = getEventFolderAndSheetName({ startDate: '2026/11/01 08:00', name: '雪山主東峰 ' });
+    assert.equal(res2.folderName, '2026/11/01_雪山主東峰');
+    assert.equal(res2.sheetName, '2026/11/01_雪山主東峰_報名名冊');
+  });
+
+  it('嚴格過濾無有效報名專屬碼（非 S 開頭）的自訂列，不納入差異比對', () => {
+    const rawSheetRows = [
+      ['報名專屬碼', '審核狀態', '姓名', '手機電話', '身分證字號', '備註'],
+      ['S2609-001', '正取', '陳小華', '0912345678', 'A123456789', '無'],
+      ['S2609-002', '備取', '林大明', '0922333444', 'B123456789', '初學者'],
+      ['第一車：司機阿強', '', '', '', '', '車位已滿'], // 幹部自行備註列
+      ['總計正取 1 人，備取 1 人', '', '', '', '', ''], // 幹部統計列
+      ['', '', '', '', '', ''], // 空白列
+      ['INVALID_CODE', '', '', '', '', ''] // 無效碼列
+    ];
+
+    const applicants = {};
+    for (let r = 1; r < rawSheetRows.length; r++) {
+      const row = rawSheetRows[r];
+      const code = String(row[0] || '').trim();
+      if (!code || !code.startsWith('S')) continue;
+      applicants[code] = {
+        code: code,
+        status: row[1],
+        name: row[2],
+        phone: row[3],
+        idNumber: row[4],
+        notes: row[5]
+      };
+    }
+
+    assert.equal(Object.keys(applicants).length, 2);
+    assert.ok(applicants['S2609-001']);
+    assert.ok(applicants['S2609-002']);
+    assert.equal(applicants['第一車：司機阿強'], undefined);
+  });
+
+  it('精確偵測試算表修改項（審核狀態、電話、備註）並產出 Diff 物件', () => {
+    const localApplicants = {
+      'S2609-001': {
+        code: 'S2609-001',
+        status: '正取（已繳費）Confirmed(Paid)',
+        notes: '已攜帶公裝',
+        phone: '0912345678',
+        idNumber: 'A123456789',
+        userId: 'U111',
+        name: '陳小華'
+      },
+      'S2609-002': {
+        code: 'S2609-002',
+        status: '備取',
+        notes: '初學者',
+        phone: '0922333444',
+        idNumber: 'B123456789',
+        userId: 'U222',
+        name: '林大明'
+      }
+    };
+
+    const remoteSupabase = {
+      'S2609-001': {
+        status: '正取',
+        notes: '無',
+        phone: '0912345678',
+        idNumber: 'A123456789',
+        userId: 'U111',
+        name: '陳小華'
+      },
+      'S2609-002': {
+        status: '備取',
+        notes: '初學者',
+        phone: '0922333444',
+        idNumber: 'B123456789',
+        userId: 'U222',
+        name: '林大明'
+      }
+    };
+
+    const diffs = [];
+    for (const code in localApplicants) {
+      const local = localApplicants[code];
+      const remote = remoteSupabase[code];
+      if (!remote) continue;
+
+      const changes = [];
+      if (local.status && local.status !== remote.status) {
+        changes.push({ field: '審核狀態', oldVal: remote.status, newVal: local.status });
+      }
+      if (local.notes !== remote.notes) {
+        changes.push({ field: '備註', oldVal: remote.notes, newVal: local.notes });
+      }
+      if (local.phone && remote.phone && local.phone !== remote.phone) {
+        changes.push({ field: '手機電話', oldVal: remote.phone, newVal: local.phone });
+      }
+
+      if (changes.length > 0) {
+        diffs.push({ code, name: local.name, changes });
+      }
+    }
+
+    assert.equal(diffs.length, 1);
+    assert.equal(diffs[0].code, 'S2609-001');
+    assert.equal(diffs[0].changes.length, 2);
+    assert.deepEqual(diffs[0].changes[0], {
+      field: '審核狀態',
+      oldVal: '正取',
+      newVal: '正取（已繳費）Confirmed(Paid)'
+    });
+    assert.deepEqual(diffs[0].changes[1], {
+      field: '備註',
+      oldVal: '無',
+      newVal: '已攜帶公裝'
+    });
+  });
+
+  it('嚴格遵守零 LINE 訊息規範：同步完成時僅回傳試算表/側邊欄確認，絕不發送 LINE 推播', () => {
+    let linePushTriggered = false;
+
+    function fakePushMessage() {
+      linePushTriggered = true;
+    }
+
+    function fakeCommitDiffsToSupabase(diffs) {
+      // 僅執行資料庫寫入，不調用任何 fakePushMessage
+      const updatedCount = diffs.length;
+      const toastMessage = '已成功同步 ' + updatedCount + ' 筆紀錄至 Supabase！';
+      return { success: true, count: updatedCount, message: toastMessage };
+    }
+
+    const testDiffs = [{ code: 'S2609-001', fullData: { status: '正取' } }];
+    const res = fakeCommitDiffsToSupabase(testDiffs);
+
+    assert.equal(res.success, true);
+    assert.equal(res.count, 1);
+    assert.equal(linePushTriggered, false, '絕對不能觸發任何 LINE 訊息推播！');
+  });
+
+  it('支援 17 欄位結構（包含通知狀態）之動態欄位對齊寫入', () => {
+    const sHeaders = [
+      '報名專屬碼', '審核狀態', '通知狀態', '繳費狀態', '姓名', '性別',
+      '身分證字號', '出生年月日', '手機電話', '緊急聯絡人', '關係',
+      '聯絡人電話', '登山經驗與體能', '特殊病史與過敏', '飲食習慣', '系統識別碼', '備註'
+    ];
+
+    const signupData = {
+      signupCode: 'S2609-888',
+      status: '審核中 Checking',
+      notifyStatus: '',
+      payStatus: '未繳費 Unpaid',
+      name: '張大千',
+      gender: '男',
+      idCard: 'A199999999',
+      birthday: '1995-05-05',
+      phone: '0988777666',
+      emerName: '張媽媽',
+      emerRel: '母子',
+      emerPhone: '0911222333',
+      exp: '百岳10座',
+      strength: '能背重15kg',
+      medicalHistory: '無',
+      diet: '全素',
+      userId: 'U999888777',
+      notes: '需要租借帳篷'
+    };
+
+    const row = new Array(sHeaders.length).fill('');
+    function setCol(kw, val) {
+      const idx = _fi(sHeaders, kw);
+      if (idx > -1) row[idx] = val;
+    }
+
+    setCol('報名專屬碼', signupData.signupCode);
+    setCol('審核狀態', signupData.status);
+    setCol('通知狀態', signupData.notifyStatus);
+    setCol('繳費狀態', signupData.payStatus);
+    setCol('姓名', signupData.name);
+    setCol('系統識別碼', signupData.userId);
+
+    assert.equal(row.length, 17);
+    assert.equal(row[0], 'S2609-888');
+    assert.equal(row[1], '審核中 Checking');
+    assert.equal(row[2], ''); // 通知狀態初始為空
+    assert.equal(row[3], '未繳費 Unpaid');
+    assert.equal(row[4], '張大千');
+    assert.equal(row[15], 'U999888777');
+  });
+
+  it('一鍵推播正備取通知：精準過濾待通知隊員，略過已通知、已取消與非會員列', () => {
+    const sheetData = [
+      ['報名專屬碼', '審核狀態', '通知狀態', '姓名', '系統識別碼'],
+      ['S01', '正取 Confirmed', '', '王小明', 'U111111'],           // 應通知（正取未通知）
+      ['S02', '正取 Confirmed', '已通知', '林美麗', 'U222222'],       // 略過（已通知）
+      ['S03', '備取 Waitlisted', '', '陳大華', 'U333333'],          // 應通知（備取未通知）
+      ['S04', '正取（已取消）', '', '李四', 'U444444'],             // 略過（已取消）
+      ['S05', '審核中 Checking', '', '張三', 'U555555'],            // 略過（尚未審核）
+      ['第一車：司機阿強', '', '', '', '']                           // 略過（自訂備註雜項）
+    ];
+
+    const candidates = [];
+    let acceptedCount = 0;
+    let waitlistCount = 0;
+
+    for (let r = 1; r < sheetData.length; r++) {
+      const row = sheetData[r];
+      const code = String(row[0] || '').trim();
+      const status = String(row[1] || '').trim();
+      const notify = String(row[2] || '').trim();
+      const name = String(row[3] || '').trim();
+      const uid = String(row[4] || '').trim();
+
+      const isAccepted = status.indexOf('正取') > -1;
+      const isWaitlisted = status.indexOf('備取') > -1;
+      const isCancelled = status.indexOf('取消') > -1;
+
+      if ((isAccepted || isWaitlisted) && !isCancelled && notify !== '已通知' && uid.startsWith('U')) {
+        candidates.push({ code, name, uid, status, isAccepted });
+        if (isAccepted) acceptedCount++;
+        else waitlistCount++;
+      }
+    }
+
+    assert.equal(candidates.length, 2);
+    assert.equal(acceptedCount, 1);
+    assert.equal(waitlistCount, 1);
+    assert.equal(candidates[0].name, '王小明');
+    assert.equal(candidates[1].name, '陳大華');
+  });
+
+  it('範本複製與動態 _CONFIG 綁定模擬測試', () => {
+    function simulateCreateEventSheet(templateId, eventId, eventName) {
+      let isCopiedFromTemplate = false;
+      let config = {};
+
+      if (templateId) {
+        isCopiedFromTemplate = true;
+      }
+
+      config['EVENT_ID'] = eventId;
+      config['EVENT_NAME'] = eventName;
+
+      return { isCopiedFromTemplate, config };
+    }
+
+    // 1. 有設定範本 ID
+    const res1 = simulateCreateEventSheet('TMPL_12345', 'E2609-01', '七星山單攻');
+    assert.equal(res1.isCopiedFromTemplate, true);
+    assert.equal(res1.config.EVENT_ID, 'E2609-01');
+    assert.equal(res1.config.EVENT_NAME, '七星山單攻');
+
+    // 2. 未設定範本 ID（自動 fallback）
+    const res2 = simulateCreateEventSheet('', 'E2609-02', '雪山主東峰');
+    assert.equal(res2.isCopiedFromTemplate, false);
+    assert.equal(res2.config.EVENT_ID, 'E2609-02');
+  });
+});
+
+

@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS members (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_members_updated_at ON members;
 CREATE TRIGGER trg_members_updated_at
 BEFORE UPDATE ON members
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -67,10 +68,18 @@ CREATE TABLE IF NOT EXISTS events (
     summary TEXT,                        -- 8. 簡介 (<=1000字)
     itinerary TEXT,                      -- 9. 詳細行程 (<=700字)
     cover_image_url TEXT,                -- 10. 封面圖網址
+    drive_folder_url TEXT,               -- 11. Google Drive 專屬活動資料夾網址
+    spreadsheet_url TEXT,                -- 12. Google Sheets 專屬活動名冊試算表網址
+    spreadsheet_id TEXT,                 -- 13. 專屬試算表 ID
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE events ADD COLUMN IF NOT EXISTS drive_folder_url TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS spreadsheet_url TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS spreadsheet_id TEXT;
+
+DROP TRIGGER IF EXISTS trg_events_updated_at ON events;
 CREATE TRIGGER trg_events_updated_at
 BEFORE UPDATE ON events
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -96,6 +105,9 @@ CREATE INDEX IF NOT EXISTS idx_signups_event_id ON event_signups(event_id);
 CREATE INDEX IF NOT EXISTS idx_signups_line_user_id ON event_signups(line_user_id);
 CREATE INDEX IF NOT EXISTS idx_signups_status ON event_signups(status);
 
+ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS name TEXT;
+
+DROP TRIGGER IF EXISTS trg_signups_updated_at ON event_signups;
 CREATE TRIGGER trg_signups_updated_at
 BEFORE UPDATE ON event_signups
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -117,6 +129,9 @@ CREATE TABLE IF NOT EXISTS reflections (
     CONSTRAINT uq_reflections_event_user UNIQUE (event_id, line_user_id)
 );
 
+ALTER TABLE reflections ADD COLUMN IF NOT EXISTS name TEXT;
+
+DROP TRIGGER IF EXISTS trg_reflections_updated_at ON reflections;
 CREATE TRIGGER trg_reflections_updated_at
 BEFORE UPDATE ON reflections
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -141,6 +156,7 @@ CREATE TABLE IF NOT EXISTS equipments (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS trg_equipments_updated_at ON equipments;
 CREATE TRIGGER trg_equipments_updated_at
 BEFORE UPDATE ON equipments
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -174,6 +190,9 @@ CREATE INDEX IF NOT EXISTS idx_loans_user_id ON loans(line_user_id);
 CREATE INDEX IF NOT EXISTS idx_loans_status ON loans(status);
 CREATE INDEX IF NOT EXISTS idx_loans_payment_status ON loans(payment_status);
 
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS name TEXT;
+
+DROP TRIGGER IF EXISTS trg_loans_updated_at ON loans;
 CREATE TRIGGER trg_loans_updated_at
 BEFORE UPDATE ON loans
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -217,6 +236,10 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(line_user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
 
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
+
+DROP TRIGGER IF EXISTS trg_payments_updated_at ON payments;
 CREATE TRIGGER trg_payments_updated_at
 BEFORE UPDATE ON payments
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -253,30 +276,39 @@ ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sync_queue ENABLE ROW LEVEL SECURITY;
 
 -- 公開唯讀原則：裝備與活動清單開放匿名讀取（提供 LIFF 首屏秒開）
+DROP POLICY IF EXISTS "Public read equipments" ON equipments;
 CREATE POLICY "Public read equipments" ON equipments
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Public read events" ON events;
 CREATE POLICY "Public read events" ON events
     FOR SELECT USING (status != '草稿 Draft');
 
 -- 服務端金鑰 (service_role) 擁有全表完整存取權限 (供 Edge Functions 與 Sync Worker 使用)
+DROP POLICY IF EXISTS "Service role full access members" ON members;
 CREATE POLICY "Service role full access members" ON members
     FOR ALL USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "Service role full access signups" ON event_signups;
 CREATE POLICY "Service role full access signups" ON event_signups
     FOR ALL USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "Service role full access reflections" ON reflections;
 CREATE POLICY "Service role full access reflections" ON reflections
     FOR ALL USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "Service role full access loans" ON loans;
 CREATE POLICY "Service role full access loans" ON loans
     FOR ALL USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "Service role full access loan_items" ON loan_items;
 CREATE POLICY "Service role full access loan_items" ON loan_items
     FOR ALL USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "Service role full access payments" ON payments;
 CREATE POLICY "Service role full access payments" ON payments
     FOR ALL USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "Service role full access sync_queue" ON sync_queue;
 CREATE POLICY "Service role full access sync_queue" ON sync_queue
     FOR ALL USING (auth.role() = 'service_role');
