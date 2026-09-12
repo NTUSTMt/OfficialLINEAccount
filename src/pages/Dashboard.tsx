@@ -4,6 +4,7 @@ import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
+import { fetchDashboardFromSupabase } from '../utils/supabaseClient';
 import {
   ShieldCheck,
   ChevronRight,
@@ -120,19 +121,34 @@ function Dashboard({ userId }: { userId: string }) {
         }
 
         const requestUserId = userId || 'TEST_USER_ID';
+
+        // ⚡ 1. 優先嘗試由 Supabase 極速讀取個人儀表板 (< 100ms 秒開)
+        let loadedFromSupabase = false;
+        try {
+          const sbData = await fetchDashboardFromSupabase(requestUserId);
+          if (!ignore && sbData && sbData.profile && sbData.profile.name) {
+            setData(sbData);
+            setLoading(false);
+            loadedFromSupabase = true;
+          }
+        } catch (sbErr) {
+          console.warn('[Dashboard] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
+        }
+
+        // 🐢 2. 背景或備援向 GAS 請求最新即時狀態
         const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${requestUserId}`));
         const result = await res.json();
 
         if (!ignore) {
           if (result.status === 'success' && result.data) {
             setData(result.data);
-          } else {
+          } else if (!loadedFromSupabase) {
             setError(result.message || t('dashboard.error.loadProfileFailed'));
           }
         }
       } catch (err) {
         console.error('載入儀表板失敗:', err);
-        if (!ignore) {
+        if (!ignore && !loadedFromSupabase) {
           setError(t('dashboard.error.networkError'));
         }
       } finally {

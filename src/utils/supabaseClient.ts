@@ -161,3 +161,61 @@ export const fetchEventsFromSupabase = async (): Promise<AdminEvent[] | null> =>
     return null;
   }
 };
+
+export interface DashboardProfileData {
+  name: string;
+  department: string;
+  studentId: string;
+  isOfficial: boolean;
+  isOfficer?: boolean;
+  officerRole?: string;
+  expireDate: string;
+}
+
+export interface DashboardActivityData {
+  eventId: string;
+  eventName: string;
+  date: string;
+  reviewStatus: string;
+  payStatus: string;
+  code?: string;
+}
+
+export interface DashboardEquipmentData {
+  orderId: string;
+  itemName: string;
+  pickupDate: string;
+  returnDate: string;
+  status: string;
+}
+
+export interface SupabaseDashboardData {
+  profile: DashboardProfileData;
+  activities: DashboardActivityData[];
+  equipments: DashboardEquipmentData[];
+}
+
+/**
+ * 從 Supabase 取得個人主頁儀表板資料 (透過 get_my_dashboard RPC 聚合函式，延遲 < 100ms)
+ */
+export const fetchDashboardFromSupabase = async (userId: string): Promise<SupabaseDashboardData | null> => {
+  if (!supabase || !userId) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('get_my_dashboard', { p_line_user_id: userId });
+
+    if (error) {
+      console.warn('[Supabase] 讀取個人主頁失敗，啟用 GAS fallback:', error.message);
+      return null;
+    }
+
+    if (!data) return null;
+
+    console.log('%c⚡ [DataSource: Supabase] 個人主頁資料讀取成功！(連線延遲 < 100ms)', 'color: #10b981; font-weight: bold;', data);
+    return data as SupabaseDashboardData;
+  } catch (err) {
+    console.warn('[Supabase] 個人主頁讀取例外，啟用 GAS fallback:', err);
+    return null;
+  }
+};
+

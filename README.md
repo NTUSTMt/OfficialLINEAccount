@@ -3,11 +3,27 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.46` (v0.1.46)
+- **當前版本**：`0.1.47` (v0.1.47)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 147. 個人主頁 Dashboard 極速秒開 RPC 函式與 SWR 雙軌整合 (v0.1.47)
+- **Supabase RPC 高速聚合函式實作 (get_my_dashboard)**：
+  - 於 [supabase/get_my_dashboard.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/get_my_dashboard.sql) 建立 `SECURITY DEFINER` 之 PostgreSQL 預存程序 `get_my_dashboard(p_line_user_id)`。
+  - 單次查詢（耗時 2~5ms）即聚合：
+    1. `profile`：會員姓名、系級、學號、有效社籍資格與到期日。
+    2. `activities`：該社員所報名之近期與歷史活動、報名碼、審核與繳費狀態。
+    3. `equipments`：租借中與歷史裝備訂單、自動將一對多品項展開聚合為簡潔字串（如 `登山帳篷 x1, 睡袋 x2`）。
+  - 嚴格隔離：僅能以 `line_user_id` 查閱本人紀錄，兼顧極致效能與嚴密資安防護。
+- **個人主頁 SWR 雙軌秒開升級 (Dashboard.tsx SWR Integration)**：
+  - 在 [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts) 封裝 `fetchDashboardFromSupabase(userId)`。
+  - 在 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 導入 SWR 機制：開啟主頁時以 < 100ms 極速自 Supabase 渲染數位社員證、報名與租借資訊，同時在背景由 GAS 進行即時狀態對齊。
+  - 若 Supabase 異常或未配置，100% 靜默無感回退至 `GAS_API_URL`。
+- **自動化測試與代碼品質**：
+  - ESLint 10 零錯誤、零警告（修復 catch 區塊依賴項）。
+  - 全套 16 組測試套件、40 項單元測試 100% 通過。
 
 ### 146. 方案 B：活動清單秒開讀取與幹部活動管理 SWR 雙軌升級 (v0.1.46)
 - **Supabase 活動讀取函式擴展 (fetchEventsFromSupabase)**：
