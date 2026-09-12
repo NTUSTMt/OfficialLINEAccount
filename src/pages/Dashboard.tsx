@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { GAS_API_URL } from '../constants/api';
 import {
   ShieldCheck,
   ChevronRight,
@@ -57,7 +58,16 @@ function Dashboard({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
-  const [lineProfile, setLineProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [lineProfile, setLineProfile] = useState<{ displayName: string; pictureUrl?: string } | null>(() => {
+    if (userId === 'TEST_USER_ID') {
+      return {
+        displayName: '測試山友',
+        pictureUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=150',
+      };
+    }
+    return null;
+  });
 
   const getReviewStatusText = (status: string) => {
     if (status.includes('已繳費') || status.includes('Paid')) return t('dashboard.status.confirmedPaid', '正取 (已繳費)');
@@ -94,43 +104,50 @@ function Dashboard({ userId }: { userId: string }) {
   const [cancelReason, setCancelReason] = useState('');
   const [targetActivity, setTargetActivity] = useState<{ code: string; eventName: string } | null>(null);
 
-  const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
+  useEffect(() => {
+    let ignore = false;
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // 1. 取得 LINE Profile
-      if (liff.isLoggedIn()) {
-        const profile = await liff.getProfile();
-        setLineProfile({
-          displayName: profile.displayName,
-          pictureUrl: profile.pictureUrl,
-        });
-      } else if (userId === 'TEST_USER_ID') {
-        setLineProfile({
-          displayName: '測試山友',
-          pictureUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=150',
-        });
+    const loadDashboard = async () => {
+      try {
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          if (!ignore) {
+            setLineProfile({
+              displayName: profile.displayName,
+              pictureUrl: profile.pictureUrl,
+            });
+          }
+        }
+
+        const requestUserId = userId || 'TEST_USER_ID';
+        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${requestUserId}`));
+        const result = await res.json();
+
+        if (!ignore) {
+          if (result.status === 'success' && result.data) {
+            setData(result.data);
+          } else {
+            setError(result.message || t('dashboard.error.loadProfileFailed'));
+          }
+        }
+      } catch (err) {
+        console.error('載入儀表板失敗:', err);
+        if (!ignore) {
+          setError(t('dashboard.error.networkError'));
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
       }
+    };
 
-      // 2. 獲取個人總覽狀態
-      const requestUserId = userId || 'TEST_USER_ID';
-      const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${requestUserId}`));
-      const result = await res.json();
+    loadDashboard();
 
-      if (result.status === 'success' && result.data) {
-        setData(result.data);
-      } else {
-        setError(result.message || t('dashboard.error.loadProfileFailed'));
-      }
-    } catch (err) {
-      console.error('載入儀表板失敗:', err);
-      setError(t('dashboard.error.networkError'));
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      ignore = true;
+    };
+  }, [userId, refreshKey, t]);
 
   // 取消裝備預約
   const handleCancelLoan = async (orderId: string) => {
@@ -154,7 +171,7 @@ function Dashboard({ userId }: { userId: string }) {
 
       if (result.status === 'success') {
         alert(t('dashboard.alert.cancelLoanSuccess'));
-        fetchData();
+        setRefreshKey(k => k + 1);
       } else {
         alert(t('dashboard.alert.cancelFailed', { message: result.message || t('dashboard.alert.contactAdmin') }));
       }
@@ -208,7 +225,7 @@ function Dashboard({ userId }: { userId: string }) {
 
       if (result.status === 'success') {
         alert(t('dashboard.alert.cancelActivitySuccess'));
-        fetchData();
+        setRefreshKey(k => k + 1);
       } else {
         alert(t('dashboard.alert.cancelFailed', { message: result.message || t('dashboard.alert.contactAdmin') }));
       }
@@ -249,7 +266,7 @@ function Dashboard({ userId }: { userId: string }) {
         setShowCancelReasonModal(false);
         setTargetActivity(null);
         setCancelReason('');
-        fetchData();
+        setRefreshKey(k => k + 1);
       } else {
         alert(t('dashboard.alert.cancelFailed', { message: result.message || t('dashboard.alert.contactAdmin') }));
       }
@@ -260,10 +277,6 @@ function Dashboard({ userId }: { userId: string }) {
       setIsCanceling(false);
     }
   };
-
-  useEffect(() => {
-    fetchData();
-  }, [userId]);
 
   // 輔助函式：判斷是否過期
   const isPastDue = (dateStr: string) => {
@@ -289,7 +302,7 @@ function Dashboard({ userId }: { userId: string }) {
         <AlertCircle size={48} color="#ef4444" style={{ margin: '0 auto 16px', display: 'block' }} />
         <h3>{t('dashboard.error.title')}</h3>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{error}</p>
-        <button className="btn btn-primary" onClick={fetchData} style={{ padding: '10px 24px' }}>
+        <button className="btn btn-primary" onClick={() => setRefreshKey(k => k + 1)} style={{ padding: '10px 24px' }}>
           {t('dashboard.error.retry')}
         </button>
       </div>

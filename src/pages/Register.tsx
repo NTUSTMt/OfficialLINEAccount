@@ -4,9 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Check, ShieldCheck, Info } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
+import { GAS_API_URL } from '../constants/api';
 import '../App.css';
-
-const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
 
 interface ProfileData {
   name: string;

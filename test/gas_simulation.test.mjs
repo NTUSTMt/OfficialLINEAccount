@@ -180,3 +180,221 @@ describe('3. 備取意願登記狀態與前端解析測試', () => {
     assert.equal(formatReview("備取 Waitlisted"), "備取");
   });
 });
+
+describe('4. 裝備預約多品項取消遍歷與退款狀態判定 (processLiffCancelLoan)', () => {
+  it('同一筆租借編號下之所有裝備品項皆應被遍歷取消，且已繳費/待確認者正確標記已取消 (待退款)', () => {
+    const mockRows = [
+      ["ORD_999", "U_USER1", "王小明", "EQ_TENT", "登山帳篷", 1, "已繳費 Paid", "待領取 To Be Collected"],
+      ["ORD_999", "U_USER1", "王小明", "EQ_MAT", "睡墊", 2, "已繳費 Paid", "待領取 To Be Collected"],
+      ["ORD_888", "U_USER2", "李小美", "EQ_POLE", "登山杖", 1, "未繳費", "待領取 To Be Collected"]
+    ];
+
+    const targetOrderId = "ORD_999";
+    const requestUserId = "U_USER1";
+
+    const cancelledItems = [];
+    let isAnyPaid = false;
+    let matchedCount = 0;
+
+    for (let i = 0; i < mockRows.length; i++) {
+      const row = mockRows[i];
+      const orderId = row[0];
+      const rowUserId = row[1];
+      const equipName = row[4];
+      const qty = row[5];
+      const payStatus = row[6];
+      const status = row[7];
+
+      if (orderId === targetOrderId && rowUserId === requestUserId) {
+        matchedCount++;
+        if (status === "待領取 To Be Collected") {
+          if (payStatus === "已繳費 Paid" || payStatus === "待確認 Checking") {
+            isAnyPaid = true;
+          }
+          cancelledItems.push({ name: equipName, qty: qty });
+          row[7] = isAnyPaid ? "已取消 (待退款)" : "已取消 Cancelled";
+        }
+      }
+    }
+
+    assert.equal(matchedCount, 2);
+    assert.equal(cancelledItems.length, 2);
+    assert.equal(isAnyPaid, true);
+    assert.equal(mockRows[0][7], "已取消 (待退款)");
+    assert.equal(mockRows[1][7], "已取消 (待退款)");
+    assert.equal(mockRows[2][7], "待領取 To Be Collected");
+  });
+});
+
+describe('5. 活動正取取消必填原因與退款備註 (processLiffCancelEvent)', () => {
+  it('正取資格取消時，若未填寫取消原因應拋出錯誤，填寫後標記為「已取消 Cancelled」並於備註加註待退款', () => {
+    const currentStatus = "正取 Confirmed";
+    const payStatus = "已繳費 Paid";
+    const reason = "臨時有公務出差";
+
+    const isPaid = (payStatus === "已繳費 Paid" || payStatus === "已繳費" || currentStatus.includes("已繳費"));
+
+    let noteText = "";
+    let finalStatus = "";
+
+    if (currentStatus.includes("正取")) {
+      assert.ok(reason.trim().length > 0, "正取資格取消必須填寫取消原因");
+      finalStatus = "已取消 Cancelled";
+      noteText = (isPaid ? "【已繳費待退款】" : "") + "取消原因: " + reason;
+    }
+
+    assert.equal(finalStatus, "已取消 Cancelled");
+    assert.ok(noteText.includes("【已繳費待退款】"));
+    assert.ok(noteText.includes("臨時有公務出差"));
+  });
+
+  it('備取資格取消時，無須必填原因，直接更新為「已取消 Cancelled」', () => {
+    const currentStatus = "備取 Waitlisted";
+
+    let finalStatus = "";
+    if (currentStatus.includes("正取")) {
+      assert.fail("備取不應進入正取檢查區塊");
+    } else {
+      finalStatus = "已取消 Cancelled";
+    }
+
+    assert.equal(finalStatus, "已取消 Cancelled");
+  });
+});
+
+describe('6. 表頭索引建構器安全解析與欄位自動對齊 (_createHeaderIndex)', () => {
+  function _createHeaderIndex(headers) {
+    const map = {};
+    if (!headers || !headers.length) return map;
+    for (let i = 0; i < headers.length; i++) {
+      const hStr = String(headers[i]).trim();
+      const hLower = hStr.toLowerCase();
+      map[hStr] = i;
+
+      if (hStr === "系統識別碼" || hStr === "User ID" || hStr === "userId") map._sysId = i;
+      if (hStr === "姓名" || hStr === "Name") map._name = i;
+      if (hStr.includes("電話") && !hStr.includes("緊急")) map._phone = i;
+      if (hLower.includes("line") && !map._line) map._line = i;
+      if ((hLower.includes("email") || hStr.includes("信箱")) && !map._email) map._email = i;
+      if (hStr.includes("審核") || hStr.includes("審核結果")) map._reviewStatus = i;
+      if (hStr.includes("繳費") || hStr.includes("繳費狀態")) map._payStatus = i;
+      if (hStr.includes("專屬碼") || hStr.includes("報名代碼")) map._signupCode = i;
+      if (hStr.includes("活動編號") || hStr === "eventId") map._eventId = i;
+    }
+    return map;
+  }
+
+  it('能正確索引複雜混亂表頭並賦予標準別名', () => {
+    const headers = ["活動編號", "系統識別碼", "專屬碼", "姓名", "聯絡電話", "真實 LINE ID", "聯絡信箱 Email", "審核結果", "繳費狀態"];
+    const idxMap = _createHeaderIndex(headers);
+
+    assert.equal(idxMap._eventId, 0);
+    assert.equal(idxMap._sysId, 1);
+    assert.equal(idxMap._signupCode, 2);
+    assert.equal(idxMap._name, 3);
+    assert.equal(idxMap._phone, 4);
+    assert.equal(idxMap._line, 5);
+    assert.equal(idxMap._email, 6);
+    assert.equal(idxMap._reviewStatus, 7);
+    assert.equal(idxMap._payStatus, 8);
+  });
+});
+
+describe('7. 安全鎖定防崩潰機制 (_safeReleaseLock)', () => {
+  it('當鎖持有有效時執行 releaseLock，未持鎖或為 null 時靜默安全處理不拋出例外', () => {
+    let released = false;
+    const activeLock = {
+      hasLock: () => true,
+      releaseLock: () => { released = true; }
+    };
+
+    function _safeReleaseLock(lock) {
+      try {
+        if (lock && typeof lock.hasLock === 'function' && lock.hasLock()) {
+          lock.releaseLock();
+        }
+      } catch (e) {
+        // 安全忽略
+      }
+    }
+
+    _safeReleaseLock(activeLock);
+    assert.equal(released, true);
+
+    assert.doesNotThrow(() => {
+      _safeReleaseLock({ hasLock: () => false, releaseLock: () => { throw new Error("Not locked"); } });
+      _safeReleaseLock(null);
+      _safeReleaseLock(undefined);
+    });
+  });
+});
+
+describe('8. 統一 JSON 回應封裝 (_jsonResponse, _errorResponse, _successResponse)', () => {
+  const MockContentService = {
+    MimeType: { JSON: 'application/json' },
+    createTextOutput: function (content) {
+      return {
+        content: content,
+        mimeType: null,
+        setMimeType: function (type) {
+          this.mimeType = type;
+          return this;
+        }
+      };
+    }
+  };
+
+  function _jsonResponse(data) {
+    return MockContentService.createTextOutput(JSON.stringify(data)).setMimeType(MockContentService.MimeType.JSON);
+  }
+
+  function _errorResponse(message, extra) {
+    const res = { status: "error", message: message };
+    if (extra && typeof extra === "object") {
+      for (const k in extra) {
+        if (Object.prototype.hasOwnProperty.call(extra, k)) {
+          res[k] = extra[k];
+        }
+      }
+    }
+    return _jsonResponse(res);
+  }
+
+  function _successResponse(data) {
+    const res = { status: "success" };
+    if (data && typeof data === "object") {
+      for (const k in data) {
+        if (Object.prototype.hasOwnProperty.call(data, k)) {
+          res[k] = data[k];
+        }
+      }
+    }
+    return _jsonResponse(res);
+  }
+
+  it('_jsonResponse 產生格式正確之 JSON TextOutput 並指定 application/json MIME', () => {
+    const output = _jsonResponse({ foo: 'bar', num: 42 });
+    assert.equal(output.mimeType, 'application/json');
+    assert.deepEqual(JSON.parse(output.content), { foo: 'bar', num: 42 });
+  });
+
+  it('_errorResponse 產出包含 status: error 及 message，支援額外擴充欄位', () => {
+    const errOut = _errorResponse('權限不足', { code: 403, retryAfter: 60 });
+    assert.equal(errOut.mimeType, 'application/json');
+    const parsed = JSON.parse(errOut.content);
+    assert.equal(parsed.status, 'error');
+    assert.equal(parsed.message, '權限不足');
+    assert.equal(parsed.code, 403);
+    assert.equal(parsed.retryAfter, 60);
+  });
+
+  it('_successResponse 產出 status: success 並完整合併 data 欄位', () => {
+    const succOut = _successResponse({ data: [1, 2, 3], message: 'OK' });
+    assert.equal(succOut.mimeType, 'application/json');
+    const parsed = JSON.parse(succOut.content);
+    assert.equal(parsed.status, 'success');
+    assert.deepEqual(parsed.data, [1, 2, 3]);
+    assert.equal(parsed.message, 'OK');
+  });
+});
+

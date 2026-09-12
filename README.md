@@ -3,13 +3,43 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.41` (v0.1.41)
+- **當前版本**：`0.1.42` (v0.1.42)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
 
-### 141. 繳費送出與裝備預約非阻塞發話 (Promise.race 逾時防禦) 與即時成功畫面切換 (v0.1.41)
+### 142. 前後端架構模組化拆分、重構與全自動化測試套件導入 (Architecture Modularization & Automated Test Suite) (v0.1.42)
+- **龐大單體組件模組化拆分 (Large Monolith Component Modularization)**：
+  - **AdminEvents.tsx（原 2,928 行）拆分重構**：
+    - [AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx)：活動卡片展示、名額/報名人數統計及操作按鈕。
+    - [AdminEventForm.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventForm.tsx)：活動新增/編輯表單，整合即時 LINE Flex 輪播卡片預覽及字數上限檢核。
+    - [AdminSignupsModal.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminSignupsModal.tsx)：報名者名冊表格、即時搜尋篩選、狀態切換及一鍵批次發送審核結果通知。
+    - [ApplicantModals.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/ApplicantModals.tsx)：報名者體能證明相片檢視與完整個資履歷彈窗。
+    - [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx)：核心頁面從 2,928 行縮減至 572 行（減少 ~80% 行數），大幅提升維護性。
+  - **Borrow.tsx（原 1,412 行）拆分重構**：
+    - [ProductImage.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/borrow/ProductImage.tsx)：裝備分類圖示與相片智能渲染器。
+    - [EquipmentCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/borrow/EquipmentCard.tsx)：裝備卡片展示、剩餘庫存狀態徽章與購物車加減按鈕。
+    - [BorrowCartDrawer.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/borrow/BorrowCartDrawer.tsx)：預訂購物車滑出抽屜、天數計算、租借表單與防重複送出機制。
+    - [EquipmentDetailModal.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/borrow/EquipmentDetailModal.tsx)：1:1 裝備相簿輪播、滑鼠拖曳/手機滑動手勢、Lightbox 燈箱放大及幹部專屬圖片管理。
+    - [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx)：核心頁面從 1,412 行縮減至 471 行（減少 ~67% 行數）。
+- **共用型別、常數與工具模組集中管理 (Shared Types, Constants & Utilities Extraction)**：
+  - [api.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/constants/api.ts) 與 [liff.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/constants/liff.ts)：集中管理後端 Web App 端點及 LIFF 應用程式 ID，消除各頁面硬編碼 URL。
+  - `src/types/`：建立完整之 [event.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/types/event.ts)、[equipment.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/types/equipment.ts)、[payment.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/types/payment.ts) 與 [member.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/types/member.ts)，淘汰隱式 `any` 型別。
+  - [statusUtils.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/statusUtils.ts)：統一報名、活動與繳費狀態的標準化比對、中英標籤以及對應色彩樣式。
+  - [applicantUtils.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/applicantUtils.ts)：安全開啟外部連結 (`openExternalUrl`) 與多圖 URL 解析 (`parseProofUrls`)，兼顧資安與 React Refresh 規範。
+  - [api.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/api.ts)：提供型別安全泛型介面 `GasApiResponse<T>` 與 `gasGet` 封裝。
+- **Google Apps Script 後端精簡與安全鎖定強化 (GAS Backend Refactoring & Safe Lock Enforcement)**：
+  - 封裝統一 JSON 輸出輔助函式 `_jsonResponse`、`_errorResponse`、`_successResponse`，減少重複樣板程式碼。
+  - 全面於所有鎖定關鍵區段之 `finally` 區塊套用 `_safeReleaseLock(lock)`，防止鎖定逾時或未持鎖引發拋錯中斷。
+  - 精簡 `doGet` 路由器，批次聚合需要 `userId` 驗證之 API 操作，提升架構清晰度與可讀性。
+- **全自動化單元與整合測試集導入 (Automated Test Suites Integration)**：
+  - [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs)：模擬 GAS 8 大關鍵邏輯（緊急聯絡人提取、繳費對帳、全形括號資料驗證、多裝備取消、正取取消原因、表頭自動對齊、安全鎖定、JSON 回應封裝）。
+  - [test/frontend_utils.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/frontend_utils.test.mjs)：驗證前端狀態樣式映射、快取安全 TTL、狀態正規化、動態結帳與社員 5 折計算。
+  - 整合 `pnpm test`（`node --test`），共 13 組測試套件、31 個單元測試 100% 通過。
+  - 全專案通過 `pnpm run lint`（ESLint 10 零錯誤零警告）與 `pnpm run build`（TypeScript + Vite 編譯完成）。
+
+### 141. 繳費送出與裝備預約非阻塞發話 (Promise.race 逾時防禦) 與即時成功畫面切換 (v0.1.41)（目前最穩定版本）
 - **前端 `liff.sendMessages` iOS 掛起致命卡死修復 (Non-blocking sendMessages with Promise.race Timeout)**：
   - **問題根因**：在 iOS LINE LIFF 環境中，若用戶端視窗未開通發話權限（例如直接自通知 URI 點開 LIFF），LIFF SDK 內部的 `liff.sendMessages` Promise 在特定 iOS LINE 版本會呈現永久掛起（Never resolve / reject）狀態。過去程式碼使用 `await liff.sendMessages(...)`，導致 JavaScript 執行緒被永久凍結在該行，後續的 `liff.closeWindow()`、`setSubmitted(true)` 與 `finally { setIsSubmitting(false) }` 全數無法執行，因此即使後端試算表與幹部推播已正常完成，前端按鈕仍持續卡在「申報送出中...」。
   - **雙重防護機制 (Dual Protection Mechanism)**：

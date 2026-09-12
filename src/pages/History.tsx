@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, Calendar, Tent, CreditCard, FileText, AlertCircle } from 'lucide-react';
 import { appendAuthToken } from '../utils/api';
+import { GAS_API_URL } from '../constants/api';
 import '../App.css';
 
 interface HistoryItem {
@@ -37,77 +38,87 @@ function History({ userId }: { userId: string }) {
     }
   };
 
-  const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (userId && userId !== 'TEST_USER_ID') {
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_payment_history&userId=${userId}`));
-        const result = await res.json();
-        if (result.status === 'success') {
-          setData(result.data);
-        } else {
-          setError(result.message || t('history.error.loadFailed'));
-        }
-      } else {
-        // 測試假資料
-        setData({
-          totalSpent: 1700,
-          history: [
-            {
-              id: 'row_15',
-              date: '2026-07-05 10:30:00',
-              type: '活動',
-              title: '初級攀岩訓練營 (攀岩基礎與確保實作)',
-              amount: 350,
-              last5Digits: '12345',
-              note: '活動與保險費',
-              status: '已確認無誤'
-            },
-            {
-              id: 'row_12',
-              date: '2026-06-20 14:15:00',
-              type: '社費',
-              title: '114-2 學期社費 (Membership Fee - Current Semester)',
-              amount: 200,
-              last5Digits: '98765',
-              status: '已確認無誤'
-            },
-            {
-              id: 'row_10',
-              date: '2026-06-10 11:20:00',
-              type: '裝備',
-              title: '黑冰 Z400 羽絨睡袋 (租期: 2天)',
-              amount: 150,
-              last5Digits: '55667',
-              note: '王小明睡袋租借',
-              status: '待確認 Checking'
-            },
-            {
-              id: 'row_9',
-              date: '2026-05-01 09:00:00',
-              type: '活動',
-              title: '合歡群峰出隊費 (交通與入園保險)',
-              amount: 1150,
-              last5Digits: '12345',
-              status: '已確認'
-            }
-          ]
-        });
-      }
-    } catch (err) {
-      console.error('取得歷史繳費紀錄失敗:', err);
-      setError(t('history.error.networkError'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let ignore = false;
+
+    const fetchData = async () => {
+      try {
+        if (userId && userId !== 'TEST_USER_ID') {
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_payment_history&userId=${userId}`));
+          const result = await res.json();
+          if (!ignore) {
+            if (result.status === 'success') {
+              setData(result.data);
+            } else {
+              setError(result.message || t('history.error.loadFailed'));
+            }
+          }
+        } else {
+          // 測試假資料
+          if (!ignore) {
+            setData({
+              totalSpent: 1700,
+              history: [
+                {
+                  id: 'row_15',
+                  date: '2026-07-05 10:30:00',
+                  type: '活動',
+                  title: '初級攀岩訓練營 (攀岩基礎與確保實作)',
+                  amount: 350,
+                  last5Digits: '12345',
+                  note: '活動與保險費',
+                  status: '已確認無誤'
+                },
+                {
+                  id: 'row_12',
+                  date: '2026-06-20 14:15:00',
+                  type: '社費',
+                  title: '114-2 學期社費 (Membership Fee - Current Semester)',
+                  amount: 200,
+                  last5Digits: '98765',
+                  status: '已確認無誤'
+                },
+                {
+                  id: 'row_10',
+                  date: '2026-06-10 11:20:00',
+                  type: '裝備',
+                  title: '黑冰 Z400 羽絨睡袋 (租期: 2天)',
+                  amount: 150,
+                  last5Digits: '55667',
+                  note: '王小明睡袋租借',
+                  status: '待確認 Checking'
+                },
+                {
+                  id: 'row_9',
+                  date: '2026-05-01 09:00:00',
+                  type: '活動',
+                  title: '合歡群峰出隊費 (交通與入園保險)',
+                  amount: 1150,
+                  last5Digits: '12345',
+                  status: '已確認'
+                }
+              ]
+            });
+          }
+        }
+      } catch (err) {
+        console.error('取得歷史繳費紀錄失敗:', err);
+        if (!ignore) {
+          setError(t('history.error.networkError'));
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
     fetchData();
-  }, [userId]);
+
+    return () => {
+      ignore = true;
+    };
+  }, [userId, t]);
 
   // 篩選後明細
   const filteredHistory = useMemo(() => {

@@ -102,6 +102,35 @@ function _safeReleaseLock(lock) {
   }
 }
 
+// 統一 JSON 回應封裝
+function _jsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function _errorResponse(message, extra) {
+  var res = { status: "error", message: message };
+  if (extra && typeof extra === "object") {
+    for (var k in extra) {
+      if (Object.prototype.hasOwnProperty.call(extra, k)) {
+        res[k] = extra[k];
+      }
+    }
+  }
+  return _jsonResponse(res);
+}
+
+function _successResponse(data) {
+  var res = { status: "success" };
+  if (data && typeof data === "object") {
+    for (var k in data) {
+      if (Object.prototype.hasOwnProperty.call(data, k)) {
+        res[k] = data[k];
+      }
+    }
+  }
+  return _jsonResponse(res);
+}
+
 // 動態欄位查找 (在 headers 中搜尋包含 keyword 的欄位索引)
 function _fi(headers, keyword) {
   return headers.findIndex(function (h) {
@@ -319,7 +348,7 @@ function doPost(e) {
       // 🛡️ 身分認證校驗：若附帶 idToken 則透過 LINE 官方端點檢驗真實性並鎖定 msg.userId
       var authResult = getAuthenticatedUserId(msg, msg.userId);
       if (!authResult.ok) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: authResult.error })).setMimeType(ContentService.MimeType.JSON);
+        return _errorResponse(authResult.error);
       }
       msg.userId = authResult.userId;
     }
@@ -632,9 +661,7 @@ function handlePostback(replyToken, userId, postbackData) {
           } catch (e) {
             console.error("庫存退還時取得鎖定失敗", e);
           } finally {
-            if (lock.hasLock()) {
-              lock.releaseLock();
-            }
+            _safeReleaseLock(lock);
           }
 
           var equipName = (lEquipNameIdx > -1 && lData[i][lEquipNameIdx]) ? String(lData[i][lEquipNameIdx]).trim() : "未知裝備";
@@ -3522,9 +3549,7 @@ function onBorrowFormSubmit(e) {
       pushMessage(userId, "⚠️ 借用失敗：系統忙碌中（太多人同時借用），請稍後再試填一次！\n─────────────\n⚠️ System busy. Please try again later!");
       return;
     } finally {
-      if (lock.hasLock()) {
-        lock.releaseLock();
-      }
+      _safeReleaseLock(lock);
     }
 
     if (!equipFound) {
@@ -4595,51 +4620,33 @@ function doGet(e) {
     if (action !== "get_equipments") {
       authUser = getAuthenticatedUserId(e.parameter, e.parameter ? e.parameter.userId : "");
       if (!authUser.ok) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: authUser.error })).setMimeType(ContentService.MimeType.JSON);
+        return _errorResponse(authUser.error);
       }
     }
     var userId = authUser.userId;
 
+    var userRequiredActions = ["get_unpaid", "get_profile", "get_my_status", "get_payment_history", "get_past_activities"];
+    if (userRequiredActions.indexOf(action) > -1 && !userId) {
+      return _errorResponse("缺少 userId 參數");
+    }
+
     if (action === "get_unpaid") {
-      if (!userId) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
-      }
       return getUnpaidListAPI(ss, userId);
-
     } else if (action === "get_profile") {
-      if (!userId) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
-      }
       return getMemberProfileAPI(ss, userId);
-
     } else if (action === "get_my_status") {
-      if (!userId) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
-      }
       return getMyStatusAPI(ss, userId);
-
     } else if (action === "get_payment_history") {
-      if (!userId) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
-      }
       return getPaymentHistoryAPI(ss, userId);
-
     } else if (action === "get_past_activities") {
-      if (!userId) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
-      }
       return getPastActivitiesAPI(ss, userId);
-
     } else if (action === "check_officer_status") {
       return checkOfficerStatusAPI(ss, userId);
-
     } else if (action === "get_admin_events") {
       return getAdminEventsAPI(ss, userId);
-
     } else if (action === "get_event_signups") {
       var eventId = e.parameter.eventId;
       return getEventSignupsAPI(ss, eventId, userId);
-
     } else if (action === "update_signup_status") {
       var payload = {
         userId: userId,
@@ -4651,7 +4658,6 @@ function doGet(e) {
         reviewResult: e.parameter.reviewResult || ""
       };
       return processUpdateSignupStatus(payload);
-
     } else if (action === "update_event_status") {
       var payload = {
         userId: userId,
@@ -4659,27 +4665,21 @@ function doGet(e) {
         status: e.parameter.status || ""
       };
       return processUpdateEventStatus(payload);
-
     } else if (action === "send_event_notifications") {
       var payload = {
         userId: userId,
         eventId: e.parameter.eventId || ""
       };
       return processSendEventNotifications(payload);
-
     } else if (action === "get_equipments") {
       // 呼叫原本的裝備清單處理引擎
       return getEquipmentsListAPI(ss);
-
     } else {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "未知的 action 參數" })).setMimeType(ContentService.MimeType.JSON);
+      return _errorResponse("未知的 action 參數");
     }
 
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: "GAS 後端執行錯誤: " + error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
+    return _errorResponse("GAS 後端執行錯誤: " + error.toString());
   }
 }
 
@@ -7250,11 +7250,7 @@ function processUpdateEventStatus(payload) {
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   } finally {
-    try {
-      if (lock && typeof lock.hasLock === 'function' && lock.hasLock()) {
-        lock.releaseLock();
-      }
-    } catch (e) { }
+    _safeReleaseLock(lock);
   }
 }
 
@@ -7383,11 +7379,7 @@ function processUpdateSignupStatus(payload) {
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   } finally {
-    try {
-      if (lock && typeof lock.hasLock === 'function' && lock.hasLock()) {
-        lock.releaseLock();
-      }
-    } catch (e) { }
+    _safeReleaseLock(lock);
   }
 }
 

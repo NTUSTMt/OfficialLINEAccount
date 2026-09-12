@@ -3,6 +3,7 @@ import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, AlertCircle, Copy, Check, Building2 } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { GAS_API_URL } from '../constants/api';
 import '../App.css';
 
 interface UnpaidItem {
@@ -16,8 +17,6 @@ interface UnpaidItem {
   purpose?: string;
   isOfficial?: string;
 }
-
-const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
 
 function Payment({ userId }: { userId: string }) {
   const { t } = useTranslation();
@@ -52,7 +51,7 @@ function Payment({ userId }: { userId: string }) {
     const year = today.getFullYear();
     const month = today.getMonth() + 1; // 1-12
     let rocYear = year - 1911;
-    let semester = 1;
+    let semester: number;
     
     if (month >= 2 && month <= 7) {
       rocYear = rocYear - 1;
@@ -107,50 +106,60 @@ function Payment({ userId }: { userId: string }) {
 
   // 1. 載入未繳費項目
   useEffect(() => {
+    let ignore = false;
+
     const fetchUnpaid = async () => {
-      setLoading(true);
-      setError(null);
       try {
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_unpaid&userId=${userId}`));
-        const result = await res.json();
-        if (result.status === 'success') {
-          setUnpaidList(result.data);
-          // 預設勾選活動與裝備，社費預設為未勾選 (去重以防同筆訂單多項裝備產生多個相同 ID)
-          const initialSelectedIds = Array.from(new Set([
-            ...result.data.activities.map((item: UnpaidItem) => item.id),
-            ...result.data.equipments.map((item: UnpaidItem) => item.id)
-          ]));
-          setSelectedIds(initialSelectedIds);
+        if (userId && userId !== 'TEST_USER_ID') {
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_unpaid&userId=${userId}`));
+          const result = await res.json();
+          if (!ignore) {
+            if (result.status === 'success') {
+              setUnpaidList(result.data);
+              const initialSelectedIds = Array.from(new Set([
+                ...result.data.activities.map((item: UnpaidItem) => item.id),
+                ...result.data.equipments.map((item: UnpaidItem) => item.id)
+              ]));
+              setSelectedIds(initialSelectedIds);
+            } else {
+              setError(result.message || t('payment.error.loadFailed'));
+            }
+          }
         } else {
-          setError(result.message || t('payment.error.loadFailed'));
+          // 測試帳號載入假資料
+          if (!ignore) {
+            setUnpaidList({
+              membership: [{ id: 'fee_membership', name: '113-1 學期社費 (Membership Fee)', amount: 200 }],
+              activities: [
+                { id: 'act_E01', name: '初級攀岩訓練營 (攀岩基礎與確保實作)', amount: 350 },
+                { id: 'act_E02', name: '合歡群峰出隊費 (交通與入園保險)', amount: 1500 }
+              ],
+              equipments: [
+                { id: 'eq_R0720141530', name: '雙人高山帳篷', amount: 100, orderId: 'R0720141530', qty: 1, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用', isOfficial: '否' },
+                { id: 'eq_R0720141530', name: '黑冰 Z400 羽絨睡袋', amount: 120, orderId: 'R0720141530', qty: 2, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用', isOfficial: '否' }
+              ]
+            });
+            setSelectedIds(['act_E01', 'eq_R0720141530']);
+          }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('取得未繳費資料失敗:', err);
-        setError(t('payment.error.networkError'));
+        if (!ignore) {
+          setError(t('payment.error.networkError'));
+        }
       } finally {
-        setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     };
 
-    if (userId && userId !== 'TEST_USER_ID') {
-      fetchUnpaid();
-    } else {
-      // 測試帳號載入假資料
-      setUnpaidList({
-        membership: [{ id: 'fee_membership', name: '113-1 學期社費 (Membership Fee)', amount: 200 }],
-        activities: [
-          { id: 'act_E01', name: '初級攀岩訓練營 (攀岩基礎與確保實作)', amount: 350 },
-          { id: 'act_E02', name: '合歡群峰出隊費 (交通與入園保險)', amount: 1500 }
-        ],
-        equipments: [
-          { id: 'eq_R0720141530', name: '雙人高山帳篷', amount: 100, orderId: 'R0720141530', qty: 1, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用', isOfficial: '否' },
-          { id: 'eq_R0720141530', name: '黑冰 Z400 羽絨睡袋', amount: 120, orderId: 'R0720141530', qty: 2, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用', isOfficial: '否' }
-        ]
-      });
-      setSelectedIds(['act_E01', 'eq_R0720141530']);
-      setLoading(false);
-    }
-  }, [userId]);
+    fetchUnpaid();
+
+    return () => {
+      ignore = true;
+    };
+  }, [userId, t]);
 
   // 所有項目的扁平化清單 (社費部分動態計算金額與名稱，裝備部分若同時繳社費享 5 折)
   const allItemsFlat = useMemo(() => {
@@ -568,7 +577,7 @@ function Payment({ userId }: { userId: string }) {
                       </label>
                       <select 
                         value={membershipOption}
-                        onChange={(e) => setMembershipOption(e.target.value as any)}
+                        onChange={(e) => setMembershipOption(e.target.value as 'thisSem' | 'undergrad' | 'master')}
                         style={{
                           width: '100%',
                           padding: '8px',

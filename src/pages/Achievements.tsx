@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, Award, Star } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
+import { GAS_API_URL } from '../constants/api';
 import '../App.css';
 
 interface Reflection {
@@ -42,70 +43,81 @@ function Achievements({ userId }: { userId: string }) {
   const [photoFiles, setPhotoFiles] = useState<{ base64: string; name: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [isViewOnly, setIsViewOnly] = useState(false);
-
-  const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (userId && userId !== 'TEST_USER_ID') {
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_past_activities&userId=${userId}`));
-        const result = await res.json();
-        if (result.status === 'success') {
-          setData(result.data);
-        } else {
-          setError(result.message || t('achievements.error.loadFailed'));
-        }
-      } else {
-        // 測試假資料
-        setData({
-          totalAttended: 3,
-          reflectionsCount: 1,
-          activities: [
-            {
-              eventId: 'evt_001',
-              title: '合歡群峰出隊 (交通與山難教育訓練)',
-              date: '2026/05/01',
-              img: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400',
-              hasReflected: true,
-              reflection: {
-                difficulty: 2,
-                beauty: 5,
-                content: '非常棒的入門路線！合歡主峰與東峰風景很漂亮，很適合帶新生。謝謝領隊貼心的照顧與入山宣導！',
-                imageUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=400'
-              }
-            },
-            {
-              eventId: 'evt_002',
-              title: '玉山主峰線 (台灣第一高峰巡禮)',
-              date: '2026/06/15',
-              img: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400',
-              hasReflected: false,
-              reflection: null
-            },
-            {
-              eventId: 'evt_003',
-              title: '初級攀岩訓練營 (人工攀登與基本確保)',
-              date: '2026/07/02',
-              img: 'https://images.unsplash.com/photo-1522163182402-834f871fd851?w=400',
-              hasReflected: false,
-              reflection: null
-            }
-          ]
-        });
-      }
-    } catch (err) {
-      console.error('載入活動成就失敗:', err);
-      setError(t('achievements.error.networkError'));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    let ignore = false;
+
+    const fetchData = async () => {
+      try {
+        if (userId && userId !== 'TEST_USER_ID') {
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_past_activities&userId=${userId}`));
+          const result = await res.json();
+          if (!ignore) {
+            if (result.status === 'success') {
+              setData(result.data);
+            } else {
+              setError(result.message || t('achievements.error.loadFailed'));
+            }
+          }
+        } else {
+          // 測試假資料
+          if (!ignore) {
+            setData({
+              totalAttended: 3,
+              reflectionsCount: 1,
+              activities: [
+                {
+                  eventId: 'evt_001',
+                  title: '合歡群峰出隊 (交通與山難教育訓練)',
+                  date: '2026/05/01',
+                  img: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400',
+                  hasReflected: true,
+                  reflection: {
+                    difficulty: 2,
+                    beauty: 5,
+                    content: '非常棒的入門路線！合歡主峰與東峰風景很漂亮，很適合帶新生。謝謝領隊貼心的照顧與入山宣導！',
+                    imageUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=400'
+                  }
+                },
+                {
+                  eventId: 'evt_002',
+                  title: '玉山主峰線 (台灣第一高峰巡禮)',
+                  date: '2026/06/15',
+                  img: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400',
+                  hasReflected: false,
+                  reflection: null
+                },
+                {
+                  eventId: 'evt_003',
+                  title: '初級攀岩訓練營 (人工攀登與基本確保)',
+                  date: '2026/07/02',
+                  img: 'https://images.unsplash.com/photo-1522163182402-834f871fd851?w=400',
+                  hasReflected: false,
+                  reflection: null
+                }
+              ]
+            });
+          }
+        }
+      } catch (err) {
+        console.error('載入活動成就失敗:', err);
+        if (!ignore) {
+          setError(t('achievements.error.networkError'));
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
     fetchData();
-  }, [userId]);
+
+    return () => {
+      ignore = true;
+    };
+  }, [userId, t, refreshKey]);
 
   const openForm = (activity: Activity, viewOnly = false) => {
     setSelectedActivity(activity);
@@ -250,7 +262,7 @@ function Achievements({ userId }: { userId: string }) {
         if (result.status === 'success') {
           alert(t('achievements.alert.submitSuccess'));
           closeForm();
-          fetchData(); // 重新整理
+          setRefreshKey(k => k + 1); // 重新整理
         } else {
           alert(t('achievements.alert.submitFailed', { message: result.message }));
         }

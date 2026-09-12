@@ -8,7 +8,7 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 
-const memoryFallbackCache: Record<string, CacheEntry<any>> = {};
+const memoryFallbackCache: Record<string, CacheEntry<unknown>> = {};
 
 /**
  * 取得指定鍵值的快取資料
@@ -27,7 +27,7 @@ export function getCache<T>(key: string): T | null {
       // 已過期則清除
       sessionStorage.removeItem(key);
     }
-  } catch (e) {
+  } catch {
     // 若 sessionStorage 無法使用（如受限瀏覽器環境），使用記憶體快取作為備援
     const memEntry = memoryFallbackCache[key];
     if (memEntry && memEntry.expiresAt > now) {
@@ -48,9 +48,9 @@ export function setCache<T>(key: string, data: T, ttlSeconds: number = 300): voi
   const entry: CacheEntry<T> = { data, expiresAt };
   try {
     sessionStorage.setItem(key, JSON.stringify(entry));
-  } catch (e) {
+  } catch {
     // 記憶體備援
-    memoryFallbackCache[key] = entry;
+    memoryFallbackCache[key] = entry as CacheEntry<unknown>;
   }
 }
 
@@ -60,7 +60,7 @@ export function setCache<T>(key: string, data: T, ttlSeconds: number = 300): voi
 export function removeCache(key: string): void {
   try {
     sessionStorage.removeItem(key);
-  } catch (e) {
+  } catch {
     // 忽略例外
   }
   delete memoryFallbackCache[key];
@@ -87,7 +87,7 @@ export function clearCache(prefix?: string): void {
     Object.keys(memoryFallbackCache).forEach(k => {
       if (k.startsWith(prefix)) delete memoryFallbackCache[k];
     });
-  } catch (e) {
+  } catch {
     // 忽略例外
   }
 }

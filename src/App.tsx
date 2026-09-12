@@ -5,6 +5,8 @@ import { ShieldCheck, Award, FileText, ClipboardList, CreditCard, User, Compass,
 import liff from '@line/liff';
 import { appendAuthToken } from './utils/api';
 import { getCache, setCache } from './utils/cacheUtils';
+import { GAS_API_URL } from './constants/api';
+import { LIFF_URLS } from './constants/liff';
 import './App.css';
 
 const Borrow = lazy(() => import('./pages/Borrow'));
@@ -179,7 +181,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 textAlign: 'left'
               }}>
                 <div
-                  onClick={() => handleNav('/dashboard', 'https://liff.line.me/2009217429-jvj3ydDT')}
+                  onClick={() => handleNav('/dashboard', LIFF_URLS.DASHBOARD)}
                   style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -187,7 +189,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                   {t('nav.menuDashboard')}
                 </div>
                 <div
-                  onClick={() => handleNav('/register', 'https://liff.line.me/2009217429-AhPRqAHg')}
+                  onClick={() => handleNav('/register', LIFF_URLS.REGISTER)}
                   style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -195,7 +197,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                   {t('nav.menuRegister')}
                 </div>
                 <div
-                  onClick={() => handleNav('/borrow', 'https://liff.line.me/2009217429-zXvGeSrI')}
+                  onClick={() => handleNav('/borrow', LIFF_URLS.BORROW)}
                   style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -203,7 +205,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                   {t('nav.menuBorrow')}
                 </div>
                 <div
-                  onClick={() => handleNav('/payment', 'https://liff.line.me/2009217429-u7OCkmQO')}
+                  onClick={() => handleNav('/payment', LIFF_URLS.PAYMENT)}
                   style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -211,7 +213,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                   {t('nav.menuPayment')}
                 </div>
                 <div
-                  onClick={() => handleNav('/history', 'https://liff.line.me/2009217429-FRB6rjph')}
+                  onClick={() => handleNav('/history', LIFF_URLS.HISTORY)}
                   style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -219,7 +221,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                   {t('nav.menuHistory')}
                 </div>
                 <div
-                  onClick={() => handleNav('/achievements', 'https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fachievements')}
+                  onClick={() => handleNav('/achievements', LIFF_URLS.ACHIEVEMENTS)}
                   style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -228,7 +230,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 </div>
                 {isOfficer && (
                   <div
-                    onClick={() => handleNav('/admin/events', 'https://liff.line.me/2009217429-DSYjXqNK')}
+                    onClick={() => handleNav('/admin/events', LIFF_URLS.ADMIN_EVENTS)}
                     style={{
                       padding: '10px 16px',
                       cursor: 'pointer',
@@ -268,7 +270,6 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
       }
 
       try {
-        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
         const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`));
         const result = await res.json();
 
@@ -374,7 +375,7 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
   return <>{children}</>;
 }
 
-function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; userId: string; displayName: string; pictureUrl: string } }) {
+function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown; userId: string; displayName: string; pictureUrl: string } }) {
   // 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，需在初始化前鎖定初始路徑
   // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
   const [redirectPath] = useState(() => getInitialRedirectPath());
@@ -385,25 +386,26 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
   });
 
   useEffect(() => {
+    let ignore = false;
     if (!liffInit.userId || liffInit.userId === 'TEST_USER_ID') {
-      setIsOfficer(false);
       return;
     }
     const cacheKey = `officer_status_${liffInit.userId}`;
-    const cached = getCache<boolean>(cacheKey);
-    if (cached !== null) {
-      setIsOfficer(cached);
-    }
 
-    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
     fetch(appendAuthToken(`${GAS_API_URL}?action=check_officer_status&userId=${liffInit.userId}`))
       .then((res) => res.json())
       .then((data) => {
-        const officerResult = !!(data.status === 'success' && data.isOfficer);
-        setIsOfficer(officerResult);
-        setCache(cacheKey, officerResult, 300); // 快取 5 分鐘，後續切換頁面 0ms
+        if (!ignore) {
+          const officerResult = !!(data.status === 'success' && data.isOfficer);
+          setIsOfficer(officerResult);
+          setCache(cacheKey, officerResult, 300); // 快取 5 分鐘，後續切換頁面 0ms
+        }
       })
       .catch((err) => console.error('幹部權限初檢出錯:', err));
+
+    return () => {
+      ignore = true;
+    };
   }, [liffInit.userId]);
 
   if (liffInit.loading) {
@@ -475,7 +477,13 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: any; us
 }
 
 function App() {
-  const [liffInit, setLiffInit] = useState({
+  const [liffInit, setLiffInit] = useState<{
+    loading: boolean;
+    error: unknown;
+    userId: string;
+    displayName: string;
+    pictureUrl: string;
+  }>({
     loading: true,
     error: null,
     userId: '',
@@ -527,7 +535,7 @@ function App() {
         }
 
         setLiffInit({ loading: false, error: null, userId, displayName, pictureUrl });
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('LIFF 初始化失敗:', err);
         setLiffInit({ loading: false, error: err, userId: 'TEST_USER_ID', displayName: '測試山友', pictureUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=150' });
       }
