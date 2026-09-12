@@ -1,22 +1,48 @@
 // ==============================================================================
 // 🏔️ 野境戶外系統：活動專屬報名試算表 綁定腳本 (Event Sheet Bound Script)
 // 說明：貼入活動專屬試算表的 Apps Script 中，即可自動獲得頂部自訂選單、側邊欄差異比對與一鍵推播錄取通知功能
+// 支援 22 個標準欄位完整對齊，Supabase 參數由 Script Properties 安全讀取
 // ==============================================================================
 
-// ⭐️ 請設定您的 Supabase 專案參數 (亦可由 _CONFIG 工作表讀取)
-var SUPABASE_URL = "https://xilpnirhquuovdntqskm.supabase.co"; 
-var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."; 
+/**
+ * 安全取得 Supabase 連線參數 (優先由 Script Properties 讀取，次由 _CONFIG 工作表讀取)
+ */
+function getSupabaseConfig() {
+  var props = PropertiesService.getScriptProperties();
+  var url = props.getProperty("SUPABASE_URL") || "";
+  var key = props.getProperty("SUPABASE_SERVICE_ROLE_KEY") || props.getProperty("SUPABASE_ANON_KEY") || "";
+
+  if (!url || !key) {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var cfgSheet = ss ? ss.getSheetByName("_CONFIG") : null;
+    if (cfgSheet) {
+      var data = cfgSheet.getDataRange().getValues();
+      for (var i = 0; i < data.length; i++) {
+        var k = String(data[i][0]).trim();
+        var v = String(data[i][1]).trim();
+        if (k === "SUPABASE_URL" && !url) url = v;
+        if ((k === "SUPABASE_SERVICE_ROLE_KEY" || k === "SUPABASE_ANON_KEY") && !key) key = v;
+      }
+    }
+  }
+
+  return { url: url, key: key };
+}
 
 /**
  * 試算表開啟時自動建立頂部自訂選單
  */
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu("🏔️ 社團系統")
-    .addItem("🔄 比對差異並同步至 Supabase", "openDiffSidebar")
-    .addSeparator()
-    .addItem("📢 一鍵推播正備取錄取通知", "sendAdmissionNotifications")
-    .addToUi();
+  try {
+    var ui = SpreadsheetApp.getUi();
+    ui.createMenu("🏔️ 社團系統")
+      .addItem("🔄 比對差異並同步至 Supabase", "openDiffSidebar")
+      .addSeparator()
+      .addItem("📢 一鍵推播正備取錄取通知", "sendAdmissionNotifications")
+      .addToUi();
+  } catch (e) {
+    console.warn("無法取得 UI (可能在無 UI 環境中執行):", e);
+  }
 }
 
 /**
@@ -59,13 +85,18 @@ function getEventInfo() {
 
 /**
  * 取得比對差異清單 (由側邊欄前端呼叫)
- * 嚴格安全防護：僅比對具備有效「報名專屬碼」之隊員列，自動忽略幹部在下方填寫之統計、車輛分配等雜項
+ * 支援 22 個標準欄位智慧檢索，僅比對具備有效專屬碼之隊員列，自動忽略雜項備註列
  */
 function getSignupsDiff() {
   var info = getEventInfo();
   var eventId = info.eventId;
   if (!eventId) {
     return { status: "error", message: "找不到活動編號 (_CONFIG 缺少 EVENT_ID)" };
+  }
+
+  var sbConfig = getSupabaseConfig();
+  if (!sbConfig.url || !sbConfig.key) {
+    return { status: "error", message: "未設定 SUPABASE_URL 或金鑰！請至 Apps Script 的「專案設定 ➔ 指令碼屬性 (Script Properties)」新增 SUPABASE_URL 與 SUPABASE_SERVICE_ROLE_KEY。" };
   }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -76,21 +107,43 @@ function getSignupsDiff() {
   }
 
   var headers = data[0];
+  function findCol(keywords) {
+    for (var k = 0; k < keywords.length; k++) {
+      var idx = headers.indexOf(keywords[k]);
+      if (idx > -1) return idx;
+    }
+    for (var i = 0; i < headers.length; i++) {
+      var hStr = String(headers[i]);
+      for (var j = 0; j < keywords.length; j++) {
+        if (hStr.includes(keywords[j])) return i;
+      }
+    }
+    return -1;
+  }
+
   var colIdx = {
-    code: headers.indexOf("報名專屬碼"),
-    name: headers.indexOf("姓名"),
-    gender: headers.indexOf("性別"),
-    idNumber: headers.indexOf("身分證字號"),
-    birthday: headers.indexOf("出生年月日"),
-    phone: headers.indexOf("手機電話"),
-    emerName: headers.indexOf("緊急聯絡人"),
-    emerRel: headers.indexOf("關係"),
-    emerPhone: headers.indexOf("聯絡人電話"),
-    status: headers.indexOf("審核狀態"),
-    notifyStatus: headers.indexOf("通知狀態"),
-    payStatus: headers.indexOf("繳費狀態"),
-    userId: headers.indexOf("系統識別碼"),
-    notes: headers.indexOf("備註")
+    userId: findCol(["系統識別碼"]),
+    code: findCol(["專屬碼", "報名專屬碼"]),
+    name: findCol(["姓名"]),
+    gender: findCol(["性別"]),
+    lineId: findCol(["LINE ID", "Line ID"]),
+    email: findCol(["聯絡信箱", "信箱", "Email"]),
+    phone: findCol(["聯絡電話", "手機電話", "電話"]),
+    address: findCol(["聯絡地址", "地址"]),
+    birthday: findCol(["生日", "出生年月日"]),
+    idNumber: findCol(["證件號碼", "身分證字號", "身分證"]),
+    emerName: findCol(["緊急聯絡人姓名", "緊急聯絡人"]),
+    emerPhone: findCol(["緊急聯絡人電話", "聯絡人電話"]),
+    emerAddr: findCol(["緊急聯絡人聯絡地址", "緊急聯絡人地址"]),
+    emerRel: findCol(["緊急聯絡人關係", "關係"]),
+    exp: findCol(["爬山經驗", "登山經驗"]),
+    fitness: findCol(["體能測驗", "體能"]),
+    proof: findCol(["體能證明"]),
+    isOfficial: findCol(["是否為社員"]),
+    status: findCol(["審核結果", "審核狀態"]),
+    notifyStatus: findCol(["通知狀態"]),
+    payStatus: findCol(["繳費狀態"]),
+    notes: findCol(["備註"])
   };
 
   // 1. 抓取試算表中「有專屬碼」的隊員資料 (過濾非隊員雜項列)
@@ -98,34 +151,41 @@ function getSignupsDiff() {
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
     var code = colIdx.code > -1 ? String(row[colIdx.code] || "").trim() : "";
-    // 嚴格識別：必須有有效報名專屬碼 (如 S 開頭且非空)
+    // 嚴格識別：必須有有效專屬碼 (如 S 開頭且非空)
     if (!code || !code.startsWith("S")) continue;
 
     sheetApplicants[code] = {
       rowIndex: r + 1,
       signupCode: code,
+      userId: colIdx.userId > -1 ? String(row[colIdx.userId] || "").trim() : "",
       name: colIdx.name > -1 ? String(row[colIdx.name] || "").trim() : "",
       gender: colIdx.gender > -1 ? String(row[colIdx.gender] || "").trim() : "",
-      idNumber: colIdx.idNumber > -1 ? String(row[colIdx.idNumber] || "").trim() : "",
-      birthday: colIdx.birthday > -1 ? String(row[colIdx.birthday] || "").trim() : "",
+      lineId: colIdx.lineId > -1 ? String(row[colIdx.lineId] || "").trim() : "",
+      email: colIdx.email > -1 ? String(row[colIdx.email] || "").trim() : "",
       phone: colIdx.phone > -1 ? String(row[colIdx.phone] || "").trim() : "",
+      address: colIdx.address > -1 ? String(row[colIdx.address] || "").trim() : "",
+      birthday: colIdx.birthday > -1 ? String(row[colIdx.birthday] || "").trim() : "",
+      idNumber: colIdx.idNumber > -1 ? String(row[colIdx.idNumber] || "").trim() : "",
       emerName: colIdx.emerName > -1 ? String(row[colIdx.emerName] || "").trim() : "",
-      emerRel: colIdx.emerRel > -1 ? String(row[colIdx.emerRel] || "").trim() : "",
       emerPhone: colIdx.emerPhone > -1 ? String(row[colIdx.emerPhone] || "").trim() : "",
+      emerAddr: colIdx.emerAddr > -1 ? String(row[colIdx.emerAddr] || "").trim() : "",
+      emerRel: colIdx.emerRel > -1 ? String(row[colIdx.emerRel] || "").trim() : "",
+      exp: colIdx.exp > -1 ? String(row[colIdx.exp] || "").trim() : "",
+      fitness: colIdx.fitness > -1 ? String(row[colIdx.fitness] || "").trim() : "",
+      proof: colIdx.proof > -1 ? String(row[colIdx.proof] || "").trim() : "",
+      isOfficial: colIdx.isOfficial > -1 ? String(row[colIdx.isOfficial] || "").trim() : "",
       status: colIdx.status > -1 ? String(row[colIdx.status] || "").trim() : "",
       notifyStatus: colIdx.notifyStatus > -1 ? String(row[colIdx.notifyStatus] || "").trim() : "",
       payStatus: colIdx.payStatus > -1 ? String(row[colIdx.payStatus] || "").trim() : "",
-      userId: colIdx.userId > -1 ? String(row[colIdx.userId] || "").trim() : "",
       notes: colIdx.notes > -1 ? String(row[colIdx.notes] || "").trim() : ""
     };
   }
 
   // 2. 向 Supabase 查詢最新資料
-  var props = PropertiesService.getScriptProperties();
-  var sbUrl = props.getProperty("SUPABASE_URL") || SUPABASE_URL;
-  var sbKey = props.getProperty("SUPABASE_SERVICE_ROLE_KEY") || props.getProperty("SUPABASE_ANON_KEY") || SUPABASE_ANON_KEY;
+  var sbUrl = sbConfig.url;
+  var sbKey = sbConfig.key;
 
-  var fetchUrl = sbUrl + "/rest/v1/event_signups?event_id=eq." + encodeURIComponent(eventId) + "&select=id,status,notes,line_user_id,members(name,phone,id_card,birthday,gender,emergency_contact_name,emergency_contact_rel,emergency_contact_phone)";
+  var fetchUrl = sbUrl + "/rest/v1/event_signups?event_id=eq." + encodeURIComponent(eventId) + "&select=id,status,notes,line_user_id,members(name,gender,line_id,email,phone,address,birthday,id_card,emergency_contact_name,emergency_contact_phone,emergency_contact_address,emergency_contact_rel,outdoor_experience,fitness_desc,is_official_member)";
   var res = UrlFetchApp.fetch(fetchUrl, {
     method: "get",
     headers: {
@@ -149,11 +209,20 @@ function getSignupsDiff() {
       notes: sbItem.notes || "",
       userId: sbItem.line_user_id || "",
       name: m.name || "",
+      gender: m.gender || "",
+      lineId: m.line_id || "",
+      email: m.email || "",
       phone: m.phone || "",
-      idNumber: m.id_card || "",
+      address: m.address || "",
       birthday: m.birthday || "",
+      idNumber: m.id_card || "",
       emerName: m.emergency_contact_name || "",
-      emerPhone: m.emergency_contact_phone || ""
+      emerPhone: m.emergency_contact_phone || "",
+      emerAddr: m.emergency_contact_address || "",
+      emerRel: m.emergency_contact_rel || "",
+      exp: m.outdoor_experience || "",
+      fitness: m.fitness_desc || "",
+      isOfficial: m.is_official_member ? "是" : "否"
     };
   }
 
@@ -175,16 +244,22 @@ function getSignupsDiff() {
 
     var changes = [];
     if (local.status && local.status !== remote.status) {
-      changes.push({ field: "審核狀態", oldVal: remote.status, newVal: local.status });
+      changes.push({ field: "審核結果", oldVal: remote.status, newVal: local.status });
     }
     if (local.notes !== remote.notes) {
       changes.push({ field: "備註", oldVal: remote.notes, newVal: local.notes });
     }
     if (local.phone && remote.phone && local.phone !== remote.phone) {
-      changes.push({ field: "手機電話", oldVal: remote.phone, newVal: local.phone });
+      changes.push({ field: "聯絡電話", oldVal: remote.phone, newVal: local.phone });
     }
     if (local.idNumber && remote.idNumber && local.idNumber !== remote.idNumber) {
-      changes.push({ field: "身分證號", oldVal: remote.idNumber, newVal: local.idNumber });
+      changes.push({ field: "證件號碼", oldVal: remote.idNumber, newVal: local.idNumber });
+    }
+    if (local.email && remote.email && local.email !== remote.email) {
+      changes.push({ field: "聯絡信箱", oldVal: remote.email, newVal: local.email });
+    }
+    if (local.address && remote.address && local.address !== remote.address) {
+      changes.push({ field: "聯絡地址", oldVal: remote.address, newVal: local.address });
     }
 
     if (changes.length > 0) {
@@ -216,9 +291,9 @@ function commitDiffsToSupabase(diffsToCommit) {
     return { success: true, count: 0, message: "無待更新項目" };
   }
 
-  var props = PropertiesService.getScriptProperties();
-  var sbUrl = props.getProperty("SUPABASE_URL") || SUPABASE_URL;
-  var sbKey = props.getProperty("SUPABASE_SERVICE_ROLE_KEY") || props.getProperty("SUPABASE_ANON_KEY") || SUPABASE_ANON_KEY;
+  var sbConfig = getSupabaseConfig();
+  var sbUrl = sbConfig.url;
+  var sbKey = sbConfig.key;
 
   var updatedCount = 0;
   for (var i = 0; i < diffsToCommit.length; i++) {
@@ -248,10 +323,19 @@ function commitDiffsToSupabase(diffsToCommit) {
     if (full.userId) {
       var memberPayload = {};
       if (full.name) memberPayload.name = full.name;
+      if (full.gender) memberPayload.gender = full.gender;
+      if (full.lineId) memberPayload.line_id = full.lineId;
+      if (full.email) memberPayload.email = full.email;
       if (full.phone) memberPayload.phone = full.phone;
+      if (full.address) memberPayload.address = full.address;
+      if (full.birthday) memberPayload.birthday = full.birthday;
       if (full.idNumber) memberPayload.id_card = full.idNumber;
       if (full.emerName) memberPayload.emergency_contact_name = full.emerName;
       if (full.emerPhone) memberPayload.emergency_contact_phone = full.emerPhone;
+      if (full.emerAddr) memberPayload.emergency_contact_address = full.emerAddr;
+      if (full.emerRel) memberPayload.emergency_contact_rel = full.emerRel;
+      if (full.exp) memberPayload.outdoor_experience = full.exp;
+      if (full.fitness) memberPayload.fitness_desc = full.fitness;
 
       if (Object.keys(memberPayload).length > 0) {
         var mUrl = sbUrl + "/rest/v1/members?line_user_id=eq." + encodeURIComponent(full.userId);
@@ -308,14 +392,28 @@ function sendAdmissionNotifications() {
   }
 
   var headers = data[0];
-  var codeCol = headers.indexOf("報名專屬碼");
-  var statusCol = headers.indexOf("審核狀態");
-  var notifyCol = headers.indexOf("通知狀態");
-  var nameCol = headers.indexOf("姓名");
-  var uidCol = headers.indexOf("系統識別碼");
+  function findCol(keywords) {
+    for (var k = 0; k < keywords.length; k++) {
+      var idx = headers.indexOf(keywords[k]);
+      if (idx > -1) return idx;
+    }
+    for (var i = 0; i < headers.length; i++) {
+      var hStr = String(headers[i]);
+      for (var j = 0; j < keywords.length; j++) {
+        if (hStr.includes(keywords[j])) return i;
+      }
+    }
+    return -1;
+  }
+
+  var codeCol = findCol(["專屬碼", "報名專屬碼"]);
+  var statusCol = findCol(["審核結果", "審核狀態"]);
+  var notifyCol = findCol(["通知狀態"]);
+  var nameCol = findCol(["姓名"]);
+  var uidCol = findCol(["系統識別碼"]);
 
   if (statusCol === -1 || uidCol === -1) {
-    ui.alert("欄位缺失", "找不到「審核狀態」或「系統識別碼」欄位，請檢查表頭！", ui.ButtonSet.OK);
+    ui.alert("欄位缺失", "找不到「審核結果」或「系統識別碼」欄位，請檢查表頭！", ui.ButtonSet.OK);
     return;
   }
 
@@ -372,7 +470,7 @@ function sendAdmissionNotifications() {
   var botToken = props.getProperty("MEMBER_BOT_TOKEN") || props.getProperty("LINE_BOT_TOKEN") || info.botToken;
 
   if (!botToken) {
-    ui.alert("缺少 LINE Token", "未設定 LINE Bot Token！請至專案屬性 (Script Properties) 設定 MEMBER_BOT_TOKEN，或於 _CONFIG 表中填入 LINE_BOT_TOKEN。", ui.ButtonSet.OK);
+    ui.alert("缺少 LINE Token", "未設定 LINE Bot Token！請至專案設定 (Script Properties) 新增 MEMBER_BOT_TOKEN，或於 _CONFIG 表填入 LINE_BOT_TOKEN。", ui.ButtonSet.OK);
     return;
   }
 

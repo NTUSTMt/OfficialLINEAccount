@@ -1006,6 +1006,121 @@ describe('12. 活動專屬 Google Drive 資料夾與專屬試算表差異比對�
     assert.equal(res2.isCopiedFromTemplate, false);
     assert.equal(res2.config.EVENT_ID, 'E2609-02');
   });
+
+  it('支援完整的 22 欄位結構（系統識別碼、專屬碼至備註）之精準定位與寫入', () => {
+    const sHeaders = [
+      '系統識別碼', '專屬碼', '姓名', '性別', 'LINE ID', '聯絡信箱', '聯絡電話', '聯絡地址',
+      '生日', '證件號碼', '緊急聯絡人姓名', '緊急聯絡人電話', '緊急聯絡人聯絡地址', '緊急聯絡人關係',
+      '爬山經驗', '體能測驗', '體能證明', '是否為社員', '審核結果', '通知狀態', '繳費狀態', '備註'
+    ];
+
+    assert.equal(sHeaders.length, 22);
+
+    const signupData = {
+      userId: 'U123456789',
+      signupCode: 'S2609-999',
+      name: '李白',
+      gender: '男',
+      lineId: 'libai_mountain',
+      email: 'libai@example.com',
+      phone: '0912345678',
+      address: '台北市大安區',
+      birthday: '1990-01-01',
+      idCard: 'A123456789',
+      emerName: '杜甫',
+      emerPhone: '0987654321',
+      emerAddr: '新北市板橋區',
+      emerRel: '好友',
+      exp: '百岳全登頂',
+      strength: '每日重訓',
+      strengthProof: 'https://drive.google.com/proof.jpg',
+      isOfficial: '是',
+      status: '正取 Confirmed',
+      notifyStatus: '已通知',
+      payStatus: '已繳費 Paid',
+      notes: '領隊人員'
+    };
+
+    const row = new Array(sHeaders.length).fill('');
+    function setCol(keywords, val) {
+      if (!Array.isArray(keywords)) keywords = [keywords];
+      for (let k = 0; k < keywords.length; k++) {
+        const idx = _fi(sHeaders, keywords[k]);
+        if (idx > -1) {
+          row[idx] = val;
+          return;
+        }
+      }
+    }
+
+    setCol(['系統識別碼'], signupData.userId);
+    setCol(['專屬碼', '報名專屬碼'], signupData.signupCode);
+    setCol(['姓名'], signupData.name);
+    setCol(['性別'], signupData.gender);
+    setCol(['LINE ID', 'Line ID'], signupData.lineId);
+    setCol(['聯絡信箱', '信箱'], signupData.email);
+    setCol(['聯絡電話', '手機電話'], signupData.phone);
+    setCol(['聯絡地址', '地址'], signupData.address);
+    setCol(['生日', '出生年月日'], signupData.birthday);
+    setCol(['證件號碼', '身分證字號'], signupData.idCard);
+    setCol(['緊急聯絡人姓名', '緊急聯絡人'], signupData.emerName);
+    setCol(['緊急聯絡人電話', '聯絡人電話'], signupData.emerPhone);
+    setCol(['緊急聯絡人聯絡地址', '緊急聯絡人地址'], signupData.emerAddr);
+    setCol(['緊急聯絡人關係', '關係'], signupData.emerRel);
+    setCol(['爬山經驗', '登山經驗'], signupData.exp);
+    setCol(['體能測驗', '體能'], signupData.strength);
+    setCol(['體能證明'], signupData.strengthProof);
+    setCol(['是否為社員'], signupData.isOfficial);
+    setCol(['審核結果', '審核狀態'], signupData.status);
+    setCol(['通知狀態'], signupData.notifyStatus);
+    setCol(['繳費狀態'], signupData.payStatus);
+    setCol(['備註'], signupData.notes);
+
+    assert.equal(row.length, 22);
+    assert.equal(row[0], 'U123456789');
+    assert.equal(row[1], 'S2609-999');
+    assert.equal(row[2], '李白');
+    assert.equal(row[4], 'libai_mountain');
+    assert.equal(row[18], '正取 Confirmed');
+    assert.equal(row[19], '已通知');
+    assert.equal(row[20], '已繳費 Paid');
+    assert.equal(row[21], '領隊人員');
+  });
+
+  it('Supabase 參數由 Script Properties 安全讀取測試', () => {
+    function fakeGetSupabaseConfig(propsStore, configSheetData) {
+      let url = propsStore['SUPABASE_URL'] || '';
+      let key = propsStore['SUPABASE_SERVICE_ROLE_KEY'] || propsStore['SUPABASE_ANON_KEY'] || '';
+
+      if (!url || !key) {
+        if (configSheetData) {
+          for (let i = 0; i < configSheetData.length; i++) {
+            if (configSheetData[i][0] === 'SUPABASE_URL' && !url) url = configSheetData[i][1];
+            if (configSheetData[i][0] === 'SUPABASE_SERVICE_ROLE_KEY' && !key) key = configSheetData[i][1];
+          }
+        }
+      }
+
+      return { url, key };
+    }
+
+    // 1. 從 Script Properties 讀取
+    const res1 = fakeGetSupabaseConfig({
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'secret-key-123'
+    }, []);
+    assert.equal(res1.url, 'https://test.supabase.co');
+    assert.equal(res1.key, 'secret-key-123');
+
+    // 2. 當 Script Properties 為空時，備援自 _CONFIG 讀取
+    const res2 = fakeGetSupabaseConfig({}, [
+      ['SUPABASE_URL', 'https://fallback.supabase.co'],
+      ['SUPABASE_SERVICE_ROLE_KEY', 'fallback-key-456']
+    ]);
+    assert.equal(res2.url, 'https://fallback.supabase.co');
+    assert.equal(res2.key, 'fallback-key-456');
+  });
 });
+
 
 

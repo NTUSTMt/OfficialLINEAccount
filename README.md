@@ -3,11 +3,31 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.61` (v0.1.61)
+- **當前版本**：`0.1.62` (v0.1.62)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 162. 試算表 22 欄全規格表頭對齊、Script Properties 金鑰安全架構與容器腳本容錯升級 (v0.1.62)
+- **22 欄標準名冊表頭完全對齊 (22-Column Standard Roster Integration)**：
+  - 依照使用者需求，全面將活動報名名冊試算表表頭升級為 22 欄標準規格：
+    `[系統識別碼, 專屬碼, 姓名, 性別, LINE ID, 聯絡信箱, 聯絡電話, 聯絡地址, 生日, 證件號碼, 緊急聯絡人姓名, 緊急聯絡人電話, 緊急聯絡人聯絡地址, 緊急聯絡人關係, 爬山經驗, 體能測驗, 體能證明, 是否為社員, 審核結果, 通知狀態, 繳費狀態, 備註]`。
+  - 在 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `_createEventDriveFolderAndSheet` 中，若無範本而程式化建立試算表時，自動套用此 22 欄全格式表頭。
+  - 在 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `_asyncAppendToEventSpreadsheet` 與報名流程中，動態對應社員完整個人資料（LINE ID、電子信箱、通訊地址、緊急聯絡人地址、體能證明等），自動依欄位名稱精準填入。
+- **Supabase 連線資訊導入 Script Properties (指令碼屬性) 安全架構**：
+  - 遵循資安最佳實踐，在 [`supabase/event_sheet_script.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/event_sheet_script.js) 中將 Supabase 連線參數（`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY`）與 LINE Token（`MEMBER_BOT_TOKEN`）改由 Apps Script「專案設定 ➔ 指令碼屬性 (Script Properties)」動態讀取。
+  - 避免將資料庫連線字串與密鑰硬編碼在腳本中，便於跨試算表與多環境安全管理。
+- **Apps Script 執行環境診斷與 `onOpen` 安全容錯 (Standalone vs. Container-bound Script Diagnostics)**：
+  - 解析使用者在編輯器手動執行 `onOpen` 或在獨立腳本（Standalone Script）中執行時拋出 `Exception: Cannot call SpreadsheetApp.getUi() from this context.` 之成因：
+    1. 在 Apps Script 程式碼編輯器中手動點擊「執行 onOpen」時，因缺乏試算表 UI 互動上下文，`SpreadsheetApp.getUi()` 必然會拋出此錯誤；但當使用者從 Google 試算表視窗重新載入頁面時，試算表會作為綁定容器自動正常觸發並產生選單。
+    2. 若先前建立成獨立指令碼（Standalone），無法取得試算表宿主實例。
+  - 於 [`supabase/event_sheet_script.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/event_sheet_script.js) 之 `onOpen` 中加入安全 `try...catch` 捕捉，確保在非 UI 環境中安全輸出日誌而不拋出阻斷性異常。
+- **測試與驗證 (Verification)**：
+  - 全套單元測試已擴充涵蓋 22 欄動態映射與 Script Properties 讀取邏輯。
+  - 執行 `pnpm test`：55 項單元測試 100% 綠燈通過。
+  - 執行 `pnpm run lint`：0 錯誤。
+  - 執行 `pnpm run build`：Vite 生產環境建置成功。
 
 ### 161. 範本試算表自動複製機制與試算表「一鍵推播正備取通知」引擎 (v0.1.61)
 - **需求背景與幹部體驗升級 (Template Auto-Copy & One-Click Admission Notification)**：

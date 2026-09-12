@@ -2690,23 +2690,27 @@ function handleSignup(replyToken, userId, eventId, ss) {
     // ⚡ 異步寫入活動專屬試算表 (完全不卡頓報名主流程)
     try {
       _asyncAppendToEventSpreadsheet(eventId, {
+        userId: userId,
         signupCode: signupCode,
+        name: p.name || "",
+        gender: p.gender || "",
+        lineId: p.lineId || (userProfile && userProfile.lineId) || "",
+        email: p.email || (userProfile && userProfile.email) || "",
+        phone: p.phone || "",
+        address: p.address || (userProfile && userProfile.address) || "",
+        birthday: p.birthday || "",
+        idCard: p.idCard || "",
+        emerName: p.emerName || "",
+        emerPhone: p.emerPhone || "",
+        emerAddr: p.emerAddr || "",
+        emerRel: p.emerRel || "",
+        exp: p.exp || "",
+        strength: p.strength || "",
+        strengthProof: p.strengthProof || "",
+        isOfficial: p.isOfficial || "否",
         status: "審核中 Checking",
         notifyStatus: "",
         payStatus: "未繳費 Unpaid",
-        name: p.name || "",
-        gender: p.gender || "",
-        idCard: p.idCard || "",
-        birthday: p.birthday || "",
-        phone: p.phone || "",
-        emerName: p.emerName || "",
-        emerRel: p.emerRel || "",
-        emerPhone: p.emerPhone || "",
-        exp: p.exp || "",
-        strength: p.strength || "",
-        medicalHistory: p.medicalHistory || "",
-        diet: p.diet || "",
-        userId: userId,
         notes: ""
       });
     } catch (sheetErr) {
@@ -7463,14 +7467,14 @@ function _createEventDriveFolderAndSheet(payload, eventId) {
       folder.addFile(file);
       DriveApp.getRootFolder().removeFile(file);
 
-      // 初始化「報名名冊」工作表與符合入山保險規範之 17 欄表頭 (含通知狀態)
+      // 初始化「報名名冊」工作表與符合社團規範之 22 欄標準表頭
       var signupSheet = newSS.getSheets()[0];
       signupSheet.setName("報名名冊");
 
       var headers = [
-        "報名專屬碼", "審核狀態", "通知狀態", "繳費狀態", "姓名", "性別",
-        "身分證字號", "出生年月日", "手機電話", "緊急聯絡人", "關係",
-        "聯絡人電話", "登山經驗與體能", "特殊病史與過敏", "飲食習慣", "系統識別碼", "備註"
+        "系統識別碼", "專屬碼", "姓名", "性別", "LINE ID", "聯絡信箱", "聯絡電話", "聯絡地址",
+        "生日", "證件號碼", "緊急聯絡人姓名", "緊急聯絡人電話", "緊急聯絡人聯絡地址", "緊急聯絡人關係",
+        "爬山經驗", "體能測驗", "體能證明", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註"
       ];
       signupSheet.appendRow(headers);
 
@@ -7624,46 +7628,62 @@ function _asyncAppendToEventSpreadsheet(eventId, signupData) {
 
     if (sHeaders.length > 0) {
       var row = new Array(sHeaders.length).fill("");
-      function setCol(kw, val) {
-        var idx = _fi(sHeaders, kw);
-        if (idx > -1) row[idx] = val;
+      function setCol(keywords, val) {
+        if (!Array.isArray(keywords)) keywords = [keywords];
+        for (var k = 0; k < keywords.length; k++) {
+          var idx = _fi(sHeaders, keywords[k]);
+          if (idx > -1) {
+            row[idx] = val;
+            return;
+          }
+        }
       }
-      setCol("報名專屬碼", signupData.signupCode || "");
-      setCol("審核狀態", signupData.status || "審核中 Checking");
-      setCol("通知狀態", signupData.notifyStatus || "");
-      setCol("繳費狀態", signupData.payStatus || "未繳費 Unpaid");
-      setCol("姓名", signupData.name || "");
-      setCol("性別", signupData.gender || "");
-      setCol("身分證字號", signupData.idCard ? ("'" + String(signupData.idCard)) : "");
-      setCol("出生年月日", signupData.birthday || "");
-      setCol("手機電話", phoneStr);
-      setCol("緊急聯絡人", signupData.emerName || "");
-      setCol("關係", signupData.emerRel || "");
-      setCol("聯絡人電話", emerPhoneStr);
-      setCol("登山經驗", expAndStrength);
-      setCol("特殊病史", signupData.medicalHistory || "");
-      setCol("飲食習慣", signupData.diet || "");
-      setCol("系統識別碼", signupData.userId || "");
-      setCol("備註", signupData.notes || "");
+      setCol(["系統識別碼"], signupData.userId || "");
+      setCol(["專屬碼", "報名專屬碼"], signupData.signupCode || "");
+      setCol(["姓名"], signupData.name || "");
+      setCol(["性別"], signupData.gender || "");
+      setCol(["LINE ID", "Line ID"], signupData.lineId || "");
+      setCol(["聯絡信箱", "信箱", "Email"], signupData.email || "");
+      setCol(["聯絡電話", "手機電話", "電話"], phoneStr);
+      setCol(["聯絡地址", "地址"], signupData.address || "");
+      setCol(["生日", "出生年月日"], signupData.birthday || "");
+      setCol(["證件號碼", "身分證字號", "身分證"], signupData.idCard ? ("'" + String(signupData.idCard)) : "");
+      setCol(["緊急聯絡人姓名", "緊急聯絡人"], signupData.emerName || "");
+      setCol(["緊急聯絡人電話", "聯絡人電話"], emerPhoneStr);
+      setCol(["緊急聯絡人聯絡地址", "緊急聯絡人地址"], signupData.emerAddr || "");
+      setCol(["緊急聯絡人關係", "關係"], signupData.emerRel || "");
+      setCol(["爬山經驗", "登山經驗"], expAndStrength);
+      setCol(["體能測驗", "體能"], signupData.strength || "");
+      setCol(["體能證明"], signupData.strengthProof || "");
+      setCol(["是否為社員"], signupData.isOfficial || "");
+      setCol(["審核結果", "審核狀態"], signupData.status || "審核中 Checking");
+      setCol(["通知狀態"], signupData.notifyStatus || "");
+      setCol(["繳費狀態"], signupData.payStatus || "未繳費 Unpaid");
+      setCol(["備註"], signupData.notes || "");
       sheet.appendRow(row);
     } else {
       sheet.appendRow([
+        signupData.userId || "",
         signupData.signupCode || "",
+        signupData.name || "",
+        signupData.gender || "",
+        signupData.lineId || "",
+        signupData.email || "",
+        phoneStr,
+        signupData.address || "",
+        signupData.birthday || "",
+        signupData.idCard ? ("'" + String(signupData.idCard)) : "",
+        signupData.emerName || "",
+        emerPhoneStr,
+        signupData.emerAddr || "",
+        signupData.emerRel || "",
+        expAndStrength,
+        signupData.strength || "",
+        signupData.strengthProof || "",
+        signupData.isOfficial || "",
         signupData.status || "審核中 Checking",
         signupData.notifyStatus || "",
         signupData.payStatus || "未繳費 Unpaid",
-        signupData.name || "",
-        signupData.gender || "",
-        signupData.idCard ? ("'" + String(signupData.idCard)) : "",
-        signupData.birthday || "",
-        phoneStr,
-        signupData.emerName || "",
-        signupData.emerRel || "",
-        emerPhoneStr,
-        expAndStrength,
-        signupData.medicalHistory || "",
-        signupData.diet || "",
-        signupData.userId || "",
         signupData.notes || ""
       ]);
     }
