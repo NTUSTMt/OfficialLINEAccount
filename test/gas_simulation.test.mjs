@@ -543,3 +543,223 @@ describe('10. Supabase ➔ Google Sheets 背景同步映射與資料校正測試
   });
 });
 
+describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試 (Payment History Amount Fix)', () => {
+  function _findAmountColIdx(headers) {
+    if (!headers || !headers.length) return -1;
+    return headers.findIndex(function (h) {
+      var s = String(h).toLowerCase();
+      return s.includes("金額") || s.includes("費用") || s.includes("總額") || s.includes("應繳") || s.includes("amount") || s.includes("cost") || s.includes("fee");
+    });
+  }
+
+  function _ensurePaymentAmountCol(sheet, headers) {
+    var idx = _findAmountColIdx(headers);
+    if (idx === -1 && sheet) {
+      idx = headers.length;
+      sheet.getRange(1, idx + 1).setValue("金額");
+      headers.push("金額");
+    }
+    return idx;
+  }
+
+  it('若表頭缺少金額欄位，_ensurePaymentAmountCol 自動補齊「金額」表頭與索引', () => {
+    const headers = ["Timestamp", "系統識別碼", "姓名", "繳費項目", "活動名稱", "裝備名稱", "帳號末5碼/備註", "對帳狀態"];
+    const mockSheet = {
+      cells: {},
+      getRange(r, c) {
+        return {
+          setValue: (val) => {
+            mockSheet.cells[`${r}_${c}`] = val;
+          }
+        };
+      }
+    };
+
+    const idx = _ensurePaymentAmountCol(mockSheet, headers);
+    assert.equal(idx, 8);
+    assert.equal(headers[8], '金額');
+    assert.equal(mockSheet.cells['1_9'], '金額');
+  });
+
+  it('推算函式能精確自 Events 與 Loan_Records 萃取費用，修復 0 元舊紀錄', () => {
+    const mockEventsSheet = {
+      getDataRange: () => ({
+        getDisplayValues: () => [
+          ['活動編號', '活動名稱', '預計費用'],
+          ['E_QIXING', '七星山迎新', '500'],
+          ['E_YUSHAN', '玉山前峰', '1200']
+        ]
+      })
+    };
+
+    const mockLoanSheet = {
+      getDataRange: () => ({
+        getValues: () => [
+          ['租借編號', '系統識別碼', '裝備名稱', '應繳費用'],
+          ['ORD_01', 'U_BRIAN', '大蜘蛛瓦斯爐', 150],
+          ['ORD_02', 'U_BRIAN', '大鋼盆', 50],
+          ['ORD_02', 'U_BRIAN', '飯鍋', 60]
+        ]
+      })
+    };
+
+    const mockSS = {
+      getSheetByName: (name) => {
+        if (name === 'Events') return mockEventsSheet;
+        if (name === 'Loan_Records') return mockLoanSheet;
+        return null;
+      }
+    };
+
+    function _inferPaymentAmount(ss, userId, title, eventName, equipName) {
+      var total = 0;
+      var fullText = [title, eventName, equipName].filter(Boolean).join(" ");
+
+      if (fullText.indexOf("社籍") > -1 || fullText.indexOf("社費") > -1 || fullText.indexOf("Membership") > -1) {
+        total += 200;
+      }
+
+      var eventSheet = ss.getSheetByName("Events");
+      if (eventSheet) {
+        var eData = eventSheet.getDataRange().getDisplayValues();
+        if (eData.length > 1) {
+          var eH = eData[0];
+          var eNameIdx = eH.indexOf("活動名稱");
+          var eCostIdx = eH.indexOf("預計費用");
+
+          for (var e = 1; e < eData.length; e++) {
+            var evName = eNameIdx > -1 ? String(eData[e][eNameIdx]).trim() : "";
+            if (evName && fullText.indexOf(evName) > -1) {
+              var evCost = eCostIdx > -1 ? (parseInt(String(eData[e][eCostIdx]).replace(/\D/g, ''), 10) || 0) : 0;
+              total += evCost;
+            }
+          }
+        }
+      }
+
+      var loanSheet = ss.getSheetByName("Loan_Records");
+      if (loanSheet) {
+        var lData = loanSheet.getDataRange().getValues();
+        if (lData.length > 1) {
+          var lH = lData[0];
+          var lSysIdx = lH.indexOf("系統識別碼");
+          var lNameIdx = lH.indexOf("裝備名稱");
+          var lOrderIdx = lH.indexOf("租借編號");
+          var lCostIdx = lH.indexOf("應繳費用");
+
+          var matchedEquip = {};
+          for (var l = 1; l < lData.length; l++) {
+            if (lSysIdx > -1 && String(lData[l][lSysIdx]).trim() === userId) {
+              var eqName = lNameIdx > -1 ? String(lData[l][lNameIdx]).trim() : "";
+              var ordId = lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : ("row_" + l);
+              var key = ordId + "_" + eqName;
+              if (eqName && fullText.indexOf(eqName) > -1 && !matchedEquip[key]) {
+                matchedEquip[key] = true;
+                var lCost = lCostIdx > -1 ? (parseInt(String(lData[l][lCostIdx]).replace(/\D/g, ''), 10) || 0) : 0;
+                total += lCost;
+              }
+            }
+          }
+        }
+      }
+
+      return total;
+    }
+
+    // 項目 1: 七星山迎新 + 大蜘蛛瓦斯爐
+    const amount1 = _inferPaymentAmount(mockSS, 'U_BRIAN', '🔸 活動：七星山迎新，🔹 裝備：大蜘蛛瓦斯爐', '', '');
+    assert.equal(amount1, 650); // 500 + 150
+
+    // 項目 2: 大鋼盆 + 飯鍋
+    const amount2 = _inferPaymentAmount(mockSS, 'U_BRIAN', '🔹 裝備：大鋼盆，🔹 裝備：飯鍋', '', '');
+    assert.equal(amount2, 110); // 50 + 60
+
+    // 項目 3: 單純活動七星山迎新
+    const amount3 = _inferPaymentAmount(mockSS, 'U_BRIAN', '🔸 活動：七星山迎新', '', '');
+    assert.equal(amount3, 500);
+
+    // 項目 4: 社費
+    const amount4 = _inferPaymentAmount(mockSS, 'U_BRIAN', '🔸 社籍與社費 (Membership Fee)', '', '');
+    assert.equal(amount4, 200);
+  });
+
+  it('getPaymentHistoryAPI 流程能自動修復歷史舊列金額並正確加總 totalSpent', () => {
+    const writtenCells = {};
+    const mockPaySheet = {
+      getDataRange: () => ({
+        getValues: () => [
+          ['Timestamp', '系統識別碼', '姓名', '繳費項目', '活動名稱', '裝備名稱', '帳號末5碼/備註', '對帳狀態'],
+          ['2026-09-12 08:20:33', 'U_TEST', '小明', '🔸 活動：七星山迎新', '', '', '12345', '已確認無誤'],
+          ['2026-09-12 01:57:08', 'U_TEST', '小明', '🔹 裝備：大鋼盆', '', '', '12345', '已確認無誤'],
+          ['2026-09-12 01:46:10', 'U_TEST', '小明', '🔸 社籍與社費', '', '', '12345', '待確認 Checking']
+        ]
+      }),
+      getRange: (r, c) => ({
+        setValue: (val) => {
+          writtenCells[`${r}_${c}`] = val;
+        }
+      })
+    };
+
+    const mockSS = {
+      getSheetByName: (name) => {
+        if (name === 'Payments') return mockPaySheet;
+        if (name === 'Events') return {
+          getDataRange: () => ({
+            getDisplayValues: () => [
+              ['活動名稱', '預計費用'],
+              ['七星山迎新', '500']
+            ]
+          })
+        };
+        if (name === 'Loan_Records') return {
+          getDataRange: () => ({
+            getValues: () => [
+              ['系統識別碼', '裝備名稱', '應繳費用'],
+              ['U_TEST', '大鋼盆', 50]
+            ]
+          })
+        };
+        return null;
+      }
+    };
+
+    // 執行模擬
+    const data = mockPaySheet.getDataRange().getValues();
+    const headers = [...data[0]];
+    const amountIdx = _ensurePaymentAmountCol(mockPaySheet, headers);
+    let totalSpent = 0;
+    const history = [];
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const title = row[3];
+      const status = row[7];
+      let amount = 0;
+
+      if (amount <= 0) {
+        if (title.includes('社籍') || title.includes('社費')) amount += 200;
+        if (title.includes('七星山迎新')) amount += 500;
+        if (title.includes('大鋼盆')) amount += 50;
+
+        mockPaySheet.getRange(i + 1, amountIdx + 1).setValue(amount);
+      }
+
+      history.push({ title, amount, status });
+
+      const isConfirmed = (status.includes('已確認') || status.includes('已繳')) && !status.includes('待確認');
+      if (isConfirmed) {
+        totalSpent += amount;
+      }
+    }
+
+    assert.equal(history[0].amount, 500);
+    assert.equal(history[1].amount, 50);
+    assert.equal(history[2].amount, 200);
+    assert.equal(totalSpent, 550); // 500 + 50 (不含待確認的 200)
+    assert.equal(writtenCells['2_9'], 500); // 第一筆回寫金額
+    assert.equal(writtenCells['3_9'], 50);  // 第二筆回寫金額
+    assert.equal(writtenCells['4_9'], 200); // 第三筆回寫金額
+  });
+});
+

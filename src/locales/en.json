@@ -286,7 +286,7 @@
       "descTitle": "Specification & Description",
       "noDesc": "No details descriptions for this gear yet. Send a message in this LINE account if you have any questions.",
       "qtyLabel": "Quantity: ",
-      "remainStock": "Remaining Stock: ",
+      "remainStock": "Stock: ",
       "outOfStock": "Out of Stock",
       "addToReservation": "Add to Reservation",
       "addToCart": "Add to Cart",

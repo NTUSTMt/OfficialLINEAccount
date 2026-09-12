@@ -3,11 +3,34 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.53` (v0.1.53)
+- **當前版本**：`0.1.54` (v0.1.54)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 154. 歷史紀錄 (Payment History) 費用顯示 $0 全面修復：表頭自動擴充、舊資料智慧推算與試算表/資料庫自癒回寫 (v0.1.54)
+- **根本原因排查與試算表自動防護擴充 (`_ensurePaymentAmountCol`)**：
+  - 徹底排查使用者歷史紀錄中已確認款項之金額皆顯示為 `+$0`、累計金額 `TOTAL EXPENSE` 為 `$0` 的問題。
+  - 核心原因為早期初始化 Google Sheets `Payments` 工作表時缺少「金額」欄位，導致無論是 LIFF 前端送出之申報金額或是試算表讀取皆因索引為 `-1` 而遺失歸零。
+  - 在 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 實作 `_findAmountColIdx` 與 `_ensurePaymentAmountCol`：於每次初始化、讀取與寫入對帳單時，自動檢查工作表表頭，若缺少「金額」欄位自動於最後一欄即時補齊，徹底杜絕往後申報掉資料。
+- **舊紀錄智慧推算與試算表自癒回寫機制 (`_inferPaymentAmount`)**：
+  - 針對現存試算表與資料庫中金額已為空或 0 之舊資料（如七星山迎新、大鋼盆/飯鍋等），於 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 實作 `_inferPaymentAmount(ss, userId, title, eventName, equipName)` 智慧推算引擎：
+    1. **社費項目**：自動識別「社費 / 社籍 / Membership」，補齊標準社費 $200。
+    2. **活動項目**：自 `Events` 工作表對齊活動名稱或編號，精準提取預計費用。
+    3. **裝備租借**：自 `Loan_Records` 工作表比對該使用者對應之裝備項目與應繳費用（支援社員 5 折折扣判定）。
+  - 在 `getPaymentHistoryAPI` 打包查詢時，若讀取到 `amount <= 0` 即時觸發推算，並**立即回寫試算表該列之「金額」儲存格**，達成查詢即自癒，永久修復歷史試算表數據。
+- **申報寫入端雙重保證 (`processPaymentSubmit` & `handlePaymentInput`)**：
+  - `processPaymentSubmit`：確保新申報之單筆與合併總額 `details.totalAmount` 必然精確寫入 `Payments` 之「金額」欄位。
+  - `handlePaymentInput`：LINE Bot 對話申報時亦同步將計算之 `totalAmount` 寫入對帳表。
+- **Supabase RPC 預存程序舊資料自動修補 (`get_my_payment_history` & `submit_payment_rpc`)**：
+  - 於 [supabase/history_achievements_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/history_achievements_rpc.sql) 中，在 `get_my_payment_history` 加入 SQL 自癒更新，當資料庫中的 `amount = 0` 時自動透過 SQL 關聯 `events` 與 `loans` 補回金額並落盤更新 `payments` 表。
+  - 於 [supabase/payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/payment_rpc.sql) 之 `submit_payment_rpc` 增加金額防呆兜底計算，避免前端送出 0 元。
+- **ETL 資料清洗防護升級 (`supabase/etl_v2.js`)**：
+  - `_etlPaymentsV2` 擴充金額欄位別名匹配清單（`["金額", "費用", "總額", "應繳金額", "amount", "fee", "cost"]`），並在金額為 0 時自動於匯入前關聯 `Events` 與 `Loan_Records` 完成金額推算。
+- **自動化測試與代碼品質**：
+  - 於 [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 新增 Suite 11（表頭自動擴充、舊資料推算萃取、加總 `totalSpent` 驗證），全套 17 組測試套件、43 項單元測試 **100% 綠燈通過**。
+  - ESLint 0 錯誤、0 警告，TypeScript 編譯與 Vite 生產打包完全正常。
 
 ### 153. 幹部活動管理與名單審核 (AdminEvents.tsx) 全面接入 Supabase：秒開後台與高規格幹部資安鑑權 (v0.1.53)
 - **最高規格幹部資安防護與 officers 幹部資料表架構**：

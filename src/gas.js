@@ -212,6 +212,93 @@ function _getEquipName(row, name1Idx, name2Idx, idIdx, fallback) {
   return name || (fallback || "未知裝備");
 }
 
+// 動態查找金額欄位索引 (防呆支援各種名稱)
+function _findAmountColIdx(headers) {
+  if (!headers || !headers.length) return -1;
+  return headers.findIndex(function (h) {
+    var s = String(h).toLowerCase();
+    return s.includes("金額") || s.includes("費用") || s.includes("總額") || s.includes("應繳") || s.includes("amount") || s.includes("cost") || s.includes("fee");
+  });
+}
+
+// 確保 Payments 工作表具有「金額」欄位，若無則自動於最後一欄補齊
+function _ensurePaymentAmountCol(sheet, headers) {
+  var idx = _findAmountColIdx(headers);
+  if (idx === -1 && sheet) {
+    idx = headers.length;
+    sheet.getRange(1, idx + 1).setValue("金額");
+    headers.push("金額");
+  }
+  return idx;
+}
+
+// 智慧推算繳費金額 (針對歷史舊紀錄中缺少或金額為 0 之補齊機制)
+function _inferPaymentAmount(ss, userId, title, eventName, equipName) {
+  var total = 0;
+  var fullText = [title, eventName, equipName].filter(Boolean).join(" ");
+
+  // 1. 社費 (Membership Fee - 預設一學期 $200)
+  if (fullText.indexOf("社籍") > -1 || fullText.indexOf("社費") > -1 || fullText.indexOf("Membership") > -1) {
+    total += 200;
+  }
+
+  // 2. 活動費用 (Events)
+  var eventSheet = ss.getSheetByName("Events");
+  if (eventSheet) {
+    var eData = eventSheet.getDataRange().getDisplayValues();
+    if (eData.length > 1) {
+      var eH = eData[0];
+      var eNameIdx = _fi(eH, "活動名稱");
+      var eIdIdx = _fi(eH, "活動編號");
+      var eCostIdx = eH.findIndex(function (h) {
+        var s = String(h);
+        return s.includes("預計費用") || s.includes("費用") || s.includes("金額");
+      });
+
+      for (var e = 1; e < eData.length; e++) {
+        var evName = eNameIdx > -1 ? String(eData[e][eNameIdx]).trim() : "";
+        var evId = eIdIdx > -1 ? String(eData[e][eIdIdx]).trim() : "";
+        if ((evName && fullText.indexOf(evName) > -1) || (evId && fullText.indexOf(evId) > -1)) {
+          var evCost = eCostIdx > -1 ? (parseInt(String(eData[e][eCostIdx]).replace(/\D/g, ''), 10) || 0) : 0;
+          total += evCost;
+        }
+      }
+    }
+  }
+
+  // 3. 裝備租借費用 (Loan_Records)
+  var loanSheet = ss.getSheetByName("Loan_Records");
+  if (loanSheet) {
+    var lData = loanSheet.getDataRange().getValues();
+    if (lData.length > 1) {
+      var lH = lData[0];
+      var lSysIdx = _fi(lH, "系統識別碼");
+      var lNameIdx = _fi(lH, "裝備名稱");
+      var lOrderIdx = _fi(lH, "租借編號");
+      var lCostIdx = lH.findIndex(function (h) {
+        var s = String(h);
+        return s.includes("應繳費用") || s.includes("費用") || s.includes("金額");
+      });
+
+      var matchedEquip = {};
+      for (var l = 1; l < lData.length; l++) {
+        if (lSysIdx > -1 && String(lData[l][lSysIdx]).trim() === userId) {
+          var eqName = lNameIdx > -1 ? String(lData[l][lNameIdx]).trim() : "";
+          var ordId = lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : ("row_" + l);
+          var key = ordId + "_" + eqName;
+          if (eqName && fullText.indexOf(eqName) > -1 && !matchedEquip[key]) {
+            matchedEquip[key] = true;
+            var lCost = lCostIdx > -1 ? (parseInt(String(lData[l][lCostIdx]).replace(/\D/g, ''), 10) || 0) : 0;
+            total += lCost;
+          }
+        }
+      }
+    }
+  }
+
+  return total;
+}
+
 // ⭐️ 訊息發送引擎 (雙核心智慧切換版)
 
 // 傳送單一「純文字」訊息
@@ -1858,7 +1945,7 @@ function handlePaymentInput(replyToken, userId, inputData, paymentType, inputTyp
 
   if (!paymentSheet) {
     paymentSheet = ss.insertSheet("Payments");
-    paymentSheet.appendRow(["Timestamp", "系統識別碼", "姓名", "繳費項目", "活動名稱", "裝備名稱", "帳號末5碼/備註", "對帳狀態"]);
+    paymentSheet.appendRow(["Timestamp", "系統識別碼", "姓名", "繳費項目", "活動名稱", "裝備名稱", "帳號末5碼/備註", "對帳狀態", "金額"]);
   }
 
   // 階段一：尋找社員姓名
@@ -1988,6 +2075,7 @@ function handlePaymentInput(replyToken, userId, inputData, paymentType, inputTyp
 
   // 階段四：寫入 Payments 對帳表
   var pHeaders = paymentSheet.getRange(1, 1, 1, paymentSheet.getLastColumn()).getValues()[0];
+  var aIdx = _ensurePaymentAmountCol(paymentSheet, pHeaders);
   var pRowData = new Array(pHeaders.length).fill("");
   var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss");
 
@@ -2006,6 +2094,8 @@ function handlePaymentInput(replyToken, userId, inputData, paymentType, inputTyp
   placePData("帳號末5碼/備註", proofContent);
   placePData("證明", proofContent);
   placePData("對帳狀態", "待確認 Checking");
+  var numericTotalAmount = (typeof totalAmount === 'number' && !isNaN(totalAmount)) ? totalAmount : (parseInt(String(totalAmount).replace(/\D/g, ''), 10) || 0);
+  if (aIdx > -1) pRowData[aIdx] = numericTotalAmount;
   paymentSheet.appendRow(pRowData);
 
   // 階段五：收尾
@@ -5290,25 +5380,27 @@ function processPaymentSubmit(payload) {
       }
     }
 
-    // 3. 寫入 Payments 工作表 (不修改 Payments 欄位結構)
+    // 3. 寫入 Payments 工作表 (確保包含金額欄位結構)
     if (paySheet) {
       var pHeaders = paySheet.getRange(1, 1, 1, paySheet.getLastColumn()).getValues()[0];
+      var aIdx = _ensurePaymentAmountCol(paySheet, pHeaders);
       var newRow = new Array(pHeaders.length).fill("");
 
       var tIdx = _fi(pHeaders, "時間") > -1 ? _fi(pHeaders, "時間") : _fi(pHeaders, "Timestamp");
       var nIdx = _fi(pHeaders, "姓名");
       var sIdx = _fi(pHeaders, "系統識別碼");
       var iIdx = _fi(pHeaders, "繳費項目");
-      var aIdx = _fi(pHeaders, "金額");
       var pIdx = _fi(pHeaders, "帳號末5碼") > -1 ? _fi(pHeaders, "帳號末5碼") : _fi(pHeaders, "帳號末5碼/備註");
       var ntIdx = _fi(pHeaders, "備註");
       var stIdx = _fi(pHeaders, "對帳狀態");
+
+      var submitAmount = (typeof details.totalAmount === 'number' && !isNaN(details.totalAmount)) ? details.totalAmount : (parseInt(String(details.totalAmount || 0).replace(/\D/g, ''), 10) || 0);
 
       if (tIdx > -1) newRow[tIdx] = new Date();
       if (nIdx > -1) newRow[nIdx] = userName;
       if (sIdx > -1) newRow[sIdx] = userId;
       if (iIdx > -1) newRow[iIdx] = confirmedItems.join(", ");
-      if (aIdx > -1) newRow[aIdx] = details.totalAmount;
+      if (aIdx > -1) newRow[aIdx] = submitAmount;
       if (pIdx > -1) newRow[pIdx] = details.last5Digits;
       if (ntIdx > -1) newRow[ntIdx] = paymentNote;
       if (stIdx > -1) newRow[stIdx] = "待確認";
@@ -6282,7 +6374,9 @@ function getPaymentHistoryAPI(ss, userId) {
   var sysIdx = _fi(headers, "系統識別碼");
   var timeIdx = _fi(headers, "時間") > -1 ? _fi(headers, "時間") : _fi(headers, "Timestamp");
   var itemIdx = _fi(headers, "繳費項目");
-  var amountIdx = _fi(headers, "金額");
+  var eventIdx = _fi(headers, "活動名稱");
+  var equipIdx = _fi(headers, "裝備名稱");
+  var amountIdx = _ensurePaymentAmountCol(paySheet, headers);
   var proofIdx = _fi(headers, "帳號末5碼") > -1 ? _fi(headers, "帳號末5碼") : _fi(headers, "帳號末5碼/備註");
   var noteIdx = _fi(headers, "備註");
   var statusIdx = _fi(headers, "對帳狀態");
@@ -6303,9 +6397,26 @@ function getPaymentHistoryAPI(ss, userId) {
       var amount = parseInt(String(rawAmount).replace(/\D/g, ''), 10) || 0;
 
       var title = itemIdx > -1 ? String(data[i][itemIdx]).trim() : "未命名項目";
+      var eventName = eventIdx > -1 ? String(data[i][eventIdx]).trim() : "";
+      var equipName = equipIdx > -1 ? String(data[i][equipIdx]).trim() : "";
       var status = statusIdx > -1 ? String(data[i][statusIdx]).trim() : "待確認";
       var last5Digits = proofIdx > -1 ? String(data[i][proofIdx]).trim() : "";
       var note = noteIdx > -1 ? String(data[i][noteIdx]).trim() : "";
+
+      // 智慧推算舊資料缺失之金額並自動回寫試算表修復
+      if (amount <= 0) {
+        var inferred = _inferPaymentAmount(ss, userId, title, eventName, equipName);
+        if (inferred > 0) {
+          amount = inferred;
+          if (amountIdx > -1 && paySheet) {
+            try {
+              paySheet.getRange(i + 1, amountIdx + 1).setValue(amount);
+            } catch (errSet) {
+              console.warn("回填金額失敗", errSet);
+            }
+          }
+        }
+      }
 
       // 判斷類型 (社費、活動、裝備)
       var type = "全部";

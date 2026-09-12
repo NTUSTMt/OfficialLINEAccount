@@ -26,14 +26,92 @@ BEGIN
         );
     END IF;
 
-    -- 查詢該用戶之所有繳費紀錄並按時間降冪排序
+    -- 1. 自癒修復舊資料中 amount 為 0 的 payments 紀錄
+    -- A. 純社費修復 (Membership Fee, 預設 200)
+    UPDATE payments
+    SET amount = 200, updated_at = NOW()
+    WHERE line_user_id = p_line_user_id
+      AND (amount IS NULL OR amount = 0)
+      AND (type ILIKE '%社費%' OR type ILIKE '%社籍%' OR type ILIKE '%Membership%')
+      AND type NOT ILIKE '%活動%' AND type NOT ILIKE '%裝備%';
+
+    -- B. 活動費用修復 (從 events 表提取費用)
+    UPDATE payments p
+    SET amount = COALESCE((
+        SELECT e.fee 
+        FROM events e 
+        WHERE (p.type ILIKE '%' || e.title || '%' OR p.type ILIKE '%' || e.id || '%')
+          AND e.fee > 0
+        LIMIT 1
+    ), 0),
+    updated_at = NOW()
+    WHERE p.line_user_id = p_line_user_id
+      AND (p.amount IS NULL OR p.amount = 0)
+      AND p.type ILIKE '%活動%'
+      AND p.type NOT ILIKE '%裝備%';
+
+    -- C. 裝備租借費用 (從 loans 及 loan_items 提取)
+    UPDATE payments p
+    SET amount = COALESCE((
+        SELECT l.total_rent 
+        FROM loans l 
+        WHERE l.line_user_id = p_line_user_id
+          AND l.total_rent > 0
+          AND (
+            p.type ILIKE '%' || l.id || '%' 
+            OR EXISTS (
+                SELECT 1 FROM loan_items li 
+                JOIN equipments eq ON li.equipment_id = eq.id 
+                WHERE li.loan_id = l.id AND p.type ILIKE '%' || eq.name || '%'
+            )
+          )
+        ORDER BY l.created_at DESC
+        LIMIT 1
+    ), 0),
+    updated_at = NOW()
+    WHERE p.line_user_id = p_line_user_id
+      AND (p.amount IS NULL OR p.amount = 0)
+      AND p.type ILIKE '%裝備%'
+      AND p.type NOT ILIKE '%活動%';
+
+    -- D. 複合申報項目 (活動 + 裝備 或 + 社費)
+    UPDATE payments p
+    SET amount = (
+        COALESCE(CASE WHEN (p.type ILIKE '%社費%' OR p.type ILIKE '%社籍%' OR p.type ILIKE '%Membership%') THEN 200 ELSE 0 END, 0) +
+        COALESCE((
+            SELECT SUM(e.fee) 
+            FROM events e 
+            WHERE (p.type ILIKE '%' || e.title || '%' OR p.type ILIKE '%' || e.id || '%')
+              AND e.fee > 0
+        ), 0) +
+        COALESCE((
+            SELECT SUM(l.total_rent) 
+            FROM loans l 
+            WHERE l.line_user_id = p_line_user_id
+              AND l.total_rent > 0
+              AND (
+                p.type ILIKE '%' || l.id || '%' 
+                OR EXISTS (
+                    SELECT 1 FROM loan_items li 
+                    JOIN equipments eq ON li.equipment_id = eq.id 
+                    WHERE li.loan_id = l.id AND p.type ILIKE '%' || eq.name || '%'
+                )
+              )
+        ), 0)
+    ),
+    updated_at = NOW()
+    WHERE p.line_user_id = p_line_user_id
+      AND (p.amount IS NULL OR p.amount = 0)
+      AND ((p.type ILIKE '%活動%' AND p.type ILIKE '%裝備%') OR (p.type ILIKE '%社費%' AND (p.type ILIKE '%活動%' OR p.type ILIKE '%裝備%')));
+
+    -- 2. 查詢該用戶之所有繳費紀錄並按時間降冪排序
     SELECT 
         COALESCE(jsonb_agg(h), '[]'::jsonb),
         COALESCE(SUM(
             CASE 
                 WHEN (status LIKE '%已確認%' OR status LIKE '%已核對%' OR status LIKE '%已繳%' OR status = 'Paid')
                      AND status NOT LIKE '%待確認%' AND status NOT LIKE '%待核對%' AND status NOT LIKE '%Checking%'
-                THEN amount 
+                THEN display_amount 
                 ELSE 0 
             END
         ), 0)
@@ -49,15 +127,25 @@ BEGIN
                 ELSE '全部'
             END,
             'title', COALESCE(type, '未命名項目'),
-            'amount', COALESCE(amount, 0),
+            'amount', display_amount,
             'last5Digits', COALESCE(bank_last5, ''),
             'note', COALESCE(officer_notes, ''),
             'status', COALESCE(status, '待確認 Checking')
         ) AS h,
-        amount,
+        display_amount,
         status
-        FROM payments
-        WHERE line_user_id = p_line_user_id
+        FROM (
+            SELECT 
+                id,
+                created_at,
+                type,
+                bank_last5,
+                officer_notes,
+                status,
+                COALESCE(amount, 0) AS display_amount
+            FROM payments
+            WHERE line_user_id = p_line_user_id
+        ) sub
         ORDER BY created_at DESC
     ) t;
 

@@ -156,6 +156,8 @@ DECLARE
     v_last5 TEXT;
     v_note TEXT;
     v_expiry TEXT;
+    v_calc_fee INTEGER;
+    v_calc_rent INTEGER;
     i INTEGER;
 BEGIN
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
@@ -178,6 +180,29 @@ BEGIN
             EXIT;
         END IF;
     END LOOP;
+
+    -- 若傳入之 totalAmount 為 0 但有選取項目，自動以原項目費用計算兜底金額
+    IF v_total_amount <= 0 AND jsonb_array_length(v_selected_ids) > 0 THEN
+        v_total_amount := 0;
+        FOR i IN 0 .. (jsonb_array_length(v_selected_ids) - 1) LOOP
+            v_item_id := v_selected_ids->>i;
+            IF v_item_id = 'fee_membership' THEN
+                v_total_amount := v_total_amount + 200;
+            ELSIF v_item_id LIKE 'act_%' THEN
+                v_event_id := substring(v_item_id from 5);
+                SELECT COALESCE(fee, 0) INTO v_calc_fee FROM events WHERE id = v_event_id;
+                v_total_amount := v_total_amount + COALESCE(v_calc_fee, 0);
+            ELSIF v_item_id LIKE 'eq_%' THEN
+                v_loan_id := substring(v_item_id from 4);
+                SELECT COALESCE(total_rent, 0) INTO v_calc_rent FROM loans WHERE id = v_loan_id;
+                IF v_has_membership THEN
+                    v_total_amount := v_total_amount + ROUND(COALESCE(v_calc_rent, 0) * 0.5);
+                ELSE
+                    v_total_amount := v_total_amount + COALESCE(v_calc_rent, 0);
+                END IF;
+            END IF;
+        END LOOP;
+    END IF;
 
     -- 逐項處理已勾選項目與狀態更新
     FOR i IN 0 .. (jsonb_array_length(v_selected_ids) - 1) LOOP
