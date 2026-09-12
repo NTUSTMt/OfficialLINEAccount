@@ -7,6 +7,7 @@ import { appendAuthToken } from './utils/api';
 import { getCache, setCache } from './utils/cacheUtils';
 import { GAS_API_URL } from './constants/api';
 import { LIFF_URLS } from './constants/liff';
+import { fetchMemberProfileFromSupabase } from './utils/supabaseClient';
 import './App.css';
 
 const Borrow = lazy(() => import('./pages/Borrow'));
@@ -269,38 +270,76 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
         return;
       }
 
-      try {
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`));
-        const result = await res.json();
+      // ⚡ 快取檢查：若本次 session 已經驗證過個人資料完整，0ms 立即放行
+      const cacheKey = `profile_complete_${userId}`;
+      const cached = getCache<boolean>(cacheKey);
+      if (cached === true) {
+        setIsComplete(true);
+        setLoading(false);
+        return;
+      }
 
-        if (result.status === 'success' && result.isMember && result.profile) {
-          const p = result.profile;
-          // 檢查 6 個必填欄位 (姓名、系所、學號、手機、Email、LINE ID) 是否非空
-          const nameOk = p.name ? String(p.name).trim() !== '' : false;
-          const deptOk = p.department ? String(p.department).trim() !== '' : false;
-          const studentIdOk = p.studentId ? String(p.studentId).trim() !== '' : false;
-          const phoneOk = p.phone ? String(p.phone).trim() !== '' : false;
-          const emailOk = p.email ? String(p.email).trim() !== '' : false;
-          const lineIdOk = p.realLineId ? String(p.realLineId).trim() !== '' : false;
+      let checkedFromSupabase = false;
+      try {
+        // ⚡ 1. 優先從 Supabase 秒級驗證個人資料完整性 (< 50ms)
+        const sbProfile = await fetchMemberProfileFromSupabase(userId);
+        if (sbProfile) {
+          checkedFromSupabase = true;
+          const nameOk = sbProfile.name ? sbProfile.name.trim() !== '' : false;
+          const deptOk = sbProfile.department ? sbProfile.department.trim() !== '' : false;
+          const studentIdOk = sbProfile.studentId ? sbProfile.studentId.trim() !== '' : false;
+          const phoneOk = sbProfile.phone ? sbProfile.phone.trim() !== '' : false;
+          const emailOk = sbProfile.email ? sbProfile.email.trim() !== '' : false;
+          const lineIdOk = sbProfile.realLineId ? sbProfile.realLineId.trim() !== '' : false;
 
           if (nameOk && deptOk && studentIdOk && phoneOk && emailOk && lineIdOk) {
             setIsComplete(true);
+            setCache(cacheKey, true, 600); // 快取 10 分鐘，後續切換路由 0ms
           } else {
             setIsComplete(false);
             setShowModal(true);
           }
-        } else {
-          // 非社員或無 profile 資料
-          setIsComplete(false);
-          setShowModal(true);
         }
-      } catch (err) {
-        console.error('檢查個人資料失敗:', err);
-        // 連線失敗時預設不阻擋，以免影響出隊租借
-        setIsComplete(true);
-      } finally {
-        setLoading(false);
+      } catch (sbErr) {
+        console.warn('[App] Supabase 個人資料驗證例外，啟用 GAS 備援:', sbErr);
       }
+
+      // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
+      if (!checkedFromSupabase) {
+        try {
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`));
+          const result = await res.json();
+
+          if (result.status === 'success' && result.isMember && result.profile) {
+            const p = result.profile;
+            // 檢查 6 個必填欄位 (姓名、系所、學號、手機、Email、LINE ID) 是否非空
+            const nameOk = p.name ? String(p.name).trim() !== '' : false;
+            const deptOk = p.department ? String(p.department).trim() !== '' : false;
+            const studentIdOk = p.studentId ? String(p.studentId).trim() !== '' : false;
+            const phoneOk = p.phone ? String(p.phone).trim() !== '' : false;
+            const emailOk = p.email ? String(p.email).trim() !== '' : false;
+            const lineIdOk = p.realLineId ? String(p.realLineId).trim() !== '' : false;
+
+            if (nameOk && deptOk && studentIdOk && phoneOk && emailOk && lineIdOk) {
+              setIsComplete(true);
+              setCache(cacheKey, true, 600);
+            } else {
+              setIsComplete(false);
+              setShowModal(true);
+            }
+          } else {
+            // 非社員或無 profile 資料
+            setIsComplete(false);
+            setShowModal(true);
+          }
+        } catch (err) {
+          console.error('檢查個人資料失敗:', err);
+          // 連線失敗時預設不阻擋，以免影響出隊租借
+          setIsComplete(true);
+        }
+      }
+
+      setLoading(false);
     };
 
     checkProfile();

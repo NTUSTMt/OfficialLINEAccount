@@ -4,6 +4,7 @@ import { AlertCircle, Award, Star } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
+import { fetchAchievementsFromSupabase, saveReflectionToSupabase } from '../utils/supabaseClient';
 import '../App.css';
 
 interface Reflection {
@@ -51,13 +52,29 @@ function Achievements({ userId }: { userId: string }) {
     const fetchData = async () => {
       try {
         if (userId && userId !== 'TEST_USER_ID') {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_past_activities&userId=${userId}`));
-          const result = await res.json();
-          if (!ignore) {
-            if (result.status === 'success') {
-              setData(result.data);
-            } else {
-              setError(result.message || t('achievements.error.loadFailed'));
+          // ⚡ 1. 優先嘗試從 Supabase 秒開活動成就 (< 50ms)
+          let loadedFromSupabase = false;
+          try {
+            const sbData = await fetchAchievementsFromSupabase(userId);
+            if (sbData && !ignore) {
+              setData(sbData);
+              setLoading(false);
+              loadedFromSupabase = true;
+            }
+          } catch (sbErr) {
+            console.warn('[Achievements] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
+          }
+
+          // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
+          if (!loadedFromSupabase) {
+            const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_past_activities&userId=${userId}`));
+            const result = await res.json();
+            if (!ignore) {
+              if (result.status === 'success') {
+                setData(result.data);
+              } else {
+                setError(result.message || t('achievements.error.loadFailed'));
+              }
             }
           }
         } else {
@@ -237,34 +254,58 @@ function Achievements({ userId }: { userId: string }) {
     if (content.trim().length < 10) return alert(t('achievements.alert.minContentLength'));
 
     setSubmitting(true);
+    let sbSuccess = false;
     try {
+      const detailsPayload = {
+        eventId: selectedActivity.eventId,
+        eventName: selectedActivity.title,
+        eventDate: selectedActivity.date,
+        difficulty,
+        beauty,
+        content: content.trim(),
+        imageUrl: imageUrl.trim()
+      };
+
+      // ⚡ 1. 優先極速儲存至 Supabase (< 50ms)
+      if (userId && userId !== 'TEST_USER_ID') {
+        try {
+          sbSuccess = await saveReflectionToSupabase(userId, detailsPayload);
+        } catch (sbErr) {
+          console.warn('[Achievements] Supabase 儲存例外:', sbErr);
+        }
+      }
+
       const payload = {
         action: 'submit_reflection',
         userId,
-        details: {
-          eventId: selectedActivity.eventId,
-          eventName: selectedActivity.title,
-          eventDate: selectedActivity.date,
-          difficulty,
-          beauty,
-          content: content.trim(),
-          imageUrl: imageUrl.trim()
-        },
+        details: detailsPayload,
         reflectionPhotoFiles: photoFiles
       };
 
       if (userId && userId !== 'TEST_USER_ID') {
-        const res = await fetch(GAS_API_URL, {
-          method: 'POST',
-          body: JSON.stringify(withAuthPayload(payload))
-        });
-        const result = await res.json();
-        if (result.status === 'success') {
+        let gasSuccess = false;
+        let gasMessage = '';
+        try {
+          const res = await fetch(GAS_API_URL, {
+            method: 'POST',
+            body: JSON.stringify(withAuthPayload(payload))
+          });
+          const result = await res.json();
+          if (result.status === 'success') {
+            gasSuccess = true;
+          } else {
+            gasMessage = result.message || '';
+          }
+        } catch (gasErr) {
+          console.warn('[Achievements] GAS 呼叫例外 (可能網路逾時):', gasErr);
+        }
+
+        if (gasSuccess || sbSuccess) {
           alert(t('achievements.alert.submitSuccess'));
           closeForm();
           setRefreshKey(k => k + 1); // 重新整理
         } else {
-          alert(t('achievements.alert.submitFailed', { message: result.message }));
+          alert(t('achievements.alert.submitFailed', { message: gasMessage }));
         }
       } else {
         // 假資料本地模擬提交

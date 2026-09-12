@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { User, Calendar, Tent, CreditCard, FileText, AlertCircle } from 'lucide-react';
 import { appendAuthToken } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
+import { fetchPaymentHistoryFromSupabase } from '../utils/supabaseClient';
 import '../App.css';
 
 interface HistoryItem {
@@ -44,13 +45,29 @@ function History({ userId }: { userId: string }) {
     const fetchData = async () => {
       try {
         if (userId && userId !== 'TEST_USER_ID') {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_payment_history&userId=${userId}`));
-          const result = await res.json();
-          if (!ignore) {
-            if (result.status === 'success') {
-              setData(result.data);
-            } else {
-              setError(result.message || t('history.error.loadFailed'));
+          // ⚡ 1. 優先嘗試從 Supabase 秒開個人繳費歷史 (< 50ms)
+          let loadedFromSupabase = false;
+          try {
+            const sbData = await fetchPaymentHistoryFromSupabase(userId);
+            if (sbData && !ignore) {
+              setData(sbData);
+              setLoading(false);
+              loadedFromSupabase = true;
+            }
+          } catch (sbErr) {
+            console.warn('[History] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
+          }
+
+          // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
+          if (!loadedFromSupabase) {
+            const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_payment_history&userId=${userId}`));
+            const result = await res.json();
+            if (!ignore) {
+              if (result.status === 'success') {
+                setData(result.data);
+              } else {
+                setError(result.message || t('history.error.loadFailed'));
+              }
             }
           }
         } else {

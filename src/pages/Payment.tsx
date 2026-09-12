@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle2, AlertCircle, Copy, Check, Building2 } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
+import { fetchUnpaidPaymentsFromSupabase, submitPaymentToSupabase } from '../utils/supabaseClient';
 import '../App.css';
 
 interface UnpaidItem {
@@ -111,18 +112,39 @@ function Payment({ userId }: { userId: string }) {
     const fetchUnpaid = async () => {
       try {
         if (userId && userId !== 'TEST_USER_ID') {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_unpaid&userId=${userId}`));
-          const result = await res.json();
-          if (!ignore) {
-            if (result.status === 'success') {
-              setUnpaidList(result.data);
+          // ⚡ 1. 優先嘗試從 Supabase 秒開讀取待繳費用清單 (< 50ms)
+          let loadedFromSupabase = false;
+          try {
+            const sbUnpaid = await fetchUnpaidPaymentsFromSupabase(userId);
+            if (sbUnpaid && !ignore) {
+              setUnpaidList(sbUnpaid);
               const initialSelectedIds = Array.from(new Set([
-                ...result.data.activities.map((item: UnpaidItem) => item.id),
-                ...result.data.equipments.map((item: UnpaidItem) => item.id)
+                ...sbUnpaid.activities.map((item: UnpaidItem) => item.id),
+                ...sbUnpaid.equipments.map((item: UnpaidItem) => item.id)
               ]));
               setSelectedIds(initialSelectedIds);
-            } else {
-              setError(result.message || t('payment.error.loadFailed'));
+              setLoading(false);
+              loadedFromSupabase = true;
+            }
+          } catch (sbErr) {
+            console.warn('[Payment] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
+          }
+
+          // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
+          if (!loadedFromSupabase) {
+            const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_unpaid&userId=${userId}`));
+            const result = await res.json();
+            if (!ignore) {
+              if (result.status === 'success') {
+                setUnpaidList(result.data);
+                const initialSelectedIds = Array.from(new Set([
+                  ...result.data.activities.map((item: UnpaidItem) => item.id),
+                  ...result.data.equipments.map((item: UnpaidItem) => item.id)
+                ]));
+                setSelectedIds(initialSelectedIds);
+              } else {
+                setError(result.message || t('payment.error.loadFailed'));
+              }
             }
           }
         } else {
@@ -310,32 +332,56 @@ function Payment({ userId }: { userId: string }) {
     if (!isFormValid || isSubmitting) return;
 
     setIsSubmitting(true);
+    let sbSubmitted = false;
     try {
       const finalDigits = totalAmount === 0 && !last5Digits.trim() ? '00000' : last5Digits.trim();
       const hasMembership = selectedIds.includes('fee_membership');
       const uniqueSelectedIds = Array.from(new Set(selectedIds));
 
+      const detailsPayload = {
+        selectedIds: uniqueSelectedIds,
+        last5Digits: finalDigits,
+        totalAmount,
+        note: note.trim(),
+        membershipOption: hasMembership ? membershipOption : undefined,
+        membershipExpiryDate: hasMembership ? membershipDetails.expiryDate : undefined
+      };
+
+      // ⚡ 1. 優先極速寫入 Supabase (< 50ms)
+      if (userId && userId !== 'TEST_USER_ID') {
+        try {
+          sbSubmitted = await submitPaymentToSupabase(userId, detailsPayload);
+        } catch (sbErr) {
+          console.warn('[Payment] Supabase 提交例外:', sbErr);
+        }
+      }
+
+      // 2. 呼叫 GAS：寫入 Sheets 並發送 LINE 幹部審核推播通知
       const payload = {
         action: 'submit_payment',
         userId,
-        details: {
-          selectedIds: uniqueSelectedIds,
-          last5Digits: finalDigits,
-          totalAmount,
-          note: note.trim(),
-          membershipOption: hasMembership ? membershipOption : undefined,
-          membershipExpiryDate: hasMembership ? membershipDetails.expiryDate : undefined
-        }
+        details: detailsPayload
       };
 
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload))
-      });
-      
-      const result = await res.json();
-      if (result.status === 'success') {
+      let gasSuccess = false;
+      let gasMessage = '';
+      try {
+        const res = await fetch(GAS_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(withAuthPayload(payload))
+        });
+        const result = await res.json();
+        if (result.status === 'success') {
+          gasSuccess = true;
+        } else {
+          gasMessage = result.message || '';
+        }
+      } catch (gasErr) {
+        console.warn('[Payment] GAS 呼叫例外 (可能網路逾時):', gasErr);
+      }
+
+      if (gasSuccess || sbSubmitted) {
         // 本地立即將已申報項目自待繳清單中排除，杜絕重複勾選申報
         setUnpaidList(prev => ({
           membership: hasMembership ? [] : prev.membership,
@@ -385,11 +431,15 @@ function Payment({ userId }: { userId: string }) {
           });
         }
       } else {
-        alert(t('payment.alert.submitFailed', { message: result.message || t('payment.alert.contactAdmin') }));
+        alert(t('payment.alert.submitFailed', { message: gasMessage || t('payment.alert.contactAdmin') }));
       }
     } catch (err) {
       console.error('申報異常:', err);
-      alert(t('payment.error.networkError'));
+      if (sbSubmitted) {
+        setSubmitted(true);
+      } else {
+        alert(t('payment.error.networkError'));
+      }
     } finally {
       setIsSubmitting(false);
     }

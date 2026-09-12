@@ -5,7 +5,14 @@ import { appendAuthToken, withAuthPayload, gasGet } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
-import { fetchEventsFromSupabase } from '../utils/supabaseClient';
+import {
+  fetchAdminEventsFromSupabase,
+  fetchAdminEventSignupsFromSupabase,
+  updateSignupStatusInSupabase,
+  updateEventStatusInSupabase,
+  saveEventToSupabase,
+  registerOfficerToSupabase
+} from '../utils/supabaseClient';
 import type { AdminEvent, SignupApplicant } from '../types/event';
 import { AdminEventCard } from '../components/admin/AdminEventCard';
 import { AdminEventForm, type AdminEventFormData } from '../components/admin/AdminEventForm';
@@ -100,29 +107,40 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     }
 
     try {
-      let sbEvents: AdminEvent[] | null = null;
+      let loadedFromSb = false;
       if (!forceRefresh) {
         try {
-          sbEvents = await fetchEventsFromSupabase();
-          if (sbEvents && sbEvents.length > 0) {
+          // ⚡ 1. 優先從 Supabase 秒級讀取活動清單與報名人數統計 (< 50ms)
+          const sbRes = await fetchAdminEventsFromSupabase(userId || 'TEST_USER_ID');
+          if (sbRes && sbRes.isOfficer) {
+            loadedFromSb = true;
             setIsOfficer(true);
-            setEvents(sbEvents);
+            setEvents(sbRes.events);
+            setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
             setLoadingEvents(false);
+            setAuthLoading(false);
           }
         } catch (sbErr) {
           console.warn('[AdminEvents] Supabase 活動讀取例外:', sbErr);
-          sbEvents = null;
         }
       }
 
-      const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
-      const data = await res.json();
-      if (data.status === 'success' && Array.isArray(data.events)) {
-        setIsOfficer(true);
-        setEvents(data.events);
-        setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
-      } else if (!sbEvents) {
-        setIsOfficer(false);
+      // 2. 若 Supabase 未配置、未命中幹部或強制重新整理，無縫由 GAS 備援
+      if (!loadedFromSb || forceRefresh) {
+        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
+        const data = await res.json();
+        if (data.status === 'success' && Array.isArray(data.events)) {
+          setIsOfficer(true);
+          setEvents(data.events);
+          setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
+
+          // ⚡ 若經由 GAS 認證為幹部，自動同步至 Supabase officers 表，下次即可享受 < 50ms 秒開
+          if (userId && userId !== 'TEST_USER_ID') {
+            registerOfficerToSupabase(userId, data.officerName, data.officerRole).catch(() => {});
+          }
+        } else if (!loadedFromSb) {
+          setIsOfficer(false);
+        }
       }
     } catch (err) {
       console.error('獲取管理端活動失敗:', err);
@@ -138,30 +156,37 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     async function loadInitial() {
       try {
-        let sbEvents: AdminEvent[] | null = null;
+        let loadedFromSb = false;
         try {
-          sbEvents = await fetchEventsFromSupabase();
+          // ⚡ 1. 優先從 Supabase 讀取 (< 50ms)
+          const sbRes = await fetchAdminEventsFromSupabase(userId || 'TEST_USER_ID');
+          if (sbRes && sbRes.isOfficer && !ignore) {
+            loadedFromSb = true;
+            setIsOfficer(true);
+            setEvents(sbRes.events);
+            setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
+            setAuthLoading(false);
+            setLoadingEvents(false);
+          }
         } catch (sbErr) {
           console.warn('[AdminEvents] Supabase 初始讀取例外:', sbErr);
-          sbEvents = null;
         }
 
-        if (sbEvents && sbEvents.length > 0 && !ignore) {
-          setIsOfficer(true);
-          setEvents(sbEvents);
-          setCache(CACHE_KEY_ADMIN_EVENTS, sbEvents, 180);
-          setAuthLoading(false);
-          setLoadingEvents(false);
-        }
+        // 2. 若 Supabase 尚未建置該幹部快取，無縫由 GAS 備援
+        if (!loadedFromSb) {
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
+          const data = await res.json();
+          if (!ignore && data.status === 'success' && Array.isArray(data.events)) {
+            setIsOfficer(true);
+            setEvents(data.events);
+            setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
 
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
-        const data = await res.json();
-        if (!ignore && data.status === 'success' && Array.isArray(data.events)) {
-          setIsOfficer(true);
-          setEvents(data.events);
-          setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
-        } else if (!ignore && !sbEvents) {
-          setIsOfficer(false);
+            if (userId && userId !== 'TEST_USER_ID') {
+              registerOfficerToSupabase(userId, data.officerName, data.officerRole).catch(() => {});
+            }
+          } else if (!ignore && !loadedFromSb) {
+            setIsOfficer(false);
+          }
         }
       } catch (err) {
         console.error('後台活動載入失敗:', err);
@@ -281,6 +306,23 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     setSubmittingForm(true);
     try {
+      // ⚡ 1. 優先極速寫入 Supabase (< 50ms)
+      saveEventToSupabase(userId || 'TEST_USER_ID', {
+        eventId: formData.eventId,
+        name: formData.name.trim(),
+        startDate: formData.startDate,
+        endDate: formData.endDate || formData.startDate,
+        deadline: formData.deadline,
+        cost: formData.cost.trim(),
+        status: formData.status,
+        shortDesc: formData.shortDesc.trim(),
+        fullDesc: formData.fullDesc.trim(),
+        imageUrl: formData.imageUrl
+      }).catch(sbErr => {
+        console.warn('[AdminEvents] Supabase 儲存活動例外:', sbErr);
+      });
+
+      // 2. 平行發送 GAS 請求處理 Google Drive 圖片上傳與幹部群組推播
       const payload = {
         action: 'save_event',
         userId: userId || 'TEST_USER_ID',
@@ -325,6 +367,19 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
   // 快速切換活動狀態
   const handleQuickStatusChange = async (eventId: string, newStatus: string) => {
+    // ⚡ 1. 優先極速更新 Supabase (< 30ms)
+    updateEventStatusInSupabase(userId || 'TEST_USER_ID', eventId, newStatus).catch(sbErr => {
+      console.warn('[AdminEvents] Supabase 活動狀態更新例外:', sbErr);
+    });
+
+    // 2. 立即無延遲更新前端 UI 與快取
+    setEvents((prev) => {
+      const next = prev.map((e) => (e.id === eventId ? { ...e, status: newStatus } : e));
+      setCache(CACHE_KEY_ADMIN_EVENTS, next, 180);
+      return next;
+    });
+
+    // 3. 背景平行發送 GAS 確保 Google Sheets 同步
     try {
       const query = new URLSearchParams({
         action: 'update_event_status',
@@ -333,19 +388,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         status: newStatus
       });
 
-      const result = await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
-
-      if (result?.status === 'success') {
-        setEvents((prev) => {
-          const next = prev.map((e) => (e.id === eventId ? { ...e, status: newStatus } : e));
-          setCache(CACHE_KEY_ADMIN_EVENTS, next, 180);
-          return next;
-        });
-      } else {
-        alert(t('adminEvents.alerts.error', { message: result?.message || '更新狀態失敗' }));
-      }
+      await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
     } catch (err) {
-      console.error('更新活動狀態失敗:', err);
+      console.error('背景同步活動狀態失敗:', err);
     }
   };
 
@@ -364,18 +409,37 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     }
 
     setLoadingSignups(true);
+    let loadedFromSb = false;
     try {
-      const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_event_signups&eventId=${evt.id}&userId=${userId || 'TEST_USER_ID'}`));
-      const data = await res.json();
-      if (data.status === 'success' && Array.isArray(data.signups)) {
-        setSignupsList(data.signups);
-        setCache(cacheKey, data.signups, 120);
-      } else {
-        setSignupsList([]);
+      if (!forceRefresh) {
+        try {
+          // ⚡ 1. 優先從 Supabase 秒開讀取報名名冊 (< 50ms)
+          const sbSignups = await fetchAdminEventSignupsFromSupabase(userId || 'TEST_USER_ID', evt.id);
+          if (sbSignups) {
+            loadedFromSb = true;
+            setSignupsList(sbSignups);
+            setCache(cacheKey, sbSignups, 120);
+            setLoadingSignups(false);
+          }
+        } catch (sbErr) {
+          console.warn('[AdminEvents] Supabase 報名名冊讀取例外:', sbErr);
+        }
+      }
+
+      // 2. 若 Supabase 尚未配置或強制重新整理，無縫由 GAS 備援
+      if (!loadedFromSb || forceRefresh) {
+        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_event_signups&eventId=${evt.id}&userId=${userId || 'TEST_USER_ID'}`));
+        const data = await res.json();
+        if (data.status === 'success' && Array.isArray(data.signups)) {
+          setSignupsList(data.signups);
+          setCache(cacheKey, data.signups, 120);
+        } else if (!loadedFromSb) {
+          setSignupsList([]);
+        }
       }
     } catch (err) {
       console.error('讀取報名名冊失敗:', err);
-      setSignupsList([]);
+      if (!loadedFromSb) setSignupsList([]);
     } finally {
       setLoadingSignups(false);
     }
@@ -408,6 +472,19 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     const applicantKey = String(applicant.rowNumber);
     setUpdatingSignupCode(applicantKey);
     try {
+      // ⚡ 1. 優先極速更新 Supabase (< 30ms)
+      if (applicant.signupCode) {
+        updateSignupStatusInSupabase(
+          userId || 'TEST_USER_ID',
+          selectedEventForSignups?.id || '',
+          applicant.signupCode,
+          newResult
+        ).catch(sbErr => {
+          console.warn('[AdminEvents] Supabase 審核狀態更新例外:', sbErr);
+        });
+      }
+
+      // 2. 平行呼叫 GAS 確保 Google Sheets 格式化更新
       const query = new URLSearchParams({
         action: 'update_signup_status',
         userId: userId || 'TEST_USER_ID',

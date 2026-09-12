@@ -5,7 +5,7 @@ import { ShoppingCart, RotateCw } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
-import { fetchEquipmentsFromSupabase } from '../utils/supabaseClient';
+import { fetchEquipmentsFromSupabase, fetchDashboardFromSupabase } from '../utils/supabaseClient';
 import type { Equipment } from '../types/equipment';
 import { EquipmentCard } from '../components/borrow/EquipmentCard';
 import { BorrowCartDrawer } from '../components/borrow/BorrowCartDrawer';
@@ -112,16 +112,40 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
       }
 
       if (userId && userId !== 'TEST_USER_ID') {
-        try {
-          const myStatusRes = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${userId}`));
-          const myStatusData = await myStatusRes.json();
-          if (!ignore && myStatusData.status === 'success' && myStatusData.data?.profile) {
-            const official = Boolean(myStatusData.data.profile.isOfficial);
-            setIsOfficial(official);
-            setCache(CACHE_KEY_OFFICIAL + userId, official, 600);
+        const cachedOfficial = getCache<boolean>(CACHE_KEY_OFFICIAL + userId);
+        if (cachedOfficial !== null) {
+          setIsOfficial(cachedOfficial);
+        } else {
+          let checkedFromSupabase = false;
+          try {
+            // ⚡ 1. 優先從 Supabase 秒級讀取社員身分與折扣權益 (< 50ms)
+            const dash = await fetchDashboardFromSupabase(userId);
+            if (dash && dash.profile) {
+              checkedFromSupabase = true;
+              const official = Boolean(dash.profile.isOfficial);
+              if (!ignore) {
+                setIsOfficial(official);
+                setCache(CACHE_KEY_OFFICIAL + userId, official, 600);
+              }
+            }
+          } catch (sbErr) {
+            console.warn('[Borrow] Supabase 社員身分檢查例外，啟用 GAS 備援:', sbErr);
           }
-        } catch (err) {
-          console.error('社員身分載入失敗:', err);
+
+          // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
+          if (!checkedFromSupabase) {
+            try {
+              const myStatusRes = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${userId}`));
+              const myStatusData = await myStatusRes.json();
+              if (!ignore && myStatusData.status === 'success' && myStatusData.data?.profile) {
+                const official = Boolean(myStatusData.data.profile.isOfficial);
+                setIsOfficial(official);
+                setCache(CACHE_KEY_OFFICIAL + userId, official, 600);
+              }
+            } catch (err) {
+              console.error('社員身分載入失敗:', err);
+            }
+          }
         }
       }
     }
