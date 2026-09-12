@@ -108,6 +108,7 @@ function Dashboard({ userId }: { userId: string }) {
   useEffect(() => {
     let ignore = false;
 
+    let loadedFromSupabase = false;
     const loadDashboard = async () => {
       try {
         if (liff.isLoggedIn()) {
@@ -123,7 +124,6 @@ function Dashboard({ userId }: { userId: string }) {
         const requestUserId = userId || 'TEST_USER_ID';
 
         // ⚡ 1. 優先嘗試由 Supabase 極速讀取個人儀表板 (< 100ms 秒開)
-        let loadedFromSupabase = false;
         try {
           const sbData = await fetchDashboardFromSupabase(requestUserId);
           if (!ignore && sbData && sbData.profile && sbData.profile.name) {

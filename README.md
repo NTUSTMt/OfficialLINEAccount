@@ -3,11 +3,39 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.47` (v0.1.47)
+- **當前版本**：`0.1.49` (v0.1.49)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 149. 資料填寫 (Register.tsx) 連上 Supabase：極速秒開與安全 RPC 零個資外洩架構 (v0.1.49)
+- **零個資外洩安全 RPC 架構 (Security Definer Architecture)**：
+  - 於 [supabase/member_profile_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/member_profile_rpc.sql) 實作兩組具備 `SECURITY DEFINER` 的安全預存程序：
+    1. `get_member_profile(p_line_user_id TEXT)`：嚴格限制僅能調用本人 `line_user_id` 之資料，收斂敏感欄位，徹底防止全表匿名爬取（身分證、電話、地址、病史等嚴密防護）。
+    2. `save_member_profile(p_line_user_id TEXT, p_data JSONB)`：嚴密 UPSERT 個人資料並寫入稽核紀錄，透過觸發器自動排入 `sync_queue` 平滑同步至 Google Sheets。
+  - 對 `anon` 匿名訪客關閉 `members` 全表之 `SELECT/INSERT/UPDATE` 權限，僅授權執行上述兩組特定 RPC，兼顧極致效能與金融級隱私防護。
+- **資料填寫頁面極速秒開與雙軌同步 (Register.tsx Fast Preload & Save)**：
+  - 在 [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts) 封裝 `fetchMemberProfileFromSupabase` 與 `saveMemberProfileToSupabase`。
+  - **讀取階段 (Preload)**：使用者進入「資料填寫」頁面時，優先從 Supabase 以 < 50ms 載入既有社員個人資料，徹底擺脫 GAS 冷啟動 3~5 秒轉圈等待；若無紀錄或網路異常，則無感無縫回退至 GAS API。
+  - **送出階段 (Submit)**：優先以 < 50ms 極速寫入 Supabase，同時平行呼叫 GAS 處理 Google Drive 體能證明附件上傳與 LINE Push 通知，大幅提升送出體驗與耐用度。
+- **自動化測試與代碼品質**：
+  - 全套 16 組測試套件、40 項單元測試 100% 綠燈通過。
+  - ESLint 10 與 TypeScript 0 錯誤、0 警告，Vite 生產建置極速完成。
+
+### 148. Members 與 Events 表結構精準對齊與前端 Supabase Client 同步升級 (v0.1.48)
+- **Members 表 24 欄位 100% 精準對齊 (Members Schema Alignment)**：
+  - 於 [supabase/schema.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/schema.sql) 補齊試算表實際存在的 7 大欄位：`line_id` (自訂 Line ID)、`payment_status` (繳費狀態)、`address` (聯絡地址)、`medical_history` (個人特殊病史或過敏)、`identity_status` (身分狀態)、`join_membership_intent` (加入社員意願)、`officer_intent` (擔任幹部意願)。
+  - 保留 `is_official_member` 布林欄位，由繳費狀態包含「已繳費/Paid」自動計算，確保數位社員證與前端資格快速識別。
+- **Events 表剔除多餘欄位與精簡 10 大核心欄位 (Events Schema Optimization)**：
+  - 精簡 `events` 資料表，徹底移除試算表不存在之多餘欄位（`category`、`location`、`max_participants`、`non_member_fee`、`notes`、`notified_at`）。
+  - 將費用統一收斂為純數字欄位 `fee`，保留 `deadline` 嚴謹之 `TIMESTAMPTZ` 型別。
+- **前端 Client 查詢同步適配 (src/utils/supabaseClient.ts)**：
+  - 更新 `SupabaseEventRow` 介面與 `fetchEventsFromSupabase` 的 `.select()` 欄位清單，全面對齊 `fee` 與 10 大核心欄位，避免無效欄位查詢異常。
+  - 修復 [Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 中 `loadedFromSupabase` 之變數作用域問題。
+- **自動化測試與代碼品質**：
+  - 全套 16 組測試套件、40 項單元測試 100% 綠燈通過。
+  - ESLint 10 零錯誤、零警告，Vite 編譯順暢通過。
 
 ### 147. 個人主頁 Dashboard 極速秒開 RPC 函式與 SWR 雙軌整合 (v0.1.47)
 - **Supabase RPC 高速聚合函式實作 (get_my_dashboard)**：

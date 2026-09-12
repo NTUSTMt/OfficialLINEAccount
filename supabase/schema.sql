@@ -20,24 +20,31 @@ $$ LANGUAGE plpgsql;
 -- 3. 會員資料表 (members) -> Google Sheets: Members
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS members (
-    line_user_id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    student_id TEXT,
-    department TEXT,
-    gender TEXT,
-    phone TEXT,
-    email TEXT,
-    birthday TEXT, -- 格式：YYYY-MM-DD
-    id_card TEXT,  -- 身分證字號 / 居留證號
-    emergency_contact_name TEXT,
-    emergency_contact_phone TEXT,
-    emergency_contact_rel TEXT,
-    emergency_contact_address TEXT,
-    outdoor_experience TEXT,
-    fitness_desc TEXT,
-    proof_urls JSONB DEFAULT '[]'::jsonb, -- Google Drive 連結陣列
-    is_official_member BOOLEAN DEFAULT FALSE,
-    membership_expires_at DATE,
+    line_user_id TEXT PRIMARY KEY,       -- 系統識別碼 (U1234567...)
+    name TEXT NOT NULL,                  -- 姓名
+    gender TEXT,                         -- 性別
+    line_id TEXT,                        -- Line ID
+    email TEXT,                          -- Email
+    phone TEXT,                          -- 聯絡電話
+    department TEXT,                     -- 系所
+    student_id TEXT,                     -- 學號
+    payment_status TEXT,                 -- 繳費狀態 (已繳費 Paid / 未繳費)
+    membership_expires_at DATE,          -- 社籍到期日
+    birthday TEXT,                       -- 生日 (格式：YYYY-MM-DD)
+    id_card TEXT,                        -- 證件號碼 (身分證字號 / 居留證號)
+    address TEXT,                        -- 聯絡地址
+    outdoor_experience TEXT,             -- 爬山經驗
+    fitness_desc TEXT,                   -- 體能測驗
+    proof_urls JSONB DEFAULT '[]'::jsonb,-- 體能測驗證明 (Google Drive 連結陣列)
+    emergency_contact_name TEXT,         -- 緊急聯絡人姓名
+    emergency_contact_rel TEXT,          -- 緊急聯絡人關係
+    emergency_contact_phone TEXT,        -- 緊急聯絡人電話
+    emergency_contact_address TEXT,      -- 緊急聯絡人聯絡地址
+    medical_history TEXT,                -- 個人特殊病史或過敏
+    identity_status TEXT,                -- 身分狀態
+    join_membership_intent TEXT,         -- 加入社員意願
+    officer_intent TEXT,                 -- 擔任幹部意願
+    is_official_member BOOLEAN DEFAULT FALSE, -- 正式社員身分 (由繳費狀態判定)
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -47,25 +54,19 @@ BEFORE UPDATE ON members
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ------------------------------------------------------------------------------
--- 4. 活動資料表 (events) -> Google Sheets: Events
+-- 4. 活動資料表 (events) -> Google Sheets: Events (10 大欄位精確對齊)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY, -- 如 E01, E20260901_01
-    title TEXT NOT NULL,
-    category TEXT,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    location TEXT,
-    max_participants INTEGER NOT NULL DEFAULT 0,
-    deadline TIMESTAMPTZ NOT NULL,
-    member_fee INTEGER NOT NULL DEFAULT 0,
-    non_member_fee INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT '報名中 Open', -- 報名中 Open / 已額滿 Full / 已截止 Closed / 已結束 Ended / 草稿 Draft
-    summary TEXT,    -- 活動簡介 (<=1000字)
-    itinerary TEXT,  -- 行程安排 (<=700字)
-    notes TEXT,      -- 注意事項
-    cover_image_url TEXT,
-    notified_at TIMESTAMPTZ, -- 幹部是否已推播通知
+    id TEXT PRIMARY KEY,                 -- 1. 活動編號 (如 E01, E20260901_01)
+    title TEXT NOT NULL,                 -- 2. 活動名稱
+    fee INTEGER NOT NULL DEFAULT 0,      -- 3. 預計費用 (純數字)
+    start_date DATE NOT NULL,            -- 4. 活動開始日期 (YYYY-MM-DD)
+    end_date DATE NOT NULL,              -- 5. 活動結束日期 (YYYY-MM-DD)
+    deadline TIMESTAMPTZ NOT NULL,       -- 6. 報名截止日期 (精確時間戳記)
+    status TEXT NOT NULL DEFAULT '開放', -- 7. 報名狀態 (開放 / 關閉)
+    summary TEXT,                        -- 8. 簡介 (<=1000字)
+    itinerary TEXT,                      -- 9. 詳細行程 (<=700字)
+    cover_image_url TEXT,                -- 10. 封面圖網址
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

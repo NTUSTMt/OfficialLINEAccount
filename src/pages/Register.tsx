@@ -5,6 +5,7 @@ import { Check, ShieldCheck, Info } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
+import { fetchMemberProfileFromSupabase, saveMemberProfileToSupabase } from '../utils/supabaseClient';
 import '../App.css';
 
 interface ProfileData {
@@ -76,65 +77,84 @@ function Register({ userId }: { userId: string }) {
   const [hasDraftRestored, setHasDraftRestored] = useState(false);
   const isInitialLoadDone = useRef(false);
 
-  // 載入 LINE Profile 與 GAS 社員資料
+  // 載入 LINE Profile 與 Supabase/GAS 社員資料
   useEffect(() => {
     const fetchProfileData = async () => {
       setLoading(true);
       let memberFound = false;
       try {
+        let lineDisplayName = '';
         // 1. 取得 LINE Profile
         if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          // 預帶 LINE ID
-          setFormData((prev) => ({ ...prev, realLineId: profile.displayName }));
+          try {
+            const profile = await liff.getProfile();
+            lineDisplayName = profile.displayName || '';
+            // 預帶 LINE ID
+            setFormData((prev) => ({ ...prev, realLineId: lineDisplayName }));
+          } catch (e) {
+            console.warn('LIFF 取得 Profile 失敗:', e);
+          }
         }
 
-        // 2. 向 GAS 查詢現有社員資料
+        // 2. 優先向 Supabase 查詢現有社員資料 (延遲 < 50ms)
         if (userId && userId !== 'TEST_USER_ID') {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`), { cache: 'no-store' });
-          const result = await res.json();
-          if (result.status === 'success' && result.isMember && result.profile) {
+          const sbProfile = await fetchMemberProfileFromSupabase(userId);
+          if (sbProfile && (sbProfile.name || sbProfile.studentId || sbProfile.phone)) {
             memberFound = true;
             setIsNewUser(false);
-            const p = result.profile;
-            
-            // 安全解析生日字串，避免 typeof/Invalid Date 造成 toISOString 崩潰或白屏
-            let birthdayStr = '';
-            if (p.birthday) {
-              const cleanBirthday = String(p.birthday).replace(/\//g, '-');
-              const d = new Date(cleanBirthday);
-              if (!isNaN(d.getTime())) {
-                birthdayStr = d.toISOString().split('T')[0];
-              } else {
-                birthdayStr = cleanBirthday.substring(0, 10);
-              }
-            }
-
-            setFormData({
-              name: p.name ? String(p.name) : '',
-              gender: p.gender ? String(p.gender) : '',
-              birthday: birthdayStr,
-              idNumber: p.idNumber ? String(p.idNumber) : '',
-              department: p.department ? String(p.department) : '',
-              identityStatus: p.identityStatus ? String(p.identityStatus) : 
-                (p.department === '臺科大在校學生' || p.department === '畢業校友' || p.department === '校外人士' ? p.department : '臺科大在校學生'),
-              studentId: p.studentId ? String(p.studentId) : '',
-              phone: p.phone ? String(p.phone) : '',
-              email: p.email ? String(p.email) : '',
-              realLineId: p.realLineId ? String(p.realLineId) : '',
-              studentAddr: p.studentAddr ? String(p.studentAddr) : '',
-              emerName: p.emerName ? String(p.emerName) : '',
-              emerRel: p.emerRel ? String(p.emerRel) : '',
-              emerPhone: p.emerPhone ? String(p.emerPhone) : '',
-              emerAddr: p.emerAddr ? String(p.emerAddr) : '',
-              medicalHistory: p.medicalHistory ? String(p.medicalHistory) : '',
-              exp: p.exp ? String(p.exp) : '',
-              strength: p.strength ? String(p.strength) : '',
-              strengthProof: p.strengthProof ? String(p.strengthProof) : '',
-              intendOfficial: p.intendOfficial ? String(p.intendOfficial) : '',
-              intendOfficer: p.intendOfficer ? String(p.intendOfficer) : '',
-            });
+            setFormData((prev) => ({
+              ...prev,
+              ...sbProfile,
+              realLineId: sbProfile.realLineId || prev.realLineId || lineDisplayName,
+            }));
             setPrivacyAgreed(true);
+          } else {
+            // Supabase 尚未有紀錄或連線失敗，向 GAS 查詢現有社員資料 fallback
+            const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`), { cache: 'no-store' });
+            const result = await res.json();
+            if (result.status === 'success' && result.isMember && result.profile) {
+              memberFound = true;
+              setIsNewUser(false);
+              const p = result.profile;
+              
+              // 安全解析生日字串，避免 typeof/Invalid Date 造成 toISOString 崩潰或白屏
+              let birthdayStr = '';
+              if (p.birthday) {
+                const cleanBirthday = String(p.birthday).replace(/\//g, '-');
+                const d = new Date(cleanBirthday);
+                if (!isNaN(d.getTime())) {
+                  birthdayStr = d.toISOString().split('T')[0];
+                } else {
+                  birthdayStr = cleanBirthday.substring(0, 10);
+                }
+              }
+
+              setFormData({
+                name: p.name ? String(p.name) : '',
+                gender: p.gender ? String(p.gender) : '',
+                birthday: birthdayStr,
+                idNumber: p.idNumber ? String(p.idNumber) : '',
+                department: p.department ? String(p.department) : '',
+                identityStatus: p.identityStatus ? String(p.identityStatus) : 
+                  (p.department === '臺科大在校學生' || p.department === '畢業校友' || p.department === '校外人士' ? p.department : '臺科大在校學生'),
+                studentId: p.studentId ? String(p.studentId) : '',
+                phone: p.phone ? String(p.phone) : '',
+                email: p.email ? String(p.email) : '',
+                realLineId: p.realLineId ? String(p.realLineId) : (lineDisplayName || ''),
+                studentAddr: p.studentAddr ? String(p.studentAddr) : '',
+                emerName: p.emerName ? String(p.emerName) : '',
+                emerRel: p.emerRel ? String(p.emerRel) : '',
+                emerPhone: p.emerPhone ? String(p.emerPhone) : '',
+                emerAddr: p.emerAddr ? String(p.emerAddr) : '',
+                medicalHistory: p.medicalHistory ? String(p.medicalHistory) : '',
+                exp: p.exp ? String(p.exp) : '',
+                strength: p.strength ? String(p.strength) : '',
+                strengthProof: p.strengthProof ? String(p.strengthProof) : '',
+                intendOfficial: p.intendOfficial ? String(p.intendOfficial) : '',
+                intendOfficer: p.intendOfficer ? String(p.intendOfficer) : '',
+              });
+              setPrivacyAgreed(true);
+            }
           }
         }
 
@@ -362,7 +382,14 @@ function Register({ userId }: { userId: string }) {
     if (!isStepValid) return;
 
     setIsSubmitting(true);
+    let sbSaved = false;
     try {
+      // 1. 優先極速寫入 Supabase (< 50ms，以安全 RPC 限制本人存取)
+      if (userId && userId !== 'TEST_USER_ID') {
+        sbSaved = await saveMemberProfileToSupabase(userId, formData);
+      }
+
+      // 2. 呼叫 GAS：處理 Google Drive 檔案上傳、發送 LINE Push 通知或雙軌寫入 Sheets
       const currentLang = i18n.language?.startsWith('en') ? 'en' : 'zh';
       const payload = {
         action: 'save_profile',
@@ -382,7 +409,7 @@ function Register({ userId }: { userId: string }) {
       });
       const result = await res.json();
 
-      if (result.status === 'success') {
+      if (result.status === 'success' || sbSaved) {
         const draftKey = 'register_draft_' + (userId || 'guest');
         localStorage.removeItem(draftKey);
         setHasDraftRestored(false);
@@ -395,7 +422,17 @@ function Register({ userId }: { userId: string }) {
       }
     } catch (err) {
       console.error('提交表單失敗:', err);
-      alert(t('register.alert.networkError'));
+      if (sbSaved) {
+        const draftKey = 'register_draft_' + (userId || 'guest');
+        localStorage.removeItem(draftKey);
+        setHasDraftRestored(false);
+        alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
+        if (liff.isInClient()) {
+          liff.closeWindow();
+        }
+      } else {
+        alert(t('register.alert.networkError'));
+      }
     } finally {
       setIsSubmitting(false);
     }
