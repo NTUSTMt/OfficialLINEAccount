@@ -266,46 +266,45 @@ function Achievements({ userId }: { userId: string }) {
         imageUrl: imageUrl.trim()
       };
 
-      // ⚡ 1. 優先極速儲存至 Supabase (< 50ms)
+      // 1. 若有新上傳的心得相片，呼叫輕量 Helper 上傳 Drive 取得連結 (純 Drive API，不接觸試算表)
+      if (photoFiles.length > 0) {
+        try {
+          const uploadRes = await fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(withAuthPayload({
+              action: 'upload_drive_file',
+              userId: userId || 'TEST_USER_ID',
+              folderType: 'reflections',
+              files: photoFiles
+            }))
+          });
+          const uploadResult = await uploadRes.json();
+          if (uploadResult.status === 'success' && uploadResult.urls) {
+            const combinedPhotos = [detailsPayload.imageUrl, ...uploadResult.urls]
+              .filter(Boolean)
+              .join('\n');
+            detailsPayload.imageUrl = combinedPhotos;
+          }
+        } catch (uploadErr) {
+          console.warn('[Achievements] 上傳心得相片例外，繼續儲存心得:', uploadErr);
+        }
+      }
+
+      // ⚡ 2. 100% 直寫 Supabase 心得評分 (< 50ms)
       if (userId && userId !== 'TEST_USER_ID') {
         try {
           sbSuccess = await saveReflectionToSupabase(userId, detailsPayload);
         } catch (sbErr) {
           console.warn('[Achievements] Supabase 儲存例外:', sbErr);
         }
-      }
 
-      const payload = {
-        action: 'submit_reflection',
-        userId,
-        details: detailsPayload,
-        reflectionPhotoFiles: photoFiles
-      };
-
-      if (userId && userId !== 'TEST_USER_ID') {
-        let gasSuccess = false;
-        let gasMessage = '';
-        try {
-          const res = await fetch(GAS_API_URL, {
-            method: 'POST',
-            body: JSON.stringify(withAuthPayload(payload))
-          });
-          const result = await res.json();
-          if (result.status === 'success') {
-            gasSuccess = true;
-          } else {
-            gasMessage = result.message || '';
-          }
-        } catch (gasErr) {
-          console.warn('[Achievements] GAS 呼叫例外 (可能網路逾時):', gasErr);
-        }
-
-        if (gasSuccess || sbSuccess) {
+        if (sbSuccess) {
           alert(t('achievements.alert.submitSuccess'));
           closeForm();
           setRefreshKey(k => k + 1); // 重新整理
         } else {
-          alert(t('achievements.alert.submitFailed', { message: gasMessage }));
+          alert(t('achievements.alert.submitFailed', { message: t('achievements.alert.contactAdmin', '儲存失敗，請稍後再試') }));
         }
       } else {
         // 假資料本地模擬提交

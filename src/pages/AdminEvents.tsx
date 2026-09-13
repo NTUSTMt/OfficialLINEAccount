@@ -402,19 +402,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       return next;
     });
 
-    // 3. 背景平行發送 GAS 確保 Google Sheets 同步
-    try {
-      const query = new URLSearchParams({
-        action: 'update_event_status',
-        userId: userId || 'TEST_USER_ID',
-        eventId: eventId,
-        status: newStatus
-      });
-
-      await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
-    } catch (err) {
-      console.error('背景同步活動狀態失敗:', err);
-    }
+    // 3. Supabase 已透過 Triggers 自動排入 sync_queue，由背景 Worker 平滑同步至 Google Sheets，無須前端呼叫 GAS 改試算表
   };
 
   // 開啟審核名冊 Modal
@@ -496,32 +484,18 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     setUpdatingSignupCode(applicantKey);
     try {
       // ⚡ 1. 優先極速更新 Supabase (< 30ms)
+      let sbSuccess = false;
       if (applicant.signupCode) {
-        updateSignupStatusInSupabase(
+        sbSuccess = await updateSignupStatusInSupabase(
           userId || 'TEST_USER_ID',
           selectedEventForSignups?.id || '',
           applicant.signupCode,
           newResult
-        ).catch(sbErr => {
-          console.warn('[AdminEvents] Supabase 審核狀態更新例外:', sbErr);
-        });
+        );
       }
 
-      // 2. 平行呼叫 GAS 確保 Google Sheets 格式化更新
-      const query = new URLSearchParams({
-        action: 'update_signup_status',
-        userId: userId || 'TEST_USER_ID',
-        eventId: selectedEventForSignups?.id || '',
-        signupCode: applicant.signupCode || '',
-        targetUserId: applicant.userId || '',
-        rowNumber: applicant.rowNumber ? String(applicant.rowNumber) : '',
-        name: applicant.name || '',
-        reviewResult: newResult
-      });
-
-      const result = await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
-
-      if (result?.status === 'success') {
+      // 2. 審核狀態已極速更新至 Supabase (並由 Triggers 自動排入 sync_queue 供試算表背景同步)
+      if (sbSuccess || !applicant.signupCode) {
         const oldResult = applicant.reviewResult || '';
         const getCategory = (res: string) => {
           if (res.indexOf('正取') > -1) return 'accepted';
@@ -568,7 +542,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           });
         }
       } else {
-        alert(t('adminEvents.alerts.error', { message: result?.message || '更新失敗' }));
+        alert(t('adminEvents.alerts.error', { message: '更新失敗' }));
       }
     } catch (err) {
       console.error('更新審核狀態失敗:', err);

@@ -347,41 +347,29 @@ function Payment({ userId }: { userId: string }) {
         membershipExpiryDate: hasMembership ? membershipDetails.expiryDate : undefined
       };
 
-      // ⚡ 1. 優先極速寫入 Supabase (< 50ms)
+      // ⚡ 1. 100% 直連 Supabase 繳費申報 (< 50ms)
       if (userId && userId !== 'TEST_USER_ID') {
         try {
           sbSubmitted = await submitPaymentToSupabase(userId, detailsPayload);
         } catch (sbErr) {
           console.warn('[Payment] Supabase 提交例外:', sbErr);
         }
+      } else {
+        sbSubmitted = true;
       }
 
-      // 2. 呼叫 GAS：寫入 Sheets 並發送 LINE 幹部審核推播通知
-      const payload = {
-        action: 'submit_payment',
-        userId,
-        details: detailsPayload
-      };
-
-      let gasSuccess = false;
-      let gasMessage = '';
-      try {
-        const res = await fetch(GAS_API_URL, {
+      if (sbSubmitted) {
+        // 2. 非同步背景發送 LINE 幹部審核推播 (純通知 API，絕不碰 Google Sheets)
+        fetch(GAS_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(withAuthPayload(payload))
-        });
-        const result = await res.json();
-        if (result.status === 'success') {
-          gasSuccess = true;
-        } else {
-          gasMessage = result.message || '';
-        }
-      } catch (gasErr) {
-        console.warn('[Payment] GAS 呼叫例外 (可能網路逾時):', gasErr);
-      }
+          body: JSON.stringify(withAuthPayload({
+            action: 'notify_officers_payment',
+            userId,
+            details: detailsPayload
+          }))
+        }).catch(err => console.warn('[Payment] 非同步推播通知略過:', err));
 
-      if (gasSuccess || sbSubmitted) {
         // 本地立即將已申報項目自待繳清單中排除，杜絕重複勾選申報
         setUnpaidList(prev => ({
           membership: hasMembership ? [] : prev.membership,
@@ -431,7 +419,7 @@ function Payment({ userId }: { userId: string }) {
           });
         }
       } else {
-        alert(t('payment.alert.submitFailed', { message: gasMessage || t('payment.alert.contactAdmin') }));
+        alert(t('payment.alert.submitFailed', { message: t('payment.alert.contactAdmin') }));
       }
     } catch (err) {
       console.error('申報異常:', err);

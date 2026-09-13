@@ -5,7 +5,7 @@ import { ShoppingCart, RotateCw } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
-import { fetchEquipmentsFromSupabase, fetchDashboardFromSupabase } from '../utils/supabaseClient';
+import { fetchEquipmentsFromSupabase, fetchDashboardFromSupabase, submitEquipmentLoanToSupabase } from '../utils/supabaseClient';
 import type { Equipment } from '../types/equipment';
 import { EquipmentCard } from '../components/borrow/EquipmentCard';
 import { BorrowCartDrawer } from '../components/borrow/BorrowCartDrawer';
@@ -297,27 +297,29 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
       return alert(t('borrow.alert.noOtherPurpose'));
     }
 
-    const orderPayload = {
-      action: 'submit_multi_loan',
-      userId: userId,
-      details: form
-    };
-
     setIsSubmittingOrder(true);
     try {
-      const response = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify(withAuthPayload(orderPayload))
-      });
+      // ⚡ 1. 100% 直連 Supabase 原子性 RPC (< 50ms)
+      const result = await submitEquipmentLoanToSupabase(userId, form);
 
-      const result = await response.json();
-      if (result.status !== 'success') {
-        alert(t('borrow.alert.systemError', { message: result.message }));
+      if (!result.success) {
+        alert(t('borrow.alert.systemError', { message: result.message || '租借失敗' }));
         return;
       }
+
+      // 2. 非同步背景發送 LINE 幹部審核推播 (純通知 API，絕不碰 Google Sheets)
+      fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(withAuthPayload({
+          action: 'notify_officers_loan',
+          userId: userId,
+          loanId: result.loanId,
+          details: form,
+          totalRent: result.totalRent
+        }))
+      }).catch(err => console.warn('[Borrow] 非同步推播通知略過:', err));
+
       removeCache(CACHE_KEY_EQUIPMENTS);
       setIsCartOpen(false);
       setForm({

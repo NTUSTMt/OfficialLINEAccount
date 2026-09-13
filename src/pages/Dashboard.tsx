@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { appendAuthToken } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
-import { fetchDashboardFromSupabase } from '../utils/supabaseClient';
+import { fetchDashboardFromSupabase, cancelEquipmentLoanInSupabase, cancelEventSignupInSupabase } from '../utils/supabaseClient';
 import {
   ShieldCheck,
   ChevronRight,
@@ -172,20 +172,10 @@ function Dashboard({ userId }: { userId: string }) {
 
     setIsCanceling(true);
     try {
-      const payload = {
-        action: 'liff_cancel_loan',
-        userId: userId || 'TEST_USER_ID',
-        targetId: orderId,
-      };
+      // ⚡ 100% 直連 Supabase 取消裝備預約 (自動釋放庫存並排入 sync_queue)
+      const result = await cancelEquipmentLoanInSupabase(userId || 'TEST_USER_ID', orderId);
 
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload)),
-      });
-      const result = await res.json();
-
-      if (result.status === 'success') {
+      if (result.success) {
         alert(t('dashboard.alert.cancelLoanSuccess'));
         setRefreshKey(k => k + 1);
       } else {
@@ -226,20 +216,10 @@ function Dashboard({ userId }: { userId: string }) {
   const submitActivityCancellationDirect = async (code: string) => {
     setIsCanceling(true);
     try {
-      const payload = {
-        action: 'liff_cancel_event',
-        userId: userId || 'TEST_USER_ID',
-        targetId: code,
-      };
+      // ⚡ 100% 直連 Supabase 取消活動報名
+      const result = await cancelEventSignupInSupabase(userId || 'TEST_USER_ID', code);
 
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload)),
-      });
-      const result = await res.json();
-
-      if (result.status === 'success') {
+      if (result.success) {
         alert(t('dashboard.alert.cancelActivitySuccess'));
         setRefreshKey(k => k + 1);
       } else {
@@ -263,21 +243,14 @@ function Dashboard({ userId }: { userId: string }) {
 
     setIsCanceling(true);
     try {
-      const payload = {
-        action: 'liff_cancel_event',
-        userId: userId || 'TEST_USER_ID',
-        targetId: targetActivity.code,
-        reason: cancelReason,
-      };
+      // ⚡ 100% 直連 Supabase 取消正取活動報名 (附帶原因)
+      const result = await cancelEventSignupInSupabase(
+        userId || 'TEST_USER_ID',
+        targetActivity.code,
+        cancelReason.trim()
+      );
 
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload)),
-      });
-      const result = await res.json();
-
-      if (result.status === 'success') {
+      if (result.success) {
         alert(t('dashboard.alert.cancelConfirmedSuccess'));
         setShowCancelReasonModal(false);
         setTargetActivity(null);

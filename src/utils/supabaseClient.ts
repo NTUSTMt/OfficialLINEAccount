@@ -737,3 +737,112 @@ export const saveEventToSupabase = async (
   }
 };
 
+export interface EquipmentLoanDetails {
+  cart: Record<string, number>;
+  pickupDate: string;
+  returnDate: string;
+  purpose: string;
+  otherPurpose?: string;
+}
+
+/**
+ * ⚡ 提交裝備租借申請至 Supabase (透過 submit_equipment_loan_rpc 安全原子性 RPC，延遲 < 50ms)
+ * 自動防超賣鎖定庫存、判定社員身分計算租金，並觸發 sync_queue 佇列
+ */
+export const submitEquipmentLoanToSupabase = async (
+  userId: string,
+  details: EquipmentLoanDetails
+): Promise<{ success: boolean; loanId?: string; message?: string; totalRent?: number }> => {
+  if (!supabase || !userId) {
+    return { success: false, message: 'Supabase 未連線或缺少使用者身分' };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('submit_equipment_loan_rpc', {
+      p_line_user_id: userId,
+      p_details: details
+    });
+
+    if (error) {
+      console.warn('[Supabase] 提交裝備租借失敗:', error.message);
+      return { success: false, message: error.message };
+    }
+
+    if (data?.status !== 'success') {
+      console.warn('[Supabase] 提交裝備租借未成功:', data?.message);
+      return { success: false, message: data?.message || '申請失敗' };
+    }
+
+    console.log('%c⚡ [DataSource: Supabase] 裝備租借申請已極速儲存！', 'color: #10b981; font-weight: bold;', data);
+    return {
+      success: true,
+      loanId: data.loanId,
+      message: data.message,
+      totalRent: data.totalRent
+    };
+  } catch (err: unknown) {
+    console.warn('[Supabase] 提交裝備租借例外:', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: msg };
+  }
+};
+
+/**
+ * ⚡ 取消裝備租借申請 (透過 cancel_equipment_loan_rpc 安全 RPC，延遲 < 30ms)
+ * 自動在資料庫層釋放並歸還裝備庫存，觸發 sync_queue
+ */
+export const cancelEquipmentLoanInSupabase = async (
+  userId: string,
+  loanId: string
+): Promise<{ success: boolean; message?: string }> => {
+  if (!supabase || !userId || !loanId) return { success: false, message: '缺少必要參數' };
+
+  try {
+    const { data, error } = await supabase.rpc('cancel_equipment_loan_rpc', {
+      p_line_user_id: userId,
+      p_loan_id: loanId
+    });
+
+    if (error || data?.status !== 'success') {
+      console.warn('[Supabase] 取消裝備失敗:', error?.message || data?.message);
+      return { success: false, message: error?.message || data?.message };
+    }
+
+    console.log('%c⚡ [DataSource: Supabase] 裝備預約已秒級取消！', 'color: #10b981; font-weight: bold;', loanId);
+    return { success: true, message: data.message };
+  } catch (err: unknown) {
+    console.warn('[Supabase] 取消裝備例外:', err);
+    return { success: false, message: err instanceof Error ? err.message : String(err) };
+  }
+};
+
+/**
+ * ⚡ 取消活動報名 (透過 cancel_event_signup_rpc 安全 RPC，延遲 < 30ms)
+ */
+export const cancelEventSignupInSupabase = async (
+  userId: string,
+  signupId: string,
+  reason?: string
+): Promise<{ success: boolean; message?: string }> => {
+  if (!supabase || !userId || !signupId) return { success: false, message: '缺少必要參數' };
+
+  try {
+    const { data, error } = await supabase.rpc('cancel_event_signup_rpc', {
+      p_line_user_id: userId,
+      p_signup_id: signupId,
+      p_reason: reason || null
+    });
+
+    if (error || data?.status !== 'success') {
+      console.warn('[Supabase] 取消報名失敗:', error?.message || data?.message);
+      return { success: false, message: error?.message || data?.message };
+    }
+
+    console.log('%c⚡ [DataSource: Supabase] 活動報名已秒級取消！', 'color: #10b981; font-weight: bold;', signupId);
+    return { success: true, message: data.message };
+  } catch (err: unknown) {
+    console.warn('[Supabase] 取消報名例外:', err);
+    return { success: false, message: err instanceof Error ? err.message : String(err) };
+  }
+};
+

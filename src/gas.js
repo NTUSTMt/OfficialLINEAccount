@@ -1,3 +1,7 @@
+// ==============================================================================
+// 🌲 野境戶外系統 GAS 模組 1：環境設定、認證與共通工具 (01_Config_Auth.js)
+// ==============================================================================
+
 // ⭐️ 1. 全域變數與環境設定
 var SPREADSHEET_ID = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
 var ADMIN_GROUP_ID = PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID');
@@ -42,8 +46,7 @@ function verifyLineIdToken(idToken, expectedUserId) {
 
     if (resCode === 200 && data && data.sub) {
       var verifiedUserId = data.sub;
-      // 寫入快取 600 秒 (10 分鐘)
-      cache.put("line_token_" + tokenHash, verifiedUserId, 600);
+      cache.put("line_token_" + tokenHash, verifiedUserId, 600); // 快取 10 分鐘
 
       if (expectedUserId && expectedUserId !== "TEST_USER_ID" && verifiedUserId !== expectedUserId) {
         return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
@@ -71,7 +74,6 @@ function getAuthenticatedUserId(paramObj, fallbackUserId) {
     }
     return { ok: true, userId: auth.userId, verified: true };
   }
-  // 向下相容過渡：若未帶 idToken 且有 fallbackUserId
   if (fallbackUserId) {
     return { ok: true, userId: fallbackUserId, verified: false };
   }
@@ -93,7 +95,7 @@ function _lineAPI(endpoint, token, payload) {
   });
 }
 
-// 安全釋放 LockService 鎖定 (防止 Lock was not released because it is not held 崩潰)
+// 安全釋放 LockService 鎖定 (防止 Lock was not released 崩潰)
 function _safeReleaseLock(lock) {
   try {
     if (lock && typeof lock.hasLock === "function" && lock.hasLock()) {
@@ -135,9419 +137,1113 @@ function _successResponse(data) {
 
 // 動態欄位查找 (在 headers 中搜尋包含 keyword 的欄位索引)
 function _fi(headers, keyword) {
+  if (!headers || !headers.length) return -1;
   return headers.findIndex(function (h) {
     return String(h).includes(keyword);
   });
 }
 
-// 動態查找「與緊急聯絡人關係」欄位索引（防呆：嚴格排除登山/爬山/經驗等欄位，並優先鎖定同時有「緊急」與「關係」之欄位）
-function _findEmerRelColIdx(headers) {
-  if (!headers || !headers.length) return -1;
-  var bestIdx = -1;
-  var fallbackIdx = -1;
-  for (var i = 0; i < headers.length; i++) {
-    var hStr = String(headers[i]);
-    if (hStr.includes("經驗") || hStr.includes("登山") || hStr.includes("爬山") || hStr.includes("經歷") || hStr.toLowerCase().includes("exp")) {
-      continue;
-    }
-    var isRel = hStr.includes("關係") || hStr.toLowerCase().includes("relation");
-    if (!isRel) continue;
+// 遮罩敏感字串 (個資保護)
+function _maskString(str, visibleStart, visibleEnd) {
+  if (!str) return "";
+  var s = String(str);
+  if (s.length <= visibleStart + visibleEnd) return s;
+  var start = s.substring(0, visibleStart);
+  var end = s.substring(s.length - visibleEnd);
+  var maskLen = s.length - visibleStart - visibleEnd;
+  var mask = "";
+  for (var i = 0; i < maskLen; i++) mask += "*";
+  return start + mask + end;
+}
+// ==============================================================================
+// 🤖 野境戶外系統 GAS 模組 2：LINE Bot Webhook 接收與指令路由 (02_LineBot_Webhook.js)
+// ==============================================================================
 
-    var isEmer = hStr.includes("緊急") || hStr.toLowerCase().includes("emergency");
-    if (isEmer) {
-      return i;
+/**
+ * GAS 主要 POST 入口點
+ * 智慧分流：LINE Messaging Webhook vs LIFF 前端 Helper API
+ */
+function doPost(e) {
+  if (!e || !e.postData || !e.postData.contents) {
+    return _errorResponse("缺少請求酬載 (Empty post data)");
+  }
+
+  try {
+    var rawText = e.postData.contents;
+    var json = JSON.parse(rawText);
+
+    // 1. 若含有 events 陣列，代表來自 LINE 官方 Messaging API Webhook
+    if (json.events && Array.isArray(json.events)) {
+      return _handleLineWebhookEvents(json.events);
     }
-    if (fallbackIdx === -1) {
-      fallbackIdx = i;
+
+    // 2. 若含有 action 欄位，代表來自 LIFF 前端之輕量 Helper API 呼叫
+    if (json.action) {
+      return handleLiffHelperApi(json);
+    }
+
+    return _errorResponse("無法辨識之請求格式");
+  } catch (err) {
+    console.error("doPost 處理異常:", err);
+    return _errorResponse("伺服器處理例外: " + err.toString());
+  }
+}
+
+/**
+ * 處理 LINE Webhook 事件陣列
+ */
+function _handleLineWebhookEvents(events) {
+  for (var i = 0; i < events.length; i++) {
+    var ev = events[i];
+    var replyToken = ev.replyToken;
+    var userId = ev.source ? ev.source.userId : "";
+    var groupId = ev.source ? ev.source.groupId : "";
+
+    // 處理文字訊息
+    if (ev.type === "message" && ev.message && ev.message.type === "text") {
+      var text = ev.message.text ? ev.message.text.trim() : "";
+      _handleTextMessage(replyToken, userId, text, groupId);
+    }
+    // 處理按鈕回傳 (Postback)
+    else if (ev.type === "postback" && ev.postback && ev.postback.data) {
+      _handlePostback(replyToken, userId, ev.postback.data);
     }
   }
-  return fallbackIdx;
+  return ContentService.createTextOutput("OK");
 }
 
-// 提取指定 row 中的「與緊急聯絡人關係」值（防呆排除經驗欄位，優先取同時有緊急與關係者）
-function _getEmerRelValue(headers, row) {
-  if (!headers || !row) return "";
-  var bestVal = "";
-  var fallbackVal = "";
-  for (var i = 0; i < headers.length; i++) {
-    var hStr = String(headers[i]);
-    if (hStr.includes("經驗") || hStr.includes("登山") || hStr.includes("爬山") || hStr.includes("經歷") || hStr.toLowerCase().includes("exp")) {
-      continue;
+/**
+ * 文字指令路由器
+ */
+function _handleTextMessage(replyToken, userId, text, groupId) {
+  // 1. 幹部群組綁定指令
+  if (text === "綁定幹部群組" || text === "#bind_admin") {
+    if (groupId) {
+      PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', groupId);
+      _replyMessage(replyToken, "✅ 已成功將此群組設定為【幹部管理推播群組】！");
+    } else {
+      _replyMessage(replyToken, "⚠️ 此指令僅能在幹部群組內執行。");
     }
-    var isRel = hStr.includes("關係") || hStr.toLowerCase().includes("relation");
-    if (!isRel) continue;
+    return;
+  }
 
-    var val = String(row[i] || "").trim();
-    if (!val) continue;
+  // 2. 最新活動查詢
+  if (text === "最新活動" || text === "報名活動" || text.toLowerCase() === "events") {
+    var flexCards = _buildLatestEventsFlex();
+    if (flexCards) {
+      _replyFlexMessage(replyToken, "最新活動資訊", flexCards);
+    } else {
+      _replyMessage(replyToken, "目前暫無開放報名的活動，請密切注意公告！");
+    }
+    return;
+  }
 
-    var isEmer = hStr.includes("緊急") || hStr.toLowerCase().includes("emergency");
-    if (isEmer && !bestVal) {
-      bestVal = val;
-    } else if (!fallbackVal) {
-      fallbackVal = val;
+  // 3. 幹部名單
+  if (text === "幹部名單" || text === "幹部是誰" || text.toLowerCase() === "officers") {
+    var officerFlex = _buildOfficersFlex();
+    if (officerFlex) {
+      _replyFlexMessage(replyToken, "幹部團隊名單", officerFlex);
+    } else {
+      _replyMessage(replyToken, "目前幹部名冊維護中。");
+    }
+    return;
+  }
+
+  // 4. 更多服務
+  if (text === "更多服務" || text === "其他服務" || text.toLowerCase() === "more") {
+    var moreFlex = _buildMoreServicesFlex();
+    _replyFlexMessage(replyToken, "野境戶外：更多服務選單", moreFlex);
+    return;
+  }
+
+  // 5. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
+  if (GEMINI_API_KEY) {
+    var aiReply = _handleGeminiChat(userId, text);
+    if (aiReply) {
+      _replyMessage(replyToken, aiReply);
+      return;
     }
   }
-  return bestVal || fallbackVal;
+
+  // 若無特定處理，回傳友善提示
+  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備借用」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！");
 }
 
-// 跨表查詢活動名稱 (從 Events 表根據活動編號取得名稱)
-function _getEventName(ss, eventId) {
-  var eventSheet = ss.getSheetByName("Events");
-  if (!eventSheet || !eventId) return eventId || "活動";
-  var eData = eventSheet.getDataRange().getDisplayValues();
-  var eIdIdx = _fi(eData[0], "活動編號");
-  var eNameIdx = _fi(eData[0], "活動名稱");
-  for (var i = 1; i < eData.length; i++) {
-    if (eIdIdx > -1 && eData[i][eIdIdx] === eventId) {
-      return (eNameIdx > -1) ? eData[i][eNameIdx] : eventId;
+/**
+ * 按鈕隱藏回傳值處理 (Postback Router)
+ */
+function _handlePostback(replyToken, userId, postbackData) {
+  var params = {};
+  var parts = postbackData.split("&");
+  for (var i = 0; i < parts.length; i++) {
+    var pair = parts[i].split("=");
+    if (pair.length === 2) {
+      params[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
     }
   }
-  return eventId;
+
+  var action = params.action;
+  if (action === "view_event_detail") {
+    var eventId = params.eventId;
+    var detailFlex = _buildSingleEventDetailFlex(eventId);
+    if (detailFlex) {
+      _replyFlexMessage(replyToken, "活動詳情", detailFlex);
+    } else {
+      _replyMessage(replyToken, "找不到該活動詳細資料。");
+    }
+  }
 }
 
-// 三重保險抓取裝備名稱
-function _getEquipName(row, name1Idx, name2Idx, idIdx, fallback) {
-  var name = "";
-  if (name1Idx > -1 && row[name1Idx]) name = String(row[name1Idx]).trim();
-  if (name === "" && name2Idx > -1 && row[name2Idx]) name = String(row[name2Idx]).trim();
-  if (name === "" && idIdx > -1 && row[idIdx]) name = String(row[idIdx]).trim();
-  return name || (fallback || "未知裝備");
-}
-
-// 動態查找金額欄位索引 (防呆支援各種名稱)
-function _findAmountColIdx(headers) {
-  if (!headers || !headers.length) return -1;
-  return headers.findIndex(function (h) {
-    var s = String(h).toLowerCase();
-    return s.includes("金額") || s.includes("費用") || s.includes("總額") || s.includes("應繳") || s.includes("amount") || s.includes("cost") || s.includes("fee");
+/**
+ * LINE 訊息發送工具函式
+ */
+function _replyMessage(replyToken, text) {
+  if (!replyToken || !text) return;
+  _lineAPI('reply', MEMBER_BOT_TOKEN, {
+    replyToken: replyToken,
+    messages: [{ type: 'text', text: text }]
   });
 }
 
-// 安全取得 Payments 表金額欄位索引（嚴格唯讀防護：絕不修改試算表表頭，避免觸發 J1 資料驗證例外）
-function _ensurePaymentAmountCol(sheet, headers) {
-  return _findAmountColIdx(headers);
+function _replyFlexMessage(replyToken, altText, flexContents) {
+  if (!replyToken || !flexContents) return;
+  _lineAPI('reply', MEMBER_BOT_TOKEN, {
+    replyToken: replyToken,
+    messages: [{
+      type: 'flex',
+      altText: altText || '新訊息',
+      contents: flexContents
+    }]
+  });
 }
 
-// ⚡ Supabase 連線整合核心 (REST API / RPC)
-function _fetchPaymentHistoryFromSupabase(userId) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !userId) return null;
-  try {
-    var url = SUPABASE_URL + "/rest/v1/rpc/get_my_payment_history";
-    var res = UrlFetchApp.fetch(url, {
-      method: "post",
-      contentType: "application/json",
-      headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY
+function _pushMessage(userId, text) {
+  if (!userId || !text) return;
+  _lineAPI('push', MEMBER_BOT_TOKEN, {
+    to: userId,
+    messages: [{ type: 'text', text: text }]
+  });
+}
+
+function pushAdminMessage(text) {
+  var adminGroupId = PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID') || ADMIN_GROUP_ID;
+  if (!adminGroupId || !text) return;
+  _lineAPI('push', ADMIN_BOT_TOKEN || MEMBER_BOT_TOKEN, {
+    to: adminGroupId,
+    messages: [{ type: 'text', text: text }]
+  });
+}
+// ==============================================================================
+// 🎨 野境戶外系統 GAS 模組 3：LINE Flex Message 樣板產生器 (03_Flex_Templates.js)
+// ==============================================================================
+
+/**
+ * 產生最新開放活動輪播卡片
+ */
+function _buildLatestEventsFlex() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName("Events");
+  if (!sheet) return null;
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return null;
+
+  var headers = data[0];
+  var idIdx = _fi(headers, "活動編號") > -1 ? _fi(headers, "活動編號") : 0;
+  var nameIdx = _fi(headers, "活動名稱") > -1 ? _fi(headers, "活動名稱") : 1;
+  var feeIdx = _fi(headers, "費用") > -1 ? _fi(headers, "費用") : 2;
+  var startIdx = _fi(headers, "開始日期") > -1 ? _fi(headers, "開始日期") : 3;
+  var endIdx = _fi(headers, "結束日期") > -1 ? _fi(headers, "結束日期") : 4;
+  var dlIdx = _fi(headers, "報名截止") > -1 ? _fi(headers, "報名截止") : 5;
+  var stIdx = _fi(headers, "報名狀態") > -1 ? _fi(headers, "報名狀態") : 6;
+  var descIdx = _fi(headers, "簡介") > -1 ? _fi(headers, "簡介") : 7;
+  var imgIdx = _fi(headers, "封面圖") > -1 ? _fi(headers, "封面圖") : 9;
+
+  var bubbles = [];
+  var count = 0;
+
+  for (var i = 1; i < data.length && count < 10; i++) {
+    var row = data[i];
+    var status = String(row[stIdx] || "").trim();
+    if (status !== "開放" && status !== "Open") continue;
+
+    var eventId = String(row[idIdx] || "");
+    var title = String(row[nameIdx] || "未命名活動");
+    var fee = row[feeIdx] ? "$" + row[feeIdx] : "免費";
+    var start = row[startIdx] ? String(row[startIdx]).split("T")[0] : "";
+    var deadline = row[dlIdx] ? String(row[dlIdx]).split("T")[0] : "";
+    var desc = String(row[descIdx] || "歡迎報名參加！");
+    if (desc.length > 50) desc = desc.substring(0, 48) + "...";
+    var coverImg = String(row[imgIdx] || "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80");
+
+    var bubble = {
+      type: "bubble",
+      hero: {
+        type: "image",
+        url: coverImg,
+        size: "full",
+        aspectRatio: "20:13",
+        aspectMode: "cover"
       },
-      payload: JSON.stringify({ p_line_user_id: userId }),
-      muteHttpExceptions: true
-    });
-    if (res.getResponseCode() === 200) {
-      var json = JSON.parse(res.getContentText());
-      if (json && Array.isArray(json.history) && json.history.length > 0) {
-        console.log("⚡ [Supabase] 成功從 Supabase 取得個人繳費歷史: " + json.history.length + " 筆");
-        return json;
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          { type: "text", text: title, weight: "bold", size: "lg", wrap: true },
+          {
+            type: "box",
+            layout: "vertical",
+            margin: "md",
+            spacing: "sm",
+            contents: [
+              {
+                type: "box",
+                layout: "baseline",
+                spacing: "sm",
+                contents: [
+                  { type: "text", text: "日期", color: "#aaaaaa", size: "sm", flex: 2 },
+                  { type: "text", text: start, wrap: true, color: "#666666", size: "sm", flex: 5 }
+                ]
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                spacing: "sm",
+                contents: [
+                  { type: "text", text: "費用", color: "#aaaaaa", size: "sm", flex: 2 },
+                  { type: "text", text: fee, wrap: true, color: "#10b981", weight: "bold", size: "sm", flex: 5 }
+                ]
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                spacing: "sm",
+                contents: [
+                  { type: "text", text: "截止", color: "#aaaaaa", size: "sm", flex: 2 },
+                  { type: "text", text: deadline, wrap: true, color: "#ef4444", size: "sm", flex: 5 }
+                ]
+              }
+            ]
+          },
+          { type: "text", text: desc, margin: "md", size: "xs", color: "#888888", wrap: true }
+        ]
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            color: "#10b981",
+            height: "sm",
+            action: {
+              type: "uri",
+              label: "線上報名 (LIFF)",
+              uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=events"
+            }
+          },
+          {
+            type: "button",
+            style: "secondary",
+            height: "sm",
+            action: {
+              type: "postback",
+              label: "詳細資訊",
+              data: "action=view_event_detail&eventId=" + encodeURIComponent(eventId)
+            }
+          }
+        ]
       }
-    } else {
-      console.warn("Supabase get_my_payment_history 回應 HTTP " + res.getResponseCode() + ": " + res.getContentText());
+    };
+    bubbles.push(bubble);
+    count++;
+  }
+
+  if (bubbles.length === 0) return null;
+  return { type: "carousel", contents: bubbles };
+}
+
+/**
+ * 產生單一活動詳細內容卡片
+ */
+function _buildSingleEventDetailFlex(eventId) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName("Events");
+  if (!sheet) return null;
+
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var idIdx = _fi(headers, "活動編號") > -1 ? _fi(headers, "活動編號") : 0;
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIdx]).trim() === String(eventId).trim()) {
+      var row = data[i];
+      var title = row[_fi(headers, "活動名稱")] || "未命名活動";
+      var summary = row[_fi(headers, "簡介")] || "無簡介";
+      var itinerary = row[_fi(headers, "詳細行程")] || "無詳細行程";
+      var fee = row[_fi(headers, "費用")] ? "$" + row[_fi(headers, "費用")] : "免費";
+
+      return {
+        type: "bubble",
+        body: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            { type: "text", text: title, weight: "bold", size: "xl", wrap: true },
+            { type: "text", text: "費用預估：" + fee, color: "#10b981", weight: "bold", margin: "md" },
+            { type: "separator", margin: "md" },
+            { type: "text", text: "【活動特色與簡介】", weight: "bold", size: "sm", margin: "md" },
+            { type: "text", text: summary, wrap: true, size: "sm", color: "#555555", margin: "xs" },
+            { type: "separator", margin: "md" },
+            { type: "text", text: "【預定詳細行程】", weight: "bold", size: "sm", margin: "md" },
+            { type: "text", text: itinerary, wrap: true, size: "xs", color: "#666666", margin: "xs" }
+          ]
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            {
+              type: "button",
+              style: "primary",
+              color: "#10b981",
+              action: {
+                type: "uri",
+                label: "前往報名",
+                uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=events"
+              }
+            }
+          ]
+        }
+      };
     }
-  } catch (err) {
-    console.warn("GAS 呼叫 Supabase get_my_payment_history 例外:", err);
   }
   return null;
 }
 
-function _syncPaymentToSupabase(userId, details, userName) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !userId) return false;
-  try {
-    if (userName && details && !details.userName) {
-      details.userName = userName;
-    }
-    var url = SUPABASE_URL + "/rest/v1/rpc/submit_payment_rpc";
-    var res = UrlFetchApp.fetch(url, {
-      method: "post",
-      contentType: "application/json",
-      headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY
-      },
-      payload: JSON.stringify({
-        p_line_user_id: userId,
-        p_details: details
-      }),
-      muteHttpExceptions: true
-    });
-    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
-      console.log("⚡ [Supabase] 繳費申報已成功同步至 Supabase submit_payment_rpc");
-      return true;
-    } else {
-      console.warn("Supabase submit_payment_rpc 失敗 (HTTP " + res.getResponseCode() + "): " + res.getContentText());
-    }
-  } catch (err) {
-    console.warn("GAS 同步繳費至 Supabase 拋出例外:", err);
-  }
-  return false;
-}
-
-function _syncPaymentStatusToSupabase(userId, status) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !userId) return;
-  try {
-    var url = SUPABASE_URL + "/rest/v1/payments?line_user_id=eq." + encodeURIComponent(userId) + "&status=ilike.*待確認*";
-    UrlFetchApp.fetch(url, {
-      method: "patch",
-      contentType: "application/json",
-      headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-        "Prefer": "return=minimal"
-      },
-      payload: JSON.stringify({
-        status: status || "已核銷 Confirmed",
-        updated_at: new Date().toISOString()
-      }),
-      muteHttpExceptions: true
-    });
-  } catch (err) {
-    console.warn("GAS 同步核銷狀態至 Supabase 失敗:", err);
-  }
-}
-
-// ⭐️ 訊息發送引擎 (雙核心智慧切換版)
-
-// 傳送單一「純文字」訊息
-
-// 👉 1. 【回覆社員】(完全免費，使用 MEMBER_BOT_TOKEN)
-// 說明：只要是社員主動操作，都必須使用這組 API 來回覆，以節省成本。
-// 注意：Reply Token 是一次性的，且時效只有 1 分鐘！
-function replyMessage(replyToken, text) {
-  _lineAPI('reply', MEMBER_BOT_TOKEN, {
-    'replyToken': replyToken,
-    'messages': [{
-      'type': 'text',
-      'text': text
-    }]
-  });
-}
-
-// 傳送單張「精美排版卡片 (Flex Message)」
-function replyFlexMessage(replyToken, altText, contents) {
-  _lineAPI('reply', MEMBER_BOT_TOKEN, {
-    'replyToken': replyToken,
-    'messages': [{
-      'type': 'flex',
-      'altText': altText,
-      'contents': contents
-    }]
-  });
-}
-
-// 一次傳送「多筆訊息」(例如：先傳一句文字，緊接著再傳一張卡片)
-function replyMultiMessages(replyToken, messagesArray) {
-  _lineAPI('reply', MEMBER_BOT_TOKEN, {
-    'replyToken': replyToken,
-    'messages': messagesArray
-  });
-}
-
-// 主動推播單一「純文字」訊息
-
-// 👉 2. 【推播給社員】(需消耗額度，使用 MEMBER_BOT_TOKEN)
-// 說明：用於系統「主動」聯絡社員 (例如：幹部審核通過後的正備取通知、對帳成功的通知)。
-// 參數使用 userId (U開頭的系統識別碼) 來精準定位要傳給誰。
-function pushMessage(userId, text) {
-  return _lineAPI('push', MEMBER_BOT_TOKEN, {
-    'to': userId,
-    'messages': [{
-      'type': 'text',
-      'text': text
-    }]
-  });
-}
-
-// 主動推播「精美排版卡片 (Flex Message)」
-function pushFlexMessage(to, altText, contents) {
-  return _lineAPI('push', MEMBER_BOT_TOKEN, {
-    'to': to,
-    'messages': [{
-      'type': 'flex',
-      'altText': altText,
-      'contents': contents
-    }]
-  });
-}
-
-// 傳送純文字通知給幹部群組
-
-// 👉 3. 【推播給幹部群組】(需消耗額度，切換使用 ADMIN_BOT_TOKEN)
-// 說明：專門用來將社員的報名、借裝備、匯款證明，自動轉發到「幹部群組」裡。
-// 因為切換了 Token，所以消耗的是「二號機器人 (管理員專用)」的免費額度，不會跟社員搶配額！
-function pushAdminMessage(text) {
-  if (!ADMIN_GROUP_ID) return;
-  return _lineAPI('push', ADMIN_BOT_TOKEN, {
-    'to': ADMIN_GROUP_ID,
-    'messages': [{
-      'type': 'text',
-      'text': text
-    }]
-  });
-}
-
-// 傳送「帶有確認按鈕的卡片 (Flex Message)」給幹部群組 (如：匯款對帳卡)
-function pushAdminFlexMessage(altText, contents) {
-  if (!ADMIN_GROUP_ID) return;
-  return _lineAPI('push', ADMIN_BOT_TOKEN, {
-    'to': ADMIN_GROUP_ID,
-    'messages': [{
-      'type': 'flex',
-      'altText': altText,
-      'contents': contents
-    }]
-  });
-}
-
-
-// 👉 4. 【幹部專用回覆引擎】(完全免費，使用 ADMIN_BOT_TOKEN)
-// 說明：當幹部在群組裡點擊了「確認無誤並發通知」的按鈕時，
-// 系統會透過這個引擎，立刻在群組內回覆幹部「已成功發送通知」。
-function replyAdminMessage(replyToken, text) {
-  _lineAPI('reply', ADMIN_BOT_TOKEN, {
-    'replyToken': replyToken,
-    'messages': [{
-      'type': 'text',
-      'text': text
-    }]
-  });
-}
-
-// 傳送「精美排版卡片 (Flex Message)」給幹部群組
-function replyAdminFlexMessage(replyToken, altText, contents) {
-  _lineAPI('reply', ADMIN_BOT_TOKEN, {
-    'replyToken': replyToken,
-    'messages': [{
-      'type': 'flex',
-      'altText': altText,
-      'contents': contents
-    }]
-  });
-}
-
-// ⭐️ 總機大廳 (Webhook 接收端 / 解除快取陷阱防護版)
-// 【函式說明】
-// 這是 LINE Bot 的「大門口」。當使用者在 LINE 傳送任何訊息、點擊按鈕或傳送照片時，
-// LINE 的伺服器都會把資料打包發送到這個 doPost 函式。
-// 這個程式負責將收到的資料「拆包分流」，判斷使用者是在按按鈕 (postback)、
-// 傳送一般文字 (text)，還是在傳送照片 (image)，然後交給對應的處理部門。
-// 同時，這裡也掌管了「狀態機 (Cache)」，負責攔截使用者正在進行的「繳費」或「取消」流程。
-function doPost(e) {
-  if (!e || !e.postData) return ContentService.createTextOutput('ok');
-
-  try {
-    var msg = JSON.parse(e.postData.contents);
-
-    if (msg.action) {
-      // 🛡️ 身分認證校驗：若附帶 idToken 則透過 LINE 官方端點檢驗真實性並鎖定 msg.userId
-      var authResult = getAuthenticatedUserId(msg, msg.userId);
-      if (!authResult.ok) {
-        return _errorResponse(authResult.error);
-      }
-      msg.userId = authResult.userId;
-    }
-
-    if (msg.action === 'submit_multi_loan') {
-      return processMultiLoan(msg);
-    }
-
-    if (msg.action === 'submit_payment') {
-      return processPaymentSubmit(msg);
-    }
-
-    if (msg.action === 'save_profile') {
-      return processSaveProfile(msg);
-    }
-
-    if (msg.action === 'submit_reflection') {
-      return processSubmitReflection(msg);
-    }
-
-    if (msg.action === 'liff_cancel_event') {
-      return processLiffCancelEvent(msg);
-    }
-
-    if (msg.action === 'liff_cancel_loan') {
-      return processLiffCancelLoan(msg);
-    }
-
-    if (msg.action === 'save_event') {
-      return processSaveEvent(msg);
-    }
-
-    if (msg.action === 'update_event_status') {
-      return processUpdateEventStatus(msg);
-    }
-
-    if (msg.action === 'update_signup_status') {
-      return processUpdateSignupStatus(msg);
-    }
-
-    if (msg.action === 'send_event_notifications') {
-      return processSendEventNotifications(msg);
-    }
-
-    if (msg.action === 'update_equipment_images') {
-      return processUpdateEquipmentImages(msg);
-    }
-
-    for (var i = 0; i < msg.events.length; i++) {
-      var event = msg.events[i];
-
-      // 注意：文字訊息分流與呼叫「小岳」皆由下方統一處理
-
-      var replyToken = event.replyToken;
-      var userId = event.source.userId;
-
-      try {
-        // 分流 1：postback
-        if (event.type === 'postback') {
-          handlePostback(replyToken, userId, event.postback.data);
-        }
-        // 分流 2：文字訊息
-        else if (event.type === 'message' && event.message.type === 'text') {
-          var userText = event.message.text.trim();
-
-          if (userText.indexOf("我想借用：") > -1 || userText.indexOf("我要報名：") > -1 || userText.indexOf("我要取消") > -1 || userText.indexOf("我要上傳匯款證明") > -1) {
-            continue;
-          }
-
-          var cache = CacheService.getUserCache();
-
-          var menuCommands = ["我的狀態 My Status", "個人主頁 My Dashboard", "填寫資料 Register", "最新活動 Activities", "器材借用 Equipment Loan", "裝備租借 Equipment Loan", "取消預約 Cancel", "繳費系統 Payment System", "繳費中心 Payment Center", "繳費紀錄 History", "繳費紀錄 Payment History", "繳費回報", "其他", "更多服務 More Services", "幹部是誰 Officers", "意見與回饋 Feedback"];
-          if (menuCommands.indexOf(userText) > -1) {
-            cache.remove(userId + "_canceling_event");
-            cache.remove(userId + "_payment_type");
-            handleTextCommand(replyToken, userId, userText, event.source.type, event);
-            continue;
-          }
-
-          var cancelingEventId = cache.get(userId + "_canceling_event");
-          if (cancelingEventId) {
-            if (userText === "取消" || userText === "取消 Cancel") {
-              cache.remove(userId + "_canceling_event");
-              replyMessage(replyToken, "✅ 已為您終止取消流程，您的【正取】資格已為您保留！\n─────────────\n✅ Cancellation process aborted. Your [Confirmed] status has been safely retained!");
-            } else {
-              handleEventCancelReason(replyToken, userId, userText, cancelingEventId);
-            }
-            continue;
-          }
-
-          var paymentType = cache.get(userId + "_payment_type");
-          if (paymentType) {
-            if (userText === "取消" || userText === "取消 Cancel") {
-              cache.remove(userId + "_payment_type");
-              replyMessage(replyToken, "✅ 已為您取消繳費回報流程\n─────────────\n✅ Payment reporting process cancelled.");
-            } else {
-              handlePaymentInput(replyToken, userId, userText, paymentType, "text");
-            }
-            continue;
-          }
-
-          handleTextCommand(replyToken, userId, userText, event.source.type, event);
-        }
-        // 分流 3：圖片
-        else if (event.type === 'message' && event.message.type === 'image') {
-          var cache = CacheService.getUserCache();
-          var paymentType = cache.get(userId + "_payment_type");
-          if (paymentType) {
-            handlePaymentInput(replyToken, userId, event.message.id, paymentType, "image");
-            continue;
-          }
-        }
-      } catch (innerError) {
-        console.error("內部錯誤:", innerError);
-        replyMessage(replyToken, "🚨 系統執行時發生錯誤 System Error：\n" + innerError.message + "\n\n請截圖通知幹部修復！\nPlease screenshot this and notify the officers!");
-      }
-    }
-  } catch (err) {
-    console.error(err);
-  }
-
-  return ContentService.createTextOutput('ok');
-}
-
-// ⭐️ 處理按鈕隱藏回傳值 (全動態搜尋版)
-// 【函式說明】
-// 當社員在 LINE 點擊了卡片上的按鈕 (例如「我要報名」、「我要借這個」)，
-// 系統並不會收到文字，而是會收到一串我們預先埋好的「隱藏資料 (Postback Data)」。
-// 這個函式負責把這串資料拆解開來，判斷使用者到底按了什麼按鈕 (action)，
-// 以及這個按鈕對應的目標是什麼 (targetId，例如活動代碼、裝備代碼)，並執行對應動作。
-function handlePostback(replyToken, userId, postbackData) {
-  var params = postbackData.split("&");
-  var action = params[0].split("=")[1];
-  var targetId = params.length > 1 ? params[1].split("=")[1] : "";
+/**
+ * 產生幹部團隊名冊卡片
+ */
+function _buildOfficersFlex() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-  // 📌 動作：確認綁定此群組為唯一幹部通知群組
-  if (action === "confirm_bind_admin_group") {
-    var newGroupId = targetId;
-    if (newGroupId) {
-      PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', newGroupId);
-      ADMIN_GROUP_ID = newGroupId;
-      var bindSuccessMsg = "✅ 【幹部通知群組綁定完成】\n\n" +
-        "已成功將本群組（" + newGroupId + "）設定為【唯一的官方幹部通知群組】！\n\n" +
-        "🔒 系統安全保證：\n" +
-        "1. 先前的舊幹部群組已完全解除綁定，不再接收任何系統訊息。\n" +
-        "2. 今後所有社員報名、裝備租借預約、活動棄權遞補，以及匯款回報審核卡片，皆會第一時間發送至此群組！\n" +
-        "3. 系統後端已自動更新持久化設定，不需手動打開 GAS 編輯。";
-      replyAdminMessage(replyToken, bindSuccessMsg);
-    }
-    return;
-  }
-
-  // 📌 動作：確認備取意願 (無 emoji，中英雙語，不通知幹部)
-  if (action === "confirm_waitlist") {
-    var paramsMap = {};
-    params.forEach(function (p) {
-      var kv = p.split("=");
-      paramsMap[kv[0]] = kv[1];
-    });
-    var eventId = paramsMap["eventId"] || "";
-    var targetId = paramsMap["targetId"] || "";
-    var targetUid = paramsMap["userId"] || userId;
-    var sSheet = ss.getSheetByName("Signups");
-    if (!sSheet) {
-      replyMessage(replyToken, "系統錯誤：找不到報名資料表。\n─────────────\nSystem Error: Signups sheet not found.");
-      return;
-    }
-    var sData = sSheet.getDataRange().getValues();
-    var sH = sData[0];
-    var sSysIdx = _fi(sH, "系統識別碼");
-    var sEventIdIdx = _fi(sH, "活動編號");
-    var sStatusIdx = _fi(sH, "審核結果");
-    var sCodeIdx = _fi(sH, "專屬碼");
-
-    var found = false;
-    for (var i = 1; i < sData.length; i++) {
-      var rowUser = sSysIdx > -1 ? String(sData[i][sSysIdx]).trim() : "";
-      var rowCode = sCodeIdx > -1 ? String(sData[i][sCodeIdx]).trim() : "";
-      var rowEvtId = sEventIdIdx > -1 ? String(sData[i][sEventIdIdx]).trim() : "";
-
-      var matchUser = (rowUser === targetUid);
-      var matchEvent = (eventId && rowEvtId === eventId);
-      var matchCode = (targetId && rowCode === targetId);
-
-      if ((matchUser && matchEvent) || matchCode || (matchUser && matchCode)) {
-        found = true;
-        var actEventId = rowEvtId || eventId;
-        var eventName = _getEventName(ss, actEventId);
-        var currentStatus = sStatusIdx > -1 ? String(sData[i][sStatusIdx]) : "";
-        if (currentStatus.indexOf("備取 (有意願)") > -1 || currentStatus.indexOf("有意願") > -1) {
-          replyMessage(replyToken, "您先前已確認過備取意願！\n活動：" + eventName + "\n審核狀態為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist interest!\nEvent: " + eventName + "\nStatus: [Waitlist (Interested)]. Officers will contact you if a spot opens up.");
-          return;
-        }
-        if (currentStatus.indexOf("備取") > -1) {
-          sSheet.getRange(i + 1, sStatusIdx + 1).setValue("備取（有意願）Waitlisted (Interested)");
-          SpreadsheetApp.flush();
-          replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nYour waitlist interest has been confirmed! Your status is updated to [Waitlist (Interested)]. Officers will contact you if a spot opens up.");
-          return;
-        } else {
-          replyMessage(replyToken, "您的活動報名狀態為【" + currentStatus + "】，無需變更備取意願。\n─────────────\nYour current status is [" + currentStatus + "], no update needed.");
-          return;
-        }
-      }
-    }
-    if (!found) {
-      replyMessage(replyToken, "找不到該活動報名紀錄。\n─────────────\nSignup record not found.");
-    }
-    return;
-  }
-
-  // 📌 動作：借用裝備
-  if (action === "borrow_form") {
-    var profileCheck = _checkProfileComplete(userId, ss, "borrow");
-    if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-      replyMessage(replyToken, "⚠️ 借用失敗：系統找不到您的社員資料！\n請先完成「填寫資料」後再借用裝備。\n─────────────\n⚠️ Borrow Failed: Member profile not found!\nplease click 'Register' in the menu to complete your profile first.");
-      return;
-    }
-    if (profileCheck.missingFields.length > 0) {
-      replyMessage(replyToken, "⚠️ 借用失敗：您的個人資料尚不完整！\n\n為了確保裝備借用紀錄與聯繫順暢，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n👉 " + profileCheck.missingFields.join("\n👉 ") + "\n\n完成資料更新後，再回來點選借用喔！🏕️\n─────────────\n⚠️ Borrow Failed: Incomplete Profile!\nPlease update your profile first.");
-      return;
-    }
-
-    var equipSheet = ss.getSheetByName("Equipments");
-    var eData = equipSheet.getDataRange().getValues();
-    var eH = eData[0];
-    var eIdIdx = _fi(eH, "裝備代號");
-    var eNameIdx = _fi(eH, "裝備名稱");
-
-    var equipName = "未知裝備";
-    for (var i = 1; i < eData.length; i++) {
-      if (eIdIdx > -1 && eData[i][eIdIdx] === targetId) {
-        equipName = (eNameIdx > -1) ? eData[i][eNameIdx] : targetId;
-        break;
-      }
-    }
-
-    var baseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSctyPWViZnt6tLkju_2-_kozenStbnvtzOUcq3Ig7E8lJasSQ/viewform?usp=pp_url&entry.1659200472=NNNNN&entry.1758853980=ZZZZZ&entry.1336614037=EEEEE";
-    var formUrl = baseUrl.replace("ZZZZZ", userId).replace("EEEEE", targetId).replace("NNNNN", encodeURIComponent(equipName));
-
-    var text = "📝 裝備借用預約 / Equipment Reservation\n\n" +
-      "您選擇了 (Selected)：【" + equipName + "】\n\n" +
-      "請點擊下方專屬連結填寫日期、數量與用途：\n" +
-      "Please click the link below to fill in details:\n" +
-      formUrl + "\n\n" +
-      "⚠️ 表單中的系統資料已為您自動帶入，請千萬不要修改它們喔！\n" +
-      "(Note: System data in the form is auto-filled, please do NOT modify it!)";
-    replyMessage(replyToken, text);
-  }
-
-  // 📌 動作：查看活動詳情
-  else if (action === "view") {
-    sendEventDetail(replyToken, targetId, ss);
-  }
-
-  // 📌 動作：一鍵報名活動
-  else if (action === "signup") {
-    handleSignup(replyToken, userId, targetId, ss);
-  }
-
-  // 📌 動作：取消裝備預約
-  else if (action === "cancel_equip") {
-    var targetId = params.length > 1 ? params[1].split("=")[1] : "";
-    var loanSheet = ss.getSheetByName("Loan_Records");
-    if (!loanSheet) return;
-    var lData = loanSheet.getDataRange().getValues();
-    var lH = lData[0];
-    var equipSheet = ss.getSheetByName("Equipments");
-    var eData = equipSheet.getDataRange().getValues();
-    var eH = eData[0];
-
-    var eIdIdx = _fi(eH, "裝備代號");
-    var eNameIdx = _fi(eH, "裝備名稱");
-    var lOrderIdx = _fi(lH, "租借編號");
-    var lSysIdx = _fi(lH, "系統識別碼");
-    var lStatusIdx = _fi(lH, "領取/歸還");
-    var lEquipIdIdx = _fi(lH, "裝備代號");
-    var lQtyIdx = _fi(lH, "數量");
-    var lEquipNameIdx = lH.findIndex(function (h) {
-      return String(h).includes("裝備名稱") || String(h).includes("租借項目");
-    });
-    var lNameIdx = _fi(lH, "姓名");
-
-    var foundRecord = false;
-    for (var i = 1; i < lData.length; i++) {
-      var isTarget = (lOrderIdx > -1 && lData[i][lOrderIdx] === targetId) || (lEquipIdIdx > -1 && lData[i][lEquipIdIdx] === targetId);
-
-      if (isTarget && lSysIdx > -1 && lData[i][lSysIdx] === userId) {
-        foundRecord = true;
-        if (lStatusIdx > -1 && lData[i][lStatusIdx] === "待領取 To Be Collected") {
-          loanSheet.getRange(i + 1, lStatusIdx + 1).setValue("已取消 Cancelled");
-
-          // 自動退還庫存 (加鎖保護防止並發寫入衝突)
-          var lock = LockService.getScriptLock();
-          try {
-            lock.waitLock(10000); // 最多等待 10 秒
-            var equipSheet = ss.getSheetByName("Equipments");
-            if (equipSheet) {
-              var eData = equipSheet.getDataRange().getValues();
-              var eH = eData[0];
-              var eIdIdx = _fi(eH, "裝備代號");
-              var eStockIdx = _fi(eH, "剩餘數量");
-              for (var j = 1; j < eData.length; j++) {
-                if (eIdIdx > -1 && lEquipIdIdx > -1 && eData[j][eIdIdx] === lData[i][lEquipIdIdx]) {
-                  equipSheet.getRange(j + 1, eStockIdx + 1).setValue((parseInt(eData[j][eStockIdx], 10) || 0) + parseInt(lData[i][lQtyIdx], 10));
-                  break;
-                }
-              }
-            }
-          } catch (e) {
-            console.error("庫存退還時取得鎖定失敗", e);
-          } finally {
-            _safeReleaseLock(lock);
-          }
-
-          var equipName = (lEquipNameIdx > -1 && lData[i][lEquipNameIdx]) ? String(lData[i][lEquipNameIdx]).trim() : "未知裝備";
-          if (equipName === "未知裝備" || equipName === "") {
-            for (var k = 1; k < eData.length; k++) {
-              if (eIdIdx > -1 && lEquipIdIdx > -1 && eData[k][eIdIdx] === lData[i][lEquipIdIdx]) {
-                equipName = (eNameIdx > -1) ? String(eData[k][eNameIdx]).trim() : "未知裝備";
-                break;
-              }
-            }
-          }
-
-          replyMessage(replyToken, "✅ 【" + equipName + "】預約已成功取消！\n─────────────\n✅ Reservation successfully cancelled!");
-          var userName = (lNameIdx > -1) ? lData[i][lNameIdx] : "社員";
-          pushAdminMessage("🔔 【幹部通知：裝備取消】\n申請人：" + userName + "\n裝備：" + equipName + "\n庫存已自動回補！");
-        } else {
-          replyMessage(replyToken, "⚠️ 取消失敗：該訂單狀態已變更，無法直接取消。\n─────────────\n⚠️ Cancellation failed: Order status has changed.");
-        }
-        return;
-      }
-    }
-    if (!foundRecord) replyMessage(replyToken, "⚠️ 找不到該筆預約紀錄，請重新點選。\n─────────────\n⚠️ Record not found, please try again.");
-  }
-
-  // 📌 動作：取消活動報名
-  else if (action === "cancel_event") {
-    var signupSheet = ss.getSheetByName("Signups");
-    if (!signupSheet) return;
-    var sData = signupSheet.getDataRange().getValues();
-    var sH = sData[0];
-
-    var sCodeIdx = _fi(sH, "專屬碼");
-    var sSysIdx = _fi(sH, "系統識別碼");
-    var sStatusIdx = _fi(sH, "審核結果");
-    var sEventIdIdx = _fi(sH, "活動編號");
-
-    for (var k = 1; k < sData.length; k++) {
-      if (sCodeIdx > -1 && sSysIdx > -1 && sData[k][sCodeIdx].toString() === targetId.toString() && sData[k][sSysIdx].toString() === userId.toString()) {
-
-        var eventName = _getEventName(ss, sEventIdIdx > -1 ? sData[k][sEventIdIdx] : "");
-
-        // 情境 A：正取 -> 詢問取消原因
-        if (sStatusIdx > -1 && sData[k][sStatusIdx].indexOf("正取") > -1) {
-          CacheService.getUserCache().put(userId + "_canceling_event", targetId, 300);
-
-          var cancelPromptFlex = {
-            "type": "bubble",
-            "body": {
-              "type": "box",
-              "layout": "vertical",
-              "contents": [{
-                "type": "text",
-                "text": "⚠️ 正取取消確認 / Confirm Cancel",
-                "weight": "bold",
-                "color": "#E54545",
-                "size": "sm"
-              }, {
-                "type": "text",
-                "text": "您目前為【" + eventName + "】的正取名單。\nYou are on the confirmed list.",
-                "wrap": true,
-                "margin": "md",
-                "size": "sm",
-                "weight": "bold"
-              }, {
-                "type": "text",
-                "text": "請直接在此對話框輸入您的「取消原因」，送出後系統才會為您完成手續！\nPlease type your reason for cancellation in this chat to complete the process.",
-                "wrap": true,
-                "margin": "md",
-                "size": "xs",
-                "color": "#666666"
-              }]
-            },
-            "footer": {
-              "type": "box",
-              "layout": "vertical",
-              "contents": [{
-                "type": "button",
-                "style": "secondary",
-                "action": {
-                  "type": "message",
-                  "label": "❌ 放棄取消 Abort",
-                  "text": "取消 Cancel"
-                }
-              }]
-            }
-          };
-          replyFlexMessage(replyToken, "請輸入取消原因或選擇保留資格", cancelPromptFlex);
-        }
-        // 情境 B：備取或審核中 -> 直接取消
-        else {
-          if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
-          try {
-            _syncSignupCancelToSupabase(userId, sEventIdIdx > -1 ? sData[k][sEventIdIdx] : "", targetId, "自願取消");
-          } catch (sbCancelErr) {
-            console.warn("取消報名同步至 Supabase 失敗:", sbCancelErr);
-          }
-          replyMessage(replyToken, "✅ 【" + eventName + "】報名已成功取消！\n期待在未來的社團活動與您相見。\n─────────────\n✅ Registration successfully cancelled!\nHope to see you in our future activities.");
-        }
-        return;
-      }
-    }
-  }
-
-  // 📌 動作：準備繳費 (單筆回報/合併結帳)
-  else if (action === "upload_proof" || action === "ready_to_pay") {
-    var profileCheck = _checkProfileComplete(userId, ss, "payment");
-    if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-      replyMessage(replyToken, "⚠️ 繳費失敗：系統找不到您的社員資料！\n請先完成「填寫資料」後再進行繳費操作。\n─────────────\n⚠️ Payment Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first.");
-      return;
-    }
-    if (profileCheck.missingFields.length > 0) {
-      replyMessage(replyToken, "⚠️ 繳費失敗：您的個人資料尚不完整！\n\n為了對帳與後續聯絡順暢，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n👉 " + profileCheck.missingFields.join("\n👉 ") + "\n\n完成資料更新後，再回來點擊繳費喔！💸\n─────────────\n⚠️ Failed: Incomplete Profile!\nPlease update your profile first before proceeding with the payment.");
-      return;
-    }
-
-    var isAlreadyPendingOrPaid = false;
-
-    // 情境 A：合併結帳 - 檢查是否還有未繳費項目
-    if (targetId === "combined") {
-      var hasUnpaid = false;
-
-      var mSheet = ss.getSheetByName("Members");
-      if (mSheet) {
-        var mData = mSheet.getDataRange().getValues();
-        var mH = mData[0];
-        var sysIdx = _fi(mH, "系統識別碼");
-        var payIdx = _fi(mH, "繳費狀態");
-        for (var i = 1; i < mData.length; i++) {
-          if (sysIdx > -1 && mData[i][sysIdx] === userId && payIdx > -1) {
-            var pt = String(mData[i][payIdx]);
-            if (pt !== "已繳費 Paid" && pt !== "待確認 Checking") hasUnpaid = true;
-            break;
-          }
-        }
-      }
-
-      if (!hasUnpaid) {
-        var sSheet = ss.getSheetByName("Signups");
-        if (sSheet) {
-          var sData = sSheet.getDataRange().getValues();
-          var sH = sData[0];
-          var sSysIdx = _fi(sH, "系統識別碼");
-          var sPayIdx = _fi(sH, "繳費狀態");
-          var sStatIdx = _fi(sH, "審核結果");
-          for (var j = 1; j < sData.length; j++) {
-            if (sSysIdx > -1 && sData[j][sSysIdx] === userId && sPayIdx > -1 && sStatIdx > -1) {
-              var st = String(sData[j][sStatIdx]);
-              var pt = String(sData[j][sPayIdx]);
-              if (st.indexOf("正取") > -1 && st.indexOf("取消") === -1 && pt !== "已繳費 Paid" && pt !== "待確認 Checking") {
-                hasUnpaid = true;
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      if (!hasUnpaid) {
-        var lSheet = ss.getSheetByName("Loan_Records");
-        if (lSheet) {
-          var lData = lSheet.getDataRange().getValues();
-          var lH = lData[0];
-          var lSysIdx = _fi(lH, "系統識別碼");
-          var lPayIdx = _fi(lH, "繳費狀態");
-          var lStatIdx = _fi(lH, "領取/歸還");
-          for (var l = 1; l < lData.length; l++) {
-            if (lSysIdx > -1 && lData[l][lSysIdx] === userId && lPayIdx > -1 && lStatIdx > -1) {
-              var lst = String(lData[l][lStatIdx]);
-              var lpt = String(lData[l][lPayIdx]);
-              if (lst.indexOf("取消") === -1 && lst.indexOf("歸還") === -1 && lpt !== "已繳費 Paid" && lpt !== "待確認 Checking") {
-                hasUnpaid = true;
-                break;
-              }
-            }
-          }
-        }
-      }
-      if (!hasUnpaid) isAlreadyPendingOrPaid = true;
-    }
-    // 情境 B：單筆回報
-    else {
-      if (targetId === "繳交社費") {
-        isAlreadyPendingOrPaid = false;
-      } else if (String(targetId).startsWith("活動：")) {
-        var targetEventName = String(targetId).split("活動：")[1].trim();
-        var sSheet = ss.getSheetByName("Signups");
-        var eSheet = ss.getSheetByName("Events");
-        if (sSheet && eSheet) {
-          var sData = sSheet.getDataRange().getValues();
-          var eData = eSheet.getDataRange().getDisplayValues();
-          var sH = sData[0],
-            eH = eData[0];
-          var sSysIdx = _fi(sH, "系統識別碼");
-          var sPayIdx = _fi(sH, "繳費狀態");
-          var sEventIdIdx = _fi(sH, "活動編號");
-          var eIdIdx = _fi(eH, "活動編號");
-          var eNameIdx = _fi(eH, "活動名稱");
-
-          for (var j = 1; j < sData.length; j++) {
-            if (sSysIdx > -1 && sData[j][sSysIdx] === userId && sPayIdx > -1 && sEventIdIdx > -1) {
-              var eName = "";
-              for (var k = 1; k < eData.length; k++) {
-                if (eIdIdx > -1 && String(eData[k][eIdIdx]).trim() === String(sData[j][sEventIdIdx]).trim()) {
-                  eName = (eNameIdx > -1) ? String(eData[k][eNameIdx]).replace(/[&=]/g, '') : "";
-                  break;
-                }
-              }
-              if (targetEventName === eName) {
-                var pStat = String(sData[j][sPayIdx]);
-                if (pStat === "待確認 Checking" || pStat === "已繳費 Paid") {
-                  isAlreadyPendingOrPaid = true;
-                  break;
-                }
-              }
-            }
-          }
-        }
-      } else if (String(targetId).startsWith("裝備：")) {
-        var targetOrderId = String(targetId).split("裝備：")[1].split(" ")[0].trim();
-        var lSheet = ss.getSheetByName("Loan_Records");
-        if (lSheet) {
-          var lData = lSheet.getDataRange().getValues();
-          var lH = lData[0];
-          var lSysIdx = _fi(lH, "系統識別碼");
-          var lOrderIdx = _fi(lH, "租借編號");
-          var lPayIdx = _fi(lH, "繳費狀態");
-
-          for (var l = 1; l < lData.length; l++) {
-            if (lSysIdx > -1 && lData[l][lSysIdx] === userId && lPayIdx > -1 && lOrderIdx > -1) {
-              if (targetOrderId === String(lData[l][lOrderIdx] || "")) {
-                var pStat = String(lData[l][lPayIdx]);
-                if (pStat === "待確認 Checking" || pStat === "已繳費 Paid") {
-                  isAlreadyPendingOrPaid = true;
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    if (isAlreadyPendingOrPaid) {
-      replyMessage(replyToken, "⚠️ 繳費確認中，請勿重複回報喔！\n(若是歷史項目，代表該筆帳務已結清)\n─────────────\n⚠️ Payment is under review, please do not resubmit!\n(If this is a past item, it means the balance is cleared.)");
-      return;
-    }
-
-    var cache = CacheService.getUserCache();
-    cache.put(userId + "_payment_type", targetId, 300);
-
-    var promptText = (targetId === "繳交社費") ?
-      "一學期(per semester)：$200\n直到畢業(until graduation)：\n$800（Undergraduate）/ $400（Master）\n\n請直接在此對話框輸入包含『匯款金額』與『帳號末 5 碼』的文字\nPlease type your 'payment amount' and the 'last 5 digits of your bank account' in this chat! ✍️" :
-      "收到！請直接在此對話框輸入包含『匯款金額』與『帳號末 5 碼』的文字\n\nPlease type your 'payment amount' and the 'last 5 digits of your bank account' in this chat! ✍️";
-
-    var promptFlex = {
-      "type": "bubble",
-      "body": {
-        "type": "box",
-        "layout": "vertical",
-        "contents": [{
-          "type": "text",
-          "text": "⏳ 等待回報中... Pending...",
-          "weight": "bold",
-          "color": "#0367D3",
-          "size": "sm"
-        }, {
-          "type": "text",
-          "text": promptText,
-          "wrap": true,
-          "margin": "md",
-          "size": "sm",
-          "color": "#333333"
-        }]
-      },
-      "footer": {
-        "type": "box",
-        "layout": "vertical",
-        "contents": [{
-          "type": "button",
-          "style": "secondary",
-          "action": {
-            "type": "message",
-            "label": "❌ 取消回報 Cancel",
-            "text": "取消 Cancel"
-          }
-        }]
-      }
-    };
-    replyFlexMessage(replyToken, "請輸入匯款金額與末5碼", promptFlex);
-  }
-
-  // 📌 動作：幹部確認繳費
-  else if (action === "admin_confirm") {
-    var paramsMap = {};
-    params.forEach(function (p) {
-      var kv = p.split("=");
-      paramsMap[kv[0]] = kv[1];
-    });
-    var row = parseInt(paramsMap["row"], 10);
-    var targetUserId = paramsMap["userId"];
-    var pType = decodeURIComponent(postbackData.substring(postbackData.indexOf("&type=") + 6).split("&")[0]);
-    var expiryDateFromPostback = paramsMap["expire"] ? decodeURIComponent(paramsMap["expire"]) : "";
-
-    var paymentSheet = ss.getSheetByName("Payments");
-    var itemsText = "";
-    var expiryDate = expiryDateFromPostback;
-    if (paymentSheet && !isNaN(row) && row > 0) {
-      var pHeaders = paymentSheet.getRange(1, 1, 1, paymentSheet.getLastColumn()).getValues()[0];
-      var pStatusCol = _fi(pHeaders, "對帳狀態") + 1;
-      if (pStatusCol > 0) paymentSheet.getRange(row, pStatusCol).setValue("已確認無誤");
-      _syncPaymentStatusToSupabase(targetUserId, "已確認 Confirmed");
-
-      var pItemCol = _fi(pHeaders, "繳費項目");
-      if (pItemCol > -1) {
-        itemsText = String(paymentSheet.getRange(row, pItemCol + 1).getValue() || "");
-      }
-      var pExpireCol = _fi(pHeaders, "社籍到期日");
-      if (pExpireCol > -1) {
-        var expFromSheet = String(paymentSheet.getRange(row, pExpireCol + 1).getValue() || "").trim();
-        if (expFromSheet) expiryDate = expFromSheet;
-      }
-    }
-
-    var hasMembershipFee = itemsText
-      ? (itemsText.indexOf("社籍") > -1 || itemsText.indexOf("社費") > -1 || itemsText.indexOf("Membership") > -1)
-      : (pType === "繳交社費" || pType === "combined" || !!expiryDateFromPostback);
-
-    var hasActivityFee = itemsText
-      ? (itemsText.indexOf("活動") > -1)
-      : (pType === "combined" || pType === "activity" || String(pType).startsWith("活動："));
-
-    var hasEquipmentFee = itemsText
-      ? (itemsText.indexOf("裝備") > -1)
-      : (pType === "combined" || pType === "equipment" || String(pType).startsWith("裝備："));
-
-    var confirmedList = [];
-
-    // 1. 社費 (支援獨立社費或 combined 申報)
-    if (hasMembershipFee) {
-      var mSheet = ss.getSheetByName("Members");
-      if (mSheet) {
-        var mData = mSheet.getDataRange().getValues();
-        var sysIdx = _fi(mData[0], "系統識別碼");
-        var payIdx = _fi(mData[0], "繳費狀態");
-        for (var i = 1; i < mData.length; i++) {
-          if (sysIdx > -1 && mData[i][sysIdx] === targetUserId) {
-            var feeLabel = "🔸 社籍與社費 (Membership Fee)";
-            if (expiryDate) {
-              feeLabel += " (有效至 " + expiryDate + ")";
-            }
-            confirmedList.push(feeLabel);
-            break;
-          }
-        }
-      }
-    }
-
-    // 2. 活動
-    if (hasActivityFee) {
-      var targetEventName = String(pType).startsWith("活動：") ? String(pType).split("活動：")[1].trim() : "ALL";
-      var sSheet = ss.getSheetByName("Signups");
-      var eSheet = ss.getSheetByName("Events");
-      if (sSheet && eSheet) {
-        var sData = sSheet.getDataRange().getValues();
-        var eData = eSheet.getDataRange().getDisplayValues();
-        var sSysIdx = _fi(sData[0], "系統識別碼");
-        var sStatusIdx = _fi(sData[0], "審核結果");
-        var sPayIdx = _fi(sData[0], "繳費狀態");
-        var sEventIdIdx = _fi(sData[0], "活動編號");
-        var eIdIdx = _fi(eData[0], "活動編號");
-        var eNameIdx = _fi(eData[0], "活動名稱");
-
-        for (var j = 1; j < sData.length; j++) {
-          if (sSysIdx > -1 && sData[j][sSysIdx] === targetUserId) {
-            var currentStatus = String(sData[j][sStatusIdx] || "");
-            var currentPay = String(sData[j][sPayIdx] || "").trim();
-            if (currentStatus.indexOf("正取") > -1 && currentStatus.indexOf("取消") === -1 && currentPay !== "已繳費 Paid") {
-              var eName = "";
-              for (var k = 1; k < eData.length; k++) {
-                if (eIdIdx > -1 && String(eData[k][eIdIdx]).trim() === String(sData[j][sEventIdIdx]).trim()) {
-                  eName = eNameIdx > -1 ? String(eData[k][eNameIdx]).replace(/[&=]/g, '') : "未知活動";
-                  break;
-                }
-              }
-              var isEventMatched = (targetEventName === "ALL" || targetEventName === eName);
-              if (!isEventMatched && itemsText && eName && itemsText.indexOf(eName) > -1) {
-                isEventMatched = true;
-              }
-              if (isEventMatched) confirmedList.push("🔸 活動：" + eName);
-            }
-          }
-        }
-      }
-    }
-
-    // 3. 裝備
-    if (hasEquipmentFee) {
-      var targetOrderId = String(pType).startsWith("裝備：") ? String(pType).split("裝備：")[1].split(" ")[0].trim() : "ALL";
-      var lSheet = ss.getSheetByName("Loan_Records");
-      if (lSheet) {
-        var lData = lSheet.getDataRange().getValues();
-        var lSysIdx = _fi(lData[0], "系統識別碼");
-        var lOrderIdx = _fi(lData[0], "租借編號");
-        var lStatusIdx = _fi(lData[0], "領取/歸還");
-        var lPayIdx = _fi(lData[0], "繳費狀態");
-        var lName1Idx = _fi(lData[0], "裝備名稱");
-        var lName2Idx = _fi(lData[0], "租借項目");
-        var lIdIdx = _fi(lData[0], "裝備代號");
-
-        for (var l = 1; l < lData.length; l++) {
-          if (lSysIdx > -1 && lData[l][lSysIdx] === targetUserId) {
-            var currentStatus = String(lData[l][lStatusIdx] || "");
-            var currentPay = String(lData[l][lPayIdx] || "").trim();
-            if (currentStatus.indexOf("取消") === -1 && currentStatus.indexOf("歸還") === -1 && currentPay !== "已繳費 Paid") {
-              var currentOrder = lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : "";
-              if (targetOrderId === "ALL" || targetOrderId === currentOrder) {
-                var equipName = _getEquipName(lData[l], lName1Idx, lName2Idx, lIdIdx, "未知裝備");
-                confirmedList.push("🔹 裝備：" + equipName);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    processPaymentConfirmation(targetUserId, pType, ss, expiryDate, itemsText);
-
-    var confirmedItemsStr = confirmedList.length > 0 ? confirmedList.join("\n") : "🔸 " + pType;
-
-    var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
-      "您好！幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
-      "✅ 【確認項目 / Confirmed Items】\n" + confirmedItemsStr + "\n\n" +
-      "感謝您的配合，您的帳務狀態已經更新為「已繳費」！🏔️\nYour account status has been updated to 'Paid'.";
-    pushMessage(targetUserId, successMsg);
-
-    // 查詢繳費人姓名
-    var userName = "未知社員";
-    var isOfficial = "否";
-    var memberSheetForName = ss.getSheetByName("Members");
-    if (memberSheetForName) {
-      var mData = memberSheetForName.getDataRange().getValues();
-      var mH = mData[0];
-      var mSysIdx = _fi(mH, "系統識別碼");
-      var mNameIdx = _fi(mH, "姓名");
-      var mPayIdx = _fi(mH, "繳費狀態");
-
-      for (var i = 1; i < mData.length; i++) {
-        if (mSysIdx > -1 && mData[i][mSysIdx] === targetUserId) {
-          if (mNameIdx > -1) userName = String(mData[i][mNameIdx]).trim() || "未知社員";
-          var payStatus = (mPayIdx > -1) ? String(mData[i][mPayIdx]).trim() : "";
-          if (payStatus.indexOf("已繳") > -1 || payStatus === "是") isOfficial = "是";
-          break;
-        }
-      }
-    }
-
-    var adminMsg = "🔔 【幹部通知：繳費確認完成】\n\n" +
-      "👤 繳費人：" + userName + " (" + isOfficial + "社員)\n" +
-      "─────────────\n" +
-      "已成功將該筆帳務標記為「已確認無誤」，並同步更新社員繳費狀態為「已繳費」！\n\n" +
-      "👉 詳細項目：\n" +
-      confirmedItemsStr +
-      "\n\n系統已自動發送詳細項目通知給社員囉！";
-    replyAdminMessage(replyToken, adminMsg);
-  }
-
-  // 📌 動作：回到取消選單
-  else if (action === "cancel_menu") {
-    sendCancelMenu(replyToken, userId, ss);
-  }
-}
-
-// ⭐️ 產生幹部群組綁定確認卡片 (防誤觸單一群組綁定)
-function sendAdminGroupBindConfirm(replyToken, currentGroupId) {
-  var isAlreadyBound = (ADMIN_GROUP_ID === currentGroupId);
-
-  var confirmFlex = {
-    "type": "bubble",
-    "header": {
-      "type": "box",
-      "layout": "vertical",
-      "backgroundColor": isAlreadyBound ? "#059669" : "#ea580c",
-      "paddingAll": "16px",
-      "contents": [
-        {
-          "type": "text",
-          "text": isAlreadyBound ? "幹部群組綁定狀態" : "幹部群組綁定確認",
-          "weight": "bold",
-          "size": "lg",
-          "color": "#ffffff"
-        }
-      ]
-    },
-    "body": {
-      "type": "box",
-      "layout": "vertical",
-      "spacing": "md",
-      "contents": [
-        {
-          "type": "box",
-          "layout": "vertical",
-          "backgroundColor": "#f8fafc",
-          "paddingAll": "12px",
-          "cornerRadius": "8px",
-          "contents": [
-            {
-              "type": "text",
-              "text": "本群組識別碼 (Group ID):",
-              "size": "xs",
-              "color": "#64748b",
-              "weight": "bold"
-            },
-            {
-              "type": "text",
-              "text": currentGroupId,
-              "size": "sm",
-              "color": "#0f172a",
-              "weight": "bold",
-              "wrap": true
-            }
-          ]
-        },
-        {
-          "type": "text",
-          "text": isAlreadyBound
-            ? "此群組目前【已是唯一的官方幹部通知群組】。所有社員報名、借用、取消與查帳對帳卡片，皆會自動即時發送至此。"
-            : "重要安全提示：系統僅能維持【單一】幹部通知群組！若點擊下方確認綁定，原先綁定的舊群組將【立即失效並停止接收訊息】！",
-          "size": "xs",
-          "color": isAlreadyBound ? "#047857" : "#b91c1c",
-          "wrap": true
-        }
-      ]
-    },
-    "footer": {
-      "type": "box",
-      "layout": "vertical",
-      "spacing": "sm",
-      "contents": isAlreadyBound ? [
-        {
-          "type": "text",
-          "text": "已處於綁定運作狀態，無需重複綁定",
-          "size": "xs",
-          "color": "#64748b",
-          "align": "center"
-        }
-      ] : [
-        {
-          "type": "button",
-          "style": "primary",
-          "color": "#ea580c",
-          "height": "sm",
-          "action": {
-            "type": "postback",
-            "label": "確認綁定為唯一通知群組",
-            "data": "action=confirm_bind_admin_group&groupId=" + currentGroupId,
-            "displayText": "確認綁定為唯一幹部通知群組"
-          }
-        }
-      ]
-    }
-  };
-
-  replyAdminFlexMessage(replyToken, "幹部群組綁定確認", confirmFlex);
-}
-
-// ⭐️ 文字指令分流 (Text Command Router)
-// 【函式說明】
-// 當使用者在 LINE 對話框輸入純文字（而不是按按鈕）時，會進入這個函式。
-// 這裡就像是總機的「分機轉接表」，會根據使用者輸入的關鍵字，
-// 決定要呼叫哪個對應的功能模組。
-// 這裡也包含了呼叫 AI 助理「小岳」的專屬通道。
-function handleTextCommand(replyToken, userId, text, sourceType, event) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var isGroup = (sourceType === "group" || sourceType === "room");
-
-  // ============================================================
-  // 🤖 呼叫助理判斷（雙軌支援：LINE 原生 @Mention 與免 @ 純文字「小岳」）
-  // ============================================================
-  var isCalled = false;
-  var question = "";
-
-  // 1. 檢查 LINE 原生 @Mention（即使在 LINE 後台改名稱，只要被 Tag 就保證精準觸發！）
-  var isNativeMention = false;
-  var selfMentionees = [];
-  if (event && event.message && event.message.mention && Array.isArray(event.message.mention.mentionees)) {
-    for (var m = 0; m < event.message.mention.mentionees.length; m++) {
-      var mItem = event.message.mention.mentionees[m];
-      if (mItem && mItem.isSelf === true) {
-        isNativeMention = true;
-        selfMentionees.push(mItem);
-      }
-    }
-  }
-
-  if (isNativeMention) {
-    isCalled = true;
-    // 優先使用 LINE 提供之精確 index 與 length 截除被 @ 的標籤字串
-    var strippedText = text;
-    selfMentionees.sort(function (a, b) { return b.index - a.index; });
-    for (var s = 0; s < selfMentionees.length; s++) {
-      var targetM = selfMentionees[s];
-      if (typeof targetM.index === "number" && typeof targetM.length === "number") {
-        strippedText = strippedText.slice(0, targetM.index) + strippedText.slice(targetM.index + targetM.length);
-      }
-    }
-    // 徹底清除開頭或結尾殘餘的 @標籤、Unicode 空格 (如 \u2005 四分之一空格、\u00A0、\u3000)
-    question = strippedText.replace(/^[@＠][^\s\u2000-\u200B\u00A0\u3000]+\s*/g, "");
-    question = question.replace(/^[\s\u2000-\u200B\u00A0\u3000]+|[\s\u2000-\u200B\u00A0\u3000]+$/g, "");
-  }
-
-  // 2. 檢查純文字前綴（小岳、Yue、yue，或使用者手動輸入的 @小岳）
-  if (!isCalled) {
-    var prefixMatch = text.match(/^@?(小岳|Yue|yue)\s*(.*)/i);
-    if (prefixMatch) {
-      isCalled = true;
-      question = prefixMatch[2].trim();
-    }
-  }
-
-  // 3. 被呼叫時的指令分流
-  if (isCalled) {
-    // 指令 A：抓取群組 ID（例如：小岳 抓取群組ID / @小岳 抓取群組ID）-> 彈出防誤觸確認卡片
-    if (question === "抓取群組ID" || question === "抓取群組id" || question === "群組ID" || question === "群組id" || question === "綁定群組") {
-      if (isGroup) {
-        var groupId = (event && event.source) ? (event.source.groupId || event.source.roomId || "") : "";
-        if (!groupId) {
-          replyAdminMessage(replyToken, "❌ 無法取得此環境之群組 ID，請確認是否在群組中呼叫。");
-          return;
-        }
-        sendAdminGroupBindConfirm(replyToken, groupId);
-      } else {
-        replyMessage(replyToken, "❌ 這裡不是群組喔！這是我們一對一的聊天室。\n順帶一提，您的個人 User ID 是：\n" + userId);
-      }
-      return;
-    }
-
-    // 指令 B：幹部系統後台連結（例如：小岳 幹部系統 / @小岳 幹部系統）
-    if (question === "幹部系統" || question === "活動管理" || question === "審核後台" || question === "審核名單") {
-      var adminLinkMsg = "🛠️ 幹部專屬管理中心：\n👉 https://liff.line.me/2009217429-DSYjXqNK\n\n在此可快速切換活動開放狀態、編輯活動內容與即時審核報名名冊！";
-      if (isGroup) replyAdminMessage(replyToken, adminLinkMsg);
-      else replyMessage(replyToken, adminLinkMsg);
-      return;
-    }
-
-    // 指令 C：在幹部群組中只有呼叫，或詢問基本打招呼/指令/功能說明 -> 自動輸出幹部群組功能指引
-    var isGreetingOrHelp = (question === "" || question === "你好" || question === "您好" || question === "嗨" || question === "哈囉" || question === "hello" || question === "hi" || question === "指令" || question === "功能" || question === "說明" || question === "幫助" || question === "在嗎");
-    if (isGroup && isGreetingOrHelp) {
-      var cadreGuide = "🌲 幹部專屬助理小岳在此！\n" +
-        "─────────────\n" +
-        "目前在幹部群組中支援以下功能與指令：\n\n" +
-        "🛠️ 【幹部系統】\n" +
-        "• 輸入「小岳 幹部系統」或點擊下方連結進入後台：\n" +
-        "👉 https://liff.line.me/2009217429-DSYjXqNK\n\n" +
-        "🆔 【抓取群組ID】\n" +
-        "• 輸入「小岳 抓取群組ID」或 @ 我並輸入「抓取群組ID」，即可查詢本群組識別碼。\n\n" +
-        "🤖 【諮詢 AI 助理】\n" +
-        "• 呼叫我並加上問題，即可解答登山專業知識或社規：\n" +
-        "👉 例：「小岳 新手登山該注意什麼？」\n" +
-        "👉 例：「@小岳 合歡北峰需要申請入山證嗎？」\n\n" +
-        "🔔 【業務自動推播】\n" +
-        "• 社員報名活動、借還裝備、取消報名或回報繳費時，我會自動在群發送通知與一鍵審核卡片！";
-      replyAdminMessage(replyToken, cadreGuide);
-      return;
-    }
-
-    // 指令 D：在一對一對話中只有呼叫，沒有附帶問題
-    if (!isGroup && question === "") {
-      replyMessage(replyToken, "找小岳嗎？有什麼我可以幫忙的？⛰️\n(請輸入：小岳 加上你的問題，例如：小岳 新手需要準備什麼裝備？)\n─────────────\nLooking for Yue? How can I help you? ⛰️\n(Type 'Yue' followed by your question, e.g., Yue What gear do beginners need?)");
-      return;
-    }
-
-    // 指令 E：具體問題，送交 Google Gemini 2.5 AI 模型回答
-    // 關鍵防打架隔離：群組嚴格使用 replyAdminMessage (ADMIN_BOT_TOKEN)，一對一使用 replyMessage (MEMBER_BOT_TOKEN)
-    var aiAnswer = talkToGemini(question);
-    if (isGroup) {
-      replyAdminMessage(replyToken, aiAnswer);
-    } else {
-      replyMessage(replyToken, aiAnswer);
-    }
-    return;
-  }
-
-  // 舊版獨立指令相容：單純輸入「抓取群組ID」
-  if (text === "抓取群組ID") {
-    if (isGroup) {
-      var gId = (event && event.source) ? (event.source.groupId || event.source.roomId || "") : "";
-      if (gId) {
-        sendAdminGroupBindConfirm(replyToken, gId);
-      } else {
-        replyAdminMessage(replyToken, "❌ 無法取得此環境之群組 ID。");
-      }
-    } else {
-      replyMessage(replyToken, "❌ 這裡不是群組喔！這是我們一對一的聊天室。\n順帶一提，您的個人 User ID 是：\n" + userId);
-    }
-    return;
-  }
-
-  if (text === "我的狀態" || text === "我的狀態 My Status" || text === "個人主頁" || text === "個人主頁 My Dashboard") handleStatusQuery(replyToken, userId, ss);
-  else if (text === "填寫資料" || text === "填寫資料 Register") sendRegisterForm(replyToken, userId);
-  else if (text === "最新活動" || text === "最新活動 Activities") sendEventList(replyToken, ss);
-  else if (text === "器材借用" || text === "器材借用 Equipment Loan" || text === "裝備租借" || text === "裝備租借 Equipment Loan") {
-    replyMessage(replyToken, "🏕️ 歡迎使用裝備租借系統！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI");
-  }
-  else if (text === "取消預約" || text === "取消預約 Cancel") sendCancelMenu(replyToken, userId, ss);
-  else if (text === "繳費系統" || text === "繳費系統 Payment System" || text === "繳費中心" || text === "繳費中心 Payment Center") {
-    replyMessage(replyToken, "💰 歡迎使用繳費與對帳系統！\n請點擊下方連結進入多選結帳表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
-  }
-  else if (text === "繳費紀錄" || text === "繳費紀錄 Payment History" || text === "繳費紀錄 History") sendPaymentHistory(replyToken, userId, ss);
-  else if (text === "意見與回饋" || text === "意見與回饋 Feedback") sendFeedbackLink(replyToken);
-  else if (text === "其他" || text === "更多服務" || text === "更多服務 More Services") sendMoreOptionsMenu(replyToken);
-  else if (text === "幹部是誰" || text === "幹部是誰 Officers") sendOfficerMenu(replyToken, ss);
-  else {
-    // 阻擋群組內的無效指令，避免對話暴走洗版 (這也是之前引發「帯域幅の上限を超えています」流量耗盡的主因！)
-    if (sourceType === "group" || sourceType === "room") return;
-
-    var propKey = "prompt_time_" + userId;
-    var scriptProps = PropertiesService.getScriptProperties();
-    var lastPromptTime = scriptProps.getProperty(propKey);
-    var nowTime = new Date().getTime();
-    var shouldPrompt = true;
-
-    if (lastPromptTime) {
-      var diffHours = (nowTime - Number(lastPromptTime)) / (1000 * 60 * 60);
-      if (diffHours < 24) {
-        shouldPrompt = false;
-      }
-    }
-
-    if (shouldPrompt) {
-      scriptProps.setProperty(propKey, String(nowTime));
-      replyMessage(replyToken, "嗨！我是登山社助理小岳 ⛰️\n請點選下方圖文選單，來查看所有功能！\n\n💡 AI 助理隱藏玩法：\n如果有登山知識或社團規章的問題，在句首加上「小岳」就可以直接問我喔！\n(例如：小岳 新手該準備什麼裝備？)\n─────────────\nHi! I am Xiao Yue, the Mountaineering Club Assistant ⛰️\nPlease use the menu below for more features!\n\n💡 AI Chat Feature:\nHave questions about hiking or the club? Just start your message with \"Yue\" to ask me!\n(e.g., Yue What gear do beginners need?)");
-    }
-  }
-}
-
-// ⭐️ 產生合併繳費與單筆回報卡片 (無懼空欄位防彈版 + 雙語 UI 版)
-// 【函式說明】
-// 這是系統最複雜的財務核心！當社員點擊「繳費系統」時，
-// 系統會去「活動報名表」、「裝備租借表」中，把該社員所有「尚未繳費」的項目全部撈出來。
-// 接著，它會自動計算總金額，並產生一組精美的 LINE 輪播卡片 (Carousel)。
-// 包含：總金額合併結帳卡、單筆活動繳費卡、單筆裝備繳費卡，以及最後一張固定的社費卡。
-function sendConsolidatedPaymentMenu(replyToken, userId, ss) {
-  var profileCheck = _checkProfileComplete(userId, ss, "payment");
-  if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-    replyMessage(replyToken, "⚠️ 讀取失敗：系統找不到您的社員資料！\n請先完成「填寫資料」後再進入繳費系統。\n─────────────\n⚠️ Access Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first.");
-    return;
-  }
-  if (profileCheck.missingFields.length > 0) {
-    replyMessage(replyToken, "⚠️ 讀取失敗：您的個人資料尚不完整！\n\n為了對帳與後續聯絡順暢，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n👉 " + profileCheck.missingFields.join("\n👉 ") + "\n\n完成資料更新後，再回來點選繳費系統喔！💸\n─────────────\n⚠️ Access Failed: Incomplete Profile!\nPlease update your profile first before entering the payment system.");
-    return;
-  }
-
-  var activityDebts = [];
-  var equipmentDebts = [];
-  var bankInfo = "銀行 Bank：(824) 連線商業銀行 (LINE Bank)\n帳號 Account：111019636700\n戶名 Name：曹洧祥";
-
-  // 階段一：抓取活動欠款
-  var signupSheet = ss.getSheetByName("Signups");
-  var eventSheet = ss.getSheetByName("Events");
-
-  if (signupSheet && eventSheet) {
-    var sData = signupSheet.getDataRange().getValues();
-    var eData = eventSheet.getDataRange().getDisplayValues();
-    var sH = sData[0],
-      eH = eData[0];
-    var sSysIdx = _fi(sH, "系統識別碼"),
-      sStatusIdx = _fi(sH, "審核結果"),
-      sPayIdx = _fi(sH, "繳費狀態"),
-      sEventIdIdx = _fi(sH, "活動編號");
-    var eIdIdx = _fi(eH, "活動編號"),
-      eNameIdx = _fi(eH, "活動名稱");
-    var eCostIdx = eH.findIndex(function (h) {
-      return String(h).includes("預計費用") || String(h).includes("費用");
-    });
-
-    for (var i = 1; i < sData.length; i++) {
-      if (sSysIdx > -1 && sData[i][sSysIdx] === userId) {
-        var status = (sStatusIdx > -1) ? String(sData[i][sStatusIdx] || "").trim() : "";
-        var payStatus = (sPayIdx > -1) ? String(sData[i][sPayIdx] || "").trim() : "未繳費 Unpaid";
-        if (status.indexOf("正取") > -1 && status.indexOf("取消") === -1 && payStatus !== "已繳費 Paid" && payStatus !== "待確認 Checking") {
-          var targetEId = (sEventIdIdx > -1) ? String(sData[i][sEventIdIdx]).trim() : "";
-          for (var j = 1; j < eData.length; j++) {
-            if (eIdIdx > -1 && String(eData[j][eIdIdx]).trim() === targetEId) {
-              var eName = (eNameIdx > -1 && eData[j][eNameIdx]) ? eData[j][eNameIdx] : "未知活動";
-              var eCostStr = (eCostIdx > -1) ? String(eData[j][eCostIdx] || "0") : "0";
-              var eCost = parseInt(eCostStr.replace(/\D/g, ''), 10) || 0;
-              var safeName = String(eName).replace(/[&=]/g, '');
-              if (eCost > 0) activityDebts.push({
-                name: safeName,
-                amount: eCost
-              });
-              break;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 階段二：抓取裝備欠款
-  var loanSheet = ss.getSheetByName("Loan_Records");
-  if (loanSheet) {
-    var lData = loanSheet.getDataRange().getValues();
-    var lH = lData[0];
-    var lSysIdx = _fi(lH, "系統識別碼"),
-      lStatusIdx = _fi(lH, "領取/歸還"),
-      lPayIdx = _fi(lH, "繳費狀態");
-    var lCostIdx = lH.findIndex(function (h) {
-      return String(h).includes("應繳費用") || String(h).includes("費用");
-    });
-    var lOrderIdx = _fi(lH, "租借編號");
-    var lName1Idx = _fi(lH, "裝備名稱"),
-      lName2Idx = _fi(lH, "租借項目"),
-      lIdIdx = _fi(lH, "裝備代號");
-
-    for (var k = 1; k < lData.length; k++) {
-      if (lSysIdx > -1 && lData[k][lSysIdx] === userId) {
-        var lStatus = (lStatusIdx > -1) ? String(lData[k][lStatusIdx] || "").trim() : "";
-        var equipPayStatus = (lPayIdx > -1) ? String(lData[k][lPayIdx] || "").trim() : "未繳費 Unpaid";
-        var cost = (lCostIdx > -1) ? parseInt(String(lData[k][lCostIdx] || "0").replace(/\D/g, ''), 10) || 0 : 0;
-        var orderId = (lOrderIdx > -1) ? String(lData[k][lOrderIdx]).trim() : "";
-        var equipName = _getEquipName(lData[k], lName1Idx, lName2Idx, lIdIdx, "未知裝備(名稱遺失)");
-        if (lStatus.indexOf("取消") === -1 && lStatus.indexOf("歸還") === -1 && cost > 0 && equipPayStatus !== "已繳費 Paid" && equipPayStatus !== "待確認 Checking") {
-          equipmentDebts.push({
-            name: equipName.replace(/[&=]/g, ''),
-            amount: cost,
-            orderId: orderId
-          });
-        }
-      }
-    }
-  }
-
-  // 階段三：結算總額
-  var activityTotal = activityDebts.reduce(function (sum, item) {
-    return sum + item.amount;
-  }, 0);
-  var equipmentTotal = equipmentDebts.reduce(function (sum, item) {
-    return sum + item.amount;
-  }, 0);
-  var totalAmount = activityTotal + equipmentTotal;
-  var hasActivity = activityTotal > 0;
-  var hasEquipment = equipmentTotal > 0;
-
-  var textMessage;
-  if (hasActivity || hasEquipment) {
-    textMessage = {
-      "type": "text",
-      "text": "💡 貼心提醒：若您有多項待繳費用，建議可以參考第一頁的【總費用】一次繳清，省去多次匯款麻煩。\n您也可以向右滑動，針對單一項目個別繳費喔！\n─────────────\n💡 Tip: You can pay multiple pending fees at once using the [Total Fee] card. Swipe right to pay for individual items!\n\n🏦 匯款帳戶 Bank Info：\n" + bankInfo + "\n\n回報完成後起重新點選「繳費系統」，查看最新繳費狀態\n─────────────\nAfter completing the report, please click \"Payment System\" again to check the latest payment status."
-    };
-  } else {
-    textMessage = {
-      "type": "text",
-      "text": "🎉 太棒了！您目前沒有任何未繳的活動或裝備費用。\n─────────────\n🎉 Great! You have no pending payments for activities or equipment.\n\n💡 若您尚未繳交本學期社費，可以透過下方卡片進行回報喔！\n💡 If you haven't paid the club membership fee, you can do so below!\n\n🏦 匯款帳戶 Bank Info：\n" + bankInfo
-    };
-  }
-
-  // 階段四：卡片 UI 產生器
-  var carouselBubbles = [];
-
-  function createDetailBoxes(items) {
-    return items.map(function (item) {
-      return {
-        "type": "box",
-        "layout": "horizontal",
-        "margin": "xs",
-        "contents": [{
-          "type": "text",
-          "text": item.name,
-          "size": "sm",
-          "color": "#555555",
-          "flex": 2,
-          "wrap": true
-        }, {
-          "type": "text",
-          "text": "$" + item.amount,
-          "size": "sm",
-          "color": "#111111",
-          "align": "end",
-          "flex": 1
-        }]
-      };
-    });
-  }
-
-  function createTotalBubble(title, items, total, postbackType) {
-    return {
-      "type": "bubble",
-      "body": {
-        "type": "box",
-        "layout": "vertical",
-        "contents": [{
-          "type": "text",
-          "text": title,
-          "weight": "bold",
-          "size": "md",
-          "color": "#1DB446"
-        }, {
-          "type": "separator",
-          "margin": "md"
-        }, {
-          "type": "box",
-          "layout": "vertical",
-          "margin": "md",
-          "spacing": "sm",
-          "contents": createDetailBoxes(items)
-        }, {
-          "type": "separator",
-          "margin": "md"
-        }, {
-          "type": "box",
-          "layout": "horizontal",
-          "margin": "md",
-          "contents": [{
-            "type": "text",
-            "text": "總計 Total",
-            "size": "md",
-            "color": "#555555"
-          }, {
-            "type": "text",
-            "text": "$" + total,
-            "size": "lg",
-            "color": "#E54545",
-            "align": "end",
-            "weight": "bold"
-          }]
-        }]
-      },
-      "footer": {
-        "type": "box",
-        "layout": "vertical",
-        "spacing": "sm",
-        "contents": [{
-          "type": "button",
-          "style": "primary",
-          "color": "#1DB446",
-          "action": {
-            "type": "postback",
-            "label": "合併繳清 Pay All",
-            "data": "action=upload_proof&type=" + postbackType,
-            "displayText": "我要上傳匯款證明 / Upload Proof"
-          }
-        }]
-      }
-    };
-  }
-
-  function createIndividualBubble(tagText, tagColor, itemName, amount, targetId) {
-    return {
-      "type": "bubble",
-      "body": {
-        "type": "box",
-        "layout": "vertical",
-        "contents": [{
-          "type": "text",
-          "text": tagText,
-          "color": tagColor,
-          "size": "xs",
-          "weight": "bold"
-        }, {
-          "type": "text",
-          "text": itemName,
-          "weight": "bold",
-          "size": "md",
-          "margin": "sm",
-          "wrap": true
-        }, {
-          "type": "text",
-          "text": "應繳金額 Amount: $" + amount,
-          "size": "sm",
-          "color": "#FF3333",
-          "margin": "sm",
-          "weight": "bold"
-        }]
-      },
-      "footer": {
-        "type": "box",
-        "layout": "vertical",
-        "contents": [{
-          "type": "button",
-          "style": "primary",
-          "color": tagColor,
-          "action": {
-            "type": "postback",
-            "label": "單筆回報 Pay Single",
-            "data": "action=ready_to_pay&targetId=" + targetId
-          }
-        }]
-      }
-    };
-  }
-
-  // 階段五：組裝卡片
-  if (hasActivity && hasEquipment) carouselBubbles.push(createTotalBubble("活動+裝備總費用 / Total Fee", [].concat(activityDebts, equipmentDebts), totalAmount, "combined"));
-  if (hasActivity) carouselBubbles.push(createTotalBubble("活動明細 / Activities", activityDebts, activityTotal, "activity"));
-  if (hasEquipment) carouselBubbles.push(createTotalBubble("裝備明細 / Equipments", equipmentDebts, equipmentTotal, "equipment"));
-
-  for (var a = 0; a < activityDebts.length; a++) {
-    if (carouselBubbles.length >= 9) break;
-    carouselBubbles.push(createIndividualBubble("📅 活動繳費 Activity", "#FF9800", activityDebts[a].name, activityDebts[a].amount, "活動：" + activityDebts[a].name));
-  }
-  for (var b = 0; b < equipmentDebts.length; b++) {
-    if (carouselBubbles.length >= 9) break;
-    carouselBubbles.push(createIndividualBubble("🏕️ 裝備繳費 Equipment", "#0367D3", equipmentDebts[b].name, equipmentDebts[b].amount, "裝備：" + equipmentDebts[b].orderId + " " + equipmentDebts[b].name));
-  }
-
-  // 階段六：社費卡片
-  var memberSheet = ss.getSheetByName("Members");
-  var payStatus = "未繳費 Unpaid";
-  var expireDate = "尚未核發/尚未繳費 (Not issued/Unpaid)";
-  if (memberSheet) {
-    var mData = memberSheet.getDataRange().getValues();
-    var mHead = mData[0];
-    var mSysIdx = _fi(mHead, "系統識別碼"),
-      mPayIdx = _fi(mHead, "繳費狀態");
-    var mExpireIdx = mHead.findIndex(function (h) {
-      return String(h).includes("到期日") || String(h).includes("社籍");
-    });
-    for (var m = 1; m < mData.length; m++) {
-      if (mSysIdx > -1 && mData[m][mSysIdx] === userId) {
-        payStatus = (mPayIdx > -1 && mData[m][mPayIdx]) ? String(mData[m][mPayIdx]).trim() : "未繳費 Unpaid";
-        if (mExpireIdx > -1 && mData[m][mExpireIdx]) {
-          var d = new Date(mData[m][mExpireIdx]);
-          expireDate = !isNaN(d.getTime()) ? Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy/MM/dd") : String(mData[m][mExpireIdx]).trim();
-        }
-        break;
-      }
-    }
-  }
-  var statusColor = (payStatus === "已繳費 Paid" || payStatus === "已繳" || payStatus === "待確認 Checking" || payStatus === "是") ? "#1DB446" : "#FF3333";
-
-  carouselBubbles.push({
-    "type": "bubble",
-    "body": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": [{
-        "type": "text",
-        "text": "👤 社籍與社費 / Membership",
-        "color": "#1DB446",
-        "size": "xs",
-        "weight": "bold"
-      }, {
-        "type": "text",
-        "text": "繳交入社/續社費\nPay Membership Fee",
-        "weight": "bold",
-        "size": "md",
-        "margin": "sm",
-        "wrap": true
-      }, {
-        "type": "text",
-        "text": "狀態 Status:\n " + (payStatus || "無紀錄"),
-        "size": "xs",
-        "color": statusColor,
-        "margin": "sm",
-        "weight": "bold"
-      }, {
-        "type": "text",
-        "text": "期限 Expiry: ",
-        "size": "xs",
-        "color": "#666666",
-        "margin": "xs"
-      }, {
-        "type": "text",
-        "text": "  " + expireDate,
-        "size": "xs",
-        "color": "#666666",
-        "margin": "xs"
-      }]
-    },
-    "footer": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": [{
-        "type": "button",
-        "style": "primary",
-        "color": "#1DB446",
-        "action": {
-          "type": "postback",
-          "label": "回報繳費 Pay",
-          "data": "action=ready_to_pay&targetId=繳交社費"
-        }
-      }]
-    }
-  });
-
-  var flexMessage = {
-    "type": "flex",
-    "altText": "您的繳費系統明細 / Payment Details",
-    "contents": {
-      "type": "carousel",
-      "contents": carouselBubbles
-    }
-  };
-  replyMultiMessages(replyToken, [textMessage, flexMessage]);
-}
-
-// ⭐️ 發送歷史繳費紀錄
-
-// 📜 全新功能：發送歷史繳費紀錄清單 (Payments 帳本集中查詢版)
-function sendPaymentHistory(replyToken, userId, ss) {
-  var profileCheck = _checkProfileComplete(userId, ss, "payment");
-  if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-    replyMessage(replyToken, "⚠️ 讀取失敗：系統找不到您的社員資料！\n請先完成「填寫資料」後再查看歷史繳費紀錄。\n─────────────\n⚠️ Access Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first.");
-    return;
-  }
-  if (profileCheck.missingFields.length > 0) {
-    replyMessage(replyToken, "⚠️ 讀取失敗：您的個人資料尚不完整！\n\n為了對帳與核對身分，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n👉 " + profileCheck.missingFields.join("\n👉 ") + "\n\n完成資料更新後，再回來點選歷史繳費紀錄喔！\n─────────────\n⚠️ Access Failed: Incomplete Profile!\nPlease update your profile first before viewing your payment history.");
-    return;
-  }
-
-  var pSheet = ss.getSheetByName("Payments");
-  if (!pSheet) {
-    replyMessage(replyToken, "⚠️ 系統找不到 Payments 分頁，請聯絡幹部確認設定。");
-    return;
-  }
-
-  var pData = pSheet.getDataRange().getValues();
-  var pH = pData[0];
-  var timeIdx = pH.findIndex(function (h) {
-    return String(h).includes("時間") || String(h).includes("日期");
-  });
-  var sysIdx = _fi(pH, "系統識別碼"),
-    eventIdx = _fi(pH, "活動名稱"),
-    equipIdx = _fi(pH, "裝備名稱"),
-    itemIdx = _fi(pH, "繳費項目");
-  var statusIdx = pH.findIndex(function (h) {
-    return String(h).includes("對帳狀態") || String(h).includes("狀態");
-  });
-
-  var historyGroups = {};
-  var hasRecord = false;
-
-  for (var i = 1; i < pData.length; i++) {
-    if (sysIdx > -1 && pData[i][sysIdx] === userId) {
-      var status = statusIdx > -1 ? String(pData[i][statusIdx]).trim() : "";
-      if (status.indexOf("確認") > -1 || status.indexOf("無誤") > -1 || status.indexOf("已繳") > -1) {
-        hasRecord = true;
-
-        var rawDate = timeIdx > -1 ? pData[i][timeIdx] : "";
-        var dateStr = "未知日期";
-        if (rawDate) {
-          var d = new Date(rawDate);
-          dateStr = !isNaN(d.getTime()) ? Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy/MM/dd") : String(rawDate).split(" ")[0];
-        }
-        if (!historyGroups[dateStr]) historyGroups[dateStr] = [];
-
-        var eventName = eventIdx > -1 ? String(pData[i][eventIdx]).trim() : "";
-        var equipName = equipIdx > -1 ? String(pData[i][equipIdx]).trim() : "";
-        var payItem = itemIdx > -1 ? String(pData[i][itemIdx]).trim() : "";
-
-        if (eventName && eventName !== "無" && eventName !== "-") {
-          eventName.split(/\r?\n/).forEach(function (line) {
-            if (line.trim()) historyGroups[dateStr].push(line.trim());
-          });
-        }
-        if (equipName && equipName !== "無" && equipName !== "-") {
-          equipName.split(/\r?\n/).forEach(function (line) {
-            if (line.trim()) historyGroups[dateStr].push(line.trim());
-          });
-        }
-        if (payItem.indexOf("社費") > -1 || ((!eventName || eventName === "無" || eventName === "-") && (!equipName || equipName === "無" || equipName === "-") && payItem === "")) {
-          historyGroups[dateStr].push("社費 Membership Fee");
-        }
-        if ((!eventName || eventName === "無") && (!equipName || equipName === "無")) {
-          historyGroups[dateStr].push("社費 Membership Fee");
-        }
-      }
-    }
-  }
-
-  if (!hasRecord || Object.keys(historyGroups).length === 0) {
-    replyMessage(replyToken, "📜 【歷史繳費紀錄 / Payment History】\n\n目前系統中沒有您的已繳費紀錄喔！\nNo payment history found in the system.");
-    return;
-  }
-
-  var blocks = [];
-  for (var dateKey in historyGroups) {
-    var uniqueItems = historyGroups[dateKey].filter(function (item, pos, arr) {
-      return arr.indexOf(item) === pos;
-    });
-    if (uniqueItems.length > 0) blocks.push(dateKey + "\n" + uniqueItems.join("\n"));
-  }
-  replyMessage(replyToken, "📜 【歷史繳費紀錄 / Payment History】\n\n" + blocks.join("\n─────────────\n"));
-}
-
-// ⭐️ 處理繳費回報 (動態明細解析 + 寫入對帳單版)
-// 【函式說明】
-// 當社員在「等待回報中」的狀態下，輸入了「匯款金額與末5碼」，就會進入這個函式。
-// 這個函式會做幾件大事：
-// 1. 查出這位社員的名字。
-// 2. 根據他剛剛點選的繳費類別 (社費/單筆活動/合併結帳)，去各大表單把對應的「未繳費」項目與金額撈出來。
-// 3. 自動在「Payments (對帳單)」分頁新增一列詳細的交易紀錄。
-// 4. 把該項目的狀態從「未繳費」改成「待確認」。
-// 5. 傳送精美的 Flex 卡片給幹部群組，讓幹部可以一鍵按下「確認無誤」。
-function handlePaymentInput(replyToken, userId, inputData, paymentType, inputType) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var memberSheet = ss.getSheetByName("Members");
-  var paymentSheet = ss.getSheetByName("Payments");
-
-  if (!paymentSheet) {
-    paymentSheet = ss.insertSheet("Payments");
-    paymentSheet.appendRow(["系統識別碼", "姓名", "繳費項目", "活動名稱", "裝備名稱", "帳號末5碼", "繳款時間", "對帳狀態", "備註"]);
-  }
-
-  // 階段一：尋找社員姓名
-  var userName = "未知社員";
-  if (memberSheet) {
-    var mData = memberSheet.getDataRange().getValues();
-    var mH = mData[0];
-    var mSysIdx = _fi(mH, "系統識別碼"),
-      mNameIdx = _fi(mH, "姓名");
-    for (var i = mData.length - 1; i >= 1; i--) {
-      if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
-        userName = (mNameIdx > -1 && mData[i][mNameIdx]) ? String(mData[i][mNameIdx]).trim() : "未知社員";
-        break;
-      }
-    }
-  }
-
-  // 階段二：處理證明
-  var proofContent = "",
-    displayProof = "";
-  if (inputType === "image") {
-    replyMessage(replyToken, "⚠️ 抱歉，目前系統僅支援「文字回報」。\n\n請重新點選繳費項目，並直接輸入「匯款金額與帳號末5碼」即可，謝謝您的配合！\n─────────────\n⚠️ Sorry, the system currently only supports 'Text Reports'.\n\nPlease re-select the payment item and directly type the 'Amount & Last 5 Digits of Account'. Thank you for your cooperation!");
-    CacheService.getUserCache().remove(userId + "_payment_type");
-    return;
-  } else {
-    proofContent = "文字：" + inputData;
-    displayProof = inputData;
-  }
-
-  // 階段三：解析細項
-  var actDetails = "",
-    eqDetails = "",
-    typeStr = "",
-    totalAmount = 0;
-
-  if (paymentType === "繳交社費") {
-    typeStr = "繳交社費";
-    totalAmount = "請見備註";
-  } else {
-    // 處理活動
-    if (paymentType === "activity" || paymentType === "combined" || String(paymentType).startsWith("活動：")) {
-      var targetEventName = String(paymentType).startsWith("活動：") ? String(paymentType).split("活動：")[1].trim() : "ALL";
-      var sSheet = ss.getSheetByName("Signups"),
-        eSheet = ss.getSheetByName("Events");
-      if (sSheet && eSheet) {
-        var sData = sSheet.getDataRange().getValues(),
-          eData = eSheet.getDataRange().getDisplayValues();
-        var sH = sData[0],
-          eH = eData[0];
-        var sSysIdx = _fi(sH, "系統識別碼"),
-          sStatIdx = _fi(sH, "審核結果"),
-          sPayIdx = _fi(sH, "繳費狀態"),
-          sEventIdIdx = _fi(sH, "活動編號");
-        var eIdIdx = _fi(eH, "活動編號"),
-          eNameIdx = _fi(eH, "活動名稱");
-        var eCostIdx = eH.findIndex(function (h) {
-          return String(h).includes("預計費用") || String(h).includes("費用");
-        });
-
-        for (var s = 1; s < sData.length; s++) {
-          var cStatus = sStatIdx > -1 ? String(sData[s][sStatIdx]) : "";
-          var cPayStatus = sPayIdx > -1 ? String(sData[s][sPayIdx]).trim() : "未繳費 Unpaid";
-          if (sSysIdx > -1 && sData[s][sSysIdx] === userId && cStatus.indexOf("正取") > -1 && cStatus.indexOf("取消") === -1 && cPayStatus !== "已繳費 Paid" && cPayStatus !== "待確認 Checking") {
-            var currentSignupEventId = sEventIdIdx > -1 ? String(sData[s][sEventIdIdx]).trim() : "";
-            for (var e = 1; e < eData.length; e++) {
-              if (eIdIdx > -1 && String(eData[e][eIdIdx]).trim() === currentSignupEventId) {
-                var eventNameRaw = (eNameIdx > -1 && eData[e][eNameIdx]) ? String(eData[e][eNameIdx]) : "未知活動";
-                var safeName = eventNameRaw.replace(/[&=]/g, '');
-                if (targetEventName === "ALL" || targetEventName === safeName) {
-                  var eCostStr = eCostIdx > -1 ? String(eData[e][eCostIdx]) : "0";
-                  var eCost = parseInt(eCostStr.replace(/\D/g, ''), 10) || 0;
-                  if (eCost > 0) {
-                    actDetails += safeName + "($" + eCost + ")\n";
-                    totalAmount += eCost;
-                  }
-                }
-                break;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // 處理裝備
-    if (paymentType === "equipment" || paymentType === "combined" || String(paymentType).startsWith("裝備：")) {
-      var targetOrderId = String(paymentType).startsWith("裝備：") ? String(paymentType).split("裝備：")[1].split(" ")[0].trim() : "ALL";
-      var lSheet = ss.getSheetByName("Loan_Records");
-      if (lSheet) {
-        var lData = lSheet.getDataRange().getValues();
-        var lH = lData[0];
-        var lSysIdx = _fi(lH, "系統識別碼"),
-          lOrderIdx = _fi(lH, "租借編號"),
-          lPayIdx = _fi(lH, "繳費狀態"),
-          lStatusIdx = _fi(lH, "領取/歸還");
-        var lCostIdx = lH.findIndex(function (h) {
-          return String(h).includes("應繳費用") || String(h).includes("費用");
-        });
-        var lName1Idx = _fi(lH, "裝備名稱"),
-          lName2Idx = _fi(lH, "租借項目"),
-          lIdIdx = _fi(lH, "裝備代號");
-
-        for (var l = 1; l < lData.length; l++) {
-          var lStatStr = lStatusIdx > -1 ? String(lData[l][lStatusIdx]) : "";
-          var eqPayStatus = lPayIdx > -1 ? String(lData[l][lPayIdx]).trim() : "未繳費 Unpaid";
-          if (lSysIdx > -1 && lData[l][lSysIdx] === userId && lStatStr.indexOf("取消") === -1 && lStatStr.indexOf("歸還") === -1 && eqPayStatus !== "已繳費 Paid" && eqPayStatus !== "待確認 Checking") {
-            var eqCostStr = lCostIdx > -1 ? String(lData[l][lCostIdx]) : "0";
-            var eqCost = parseInt(eqCostStr.replace(/\D/g, ''), 10) || 0;
-            var currentOrder = lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : "";
-            if (eqCost > 0 && (targetOrderId === "ALL" || targetOrderId === currentOrder)) {
-              var equipName = _getEquipName(lData[l], lName1Idx, lName2Idx, lIdIdx, "未知裝備");
-              eqDetails += equipName + "($" + eqCost + ")\n";
-              totalAmount += eqCost;
-            }
-          }
-        }
-      }
-    }
-
-    if (paymentType === "combined") typeStr = "合併結帳";
-    else if (paymentType === "activity" || String(paymentType).startsWith("活動：")) typeStr = "單繳活動";
-    else typeStr = "單繳裝備";
-  }
-
-  actDetails = actDetails.trim();
-  eqDetails = eqDetails.trim();
-
-  // 階段四：寫入 Payments 對帳表 (防呆：絕不修改試算表表頭，維持既有 9 欄)
-  var pHeaders = paymentSheet.getRange(1, 1, 1, paymentSheet.getLastColumn()).getValues()[0];
-  var aIdx = _findAmountColIdx(pHeaders);
-  var pRowData = new Array(pHeaders.length).fill("");
-  var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss");
-
-  function placePData(keyword, value) {
-    var idx = _fi(pHeaders, keyword);
-    if (idx > -1) pRowData[idx] = value;
-  }
-
-  var numericTotalAmount = (typeof totalAmount === 'number' && !isNaN(totalAmount)) ? totalAmount : (parseInt(String(totalAmount).replace(/\D/g, ''), 10) || 0);
-
-  placePData("Timestamp", now);
-  placePData("繳款時間", now);
-  placePData("系統識別碼", userId);
-  placePData("姓名", userName);
-  placePData("繳費項目", typeStr + (numericTotalAmount > 0 ? " ($" + numericTotalAmount + ")" : ""));
-  placePData("活動名稱", actDetails);
-  placePData("裝備名稱", eqDetails);
-  placePData("帳號末5碼", proofContent);
-  placePData("帳號末5碼/備註", proofContent);
-  placePData("證明", proofContent);
-  placePData("對帳狀態", "待確認 Checking");
-  if (numericTotalAmount > 0) {
-    placePData("備註", "金額: $" + numericTotalAmount);
-  }
-  if (aIdx > -1) pRowData[aIdx] = numericTotalAmount;
-  paymentSheet.appendRow(pRowData);
-
-  // ⚡ 同步提交至 Supabase
-  var sbSelectedIds = [];
-  if (paymentType === "fee_membership" || (typeof hasMembership !== 'undefined' && hasMembership)) {
-    sbSelectedIds.push("fee_membership");
-  }
-  _syncPaymentToSupabase(userId, {
-    selectedIds: sbSelectedIds,
-    last5Digits: proofContent,
-    totalAmount: numericTotalAmount,
-    note: typeStr
-  }, userName);
-
-  // 階段五：收尾
-  markAsPending(userId, paymentType, ss);
-  CacheService.getUserCache().remove(userId + "_payment_type");
-
-  replyMessage(replyToken, "✅ 已經收到您的匯款資訊囉！\n系統已為您提交對帳申請。待幹部確認無誤後，狀態就會自動更新為已繳費。🙌\n─────────────\n✅ Your payment information has been received!\nThe system has submitted your reconciliation request. Once confirmed by the officer, the status will automatically update to 'Paid'. 🙌");
-
-  var specificItems = "";
-  if (actDetails) specificItems += "🔸 活動：\n" + actDetails + "\n";
-  if (eqDetails) specificItems += "🔹 裝備：\n" + eqDetails + "\n";
-  if (!specificItems.trim()) specificItems = "🔸 項目：" + typeStr;
-  var displayAmount = (typeof totalAmount === 'number' && totalAmount > 0) ? "$" + totalAmount : String(totalAmount);
-
-  var adminFlex = {
-    "type": "bubble",
-    "body": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": [{
-        "type": "text",
-        "text": "🔔 新繳費回報",
-        "weight": "bold",
-        "color": "#1DB446",
-        "size": "md"
-      }, {
-        "type": "separator",
-        "margin": "md"
-      }, {
-        "type": "text",
-        "text": "繳款人：" + userName,
-        "margin": "md",
-        "size": "sm",
-        "weight": "bold"
-      }, {
-        "type": "text",
-        "text": "回報明細：\n" + specificItems.trim(),
-        "size": "sm",
-        "wrap": true,
-        "margin": "sm",
-        "color": "#555555"
-      }, {
-        "type": "text",
-        "text": "總金額：" + displayAmount,
-        "size": "sm",
-        "color": "#FF3333",
-        "weight": "bold",
-        "margin": "sm"
-      }, {
-        "type": "text",
-        "text": "證明：" + displayProof,
-        "size": "sm",
-        "wrap": true,
-        "margin": "sm",
-        "color": "#333333"
-      }]
-    },
-    "footer": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": [{
-        "type": "button",
-        "style": "primary",
-        "color": "#1DB446",
-        "action": {
-          "type": "postback",
-          "label": "✅ 確認無誤並發通知",
-          "data": "action=admin_confirm&row=" + paymentSheet.getLastRow() + "&userId=" + userId + "&type=" + encodeURIComponent(paymentType)
-        }
-      }]
-    }
-  };
-
-  if (paymentType === "繳交社費") {
-    adminFlex.body.contents.push({
-      "type": "separator",
-      "margin": "md"
-    }, {
-      "type": "text",
-      "text": "⚠️ 注意：此為社費繳交，請幹部務必至「Members」分頁手動更新該社員的【社籍到期日】！",
-      "size": "xs",
-      "color": "#FF9800",
-      "wrap": true,
-      "margin": "md",
-      "weight": "bold"
-    });
-  }
-
-  if (typeof pushAdminFlexMessage === "function") {
-    pushAdminFlexMessage("收到新的繳費回報", adminFlex);
-  } else if (typeof pushAdminMessage === "function") {
-    pushAdminMessage({
-      "type": "flex",
-      "altText": "收到新的繳費回報",
-      "contents": adminFlex
-    });
-  }
-}
-
-// ⭐️ 全新：幹部手動更新狀態觸發器 (全動態防彈版)
-// 【函式說明】
-// 這是一個特殊的「Google 試算表觸發器 (Simple Trigger)」。
-// 每當有人(通常是幹部)在試算表中「手動編輯」任何一格資料時，這個函式就會默默在背後啟動。
-// 它負責兩大自動化任務：
-// 1. 【裝備歸還自動化】：當幹部把裝備狀態改成「已歸還」時，自動把庫存加回去。
-// 2. 【繳費對帳自動化】：當幹部把對帳單改成「已確認無誤」時，自動發 LINE 通知給該社員。
-function onEdit(e) {
-  if (!e || !e.range) return;
-  var sheet = e.range.getSheet();
-  var sheetName = sheet.getName();
-
-  // 裝備歸還觸發器
-  if (sheetName === "Loan_Records") {
-    var lHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var statusCol = _fi(lHeaders, "領取/歸還") + 1;
-    if (statusCol > 0 && e.range.getColumn() === statusCol) {
-      if (e.value === "已歸還 Returned" && e.oldValue !== "已歸還 Returned") {
-        var row = e.range.getRow();
-        var equipIdCol = _fi(lHeaders, "裝備代號") + 1;
-        var qtyCol = _fi(lHeaders, "借用數量") + 1;
-        var equipId = (equipIdCol > 0) ? sheet.getRange(row, equipIdCol).getValue() : "";
-        var qty = (qtyCol > 0) ? sheet.getRange(row, qtyCol).getValue() : 0;
-
-        var equipSheet = e.source.getSheetByName("Equipments");
-        if (equipSheet && equipId) {
-          var eData = equipSheet.getDataRange().getValues();
-          var eH = eData[0];
-          var eIdIdx = _fi(eH, "裝備代號"),
-            eStockIdx = _fi(eH, "剩餘數量");
-          for (var i = 1; i < eData.length; i++) {
-            if (eIdIdx > -1 && eData[i][eIdIdx] === equipId && eStockIdx > -1) {
-              equipSheet.getRange(i + 1, eStockIdx + 1).setValue((parseInt(eData[i][eStockIdx], 10) || 0) + parseInt(qty, 10));
-              e.source.toast("✅ 已將 " + qty + " 個加回庫存！", "系統自動通知", 5);
-              break;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // Payments 繳費確認觸發器
-  if (sheetName === "Payments") {
-    var pHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var pStatusCol = _fi(pHeaders, "對帳狀態") + 1;
-    if (pStatusCol > 0 && e.range.getColumn() === pStatusCol && e.value === "已確認無誤" && e.oldValue !== "已確認無誤") {
-      var row = e.range.getRow();
-      var sysIdCol = _fi(pHeaders, "系統識別碼") + 1;
-      var userId = (sysIdCol > 0) ? sheet.getRange(row, sysIdCol).getValue() : "";
-
-      if (!userId) {
-        var nameCol = _fi(pHeaders, "姓名") + 1;
-        var userName = (nameCol > 0) ? sheet.getRange(row, nameCol).getValue() : "";
-        if (userName) {
-          var mSheet = e.source.getSheetByName("Members");
-          if (mSheet) {
-            var mData = mSheet.getDataRange().getValues();
-            var mNameIdx = _fi(mData[0], "姓名"),
-              mSysIdx = _fi(mData[0], "系統識別碼");
-            for (var m = 1; m < mData.length; m++) {
-              if (mNameIdx > -1 && mData[m][mNameIdx] === userName) {
-                userId = (mSysIdx > -1) ? mData[m][mSysIdx] : "";
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      if (userId) {
-        pushMessage(userId, "🎉 繳費成功通知 / Payment Confirmed\n\n您好！幹部已確認收到您的款項囉！\nOfficer has confirmed the receipt of your payment!\n\n感謝您的配合，帳務狀態已更新，期待活動相見！🏔️\nThank you for your cooperation. Your account status is updated. Hope to see you at the event!");
-        e.source.toast("✅ 已自動發送推播通知給該社員！", "繳費確認成功", 5);
-      } else {
-        e.source.toast("⚠️ 找不到該社員的系統識別碼，無法發送通知", "推播失敗", 5);
-      }
-    }
-  }
-}
-
-// ⭐️ 查詢我的狀態 (無懼空欄位防彈版 / 雙語升級)
-// 【函式說明】
-// 當社員點擊圖文選單的「我的狀態」時，會觸發這個函式。
-// 它會同時掃描「社員資料」、「活動報名」、「裝備租借」與「活動資訊」四張資料表，
-// 把該名社員所有進行中的進度（包含繳費狀態、審核結果）一次打包，
-// 並用中英雙語回覆給社員，是一個非常強大的跨表查詢引擎！
-function handleStatusQuery(replyToken, userId, ss) {
-  var memberSheet = ss.getSheetByName("Members"),
-    signupSheet = ss.getSheetByName("Signups"),
-    loanSheet = ss.getSheetByName("Loan_Records"),
-    eventSheet = ss.getSheetByName("Events");
-  var mData = memberSheet ? memberSheet.getDataRange().getValues() : [],
-    sData = signupSheet ? signupSheet.getDataRange().getValues() : [];
-  var lData = loanSheet ? loanSheet.getDataRange().getValues() : [],
-    eData = eventSheet ? eventSheet.getDataRange().getDisplayValues() : [];
-  var found = false,
-    userInfo = "";
-
-  // 1. 社員資料
-  if (mData.length > 0) {
-    var mH = mData[0],
-      mSysIdx = _fi(mH, "系統識別碼"),
-      mNameIdx = _fi(mH, "姓名");
-    var mExpireIdx = mH.findIndex(function (h) {
-      return String(h).includes("到期日") || String(h).includes("社籍");
-    });
-    for (var i = mData.length - 1; i >= 1; i--) {
-      if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
-        found = true;
-        var expireDate = "尚未核發/尚未繳費 (Not issued/Unpaid)";
-        if (mExpireIdx > -1 && mData[i][mExpireIdx]) {
-          var d = new Date(mData[i][mExpireIdx]);
-          expireDate = !isNaN(d.getTime()) ? Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy/MM/dd") : mData[i][mExpireIdx];
-        }
-        userInfo += "👤 【社員資料 Profile】\n姓名 Name：" + (mNameIdx > -1 ? mData[i][mNameIdx] : "未知 (Unknown)") + "\n到期日 Expiry：" + expireDate + "\n\n";
-        break;
-      }
-    }
-  }
-  if (!found) {
-    replyMessage(replyToken, "找不到您的資料，請先點選單中的「填寫資料」完成註冊喔！\n─────────────\nProfile not found. Please click 'Register' in the menu first!");
-    return;
-  }
-
-  // 2. 已報名活動
-  var eventList = [];
-  if (sData.length > 0 && eData.length > 0) {
-    var sH = sData[0],
-      sSysIdx = _fi(sH, "系統識別碼"),
-      sEventIdIdx = _fi(sH, "活動編號"),
-      sStatIdx = _fi(sH, "審核結果"),
-      sPayIdx = _fi(sH, "繳費狀態");
-    var eH = eData[0],
-      eIdIdx = _fi(eH, "活動編號"),
-      eNameIdx = _fi(eH, "活動名稱");
-    var eDateIdx = eH.findIndex(function (h) {
-      var s = String(h);
-      return s.includes("活動開始日期") || s.includes("活動日期") || (s.includes("日期") && !s.includes("截止") && !s.includes("結束"));
-    });
-    for (var j = 1; j < sData.length; j++) {
-      if (sSysIdx > -1 && sData[j][sSysIdx] === userId) {
-        var eStatus = (sStatIdx > -1 && sData[j][sStatIdx]) ? String(sData[j][sStatIdx]).trim() : "審核中 Checking";
-        var payStatus = (sPayIdx > -1 && sData[j][sPayIdx]) ? String(sData[j][sPayIdx]).trim() : "未繳費 Unpaid";
-        if (eStatus.indexOf("取消") === -1) {
-          var eName = "未知活動 (Unknown)",
-            eDate = "未知日期 (TBD)",
-            isExpiredChecking = false;
-          var eventId = sEventIdIdx > -1 ? sData[j][sEventIdIdx] : "";
-          for (var k = 1; k < eData.length; k++) {
-            if (eIdIdx > -1 && eData[k][eIdIdx] === eventId) {
-              eName = eNameIdx > -1 ? eData[k][eNameIdx] : "活動";
-              if (eDateIdx > -1 && eData[k][eDateIdx]) {
-                var ed = new Date(eData[k][eDateIdx]);
-                eDate = !isNaN(ed.getTime()) ? Utilities.formatDate(ed, Session.getScriptTimeZone(), "yyyy/MM/dd") : eData[k][eDateIdx];
-              }
-              // 檢查結束日期是否已經過去
-              var endIdx = _fi(eH, "結束");
-              if (endIdx > -1 && eData[k][endIdx]) {
-                var endDate = new Date(eData[k][endIdx]);
-                if (!isNaN(endDate.getTime())) {
-                  endDate.setHours(23, 59, 59, 999);
-                  if (new Date() > endDate && eStatus.indexOf("審核中") > -1) {
-                    isExpiredChecking = true;
-                  }
-                }
-              }
-              break;
-            }
-          }
-
-          if (!isExpiredChecking) {
-            var displayStatus = "[" + eStatus + "]";
-            if (eStatus.indexOf("正取") > -1) displayStatus += "[" + payStatus + "]";
-            eventList.push("🔸 " + eName + " (" + eDate + ")\n進度 Progress：\n" + displayStatus);
-          }
-        }
-      }
-    }
-  }
-  userInfo += "📅 【已報名活動 Activities】\n" + (eventList.length > 0 ? eventList.join("\n\n") : "目前無報名紀錄 (No records found)") + "\n\n";
-
-  // 3. 租借裝備
-  var loanList = [];
-  if (lData.length > 0) {
-    var lH = lData[0],
-      lSysIdIdx = _fi(lH, "系統識別碼"),
-      lStatusIdx = _fi(lH, "領取/歸還"),
-      lPayIdx = _fi(lH, "繳費狀態"),
-      lQtyIdx = _fi(lH, "數量");
-    var lName1Idx = _fi(lH, "裝備名稱"),
-      lName2Idx = _fi(lH, "裝備名稱"),
-      lIdIdx = _fi(lH, "裝備代號");
-    for (var x = 1; x < lData.length; x++) {
-      if (lSysIdIdx > -1 && lData[x][lSysIdIdx] === userId) {
-        var lStatus = (lStatusIdx > -1 && lData[x][lStatusIdx]) ? String(lData[x][lStatusIdx]).trim() : "處理中";
-        var lPayStatus = (lPayIdx > -1 && lData[x][lPayIdx]) ? String(lData[x][lPayIdx]).trim() : "未繳費 Unpaid";
-        var lQty = (lQtyIdx > -1 && lData[x][lQtyIdx]) ? parseInt(lData[x][lQtyIdx], 10) || 1 : 1;
-        var lEquip = _getEquipName(lData[x], lName1Idx, lName2Idx, lIdIdx, "未知裝備 (Name missing)");
-        if (lStatus.indexOf("取消") === -1 && lStatus.indexOf("歸還") === -1) {
-          loanList.push("🔹 " + lEquip + " x" + lQty + "\n   狀態 Status：[" + lStatus + "][" + lPayStatus + "]");
-        }
-      }
-    }
-  }
-  userInfo += "🏕️ 【租借裝備 Equipments】\n" + (loanList.length > 0 ? loanList.join("\n\n") : "目前無租借紀錄 (No records found)");
-  userInfo += "\n\n📊 數位個人總覽儀表板 (My Dashboard)：\nhttps://liff.line.me/2009217429-jvj3ydDT";
-  replyMessage(replyToken, userInfo);
-}
-
-// ⭐️ 表單觸發：一鍵報名引擎 (漸進式個資檢查 + 雙語升級版)
-// 【函式說明】
-// 新增了「漸進式資料收集」的安全攔截機制。
-// 當社員點擊一鍵報名時，系統會先盤點他的基本資料。
-// 驗證社員資料是否完整 (回傳 missingFields 陣列與 p 物件，若陣列包含 "NOT_FOUND" 則代表找不到社員)
-function _checkProfileComplete(userId, ss, type) {
-  var memberSheet = ss.getSheetByName("Members");
-  if (!memberSheet) return {
-    missingFields: ["NOT_FOUND"],
-    p: null
-  };
-  var mData = memberSheet.getDataRange().getValues();
-  var mH = mData.length > 0 ? mData[0] : [];
-  var mSysIdx = _fi(mH, "系統識別碼");
-  var isMember = false;
-  var missingFields = [];
-  var p = {};
-
-  for (var i = mData.length - 1; i >= 1; i--) {
-    if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
-      isMember = true;
-      p.name = mData[i][_fi(mH, "姓名")] || "";
-      p.gender = mData[i][_fi(mH, "性別")] || "";
-      p.realLineId = mData[i][mH.findIndex(function (h) {
-        return String(h).toUpperCase().includes("LINE");
-      })] || "";
-      p.email = mData[i][mH.findIndex(function (h) {
-        return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱");
-      })] || "";
-      p.phone = mData[i][mH.findIndex(function (h) {
-        return String(h).includes("電話") && !String(h).includes("緊急");
-      })] || "";
-      p.department = mData[i][_fi(mH, "系所")] || "";
-      p.studentId = mData[i][_fi(mH, "學號")] || "";
-
-      // 借用裝備、繳交費用共同必填項
-      if (String(p.name).trim() === "") missingFields.push("姓名 (Name)");
-      if (String(p.gender).trim() === "") missingFields.push("性別 (Gender)");
-      if (String(p.realLineId).trim() === "") missingFields.push("LINE ID");
-      if (String(p.email).trim() === "") missingFields.push("聯絡信箱 (Email)");
-      if (String(p.phone).trim() === "") missingFields.push("聯絡電話 (Phone)");
-      if (String(p.department).trim() === "") missingFields.push("系所 (Department)");
-      if (String(p.studentId).trim() === "") missingFields.push("學號 (Student ID)");
-
-      // 只有報名活動才需要的額外欄位 (type === "signup")
-      if (type === "signup") {
-        p.birthday = mData[i][_fi(mH, "生日")] || "";
-        p.idNumber = mData[i][_fi(mH, "證件")] || "";
-        p.studentAddr = mData[i][mH.findIndex(function (h) {
-          return String(h).includes("地址") && !String(h).includes("緊急");
-        })] || "";
-        p.emerName = mData[i][mH.findIndex(function (h) {
-          return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
-        })] || "";
-        p.emerRel = _getEmerRelValue(mH, mData[i]);
-        p.emerAddr = mData[i][mH.findIndex(function (h) {
-          return String(h).includes("地址") && String(h).includes("緊急");
-        })] || "";
-        p.emerPhone = mData[i][_fi(mH, "緊急聯絡人電話")] || "";
-        p.exp = mData[i][_fi(mH, "經驗")] || "";
-        p.strength = mData[i][_fi(mH, "體能")] || "";
-        p.strengthProof = mData[i][_fi(mH, "證明")] || "";
-
-        if (String(p.birthday).trim() === "") missingFields.push("生日 (Birthday)");
-        if (String(p.idNumber).trim() === "") missingFields.push("身分證/護照號碼 (ID/Passport)");
-        if (String(p.studentAddr).trim() === "") missingFields.push("聯絡地址 (Correspondence Address)");
-        if (String(p.emerName).trim() === "") missingFields.push("緊急聯絡人姓名 (Emergency Contact)");
-        if (String(p.emerRel).trim() === "") missingFields.push("與緊急聯絡人關係 (Emergency Relation)");
-        if (String(p.emerAddr).trim() === "") missingFields.push("緊急聯絡人地址 (Emergency Address)");
-        if (String(p.emerPhone).trim() === "") missingFields.push("緊急聯絡人電話 (Emergency Phone)");
-        if (String(p.strength).trim() === "") missingFields.push("體能 (Physical Fitness)");
-        if (String(p.strengthProof).trim() === "") missingFields.push("體能證明 (Proof of Physical Fitness)");
-        if (String(p.exp).trim() === "") missingFields.push("爬山經驗 (Mountaineering Experience)");
-      }
-
-      var payIdx = _fi(mH, "繳費狀態");
-      var paymentStatus = payIdx > -1 ? String(mData[i][payIdx]).trim() : "";
-      p.isOfficial = (paymentStatus === "已繳費 Paid" || paymentStatus === "已繳" || paymentStatus === "是") ? "是" : "否";
-      break;
-    }
-  }
-
-  if (!isMember) return {
-    missingFields: ["NOT_FOUND"],
-    p: null
-  };
-  return {
-    missingFields: missingFields,
-    p: p
-  };
-}
-
-// 如果發現缺少辦理保險所需的敏感資訊 (身分證、緊急聯絡人等)，
-// 系統會中斷報名，並貼心地列出「缺少的清單」，引導社員先去更新資料。
-function handleSignup(replyToken, userId, eventId, ss) {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000); // 鎖定 10 秒防衝突
-
-    // 檢查活動是否存在與是否已截止/已關閉
-    var eventSheet = ss.getSheetByName("Events");
-    if (eventSheet) {
-      var eData = eventSheet.getDataRange().getDisplayValues();
-      if (eData.length > 1) {
-        var eHeaders = eData[0];
-        var eIdCol = _fi(eHeaders, "活動編號");
-        var eNameCol = _fi(eHeaders, "活動名稱");
-        var eStatusCol = eHeaders.findIndex(function (h) {
-          return String(h).includes("報名狀態") || String(h).includes("狀態");
-        });
-        var eDeadCol = _fi(eHeaders, "報名截止日期");
-
-        for (var ev = 1; ev < eData.length; ev++) {
-          if (eData[ev][eIdCol > -1 ? eIdCol : 0] === eventId) {
-            var evStatus = eStatusCol > -1 ? eData[ev][eStatusCol] : "";
-            var evDead = eDeadCol > -1 ? eData[ev][eDeadCol] : "";
-            var evName = eNameCol > -1 ? eData[ev][eNameCol] : eventId;
-            var isEvExpired = _isEventExpired(evDead);
-
-            if (isEvExpired || evStatus === "關閉" || evStatus === "已截止") {
-              if (evStatus === "開放" && isEvExpired) {
-                try {
-                  eventSheet.getRange(ev + 1, eStatusCol + 1).setValue("關閉");
-                } catch (err) { }
-              }
-              replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (evDead || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration closed on " + (evDead || "deadline") + ".");
-              return;
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    var profileCheck = _checkProfileComplete(userId, ss, "signup");
-
-    if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-      replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先完成「填寫資料」後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nplease click 'Register' in the menu to complete your profile first");
-      return;
-    }
-
-    if (profileCheck.missingFields.length > 0) {
-      replyMessage(replyToken, "⚠️ 報名失敗：您的個人資料尚不完整！\n\n為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n👉 " + profileCheck.missingFields.join("\n👉 ") + "\n\n完成資料更新後，再回來點擊一鍵報名喔！🏕️\n─────────────\n⚠️ Failed: Incomplete Profile!\nFor insurance and safety purposes, please click 'Register' in the menu to complete your profile. Once updated, you can sign up again!");
-      return;
-    }
-
-    var p = profileCheck.p;
-
-    // 寫入 Signups
-    var signupSheet = ss.getSheetByName("Signups");
-    if (!signupSheet) {
-      signupSheet = ss.insertSheet("Signups");
-      signupSheet.appendRow(["活動編號", "系統識別碼", "專屬碼", "活動名稱", "姓名", "性別", "LINE ID", "聯絡信箱 Email", "聯絡電話", "生日", "證件號碼", "緊急聯絡人姓名", "與緊急聯絡人關係", "爬山經驗", "緊急聯絡人聯絡地址", "體能測驗", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "聯絡地址", "緊急聯絡人電話"]);
-    }
-    var sheetHeaders = signupSheet.getRange(1, 1, 1, signupSheet.getLastColumn()).getValues()[0];
-
-    // 確保「與緊急聯絡人關係」在表頭中存在，若無則自動在最右側建立新欄位
-    var relColIdx = _findEmerRelColIdx(sheetHeaders);
-    if (relColIdx === -1) {
-      relColIdx = getOrCreateColIdx(signupSheet, sheetHeaders, "與緊急聯絡人關係");
-    }
-
-    // 防重複報名
-    var existingData = signupSheet.getDataRange().getValues();
-    if (existingData.length > 1) {
-      var eSysIdx = _fi(sheetHeaders, "系統識別碼"),
-        eEvtIdx = _fi(sheetHeaders, "活動編號"),
-        eStatIdx = _fi(sheetHeaders, "審核結果");
-      for (var s = 1; s < existingData.length; s++) {
-        if (eSysIdx > -1 && existingData[s][eSysIdx] === userId && existingData[s][eEvtIdx] === eventId) {
-          var currentStatus = existingData[s][eStatIdx] ? String(existingData[s][eStatIdx]) : "";
-          if (currentStatus.indexOf("取消") === -1) {
-            var cache = CacheService.getScriptCache();
-            if (!cache.get(userId + "_" + eventId)) {
-              cache.put(userId + "_" + eventId, 'locked', 10);
-              var eventName = _getEventName(ss, eventId);
-              replyMessage(replyToken, "⚠️ 您已經報名過【" + eventName + "】囉！\n請耐心等候幹部審核，或是點選選單「個人主頁」查詢進度。\n─────────────\n⚠️ You have already registered for [" + eventName + "]!\nPlease wait for officer review, or check 'My Status' for progress.");
-            }
-            return;
-          }
-        }
-      }
-    }
-
-    // 寫入資料
-    var signupCode = "S" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMddHHmmss");
-    var rowData = new Array(sheetHeaders.length).fill("");
-    var eName = _getEventName(ss, eventId);
-
-    function placeData(keyword, value) {
-      var idx = _fi(sheetHeaders, keyword);
-      if (idx > -1) rowData[idx] = value;
-    }
-
-    placeData("活動編號", eventId);
-    placeData("系統識別碼", userId);
-    placeData("專屬碼", signupCode);
-    placeData("活動名稱", eName);
-    placeData("姓名", p.name);
-    placeData("性別", p.gender);
-    placeData("LINE", p.realLineId);
-    placeData("Email", p.email);
-
-    // 本人聯絡電話（排除緊急）
-    var phoneIdx = sheetHeaders.findIndex(function (h) {
-      return String(h).includes("電話") && !String(h).includes("緊急");
-    });
-    if (phoneIdx > -1) rowData[phoneIdx] = p.phone ? "'" + String(p.phone) : "";
-
-    placeData("生日", p.birthday);
-    placeData("證件", p.idNumber);
-
-    // 本人聯絡地址（排除緊急，避免誤寫入緊急聯絡人地址欄位）
-    var studentAddrIdx = sheetHeaders.findIndex(function (h) {
-      return String(h).includes("地址") && !String(h).includes("緊急");
-    });
-    if (studentAddrIdx > -1) rowData[studentAddrIdx] = p.studentAddr;
-
-    // 緊急聯絡人姓名
-    var emerNameIdx = sheetHeaders.findIndex(function (h) {
-      return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
-    });
-    if (emerNameIdx > -1) rowData[emerNameIdx] = p.emerName;
-
-    // 與緊急聯絡人關係
-    if (relColIdx > -1) rowData[relColIdx] = p.emerRel;
-
-    // 緊急聯絡人地址
-    var emerAddrIdx = sheetHeaders.findIndex(function (h) {
-      return String(h).includes("地址") && String(h).includes("緊急");
-    });
-    if (emerAddrIdx > -1) rowData[emerAddrIdx] = p.emerAddr;
-
-    // 緊急聯絡人電話
-    var emerPhoneIdx = sheetHeaders.findIndex(function (h) {
-      return String(h).includes("電話") && String(h).includes("緊急");
-    });
-    if (emerPhoneIdx > -1) rowData[emerPhoneIdx] = p.emerPhone ? "'" + String(p.emerPhone) : "";
-
-    placeData("經驗", p.exp);
-    placeData("體能", p.strength);
-    placeData("體能證明", p.strengthProof);
-    placeData("是否為社員", p.isOfficial);
-    placeData("審核結果", "審核中 Checking");
-    placeData("通知狀態", "");
-    placeData("繳費狀態", "未繳費 Unpaid");
-    placeData("系所", p.department);
-    placeData("學號", p.studentId);
-    placeData("病史", p.medicalHistory);
-    signupSheet.appendRow(rowData);
-
-    // ⚡ 即時同步寫入 Supabase (單一信任來源：members 與 event_signups 表)
-    try {
-      _syncSignupToSupabase(userId, eventId, signupCode, p, "審核中 Checking", eName);
-    } catch (sbErr) {
-      console.warn("同步報名至 Supabase 例外 (略過不影響主流程):", sbErr);
-    }
-
-    // ⚡ 異步寫入活動專屬試算表 (完全不卡頓報名主流程)
-    try {
-      _asyncAppendToEventSpreadsheet(eventId, {
-        eventName: eName,
-        userId: userId,
-        signupCode: signupCode,
-        name: p.name || "",
-        gender: p.gender || "",
-        lineId: p.realLineId || p.lineId || "",
-        email: p.email || "",
-        phone: p.phone || "",
-        address: p.studentAddr || p.address || "",
-        birthday: p.birthday || "",
-        idCard: p.idNumber || p.idCard || "",
-        emerName: p.emerName || "",
-        emerPhone: p.emerPhone || "",
-        emerAddr: p.emerAddr || "",
-        emerRel: p.emerRel || "",
-        exp: p.exp || "",
-        strength: p.strength || "",
-        strengthProof: p.strengthProof || "",
-        isOfficial: p.isOfficial || "否",
-        status: "審核中 Checking",
-        notifyStatus: "",
-        payStatus: "未繳費 Unpaid",
-        notes: ""
-      }, eName);
-    } catch (sheetErr) {
-      console.warn("寫入活動專屬試算表例外 (略過不影響主流程):", sheetErr);
-    }
-
-    replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n活動 (Event)：\n" + eName + "\n活動代號 (Event ID)：" + eventId + "\n報名專屬碼 (Signup Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的資料 (We have received your info)。\n\n⚠️ 【重要提醒 / Important】\n由於活動有人數限制及安全考量，此階段僅為「報名登記」。幹部將進行體能評估與篩選。最終是否錄取（正取/備取），將會透過本帳號個別推播通知您，請留意後續訊息！\n(This is only a registration. Final admission status will be notified to you individually through this account!)");
-
-  } catch (err) {
-    console.error("活動報名失敗:", err);
-    replyMessage(replyToken, "⚠️ 系統目前忙碌中，請稍後再試！");
-  } finally {
-    _safeReleaseLock(lock);
-  }
-}
-
-// ⭐️ 傳送專屬註冊/更新表單 (雙語排版版)
-// 【函式說明】
-// 這是新生入社或舊生更新資料的「大門口」。
-// 為了精準識別是哪位社員填寫了表單，系統會將使用者的 LINE 系統識別碼 (userId)，
-// 透過 URL 參數 (Google 表單的「取得預先填入連結」功能)，
-// 自動帶入並填寫在 Google 表單的特定格子裡。
-// 這樣社員就不需要自己去查一長串複雜的 ID，系統也能百分之百保證資料不會對錯人！
-function sendRegisterForm(replyToken, userId) {
-  var liffUrl = "https://liff.line.me/2009217429-AhPRqAHg";
-  replyMessage(replyToken, "登山社資料填寫 / Club Registration\n\n請點擊下方專屬連結填寫或更新您的個人資料：\nPlease click the link below to fill out or update your profile:\n\n" + liffUrl);
-}
-
-// ⭐️ 輔助函式：判定活動報名截止日是否已過 (當天 23:59:59 截止)
-function _isEventExpired(deadlineVal) {
-  if (!deadlineVal) return false;
-  try {
-    var now = new Date();
-    if (deadlineVal instanceof Date) {
-      var d = new Date(deadlineVal.getTime());
-      if (d.getHours() === 0 && d.getMinutes() === 0) {
-        d.setHours(23, 59, 59, 999);
-      }
-      return now.getTime() > d.getTime();
-    }
-    var str = String(deadlineVal).trim();
-    if (!str) return false;
-    var cleanStr = str.replace(/[\/\.]/g, "-");
-    var parts = cleanStr.split(" ")[0].split("-");
-    if (parts.length >= 3) {
-      var year = parseInt(parts[0], 10);
-      var month = parseInt(parts[1], 10) - 1;
-      var day = parseInt(parts[2], 10);
-      var deadlineDate = new Date(year, month, day, 23, 59, 59, 999);
-      return now.getTime() > deadlineDate.getTime();
-    }
-  } catch (e) {
-    console.error("解析活動截止日期失敗:", deadlineVal, e);
-  }
-  return false;
-}
-
-// ⭐️ 輔助函式：判定活動是否已經開始 (活動開始日 00:00:00 起算)
-function _isEventStarted(startDateVal) {
-  if (!startDateVal) return false;
-  try {
-    var now = new Date();
-    if (startDateVal instanceof Date) {
-      var d = new Date(startDateVal.getTime());
-      d.setHours(0, 0, 0, 0);
-      return now.getTime() >= d.getTime();
-    }
-    var str = String(startDateVal).trim();
-    if (!str) return false;
-    var cleanStr = str.replace(/[\/\.]/g, "-");
-    var parts = cleanStr.split(" ")[0].split("-");
-    if (parts.length >= 3) {
-      var year = parseInt(parts[0], 10);
-      var month = parseInt(parts[1], 10) - 1;
-      var day = parseInt(parts[2], 10);
-      var eventStartDate = new Date(year, month, day, 0, 0, 0, 0);
-      return now.getTime() >= eventStartDate.getTime();
-    }
-  } catch (e) {
-    console.error("解析活動開始日期失敗:", startDateVal, e);
-  }
-  return false;
-}
-
-// ⭐️ 產生最新活動卡片 (100% 全動態對應最新欄位版 / 雙語升級)
-// 【函式說明】
-// 當社員點擊「最新活動」時，這個函式會去「Events (活動資訊)」分頁，
-// 撈出所有狀態標記為「開放」或「未來開放」的活動。
-// 接著，它會把這些活動的名稱、日期、費用、簡介和封面圖，
-// 自動組裝成一組精美的 LINE 輪播卡片 (Carousel Flex Message) 傳送給社員。
-// 這支程式採用了「全動態欄位對應」，即使幹部未來不小心調換了試算表的欄位順序，系統也不會壞掉！
-function sendEventList(replyToken, ss) {
-  var eventSheet = ss.getSheetByName("Events");
-  if (!eventSheet) return;
-  var data = eventSheet.getDataRange().getDisplayValues();
-  var bubbles = [];
-
-  var headers = data[0];
-  var hIdx = {
-    id: _fi(headers, "活動編號"),
-    name: _fi(headers, "活動名稱"),
-    startDate: _fi(headers, "活動開始日期"),
-    endDate: _fi(headers, "活動結束日期"),
-    deadline: _fi(headers, "報名截止日期"),
-    cost: headers.findIndex(function (h) {
-      return String(h).includes("預計費用") || String(h).includes("費用");
-    }),
-    status: headers.findIndex(function (h) {
-      return String(h).includes("報名狀態") || String(h).includes("狀態");
-    }),
-    shortDesc: _fi(headers, "簡介"),
-    img: headers.findIndex(function (h) {
-      return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片");
-    })
-  };
-
-  for (var i = 1; i < data.length; i++) {
-    var status = hIdx.status > -1 ? data[i][hIdx.status] : "";
-    var deadline = hIdx.deadline > -1 ? data[i][hIdx.deadline] : "";
-    var isExpired = _isEventExpired(deadline);
-
-    // 若活動標記為開放但已超過截止日，自動即時關閉並回寫試算表
-    if (status === "開放" && isExpired) {
-      status = "關閉";
-      try {
-        if (hIdx.status > -1) {
-          eventSheet.getRange(i + 1, hIdx.status + 1).setValue("關閉");
-        }
-      } catch (err) { }
-    }
-
-    if (status === "開放" || status === "未來開放") {
-      var eventId = hIdx.id > -1 ? data[i][hIdx.id] : "";
-      var eventName = hIdx.name > -1 ? data[i][hIdx.name] : "未命名活動";
-      var tagColor = (status === "開放") ? "#1DB446" : "#FF9800";
-      var displayStatus = status === "開放" ? "開放 Open" : "未來開放 Coming Soon";
-
-      var bubble = {
-        "type": "bubble",
-        "body": {
-          "type": "box",
-          "layout": "vertical",
-          "contents": [{
-            "type": "text",
-            "text": displayStatus,
-            "weight": "bold",
-            "color": tagColor,
-            "size": "sm"
-          }, {
-            "type": "text",
-            "text": eventName,
-            "weight": "bold",
-            "size": "xl",
-            "margin": "sm",
-            "wrap": true
-          }, {
-            "type": "box",
-            "layout": "vertical",
-            "margin": "md",
-            "spacing": "xs",
-            "contents": [{
-              "type": "text",
-              "text": "費用 Cost: " + (hIdx.cost > -1 ? data[i][hIdx.cost] : ""),
-              "size": "sm",
-              "color": "#666666",
-              "weight": "bold"
-            }, {
-              "type": "text",
-              "text": "活動時間 Event Date:",
-              "size": "sm",
-              "color": "#666666",
-              "margin": "sm"
-            }, {
-              "type": "text",
-              "text": (hIdx.startDate > -1 ? data[i][hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? data[i][hIdx.endDate] : ""),
-              "size": "sm",
-              "color": "#1DB446",
-              "weight": "bold"
-            }, {
-              "type": "text",
-              "text": "報名截止 Sign Up Deadline:",
-              "size": "sm",
-              "color": "#666666",
-              "margin": "sm"
-            }, {
-              "type": "text",
-              "text": (hIdx.deadline > -1 ? data[i][hIdx.deadline] : ""),
-              "size": "sm",
-              "color": "#E53935",
-              "weight": "bold"
-            }]
-          }, {
-            "type": "separator",
-            "margin": "md"
-          }, {
-            "type": "text",
-            "text": hIdx.shortDesc > -1 ? data[i][hIdx.shortDesc] : "",
-            "size": "sm",
-            "color": "#999999",
-            "margin": "md",
-            "wrap": true,
-            "maxLines": 3
-          }]
-        },
-        "footer": {
-          "type": "box",
-          "layout": "vertical",
-          "contents": [{
-            "type": "button",
-            "style": "secondary",
-            "action": {
-              "type": "postback",
-              "label": "查看詳情 View",
-              "data": "action=view&eventId=" + eventId,
-              "displayText": "我想查看 " + eventName + " 的資訊 / I want to view details"
-            }
-          }]
-        }
-      };
-
-      var imageUrl = hIdx.img > -1 ? data[i][hIdx.img] : "";
-      if (imageUrl && imageUrl.startsWith("http")) {
-        bubble.hero = {
-          "type": "image",
-          "url": imageUrl,
-          "size": "full",
-          "aspectRatio": "20:13",
-          "aspectMode": "cover"
-        };
-      }
-      bubbles.push(bubble);
-    }
-  }
-
-  if (bubbles.length === 0) {
-    replyMessage(replyToken, "目前這學期還沒有排定的活動喔！\n─────────────\nThere are no scheduled activities for this semester yet!");
-  } else {
-    replyFlexMessage(replyToken, "請查看本學期活動列表 / Event List", {
-      "type": "carousel",
-      "contents": bubbles
-    });
-  }
-}
-
-// ⭐️ 傳送單一活動詳細資訊與報名按鈕 (100% 全動態對應最新欄位版 / 雙語升級)
-// 【函式說明】
-// 當社員在「最新活動」輪播卡片上點擊某個活動的「查看詳情」時，會觸發此函式。
-// 系統會根據傳入的 eventId，去「Events」試算表裡精準找出那場活動的完整資料，
-// 包含長篇的「詳細行程」。
-// 然後將這些資訊組裝成一張「單一的超大張詳情卡片」，
-// 如果該活動處於「開放」狀態，卡片最下方就會出現綠色的「一鍵報名」按鈕！
-function sendEventDetail(replyToken, eventId, ss) {
-  var eventSheet = ss.getSheetByName("Events");
-  if (!eventSheet) {
-    replyMessage(replyToken, "找不到活動資料表！\n─────────────\nEvent sheet not found!");
-    return;
-  }
-  var data = eventSheet.getDataRange().getDisplayValues();
-  if (data.length <= 1) {
-    replyMessage(replyToken, "目前沒有任何活動資料！\n─────────────\nNo event data available yet!");
-    return;
-  }
-
-  var headers = data[0];
-  var hIdx = {
-    id: _fi(headers, "活動編號"),
-    name: _fi(headers, "活動名稱"),
-    startDate: _fi(headers, "活動開始日期"),
-    endDate: _fi(headers, "活動結束日期"),
-    deadline: _fi(headers, "報名截止日期"),
-    cost: headers.findIndex(function (h) {
-      return String(h).includes("預計費用") || String(h).includes("費用");
-    }),
-    status: headers.findIndex(function (h) {
-      return String(h).includes("報名狀態") || String(h).includes("狀態");
-    }),
-    shortDesc: _fi(headers, "簡介"),
-    fullDesc: headers.findIndex(function (h) {
-      return String(h).includes("詳細行程") || String(h).includes("行程");
-    }),
-    img: headers.findIndex(function (h) {
-      return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片");
-    })
-  };
-
-  var idCol = hIdx.id > -1 ? hIdx.id : 0;
-  var eventData = null;
-  var eventRowIndex = -1;
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][idCol] === eventId) {
-      eventData = data[i];
-      eventRowIndex = i + 1;
-      break;
-    }
-  }
-  if (!eventData) {
-    replyMessage(replyToken, "找不到該活動的詳細資訊！\n─────────────\nEvent details not found!");
-    return;
-  }
-
-  var eventName = hIdx.name > -1 ? eventData[hIdx.name] : "未命名活動 (Untitled Event)";
-  var status = hIdx.status > -1 ? eventData[hIdx.status] : "";
-  var deadline = hIdx.deadline > -1 ? eventData[hIdx.deadline] : "";
-  var isExpired = _isEventExpired(deadline);
-
-  // 若活動標記為開放但已超過截止日，自動即時關閉並回寫試算表
-  if (status === "開放" && isExpired) {
-    status = "關閉";
-    try {
-      if (hIdx.status > -1 && eventRowIndex > 0) {
-        eventSheet.getRange(eventRowIndex, hIdx.status + 1).setValue("關閉");
-      }
-    } catch (err) { }
-  }
-
-  var buttonBox;
-  if (status === "開放" && !isExpired) {
-    buttonBox = {
-      "type": "button",
-      "style": "primary",
-      "color": "#1DB446",
-      "action": {
-        "type": "postback",
-        "label": "一鍵報名 Sign Up",
-        "data": "action=signup&eventId=" + eventId,
-        "displayText": "我要報名 Sign up for: " + eventName
-      }
-    };
-  } else {
-    var closedLabel = isExpired ? "報名已截止 Closed" : "尚未開放 Not Open";
-    buttonBox = {
-      "type": "button",
-      "style": "secondary",
-      "color": "#CCCCCC",
-      "action": {
-        "type": "uri",
-        "label": closedLabel,
-        "uri": "https://line.me/R/"
-      }
-    };
-  }
-
-  var detailContents = [{
-    "type": "text",
-    "text": eventName,
-    "weight": "bold",
-    "size": "xxl",
-    "wrap": true
-  }, {
-    "type": "text",
-    "text": "活動詳情 Event Details",
-    "weight": "bold",
-    "color": "#1DB446",
-    "size": "sm",
-    "margin": "xs"
-  }, {
-    "type": "box",
-    "layout": "vertical",
-    "margin": "md",
-    "spacing": "sm",
-    "contents": [{
-      "type": "text",
-      "text": "費用 Cost: " + (hIdx.cost > -1 ? eventData[hIdx.cost] : ""),
-      "size": "sm",
-      "color": "#666666",
-      "weight": "bold"
-    }, {
-      "type": "text",
-      "text": "活動時間 Event Date:",
-      "size": "sm",
-      "color": "#666666",
-      "margin": "sm"
-    }, {
-      "type": "text",
-      "text": (hIdx.startDate > -1 ? eventData[hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? eventData[hIdx.endDate] : ""),
-      "size": "sm",
-      "color": "#1DB446",
-      "weight": "bold"
-    }, {
-      "type": "text",
-      "text": "報名截止 Sign Up Deadline:",
-      "size": "sm",
-      "color": "#666666",
-      "margin": "sm"
-    }, {
-      "type": "text",
-      "text": (hIdx.deadline > -1 ? eventData[hIdx.deadline] : ""),
-      "size": "sm",
-      "color": "#E53935",
-      "weight": "bold"
-    }]
-  }];
-
-  var shortDescText = (hIdx.shortDesc > -1 ? eventData[hIdx.shortDesc] : "").trim();
-  var fullDescText = (hIdx.fullDesc > -1 ? eventData[hIdx.fullDesc] : "").trim();
-
-  if (shortDescText) {
-    detailContents.push({
-      "type": "separator",
-      "margin": "lg"
-    });
-    detailContents.push({
-      "type": "text",
-      "text": "【活動簡介 Overview】",
-      "weight": "bold",
-      "size": "sm",
-      "margin": "lg"
-    });
-    detailContents.push({
-      "type": "text",
-      "text": shortDescText,
-      "size": "sm",
-      "margin": "md",
-      "wrap": true,
-      "color": "#555555"
-    });
-  }
-
-  detailContents.push({
-    "type": "separator",
-    "margin": "lg"
-  });
-  detailContents.push({
-    "type": "text",
-    "text": "【詳細行程 Itinerary & Details】",
-    "weight": "bold",
-    "size": "sm",
-    "margin": "lg"
-  });
-  detailContents.push({
-    "type": "text",
-    "text": fullDescText || "無詳細說明 (No details provided)",
-    "size": "sm",
-    "margin": "md",
-    "wrap": true
-  });
-
-  var bubble = {
-    "type": "bubble",
-    "body": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": detailContents
-    },
-    "footer": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": [buttonBox]
-    }
-  };
-
-  var imageUrl = hIdx.img > -1 ? eventData[hIdx.img] : "";
-  if (imageUrl && imageUrl.startsWith("http")) {
-    bubble.hero = {
-      "type": "image",
-      "url": imageUrl,
-      "size": "full",
-      "aspectRatio": "20:13",
-      "aspectMode": "cover"
-    };
-  }
-  replyFlexMessage(replyToken, eventName + " 詳細資訊 Details", bubble);
-}
-
-// ⭐️ 幹部管理工具 (主動推播通知系統)
-// 【函式說明】
-// 這是一個 Google Apps Script 的「內建觸發器 (Simple Trigger)」。
-// 只要有任何擁有權限的人(幹部)打開這份 Google 試算表，這個函式就會自動執行。
-// 它的唯一工作，就是在試算表最上方的工具列中，額外「長出」一個自訂的下拉選單。
-// 這樣一來，不懂程式的幹部也能透過簡單的點擊，一鍵觸發強大的後端自動化推播功能！
-function onOpen() {
-  var ui = SpreadsheetApp.getUi();
-  ui.createMenu('🏕️ 登山社管理工具')
-    .addItem('🔄 比對並同步至 Supabase (目前分頁)', 'openMainSyncSidebar')
-    .addSeparator()
-    .addItem('發送審核結果通知 Send Review Notifications', 'sendReviewNotifications')
-    .addSeparator()
-    .addItem('🧹 一鍵清理測試診斷資料', 'cleanupDiagnosticData')
-    .addToUi();
-}
-
-// ⭐️ 幹部發送通知引擎 (防呆除錯升級版 / 雙語升級)
-// 【函式說明】
-// 這是專門給「幹部」使用的批次發送工具。
-// 當幹部在試算表上點擊「發送審核結果通知」時，系統會掃描整張「Signups (報名表)」。
-// 只要發現有人的審核結果被標記為「正取」或「備取」，且通知狀態還不是「已通知」，
-// 系統就會主動推播相對應的精美錄取卡片給該名社員。
-// 為了避免 LINE 的 API 報錯，這個函式內建了極強的除錯與防呆機制，並會把發送失敗的名單回報給幹部。
-function sendReviewNotifications() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("Signups"),
-    eventSheet = ss.getSheetByName("Events");
-  if (!sheet || !eventSheet) return;
+  var sheet = ss.getSheetByName("Officers");
+  if (!sheet) return null;
 
   var data = sheet.getDataRange().getValues();
-  var eData = eventSheet.getDataRange().getDisplayValues();
-  var eIdIdx = _fi(eData[0], "活動編號"),
-    eNameIdx = _fi(eData[0], "活動名稱");
-  var sysIdIndex = _fi(data[0], "系統識別碼"),
-    nameIndex = _fi(data[0], "姓名"),
-    eventIndex = _fi(data[0], "活動編號");
-  var resultIndex = _fi(data[0], "審核結果"),
-    statusIndex = _fi(data[0], "通知狀態"),
-    codeIndex = _fi(data[0], "專屬碼");
+  if (data.length <= 1) return null;
 
-  var count = 0,
-    errorLog = "";
-
-  for (var i = 1; i < data.length; i++) {
-    var userId = String(data[i][sysIdIndex] || "").trim();
-    var name = nameIndex > -1 ? data[i][nameIndex] : "社員";
-    var eventId = data[i][eventIndex];
-    var result = String(data[i][resultIndex] || "");
-    var status = String(data[i][statusIndex] || "");
-    var signupCode = (codeIndex > -1) ? data[i][codeIndex] : "";
-
-    var isAcceptedOrWaitlisted = (result.indexOf("正取") > -1 || result.indexOf("備取") > -1);
-    if (isAcceptedOrWaitlisted && status !== "已通知" && result.indexOf("取消") === -1) {
-      if (!userId.startsWith("U") || userId.length < 30) {
-        errorLog += "❌ " + name + " 的系統識別碼格式錯誤 (必須為U開頭的長亂碼)。\n";
-        continue;
-      }
-
-      var eventName = eventId;
-      for (var e = 1; e < eData.length; e++) {
-        if (eData[e][eIdIdx > -1 ? eIdIdx : 0] === eventId) {
-          eventName = eData[e][eNameIdx > -1 ? eNameIdx : 1];
-          break;
-        }
-      }
-
-      var apiResponse = null;
-
-      if (result.indexOf("正取") > -1) {
-        var acceptedFlex = {
-          "type": "bubble",
-          "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [{
-              "type": "text",
-              "text": "審核結果出爐 Result",
-              "weight": "bold",
-              "color": "#1DB446",
-              "size": "sm"
-            }, {
-              "type": "text",
-              "text": "活動正取通知",
-              "weight": "bold",
-              "size": "xl",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:",
-              "margin": "md",
-              "size": "sm",
-              "wrap": true
-            }, {
-              "type": "text",
-              "text": eventName,
-              "weight": "bold",
-              "color": "#111111",
-              "size": "md",
-              "wrap": true,
-              "margin": "sm"
-            }, {
-              "type": "text",
-              "text": "審核結果為 Result：",
-              "margin": "md",
-              "size": "sm"
-            }, {
-              "type": "text",
-              "text": "【 " + result + " 】",
-              "weight": "bold",
-              "color": "#1DB446",
-              "size": "lg",
-              "align": "center",
-              "margin": "md"
-            }, {
-              "type": "separator",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": "恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!",
-              "wrap": true,
-              "margin": "md",
-              "size": "xs",
-              "color": "#666666"
-            }]
-          },
-          "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [{
-              "type": "button",
-              "style": "primary",
-              "color": "#1DB446",
-              "action": {
-                "type": "uri",
-                "label": "前往繳費系統 Pay",
-                "uri": "https://liff.line.me/2009217429-u7OCkmQO"
-              }
-            }]
-          }
-        };
-        apiResponse = pushFlexMessage(userId, "【活動正取通知 Confirmed】", acceptedFlex);
-      } else if (result.indexOf("備取") > -1) {
-        var waitlistFlex = {
-          "type": "bubble",
-          "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [{
-              "type": "text",
-              "text": "審核結果出爐 Result",
-              "weight": "bold",
-              "color": "#FF9800",
-              "size": "sm"
-            }, {
-              "type": "text",
-              "text": "活動備取通知",
-              "weight": "bold",
-              "size": "xl",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:",
-              "margin": "md",
-              "size": "sm",
-              "wrap": true
-            }, {
-              "type": "text",
-              "text": eventName,
-              "weight": "bold",
-              "color": "#111111",
-              "size": "md",
-              "wrap": true,
-              "margin": "sm"
-            }, {
-              "type": "text",
-              "text": "審核結果為 Result：",
-              "margin": "md",
-              "size": "sm"
-            }, {
-              "type": "text",
-              "text": "【 " + result + " 】",
-              "weight": "bold",
-              "color": "#FF3333",
-              "size": "md",
-              "align": "center",
-              "margin": "md"
-            }, {
-              "type": "separator",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": "若有正取者放棄資格，我們將會隨時遞補。如果您確定願意等待遞補，請點擊下方按鈕進行登記！\nIf confirmed members cancel, we will notify the waitlist. Click below if you are willing to wait!",
-              "wrap": true,
-              "margin": "md",
-              "size": "xs",
-              "color": "#666666"
-            }]
-          },
-          "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [{
-              "type": "button",
-              "style": "primary",
-              "color": "#FF9800",
-              "action": {
-                "type": "postback",
-                "label": "我要遞補 Waitlist",
-                "data": "action=confirm_waitlist&targetId=" + signupCode,
-                "displayText": "我願意等待遞補！/ Willing to wait!"
-              }
-            }]
-          }
-        };
-        apiResponse = pushFlexMessage(userId, "【活動備取通知 Waitlist】", waitlistFlex);
-      }
-
-      if (apiResponse && apiResponse.getResponseCode() !== 200) {
-        errorLog += "❌ " + name + " 發送失敗 (LINE 拒絕)：" + apiResponse.getContentText() + "\n";
-      } else {
-        sheet.getRange(i + 1, statusIndex + 1).setValue("已通知");
-        count++;
-      }
-    }
-  }
-
-  if (errorLog !== "") {
-    SpreadsheetApp.getUi().alert("⚠️ 執行完畢，但有發生錯誤：\n\n✅ 成功發送: " + count + " 則\n\n📝 錯誤紀錄:\n" + errorLog);
-  } else {
-    SpreadsheetApp.getUi().alert("✅ 執行完畢！共成功發送了 " + count + " 則通知。");
-  }
-}
-
-// ⭐️ 產生裝備借用輪播卡片 (100% 全動態對應最新欄位版 / 雙語升級)
-// 【函式說明】
-// 當社員點擊「器材借用」時，系統會啟動這個虛擬倉庫引擎。
-// 它會去「Equipments (裝備表)」掃描所有狀態為「可外借」且沒有損壞的裝備，
-// 並抓取庫存數量與租金，組裝成最多 10 張的精美輪播卡片。
-// 若庫存大於 0，按鈕會亮綠燈允許借用；若庫存為 0，按鈕會反灰變成「庫存不足」。
-function sendBorrowMenu(replyToken, ss) {
-  var equipSheet = ss.getSheetByName("Equipments");
-  if (!equipSheet) {
-    replyMessage(replyToken, "找不到裝備資料表！\n─────────────\nEquipment sheet not found!");
-    return;
-  }
-  var data = equipSheet.getDataRange().getDisplayValues();
-  if (data.length <= 1) {
-    replyMessage(replyToken, "目前沒有裝備資料！\n─────────────\nNo equipment data available!");
-    return;
-  }
   var bubbles = [];
+  for (var i = 1; i < data.length && i <= 8; i++) {
+    var name = data[i][0] || "幹部";
+    var role = data[i][1] || "幹部";
+    var contact = data[i][2] || "無特殊聯絡資訊";
 
-  var headers = data[0];
-  var hIdx = {
-    id: _fi(headers, "裝備代號"),
-    name: _fi(headers, "裝備名稱"),
-    totalQty: _fi(headers, "總數量"),
-    remainQty: _fi(headers, "剩餘數量"),
-    borrowable: _fi(headers, "是否外借"),
-    price2Days: _fi(headers, "2天"),
-    priceExtra: _fi(headers, "+1天"),
-    status: _fi(headers, "狀態")
-  };
-
-  for (var i = 1; i < data.length; i++) {
-    var isBorrowable = hIdx.borrowable > -1 ? data[i][hIdx.borrowable] : "";
-    var status = hIdx.status > -1 ? data[i][hIdx.status] : "";
-    if (isBorrowable === "可外借" && status !== "維修中" && status !== "報廢" && status !== "需汰換" && status !== "待測") {
-      var equipId = hIdx.id > -1 ? data[i][hIdx.id] : "";
-      var equipName = hIdx.name > -1 ? data[i][hIdx.name] : "未知裝備";
-      var remainQty = hIdx.remainQty > -1 ? data[i][hIdx.remainQty] : "0";
-      var hasStock = parseInt(remainQty) > 0;
-      var stockColor = hasStock ? "#1DB446" : "#FF3333";
-      var stockText = hasStock ? "剩餘 Left " + remainQty + " / " + (hIdx.totalQty > -1 ? data[i][hIdx.totalQty] : "0") : "已全數借出 Out of stock";
-
-      var buttonAction = hasStock ?
-        {
-          "type": "postback",
-          "label": "我要借 Borrow",
-          "data": "action=borrow_form&equipId=" + equipId,
-          "displayText": "我想借用 I want to borrow: " + equipName
-        } :
-        {
-          "type": "uri",
-          "label": "庫存不足 Empty",
-          "uri": "https://line.me/R/"
-        };
-
-      bubbles.push({
-        "type": "bubble",
-        "size": "kilo",
-        "body": {
-          "type": "box",
-          "layout": "vertical",
-          "contents": [{
-            "type": "text",
-            "text": equipId,
-            "color": "#888888",
-            "size": "xs",
-            "weight": "bold"
-          }, {
-            "type": "text",
-            "text": equipName,
-            "weight": "bold",
-            "size": "md",
-            "margin": "sm",
-            "wrap": true
-          }, {
-            "type": "text",
-            "text": "📦 " + stockText,
-            "size": "xs",
-            "color": stockColor,
-            "margin": "sm",
-            "weight": "bold"
-          }, {
-            "type": "separator",
-            "margin": "md"
-          }, {
-            "type": "text",
-            "text": "非社員收費 Non-member Rates:",
-            "size": "xxs",
-            "color": "#999999",
-            "margin": "md"
-          }, {
-            "type": "text",
-            "text": "💰 基本(2天) Base(2D): $" + (hIdx.price2Days > -1 ? data[i][hIdx.price2Days] : "0"),
-            "size": "xs",
-            "color": "#666666",
-            "margin": "xs"
-          }, {
-            "type": "text",
-            "text": "💰 之後(+1天) After(+1D): +$" + (hIdx.priceExtra > -1 ? data[i][hIdx.priceExtra] : "0"),
-            "size": "xs",
-            "color": "#666666",
-            "margin": "xs"
-          }, {
-            "type": "text",
-            "text": "✨ 正式社員享 5 折 Member gets 50% Off",
-            "size": "xxs",
-            "color": "#FF9800",
-            "weight": "bold",
-            "margin": "md"
-          }]
-        },
-        "footer": {
-          "type": "box",
-          "layout": "vertical",
-          "contents": [{
-            "type": "button",
-            "style": hasStock ? "primary" : "secondary",
-            "color": hasStock ? "#1DB446" : "#CCCCCC",
-            "action": buttonAction
-          }]
-        }
-      });
-      if (bubbles.length === 10) break;
-    }
-  }
-
-  if (bubbles.length === 0) {
-    replyMessage(replyToken, "目前沒有可外借的裝備。\n─────────────\nNo equipment available for borrowing currently.");
-  } else {
-    var replyText = "請選擇您要預約的裝備 / Please select equipment" + (bubbles.length === 10 ? "\n(僅顯示前 10 項可外借裝備 Top 10 items shown)" : "");
-    replyFlexMessage(replyToken, replyText, {
-      "type": "carousel",
-      "contents": bubbles
+    bubbles.push({
+      type: "bubble",
+      size: "kilo",
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          { type: "text", text: role, weight: "bold", size: "sm", color: "#10b981" },
+          { type: "text", text: name, weight: "bold", size: "lg", margin: "xs" },
+          { type: "text", text: contact, size: "xs", color: "#888888", margin: "sm", wrap: true }
+        ]
+      }
     });
   }
+
+  return bubbles.length > 0 ? { type: "carousel", contents: bubbles } : null;
 }
 
-// ⭐️ 裝備表單提交攔截器 (防呆與算錢引擎 / 雙語升級版)
-// 【函式說明】
-// 這是一個 Google Apps Script 的「表單提交觸發器 (onFormSubmit)」。
-// 當社員填寫完「裝備借用 Google 表單」並按下提交時，這個函式會立刻啟動。
-// 它會對剛剛送進來的資料進行 4 道嚴格的防呆檢查：
-// 1. 日期是否合理 (歸還不能早於領取)
-// 2. 借用天數是否超標 (不可超過 14 天)
-// 3. 是否真的是本社社員
-// 4. 裝備庫存是否足夠，且名稱沒有被惡意竄改
-// 如果任何一項不合格，它會把這筆訂單標示為「已取消」，並傳 LINE 警告社員。
-// 如果一切正常，它會自動計算費用、扣除庫存，並發出訂單成立的推播！
-function onBorrowFormSubmit(e) {
-  try {
-    var sheet = e.range.getSheet();
-    if (sheet.getName() !== "Loan_Records") return;
-
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var row = e.range.getRow();
-    var lHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var rowData = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
-
-    function getColIdx(keyword) {
-      return lHeaders.findIndex(function (h) {
-        return String(h).includes(keyword);
-      });
-    }
-
-    var userIdIdx = getColIdx("系統識別碼"),
-      equipIdIdx = getColIdx("裝備代號");
-    var purposeIdx = getColIdx("用途") > -1 ? getColIdx("用途") : getColIdx("借用用途");
-    var qtyIdx = getColIdx("數量") > -1 ? getColIdx("數量") : getColIdx("借用數量");
-    var pickupIdx = getColIdx("預計領取"),
-      returnIdx = getColIdx("預計歸還"),
-      noteIdx = getColIdx("備註");
-    var submittedEquipNameIdx = getColIdx("裝備名稱") > -1 ? getColIdx("裝備名稱") : getColIdx("租借項目");
-
-    if (userIdIdx === -1 || equipIdIdx === -1) return;
-
-    function getDisplayDate(val) {
-      if (!val) return "";
-      if (val instanceof Date) return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy/MM/dd");
-      return String(val);
-    }
-
-    var userId = String(rowData[userIdIdx]).trim();
-    var equipId = String(rowData[equipIdIdx]).trim().toUpperCase();
-    var purpose = purposeIdx > -1 ? String(rowData[purposeIdx]) : "未填寫";
-    var qty = qtyIdx > -1 ? parseInt(rowData[qtyIdx], 10) || 0 : 0;
-    var pickupTime = pickupIdx > -1 ? getDisplayDate(rowData[pickupIdx]) : "";
-    var returnTime = returnIdx > -1 ? getDisplayDate(rowData[returnIdx]) : "";
-    var note = noteIdx > -1 && rowData[noteIdx] ? String(rowData[noteIdx]) : "無";
-    var submittedEquipName = submittedEquipNameIdx > -1 ? String(rowData[submittedEquipNameIdx]).trim() : "";
-
-    function ensureCol(keyword) {
-      var idx = getColIdx(keyword);
-      if (idx === -1) {
-        idx = lHeaders.length;
-        sheet.getRange(1, idx + 1).setValue(keyword);
-        lHeaders.push(keyword);
-        rowData.push("");
-      }
-      return idx;
-    }
-
-    var colStatusIdx = ensureCol("領取/歸還"),
-      colPayStatusIdx = ensureCol("繳費狀態");
-    var colOrderIdIdx = ensureCol("租借編號"),
-      colCostIdx = ensureCol("應繳費用");
-    var colIsOfficialIdx = ensureCol("是否為社員"),
-      colEquipNameIdx = ensureCol("裝備名稱"),
-      colNameIdx = ensureCol("姓名");
-
-    // 日期解析與防呆
-    function parseDate(dateStr) {
-      if (!dateStr) return new Date();
-      var parts = String(dateStr).split(/[-/]/);
-      if (parts.length === 3) {
-        if (parts[2].length === 4) return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-        else if (parts[0].length === 4) return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-      }
-      return new Date(dateStr);
-    }
-
-    var pDate = parseDate(pickupTime),
-      rDate = parseDate(returnTime);
-    pDate.setHours(0, 0, 0, 0);
-    rDate.setHours(0, 0, 0, 0);
-    var diffTime = rDate.getTime() - pDate.getTime();
-
-    if (isNaN(diffTime) || diffTime < 0) {
-      sheet.deleteRow(row);
-      pushMessage(userId, "⚠️ 借用失敗：您填寫的「預計歸還日期」早於「預計領取日期」或格式錯誤，請重新填寫表單！\n─────────────\n⚠️ Failed: 'Return Date' cannot be earlier than 'Pickup Date' or format error. Please refill the form!");
-      return;
-    }
-
-    var borrowDays = Math.max(2, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
-    if (borrowDays > 14) {
-      sheet.deleteRow(row);
-      pushMessage(userId, "⚠️ 借用失敗：單次借用天數不可超過 14 天（您填寫了 " + borrowDays + " 天），請重新評估後再填寫一次！如需長時間借用請直接聯繫幹部。\n─────────────\n⚠️ Failed: Borrowing period cannot exceed 14 days (You selected " + borrowDays + " days). Please re-evaluate and refill the form! For long-term borrowing, please contact the officers directly.");
-      return;
-    }
-
-    // 跨表查詢社員
-    var mSheet = ss.getSheetByName("Members"),
-      mData = mSheet.getDataRange().getValues();
-    var mSysIdx = _fi(mData[0], "系統識別碼");
-    var userName = "未知",
-      isOfficial = "否",
-      realLineId = "未提供",
-      idFound = false;
-
-    for (var i = 1; i < mData.length; i++) {
-      if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
-        idFound = true;
-        userName = mData[i][_fi(mData[0], "姓名")] || "未知";
-        var lineIdx = mData[0].findIndex(function (h) {
-          return String(h).toUpperCase().includes("LINE");
-        });
-        realLineId = lineIdx > -1 ? (mData[i][lineIdx] || "未提供") : "未提供";
-        var payStatus = mData[i][_fi(mData[0], "繳費狀態")] || "";
-        if (String(payStatus).trim() === "已繳費 Paid") isOfficial = "是";
-        break;
-      }
-    }
-
-    if (!idFound) {
-      sheet.deleteRow(row);
-      pushMessage(userId, "⚠️ 借用失敗：系統找不到您的社員資料，請先透過選單的「填寫資料」完成註冊喔！\n─────────────\n⚠️ Failed: Profile not found. Please click 'Register' in the menu first!");
-      return;
-    }
-
-    // 跨表查詢裝備與計算費用 (加入並行鎖定保護)
-    var equipSheet = ss.getSheetByName("Equipments");
-    var eData = equipSheet.getDataRange().getValues();
-    var eIdIdx = _fi(eData[0], "裝備代號");
-    var equipName = "未知裝備",
-      cost = 0,
-      newStock = 0,
-      equipFound = false,
-      nameMatch = true;
-
-    var lock = LockService.getScriptLock();
-    try {
-      lock.waitLock(10000); // 最多等 10 秒
-      // 由於可能等待過，再次取得最新庫存資料
-      eData = equipSheet.getDataRange().getValues();
-
-      for (var j = 1; j < eData.length; j++) {
-        if (eIdIdx > -1 && eData[j][eIdIdx] === equipId) {
-          equipFound = true;
-          var actualName = eData[j][_fi(eData[0], "裝備名稱")] || equipId;
-          if (submittedEquipName && submittedEquipName !== actualName) {
-            nameMatch = false;
-            break;
-          }
-          equipName = actualName;
-
-          var eStockIdx = _fi(eData[0], "剩餘數量");
-          var currentStock = eStockIdx > -1 ? (parseInt(eData[j][eStockIdx], 10) || 0) : 0;
-
-          if (qty > currentStock) {
-            sheet.deleteRow(row);
-            pushMessage(userId, "⚠️ 借用失敗：您欲借用的【" + equipName + "】數量大於剩餘庫存（目前剩餘 " + currentStock + " 個），請重新填寫數量！\n─────────────\n⚠️ Failed: Requested quantity for [" + equipName + "] exceeds available stock (Only " + currentStock + " left). Please re-enter quantity!");
-            return;
-          }
-
-          newStock = currentStock - qty;
-          if (eStockIdx > -1) equipSheet.getRange(j + 1, eStockIdx + 1).setValue(newStock);
-
-          if (purpose && purpose.indexOf("社團出隊") === -1) {
-            var price2 = parseInt(eData[j][eData[0].findIndex(function (h) {
-              return String(h).includes("2天");
-            })], 10) || 0;
-            var priceEx = parseInt(eData[j][eData[0].findIndex(function (h) {
-              return String(h).includes("+1天");
-            })], 10) || 0;
-            var unitCost = price2 + (borrowDays > 2 ? priceEx * (borrowDays - 2) : 0);
-            cost = (isOfficial === "是") ? Math.ceil((unitCost * qty) / 2) : (unitCost * qty);
-          }
-          break;
-        }
-      }
-    } catch (e) {
-      console.error("裝備扣庫存時取得鎖定失敗", e);
-      sheet.deleteRow(row);
-      pushMessage(userId, "⚠️ 借用失敗：系統忙碌中（太多人同時借用），請稍後再試填一次！\n─────────────\n⚠️ System busy. Please try again later!");
-      return;
-    } finally {
-      _safeReleaseLock(lock);
-    }
-
-    if (!equipFound) {
-      sheet.deleteRow(row);
-      pushMessage(userId, "⚠️ 借用失敗：系統找不到代號為「" + equipId + "」的裝備，請確認後重新填寫表單！\n─────────────\n⚠️ Failed: Equipment ID '" + equipId + "' not found. Please check and try again!");
-      return;
-    }
-    if (!nameMatch) {
-      sheet.deleteRow(row);
-      pushMessage(userId, "⚠️ 借用失敗：您填寫的裝備名稱與系統代號不符。\n請勿任意修改表單自動帶入的預設資料！\n─────────────\n⚠️ Failed: Equipment name does not match ID. Please do NOT modify auto-filled data!");
-      return;
-    }
-
-    // 生成訂單
-    var orderId = "R" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMddHHmmss");
-    rowData[colOrderIdIdx] = orderId;
-    rowData[colNameIdx] = userName;
-    rowData[colIsOfficialIdx] = isOfficial;
-    rowData[colEquipNameIdx] = equipName;
-    rowData[colCostIdx] = cost;
-    rowData[colStatusIdx] = "待領取 To Be Collected";
-    rowData[colPayStatusIdx] = "未繳費 Unpaid";
-    sheet.getRange(row, 1, 1, rowData.length).setValues([rowData]);
-
-    var userMsg = "⛺ 【裝備預約成功 / Reservation Confirmed】\n\n" +
-      userName + " 您好，您的借用申請已成立！\nYour reservation is successful!\n\n" +
-      "🔹 訂單 Order：" + orderId + "\n" +
-      "🔹 裝備 Item：" + equipName + " x" + qty + "\n" +
-      "🔹 天數 Days：" + borrowDays + " 天\n" +
-      "🔹 預計領取 Pickup：" + pickupTime + "\n" +
-      "🔹 預計歸還 Return：" + returnTime + "\n" +
-      "🔹 用途 Purpose：" + purpose + "\n" +
-      "💰 總費用 Total Fee：$" + cost + "\n\n" +
-      "⚠️ 幹部將會透過 LINE 與您聯繫，確認面交時間與地點！\nOfficer will contact you via LINE for pickup details! (Where and When)";
-    pushMessage(userId, userMsg);
-
-    var adminMsg = "🔔 【幹部通知：新裝備預約】\n\n" +
-      "申請人：" + userName + " (" + isOfficial + "社員)\n" +
-      "聯絡 (Line ID)：" + realLineId + "\n" +
-      "裝備：" + equipName + " x" + qty + "\n" +
-      "用途：" + purpose + "\n" +
-      "借用天數：" + borrowDays + " 天\n" +
-      "預計領取：" + pickupTime + "\n" +
-      "預計歸還：" + returnTime + "\n" +
-      "備註：" + note + "\n\n" +
-      "💵 系統試算費用：$" + cost + "\n" +
-      "📦 該裝備剩餘庫存：" + newStock + "\n\n" +
-      "📌 請負責幹部聯繫申請人！";
-    if (typeof pushAdminMessage === "function") pushAdminMessage(adminMsg);
-
-  } catch (err) {
-    console.error(err);
-    var errSs = SpreadsheetApp.getActiveSpreadsheet();
-    if (errSs) errSs.toast("❌ 裝備表單處理失敗：" + err.message, "系統錯誤", 10);
-  }
-}
-
-// ⭐️ 9. 取消系統：產生可取消的項目卡片 (100% 全動態防彈版 / 雙語升級)
-// 【函式說明】
-// 當社員點擊「取消預約」時，系統會自動盤點該社員所有「還可以取消」的項目。
-// 包含：尚未領取的「裝備預約」、以及還沒被取消的「活動報名」。
-// 系統會將這些項目做成精美的輪播卡片，最多產生 10 張，讓社員可以一鍵點擊取消。
-// (註：如果取消的是「正取」活動，總機會自動攔截這個動作，並要求社員輸入取消原因)
-function sendCancelMenu(replyToken, userId, ss) {
-  var signupSheet = ss.getSheetByName("Signups"),
-    loanSheet = ss.getSheetByName("Loan_Records"),
-    eventSheet = ss.getSheetByName("Events");
-  var bubbles = [];
-
-  // 活動取消
-  if (signupSheet && eventSheet) {
-    var sData = signupSheet.getDataRange().getValues();
-    var eData = eventSheet.getDataRange().getDisplayValues();
-    var sH = sData[0],
-      eH = eData[0];
-    var sSysIdx = _fi(sH, "系統識別碼"),
-      sCodeIdx = _fi(sH, "專屬碼"),
-      sStatIdx = _fi(sH, "審核結果"),
-      sEventIdIdx = _fi(sH, "活動編號");
-    var eIdIdx = _fi(eH, "活動編號"),
-      eNameIdx = _fi(eH, "活動名稱");
-
-    for (var i = 1; i < sData.length; i++) {
-      if (sSysIdx > -1 && sData[i][sSysIdx] === userId) {
-        var status = (sStatIdx > -1) ? String(sData[i][sStatIdx]) : "";
-        if (status.indexOf("取消") === -1 && status !== "") {
-          var code = sCodeIdx > -1 ? sData[i][sCodeIdx] : "";
-          var eventName = _getEventName(ss, sEventIdIdx > -1 ? sData[i][sEventIdIdx] : "");
-
-          bubbles.push({
-            "type": "bubble",
-            "size": "kilo",
-            "body": {
-              "type": "box",
-              "layout": "vertical",
-              "contents": [{
-                "type": "text",
-                "text": "📅 活動報名 Activity",
-                "color": "#FF9800",
-                "size": "xs",
-                "weight": "bold"
-              }, {
-                "type": "text",
-                "text": eventName,
-                "weight": "bold",
-                "size": "md",
-                "margin": "sm",
-                "wrap": true
-              }, {
-                "type": "text",
-                "text": "狀態 Status: " + status,
-                "size": "xs",
-                "color": "#666666",
-                "margin": "sm"
-              }]
+/**
+ * 產生更多服務選單卡片
+ */
+function _buildMoreServicesFlex() {
+  return {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        { type: "text", text: "野境戶外：服務大廳", weight: "bold", size: "xl", color: "#1e293b" },
+        { type: "text", text: "請選擇您需要使用的社團系統服務：", size: "sm", color: "#64748b", margin: "sm" },
+        { type: "separator", margin: "lg" },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "md",
+          spacing: "sm",
+          contents: [
+            {
+              type: "button",
+              style: "primary",
+              color: "#3b82f6",
+              height: "sm",
+              action: { type: "uri", label: "🎒 裝備租借商城", uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=borrow" }
             },
-            "footer": {
-              "type": "box",
-              "layout": "vertical",
-              "contents": [{
-                "type": "button",
-                "style": "primary",
-                "color": "#E54545",
-                "action": {
-                  "type": "postback",
-                  "label": "取消報名 Cancel",
-                  "data": "action=cancel_event&targetId=" + code,
-                  "displayText": "我要取消" + eventName + " / Cancel: " + eventName
-                }
-              }]
-            }
-          });
-        }
-      }
-    }
-  }
-
-  // 裝備取消
-  if (loanSheet) {
-    var lData = loanSheet.getDataRange().getValues();
-    var lH = lData[0];
-    var lSysIdx = _fi(lH, "系統識別碼"),
-      lStatIdx = _fi(lH, "領取/歸還"),
-      lOrderIdx = _fi(lH, "租借編號");
-    var lName1Idx = _fi(lH, "裝備名稱"),
-      lName2Idx = _fi(lH, "租借項目"),
-      lIdIdx = _fi(lH, "裝備代號");
-
-    for (var j = 1; j < lData.length; j++) {
-      if (lSysIdx > -1 && lData[j][lSysIdx] === userId) {
-        var lStatus = (lStatIdx > -1) ? String(lData[j][lStatIdx]) : "";
-        if (lStatus === "待領取 To Be Collected") {
-          var orderId = lOrderIdx > -1 ? lData[j][lOrderIdx] : "";
-          var equipName = _getEquipName(lData[j], lName1Idx, lName2Idx, lIdIdx, "未知裝備");
-
-          bubbles.push({
-            "type": "bubble",
-            "size": "kilo",
-            "body": {
-              "type": "box",
-              "layout": "vertical",
-              "contents": [{
-                "type": "text",
-                "text": "🏕️ 裝備預約 Equipment",
-                "color": "#0367D3",
-                "size": "xs",
-                "weight": "bold"
-              }, {
-                "type": "text",
-                "text": equipName,
-                "weight": "bold",
-                "size": "md",
-                "margin": "sm",
-                "wrap": true
-              }, {
-                "type": "text",
-                "text": "狀態 Status: " + lStatus,
-                "size": "xs",
-                "color": "#666666",
-                "margin": "sm"
-              }]
+            {
+              type: "button",
+              style: "primary",
+              color: "#10b981",
+              height: "sm",
+              action: { type: "uri", label: "💳 待繳費用與對帳申報", uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=payment" }
             },
-            "footer": {
-              "type": "box",
-              "layout": "vertical",
-              "contents": [{
-                "type": "button",
-                "style": "primary",
-                "color": "#E54545",
-                "action": {
-                  "type": "postback",
-                  "label": "取消預約 Cancel",
-                  "data": "action=cancel_equip&targetId=" + orderId,
-                  "displayText": "我要取消" + equipName + " / Cancel: " + equipName
-                }
-              }]
+            {
+              type: "button",
+              style: "primary",
+              color: "#8b5cf6",
+              height: "sm",
+              action: { type: "uri", label: "👤 個人主頁與出隊成就", uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=dashboard" }
             }
-          });
-        }
-      }
-    }
-  }
-
-  if (bubbles.length === 0) {
-    replyMessage(replyToken, "✅ 目前沒有可取消的報名或預約紀錄。\n─────────────\n✅ No cancellable registrations or reservations found.");
-  } else {
-    replyFlexMessage(replyToken, "請選擇您要取消的項目 / Select Item to Cancel", {
-      "type": "carousel",
-      "contents": bubbles
-    });
-  }
-}
-
-// ⭐️ 10. 處理正取取消活動的原因與幹部通知 (全動態防彈版 / 雙語升級)
-// 【函式說明】
-// 這是一個專門處理「正取生放棄資格」的特殊函式。
-// 因為正取生取消會影響到整場活動的收支與備取遞補，所以系統會強制要求他們輸入「取消原因」。
-// 當使用者在對話框輸入原因後，總機會把那段文字傳送到這個函式。
-// 本函式會：
-// 1. 去 Signups (報名表) 把該社員的狀態改為「已取消」。
-// 2. 把他輸入的「取消原因」寫入通知狀態欄，留給幹部備查。
-// 3. 解除他的快取等待狀態，讓他可以繼續使用選單。
-// 4. 發送雙語成功通知給社員。
-// 5. 發送緊急推播給幹部群組，提醒負責人趕快去聯絡備取名單！
-function handleEventCancelReason(replyToken, userId, reasonText, signupCode) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var signupSheet = ss.getSheetByName("Signups");
-  if (!signupSheet) return;
-  var sData = signupSheet.getDataRange().getValues();
-  var sH = sData[0];
-  var sCodeIdx = _fi(sH, "專屬碼"),
-    sSysIdx = _fi(sH, "系統識別碼"),
-    sStatIdx = _fi(sH, "審核結果");
-  var sEventIdIdx = _fi(sH, "活動編號"),
-    sNameIdx = _fi(sH, "姓名");
-  var sNotifyIdx = _fi(sH, "通知狀態");
-
-  for (var i = 1; i < sData.length; i++) {
-    if (sCodeIdx > -1 && sSysIdx > -1 && sData[i][sCodeIdx].toString() === signupCode.toString() && sData[i][sSysIdx].toString() === userId.toString()) {
-      if (sStatIdx > -1) signupSheet.getRange(i + 1, sStatIdx + 1).setValue("已取消 Cancelled");
-      if (sNotifyIdx > -1) signupSheet.getRange(i + 1, sNotifyIdx + 1).setValue("取消原因：" + reasonText);
-      try {
-        _syncSignupCancelToSupabase(userId, sEventIdIdx > -1 ? sData[i][sEventIdIdx] : "", signupCode, reasonText);
-      } catch (sbCancelErr) {
-        console.warn("取消報名同步至 Supabase 失敗:", sbCancelErr);
-      }
-      CacheService.getUserCache().remove(userId + "_canceling_event");
-      var eventName = _getEventName(ss, sEventIdIdx > -1 ? sData[i][sEventIdIdx] : "");
-      var userName = sNameIdx > -1 ? sData[i][sNameIdx] : "社員";
-
-      replyMessage(replyToken, "✅ 【" + eventName + "】報名已取消成功！\n\n您的報名狀態已更新為「已取消」，我們期待在未來的社團活動與您相見。\n─────────────\n✅ Your registration for [" + eventName + "] has been cancelled.\nWe look forward to seeing you at future events!");
-
-      pushAdminMessage("【幹部緊急通知：正取棄權】\n\n❗ 活動：" + eventName + "\n❗ 棄權社員：" + userName + "\n\n取消原因：\n" + reasonText + "\n\n建議幹部檢視備取名單，聯繫有遞補意願的社員！");
-      return;
-    }
-  }
-}
-
-// ⭐️ 更多服務選單
-
-// ⭐️ 產生「其他 / 更多服務」進階選單卡片 (雙語升級版)
-// 【函式說明】
-// 因為 LINE 手機版底下的「圖文選單」最多只能放 6 個按鈕，
-// 當社團功能變多時，我們就把進階功能（如：繳費系統、查詢幹部名單）
-// 收納進這個「更多服務」的擴充卡片裡。
-function sendMoreOptionsMenu(replyToken) {
-  var bubble = {
-    "type": "bubble",
-    "body": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": [{
-        "type": "text",
-        "text": "🛠️ 聯絡與支援 Support",
-        "weight": "bold",
-        "color": "#0367D3",
-        "size": "sm"
-      }, {
-        "type": "text",
-        "text": "幫助中心 Help Center",
-        "weight": "bold",
-        "size": "xl",
-        "margin": "md"
-      }, {
-        "type": "text",
-        "text": "聯絡社團幹部 Contact Officers",
-        "size": "xs",
-        "color": "#999999",
-        "margin": "sm"
-      }]
-    },
-    "footer": {
-      "type": "box",
-      "layout": "vertical",
-      "spacing": "sm",
-      "contents": [{
-        "type": "button",
-        "style": "secondary",
-        "action": {
-          "type": "message",
-          "label": "👤 幹部是誰 Officers",
-          "text": "幹部是誰 Officers"
-        }
-      }, {
-        "type": "button",
-        "style": "secondary",
-        "action": {
-          "type": "message",
-          "label": "📢 意見與回饋 Feedback",
-          "text": "意見與回饋 Feedback"
-        }
-      }]
-    }
-  };
-
-  replyFlexMessage(replyToken, "更多服務 More Services", bubble);
-}
-
-function sendPaymentCenterMenu(replyToken) {
-  var bubble = {
-    "type": "bubble",
-    "body": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": [{
-        "type": "text",
-        "text": "⚙️ 帳務 Finance",
-        "weight": "bold",
-        "color": "#1DB446",
-        "size": "sm"
-      }, {
-        "type": "text",
-        "text": "繳費中心 Payment Center",
-        "weight": "bold",
-        "size": "xl",
-        "margin": "md"
-      }, {
-        "type": "text",
-        "text": "回報與查詢 Payment Report & Inquiry",
-        "size": "xs",
-        "color": "#999999",
-        "margin": "sm"
-      }]
-    },
-    "footer": {
-      "type": "box",
-      "layout": "vertical",
-      "spacing": "sm",
-      "contents": [{
-        "type": "button",
-        "style": "primary",
-        "color": "#1DB446",
-        "action": {
-          "type": "uri",
-          "label": "💰 繳費系統 Payment System",
-          "uri": "https://liff.line.me/2009217429-u7OCkmQO"
-        }
-      }, {
-        "type": "button",
-        "style": "secondary",
-        "action": {
-          "type": "uri",
-          "label": "📜 繳費紀錄 Payment History",
-          "uri": "https://liff.line.me/2009217429-FRB6rjph"
-        }
-      }]
-    }
-  };
-
-  replyFlexMessage(replyToken, "繳費中心 Payment Center", bubble);
-}
-
-// ⭐️ 引擎一：回報後標記獨立欄位為「待確認」 (100% 全動態防彈版)
-// 【函式說明】
-// 這是繳費系統的「狀態鎖定器」。
-// 💡 全域效能優化：使用 TextFinder 快速定位系統識別碼，避免讀取整張表格造成記憶體與效能浪費！
-function markAsPending(userId, paymentType, ss) {
-  // 1. 社費
-  if (paymentType === "繳交社費" || paymentType === "combined") {
-    var mSheet = ss.getSheetByName("Members");
-    if (mSheet) {
-      var mH = mSheet.getRange(1, 1, 1, mSheet.getLastColumn()).getValues()[0];
-      var payCol = _fi(mH, "繳費狀態") + 1,
-        sysCol = _fi(mH, "系統識別碼") + 1;
-      if (payCol > 0 && sysCol > 0) {
-        var matches = mSheet.createTextFinder(userId).matchEntireCell(true).findAll();
-        for (var i = 0; i < matches.length; i++) {
-          if (matches[i].getColumn() === sysCol) {
-            var current = String(mSheet.getRange(matches[i].getRow(), payCol).getValue()).trim();
-            if (current !== "已繳費 Paid") mSheet.getRange(matches[i].getRow(), payCol).setValue("待確認 Checking");
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  // 2. 活動
-  if (paymentType === "combined" || paymentType === "activity" || String(paymentType).startsWith("活動：")) {
-    var targetEventName = String(paymentType).startsWith("活動：") ? String(paymentType).split("活動：")[1].trim() : "ALL";
-    var sSheet = ss.getSheetByName("Signups"),
-      eSheet = ss.getSheetByName("Events");
-    if (sSheet && eSheet) {
-      var sH = sSheet.getRange(1, 1, 1, sSheet.getLastColumn()).getValues()[0];
-      var payCol = _fi(sH, "繳費狀態") + 1,
-        sysCol = _fi(sH, "系統識別碼") + 1;
-      var statCol = _fi(sH, "審核結果") + 1,
-        evtCol = _fi(sH, "活動編號") + 1;
-
-      if (sysCol > 0 && payCol > 0 && statCol > 0) {
-        var eData = eSheet.getDataRange().getDisplayValues();
-        var eIdIdx = _fi(eData[0], "活動編號"),
-          eNameIdx = _fi(eData[0], "活動名稱");
-        var matches = sSheet.createTextFinder(userId).matchEntireCell(true).findAll();
-
-        for (var j = 0; j < matches.length; j++) {
-          if (matches[j].getColumn() === sysCol) {
-            var row = matches[j].getRow();
-            var st = String(sSheet.getRange(row, statCol).getValue());
-            var pay = String(sSheet.getRange(row, payCol).getValue()).trim();
-            if (st.indexOf("正取") > -1 && st.indexOf("取消") === -1 && pay !== "已繳費 Paid" && pay !== "待確認 Checking") {
-              var eName = "";
-              var evId = String(sSheet.getRange(row, evtCol).getValue()).trim();
-              for (var k = 1; k < eData.length; k++) {
-                if (eIdIdx > -1 && String(eData[k][eIdIdx]).trim() === evId) {
-                  eName = eNameIdx > -1 ? String(eData[k][eNameIdx]).replace(/[&=]/g, '') : "";
-                  break;
-                }
-              }
-              if (targetEventName === "ALL" || targetEventName === eName) sSheet.getRange(row, payCol).setValue("待確認 Checking");
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 3. 裝備
-  if (paymentType === "combined" || paymentType === "equipment" || String(paymentType).startsWith("裝備：")) {
-    var targetOrderId = String(paymentType).startsWith("裝備：") ? String(paymentType).split("裝備：")[1].split(" ")[0].trim() : "ALL";
-    var lSheet = ss.getSheetByName("Loan_Records");
-    if (lSheet) {
-      var lH = lSheet.getRange(1, 1, 1, lSheet.getLastColumn()).getValues()[0];
-      var sysCol = _fi(lH, "系統識別碼") + 1,
-        payCol = _fi(lH, "繳費狀態") + 1;
-      var statCol = _fi(lH, "領取/歸還") + 1,
-        orderCol = _fi(lH, "租借編號") + 1;
-
-      if (sysCol > 0 && payCol > 0 && statCol > 0) {
-        var matches = lSheet.createTextFinder(userId).matchEntireCell(true).findAll();
-        for (var l = 0; l < matches.length; l++) {
-          if (matches[l].getColumn() === sysCol) {
-            var row = matches[l].getRow();
-            var lst = String(lSheet.getRange(row, statCol).getValue());
-            var lPay = String(lSheet.getRange(row, payCol).getValue()).trim();
-            if (lst.indexOf("取消") === -1 && lst.indexOf("歸還") === -1 && lPay !== "已繳費 Paid" && lPay !== "待確認 Checking") {
-              var curOrder = orderCol > 0 ? String(lSheet.getRange(row, orderCol).getValue()).trim() : "";
-              if (targetOrderId === "ALL" || targetOrderId === curOrder) lSheet.getRange(row, payCol).setValue("待確認 Checking");
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-// ⭐️ 引擎二：確認無誤後標記獨立欄位為「已繳費」 (100% 全動態防彈版 + 效能優化版)
-// 💡 全域效能優化：改用 TextFinder 快速鎖定特定社員，避免大量陣列讀取與運算！
-function processPaymentConfirmation(userId, paymentType, ss, customExpiryDate, itemsText) {
-  var hasMembership = itemsText
-    ? (itemsText.indexOf("社籍") > -1 || itemsText.indexOf("社費") > -1 || itemsText.indexOf("Membership") > -1)
-    : (paymentType === "繳交社費" || paymentType === "combined" || !!customExpiryDate);
-
-  var hasActivity = itemsText
-    ? (itemsText.indexOf("活動") > -1)
-    : (paymentType === "combined" || paymentType === "activity" || String(paymentType).startsWith("活動："));
-
-  var hasEquipment = itemsText
-    ? (itemsText.indexOf("裝備") > -1)
-    : (paymentType === "combined" || paymentType === "equipment" || String(paymentType).startsWith("裝備："));
-
-  // 1. 社費
-  if (hasMembership) {
-    var mSheet = ss.getSheetByName("Members");
-    if (mSheet) {
-      var mH = mSheet.getRange(1, 1, 1, mSheet.getLastColumn()).getValues()[0];
-      var payCol = _fi(mH, "繳費狀態") + 1,
-        sysCol = _fi(mH, "系統識別碼") + 1;
-      var expireCol = _fi(mH, "社籍到期日") + 1;
-      if (expireCol === 0) {
-        var expIdx = mH.findIndex(function (h) { return String(h).includes("到期日") || String(h).includes("社籍"); });
-        if (expIdx > -1) expireCol = expIdx + 1;
-      }
-      // 若 Members 表尚未建立「社籍到期日」欄位且有到期日需寫入，自動建立該欄位
-      if (expireCol === 0) {
-        expireCol = mSheet.getLastColumn() + 1;
-        mSheet.getRange(1, expireCol).setValue("社籍到期日");
-      }
-      if (payCol > 0 && sysCol > 0) {
-        var matches = mSheet.createTextFinder(userId).matchEntireCell(true).findAll();
-        for (var i = 0; i < matches.length; i++) {
-          if (matches[i].getColumn() === sysCol) {
-            var current = String(mSheet.getRange(matches[i].getRow(), payCol).getValue()).trim();
-            if (current !== "已繳費 Paid") mSheet.getRange(matches[i].getRow(), payCol).setValue("已繳費 Paid");
-            var finalExp = customExpiryDate || "2027/01/31";
-            if (expireCol > 0) {
-              mSheet.getRange(matches[i].getRow(), expireCol).setValue(finalExp);
-            }
-            break;
-          }
-        }
-      }
-      SpreadsheetApp.flush();
-    }
-
-    // ⭐️ 連動 Signups：若社員已繳納社費，且其先前報名之活動尚未開始，將原本「是否為社員」由「否」更新為「是」
-    var sSheetForMem = ss.getSheetByName("Signups");
-    var eSheetForMem = ss.getSheetByName("Events");
-    if (sSheetForMem && eSheetForMem) {
-      var sDataMem = sSheetForMem.getDataRange().getDisplayValues();
-      if (sDataMem.length > 1) {
-        var sHMem = sDataMem[0];
-        var sSysIdxMem = _fi(sHMem, "系統識別碼");
-        var sEvtIdIdxMem = _fi(sHMem, "活動編號");
-        var sOfficialIdxMem = _fi(sHMem, "是否為社員");
-
-        if (sSysIdxMem > -1 && sEvtIdIdxMem > -1 && sOfficialIdxMem > -1) {
-          // 建立活動開始日期映射表
-          var eventDateMap = {};
-          var eDataMem = eSheetForMem.getDataRange().getDisplayValues();
-          if (eDataMem.length > 1) {
-            var eHMem = eDataMem[0];
-            var eIdColMem = _fi(eHMem, "活動編號");
-            var eStartColMem = _fi(eHMem, "活動開始日期");
-            if (eStartColMem === -1) eStartColMem = _fi(eHMem, "開始日期");
-            if (eStartColMem === -1) eStartColMem = _fi(eHMem, "活動日期");
-            if (eIdColMem > -1 && eStartColMem > -1) {
-              for (var em = 1; em < eDataMem.length; em++) {
-                var evId = String(eDataMem[em][eIdColMem]).trim();
-                if (evId) eventDateMap[evId] = eDataMem[em][eStartColMem];
-              }
-            }
-          }
-
-          var memMatches = sSheetForMem.createTextFinder(userId).matchEntireCell(true).findAll();
-          for (var sm = 0; sm < memMatches.length; sm++) {
-            if (memMatches[sm].getColumn() === (sSysIdxMem + 1)) {
-              var sRow = memMatches[sm].getRow();
-              var curEvtId = String(sSheetForMem.getRange(sRow, sEvtIdIdxMem + 1).getValue()).trim();
-              var curOfficial = String(sSheetForMem.getRange(sRow, sOfficialIdxMem + 1).getValue()).trim();
-              var evStartDate = eventDateMap[curEvtId] || "";
-              // 前提：活動尚未開始
-              if (!_isEventStarted(evStartDate) && curOfficial !== "是") {
-                sSheetForMem.getRange(sRow, sOfficialIdxMem + 1).setValue("是");
-              }
-            }
-          }
-        }
-      }
-      SpreadsheetApp.flush();
-    }
-  }
-
-  // 2. 活動
-  if (hasActivity) {
-    var targetEventName = String(paymentType).startsWith("活動：") ? String(paymentType).split("活動：")[1].trim() : "ALL";
-    var sSheet = ss.getSheetByName("Signups"),
-      eSheet = ss.getSheetByName("Events");
-    if (sSheet && eSheet) {
-      var sH = sSheet.getRange(1, 1, 1, sSheet.getLastColumn()).getValues()[0];
-      var payCol = _fi(sH, "繳費狀態") + 1,
-        sysCol = _fi(sH, "系統識別碼") + 1;
-      var statCol = _fi(sH, "審核結果") + 1,
-        evtCol = _fi(sH, "活動編號") + 1;
-
-      if (sysCol > 0 && payCol > 0 && statCol > 0) {
-        var eData = eSheet.getDataRange().getDisplayValues();
-        var eIdIdx = _fi(eData[0], "活動編號"),
-          eNameIdx = _fi(eData[0], "活動名稱");
-        var matches = sSheet.createTextFinder(userId).matchEntireCell(true).findAll();
-
-        for (var j = 0; j < matches.length; j++) {
-          if (matches[j].getColumn() === sysCol) {
-            var row = matches[j].getRow();
-            var st = String(sSheet.getRange(row, statCol).getValue());
-            var pay = String(sSheet.getRange(row, payCol).getValue()).trim();
-            if (st.indexOf("正取") > -1 && st.indexOf("取消") === -1 && pay !== "已繳費 Paid") {
-              var eName = "";
-              var evId = String(sSheet.getRange(row, evtCol).getValue()).trim();
-              for (var k = 1; k < eData.length; k++) {
-                if (eIdIdx > -1 && String(eData[k][eIdIdx]).trim() === evId) {
-                  eName = eNameIdx > -1 ? String(eData[k][eNameIdx]).replace(/[&=]/g, '') : "";
-                  break;
-                }
-              }
-              var isEventMatched = (targetEventName === "ALL" || targetEventName === eName);
-              if (!isEventMatched && itemsText && eName && itemsText.indexOf(eName) > -1) {
-                isEventMatched = true;
-              }
-              if (isEventMatched) {
-                sSheet.getRange(row, payCol).setValue("已繳費 Paid");
-                sSheet.getRange(row, statCol).setValue("正取（已繳費）Confirmed(Paid)");
-              }
-            }
-          }
-        }
-      }
-      SpreadsheetApp.flush();
-    }
-  }
-
-  // 3. 裝備
-  if (hasEquipment) {
-    var targetOrderId = String(paymentType).startsWith("裝備：") ? String(paymentType).split("裝備：")[1].split(" ")[0].trim() : "ALL";
-    var lSheet = ss.getSheetByName("Loan_Records");
-    if (lSheet) {
-      var lH = lSheet.getRange(1, 1, 1, lSheet.getLastColumn()).getValues()[0];
-      var sysCol = _fi(lH, "系統識別碼") + 1,
-        payCol = _fi(lH, "繳費狀態") + 1;
-      var statCol = _fi(lH, "領取/歸還") + 1,
-        orderCol = _fi(lH, "租借編號") + 1;
-
-      if (sysCol > 0 && payCol > 0 && statCol > 0) {
-        var matches = lSheet.createTextFinder(userId).matchEntireCell(true).findAll();
-        for (var l = 0; l < matches.length; l++) {
-          if (matches[l].getColumn() === sysCol) {
-            var row = matches[l].getRow();
-            var lst = String(lSheet.getRange(row, statCol).getValue());
-            var lPay = String(lSheet.getRange(row, payCol).getValue()).trim();
-            if (lst.indexOf("取消") === -1 && lst.indexOf("歸還") === -1 && lPay !== "已繳費 Paid") {
-              var curOrder = orderCol > 0 ? String(lSheet.getRange(row, orderCol).getValue()).trim() : "";
-              if (targetOrderId === "ALL" || targetOrderId === curOrder) {
-                lSheet.getRange(row, payCol).setValue("已繳費 Paid");
-              }
-            }
-          }
-        }
-      }
-      SpreadsheetApp.flush();
-    }
-  }
-}
-
-// ⭐️ 產生「幹部是誰」精美輪播卡片 (100% 全動態防彈版 / 雙語升級)
-// 【函式說明】
-// 當社員點擊「幹部是誰」時，系統會啟動這個「數位名片牆」功能。
-// 系統會去「Officers (幹部名單)」分頁，抓取每一位幹部的照片、職稱與負責業務。
-// 如果幹部有附上合法的照片網址，卡片上方就會顯示大大的頭像。
-// 為了避免版面壞掉，本程式內建了「自動填補預設值」的防呆機制，
-// 就算幹部忘了寫「給社員的話」，系統也會自動幫他補上歡迎詞！
-function sendOfficerMenu(replyToken, ss) {
-  try {
-    var sheet = ss.getSheetByName("Officers");
-    var data = sheet.getDataRange().getDisplayValues();
-    if (data.length <= 1) {
-      replyMessage(replyToken, "目前還沒有建立幹部資料喔！敬請期待。\n─────────────\nOfficer data not set up yet. Stay tuned!");
-      return;
-    }
-
-    var headers = data[0];
-    var roleIdx = headers.findIndex(function (h) {
-      return String(h).includes("職稱") || String(h).includes("職位");
-    });
-    var nameIdx = headers.findIndex(function (h) {
-      return String(h).includes("姓名") || String(h).includes("名字");
-    });
-    var photoIdx = headers.findIndex(function (h) {
-      return String(h).includes("照片") || String(h).includes("圖片");
-    });
-    var dutyIdx = headers.findIndex(function (h) {
-      return String(h).includes("負責業務") || String(h).includes("負責");
-    });
-    var quoteIdx = headers.findIndex(function (h) {
-      return String(h).includes("給社員的話") || String(h).includes("介紹") || String(h).includes("備註");
-    });
-
-    var bubbles = [];
-
-    if (nameIdx === -1) {
-      replyMessage(replyToken, "⚠️ 幹部名單的「姓名」欄位遺失了，請通知管理員檢查試算表！\n─────────────\n⚠️ 'Name' column is missing in the Officer sheet!");
-      return;
-    }
-
-    for (var i = 1; i < data.length; i++) {
-      var name = String(data[i][nameIdx]).trim();
-      if (name !== "") {
-        var role = (roleIdx > -1 && data[i][roleIdx]) ? String(data[i][roleIdx]).trim() : "幹部 Officer";
-        var photoUrl = (photoIdx > -1 && data[i][photoIdx]) ? String(data[i][photoIdx]).trim() : "";
-        var duty = (dutyIdx > -1 && data[i][dutyIdx]) ? String(data[i][dutyIdx]).trim() : "協助社團事務 Assist with club affairs";
-        var quote = (quoteIdx > -1 && data[i][quoteIdx]) ? String(data[i][quoteIdx]).trim() : "歡迎加入登山社！ Welcome to the club!";
-        var themeColor = (role.indexOf("社長") > -1) ? "#FF9800" : "#0367D3";
-
-        var bubble = {
-          "type": "bubble",
-          "size": "micro",
-          "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [{
-              "type": "text",
-              "text": role,
-              "weight": "bold",
-              "color": themeColor,
-              "size": "sm"
-            }, {
-              "type": "text",
-              "text": name,
-              "weight": "bold",
-              "size": "xl",
-              "margin": "sm"
-            }, {
-              "type": "separator",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": "📌 負責業務 Duties",
-              "size": "xxs",
-              "color": "#999999",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": duty,
-              "size": "xs",
-              "color": "#333333",
-              "wrap": true,
-              "margin": "xs"
-            }, {
-              "type": "separator",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": "💬 " + quote,
-              "size": "xs",
-              "color": "#666666",
-              "wrap": true,
-              "margin": "md",
-              "style": "italic"
-            }]
-          }
-        };
-
-        if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"))) {
-          bubble.hero = {
-            "type": "image",
-            "url": photoUrl,
-            "size": "full",
-            "aspectRatio": "1:1",
-            "aspectMode": "cover"
-          };
-        }
-
-        bubbles.push(bubble);
-        if (bubbles.length === 10) break;
-      }
-    }
-
-    if (bubbles.length === 0) {
-      replyMessage(replyToken, "目前還沒有建立幹部資料喔！敬請期待。\n─────────────\nOfficer data not set up yet. Stay tuned!");
-    } else {
-      replyFlexMessage(replyToken, "來認識一下登山社幹部吧！ / Meet the club officers!", {
-        "type": "carousel",
-        "contents": bubbles
-      });
-    }
-
-  } catch (err) {
-    console.error("幹部名單載入失敗:", err);
-    replyMessage(replyToken, "⚠️ 讀取幹部名單時發生錯誤，請稍後再試。\n─────────────\n⚠️ Error loading officer list, please try again later.");
-  }
-}
-
-// ⭐️ 系統每日自動巡檢：社籍過期與活動報名截止 (全動態防彈版)
-// 【函式說明】
-// 這是一個設計給「時間驅動觸發器 (Time-driven Trigger)」使用的背景排程程式。
-// 建議在 Apps Script 後台設定為「每天凌晨 1:00 ~ 2:00」自動執行一次。
-// 它的任務有兩個：
-// 1. 巡邏 Members 表：把「社籍到期日」早於今天的社員，自動標記為「未繳費」。
-// 2. 巡邏 Events 表：把「報名截止日」早於今天的活動，自動把狀態改成「關閉」。
-// 巡邏完畢後，它會整理一份報表傳送到幹部群組 (如果打開推播功能的話)。
-function dailySystemCheck() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var requiredSheets = ["Members", "Events", "Signups", "Loan_Records", "Payments", "Equipments", "Officers"];
-  var missingSheets = requiredSheets.filter(function (name) {
-    return !ss.getSheetByName(name);
-  });
-
-  if (missingSheets.length > 0) {
-    pushAdminMessage("【每日系統健檢通知】\n\n⚠️ 偵測到以下分頁缺失：\n" + missingSheets.join("\n") + "\n\n請盡速建立以上分頁，否則相關功能將無法正常運作！");
-    return;
-  }
-
-  // 1. 巡檢 Events 表：將已過報名截止日之活動自動切換為「關閉」
-  var eventSheet = ss.getSheetByName("Events");
-  var closedCount = 0;
-  var closedEvents = [];
-  if (eventSheet) {
-    var eData = eventSheet.getDataRange().getDisplayValues();
-    if (eData.length > 1) {
-      var eHeaders = eData[0];
-      var eNameCol = _fi(eHeaders, "活動名稱");
-      var eStatusCol = eHeaders.findIndex(function (h) {
-        return String(h).includes("報名狀態") || String(h).includes("狀態");
-      });
-      var eDeadCol = _fi(eHeaders, "報名截止日期");
-
-      for (var i = 1; i < eData.length; i++) {
-        var curStatus = eStatusCol > -1 ? eData[i][eStatusCol] : "";
-        var curDead = eDeadCol > -1 ? eData[i][eDeadCol] : "";
-        var curName = eNameCol > -1 ? eData[i][eNameCol] : ("活動 " + i);
-
-        if (curStatus === "開放" && _isEventExpired(curDead)) {
-          eventSheet.getRange(i + 1, eStatusCol + 1).setValue("關閉");
-          closedCount++;
-          closedEvents.push(curName + " (截止日: " + curDead + ")");
-        }
-      }
-    }
-  }
-
-  // 2. 巡檢 Members 表：社籍已過期且目前繳費狀態為「已繳費 Paid」或「是」者，自動標記為「未繳費 Unpaid」
-  var memberSheet = ss.getSheetByName("Members");
-  var expiredMemberCount = 0;
-  var expiredMembers = [];
-  if (memberSheet) {
-    var mData = memberSheet.getDataRange().getDisplayValues();
-    if (mData.length > 1) {
-      var mHeaders = mData[0];
-      var mSysCol = mHeaders.findIndex(function (h) {
-        var s = String(h).toLowerCase();
-        return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
-      });
-      var mNameCol = _fi(mHeaders, "姓名");
-      var mPayCol = _fi(mHeaders, "繳費狀態");
-      var mExpCol = mHeaders.findIndex(function (h) {
-        return String(h).includes("到期日") || String(h).includes("社籍");
-      });
-
-      if (mPayCol > -1 && mExpCol > -1) {
-        for (var mi = 1; mi < mData.length; mi++) {
-          var curPay = String(mData[mi][mPayCol]).trim();
-          var curExp = String(mData[mi][mExpCol]).trim();
-          var curMemName = mNameCol > -1 ? mData[mi][mNameCol] : ("成員 " + mi);
-          var curUserId = mSysCol > -1 ? String(mData[mi][mSysCol]).trim() : "";
-
-          if (curPay === "已繳費 Paid" || curPay === "是") {
-            if (_isEventExpired(curExp)) {
-              memberSheet.getRange(mi + 1, mPayCol + 1).setValue("未繳費 Unpaid");
-              expiredMemberCount++;
-              expiredMembers.push(curMemName + " (到期日: " + curExp + ")");
-
-              // 自動傳送專屬 LINE 通知告知該社員社籍已到期
-              if (curUserId && curUserId.startsWith("U")) {
-                try {
-                  var memberNotice = "【社籍期滿溫馨祝福 / Club Membership Milestone】\n\n" +
-                    "親愛的 " + curMemName + " 您好：\n\n" +
-                    "您的登山社社員資格已於 " + curExp + " 圓滿告一段落。\n\n" +
-                    "非常感謝您這段時間以來對登山社的陪伴與熱情參與，與大家一同在山林與步道間留下了許多珍貴美好的回憶！\n\n" +
-                    "山一直在那裡，夥伴的情誼也始終常在。\n" +
-                    "無論未來您走向哪一座山頭、開啟怎樣的新冒險，登山社都由衷祝福您平安順遂、每一步都有美麗的風景相伴！🏔️✨\n\n" +
-                    "若想念山林或想再與大家聚聚，隨時都歡迎回到登山社這個溫暖的大家庭！\n" +
-                    "─────────────\n" +
-                    "Dear " + curMemName + ",\n\n" +
-                    "Your club membership period has concluded on " + curExp + ".\n\n" +
-                    "Thank you so much for being an essential part of our mountaineering journey and sharing unforgettable moments with us on the trails.\n\n" +
-                    "The mountains will always be here, and so will our friendship. Wherever your next journey takes you, we warmly wish you safety, joy, and breathtaking views along the way! 🏔️✨\n\n" +
-                    "You are always welcome back to our club family whenever you wish!";
-                  pushMessage(curUserId, memberNotice);
-                } catch (pushErr) {
-                  console.error("發送社籍到期推播至社員失敗 (" + curUserId + "):", pushErr);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 若有自動關閉之活動或社籍到期更新，推播告知幹部群組
-  var noticeSections = [];
-  if (closedCount > 0) {
-    noticeSections.push("【活動截止自動關閉】\n系統已自動將下列 " + closedCount + " 場已過截止日之活動狀態切換為「關閉」：\n\n" +
-      closedEvents.map(function (item) { return "• " + item; }).join("\n") +
-      "\n\n社員將無法再進行報名，幹部可於管理中心進行後續名冊審核。");
-  }
-  if (expiredMemberCount > 0) {
-    noticeSections.push("【社籍到期自動轉未繳費】\n系統巡檢偵測到下列 " + expiredMemberCount + " 位社員之社籍已逾期，已將繳費狀態自動重置為「未繳費 Unpaid」：\n\n" +
-      expiredMembers.map(function (item) { return "• " + item; }).join("\n") +
-      "\n\n社員登入繳費系統即可繳納新學期社費。");
-  }
-  if (noticeSections.length > 0) {
-    pushAdminMessage("【系統每日自動巡檢報告】\n\n" + noticeSections.join("\n\n--------------------\n\n"));
-  }
-}
-
-// ⭐️ AI 聊天引擎：結合動態資料與 Docs 知識庫的終極版 (雙語防呆版)
-// 【函式說明】
-// 這是我們 AI 助理「小山/小岳 (Yue)」的核心大腦！
-// 當社員在文字框輸入「小岳 xxx」時，問題就會傳送到這裡。
-// 本程式使用了業界最強的 RAG (Retrieval-Augmented Generation) 架構：
-// 1. 先去試算表抓「最新活動」(動態知識)。
-// 2. 再去 Google Docs 抓「社團規章」(靜態知識)。
-// 3. 把這些知識連同社員的問題，一起打包送給 Google Gemini 2.5 AI 模型。
-// 這樣 AI 就絕對不會亂回答，而且會嚴格遵守我們設定的活潑個性！
-function talkToGemini(question) {
-  try {
-    var eventsContext = getPublicEventsInfo();
-    var clubKnowledge = getClubKnowledgeFromDoc();
-
-    // ==========================================
-    // 🧠 階段二：建構系統提示詞 (System Prompt)
-    // 💡 這是賦予 AI 靈魂與規則的最高指導原則！
-    // ==========================================
-    var systemPrompt = `
-      你現在是台灣某大學登山社的專屬 AI 助理，名字叫「小岳」、「Yue」。
-      你的個性專業、親切、熱心，回覆排版工整清晰。
-      
-      【你的最高原則】
-      1. 你的職責是解答社員關於「登山基礎知識、裝備保養、體能訓練」、「社團最新活動」以及「社團各項規章」的問題。
-      2. 如果有人問你無關的問題，請幽默且有禮貌地拒絕。
-      3. 如果有人問「怎麼報名活動」、「怎麼借裝備」、「怎麼繳費」，請務必回答：「這個可以直接點擊 LINE 下方的『圖文選單』來操作喔！超級方便的啦！」。
-      4. 如果在幹部環境中詢問幹部管理相關事宜，請提醒可使用幹部專屬指令：「小岳 幹部系統」或「小岳 抓取群組ID」。
-      5. ⚠️ 極度重要排版規則：絕對不要使用任何 Markdown 語法（例如不要用 **粗體**、不要用 # 標題）。請一律只使用「純文字」加上「適當的換行」來排版！
-      6. 語言自動偵測：請嚴格根據發問者的語言來回答。如果用英文問，你就用全英文回答；如果用印尼文，你就用印尼文回答。
-      
-      👇👇👇 (這是系統剛剛從試算表抓取的【最新活動資料】) 👇👇👇
-      ${eventsContext}
-  
-      👇👇👇 (這是社團幹部撰寫的【社團百科全書規章】) 👇👇👇
-      請務必優先根據以下提供的資料來回答社員的問題：
-      ${clubKnowledge}
-    `;
-
-    // ==========================================
-    // 📦 階段三：打包資料送往 Google 伺服器
-    // ==========================================
-    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=" + GEMINI_API_KEY;
-
-    var payload = {
-      // 放入剛剛寫好的最高指導原則 (System Instruction)
-      "system_instruction": {
-        "parts": [{
-          "text": systemPrompt
-        }]
-      },
-      // 放入社員真正問的問題
-      "contents": [{
-        "parts": [{
-          "text": question
-        }]
-      }]
-    };
-    var response = UrlFetchApp.fetch(url, {
-      'method': 'post',
-      'contentType': 'application/json',
-      'payload': JSON.stringify(payload),
-      'muteHttpExceptions': true
-    });
-    var json = JSON.parse(response.getContentText());
-    if (json.candidates && json.candidates.length > 0 && json.candidates[0].content) {
-      var aiText = json.candidates[0].content.parts[0].text.trim();
-      var aiDisclaimer = "\n\n─────────────\n小岳 Yue is AI.\n小岳 Yue can make mistake.";
-      return aiText + aiDisclaimer;
-    }
-    return "小岳剛剛在山上收訊不好，沒聽清楚，請再說一次喔！⛰️\n─────────────\nYue has a bad signal on the mountain, please say that again! ⛰️。";
-  } catch (error) {
-    console.error("Gemini API error:", error);
-    return "哎呀，小岳去營地打水了，暫時不在座位上喔！\n─────────────\nOops, Yue went to fetch water at the camp and is currently away! ";
-  }
-}
-
-// ⭐️ 安全隔離牆：只抓取「公開活動」資訊餵給 AI (雙語升級版)
-// 【函式說明】
-// 這是一個「資料守門員」。為了防止 AI 助理 (小岳) 不小心洩漏社團的機密資料
-// (例如尚未定案的活動、或是已被關閉的行程)，
-// 我們只允許 AI 透過這個函式拿到「目前對外開放報名中」的活動清單。
-// AI 拿到這串乾淨、安全的雙語字串後，就能自然且安全地回答社員的詢問！
-function getPublicEventsInfo() {
-  try {
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var eventSheet = ss.getSheetByName("Events");
-    if (!eventSheet) return "";
-    var data = eventSheet.getDataRange().getDisplayValues();
-    if (data.length <= 1) return "";
-
-    var headers = data[0];
-    var result = "";
-    for (var i = 1; i < data.length; i++) {
-      result += data[i].join(" | ") + "\n";
-    }
-    return result;
-  } catch (e) {
-    return "";
-  }
-}
-
-// ⭐️ AI 知識庫：讀取 Google Docs 雲端大腦 (防呆除錯版)
-// 【函式說明】
-// 這是 AI 助理小山/小岳的「靜態記憶庫 (Knowledge Base)」。
-// 它可以讓不懂程式的幹部，直接在一個普通的 Google 文件 (Google Docs) 裡面，
-// 用白話文打上社團的歷史、裝備清單、入社規章、甚至是常見 Q&A。
-// 當社員用 LINE 問問題時，系統會瞬間去讀取那份文件的所有文字，
-// 並把它當作背景知識餵給 AI，讓 AI 能夠回答社團專屬的客製化問題，不再憑空捏造！
-function getClubKnowledgeFromDoc() {
-  try {
-    var folderId = PropertiesService.getScriptProperties().getProperty('KNOWLEDGE_FOLDER_ID');
-    if (!folderId) {
-      // 預設降級：若無設定，讀取原有的單一文件 ID
-      var docId = "1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI";
-      var doc = DocumentApp.openById(docId);
-      var text = doc.getBody().getText();
-      return text.substring(0, 4000);
-    }
-
-    var folder = DriveApp.getFolderById(folderId);
-    var files = folder.getFiles();
-    var allKnowledge = "";
-
-    while (files.hasNext()) {
-      var file = files.next();
-      var mimeType = file.getMimeType();
-
-      // 支援讀取 Google Docs 文件
-      if (mimeType === MimeType.GOOGLE_DOCS) {
-        var doc = DocumentApp.openById(file.getId());
-        allKnowledge += "【規章文件：" + file.getName() + "】\n" + doc.getBody().getText() + "\n\n";
-      }
-      // 支援讀取純文字檔案 (TXT)
-      else if (mimeType === MimeType.PLAIN_TEXT) {
-        allKnowledge += "【規章文件：" + file.getName() + "】\n" + file.getAs("text/plain").getDataAsString() + "\n\n";
-      }
-    }
-
-    // 限制總長度 15000 字，避免提示詞過長
-    return allKnowledge.substring(0, 15000);
-  } catch (e) {
-    console.error("讀取雲端硬碟規範資料夾失敗:", e.toString());
-    try {
-      var docId = "1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI";
-      return DocumentApp.openById(docId).getBody().getText().substring(0, 4000);
-    } catch (err) {
-      return "";
-    }
-  }
-}
-
-// ⭐️ 傳送意見回饋表單連結
-
-// 📢 全新功能：發送意見與回饋表單連結
-function sendFeedbackLink(replyToken) {
-  var googleFormUrl = "https://forms.gle/bCT7fjVP3bSrReF96";
-
-  var msg = "【意見與回饋 / Feedback & Suggestions】\n\n" +
-    "無論是想對社團說的話、活動建議、問題詢問，還是回報系統錯誤 (可附截圖)，都歡迎透過下方表單告訴我們！\n\n" +
-    "Whether you have suggestions, questions, or want to report a bug (screenshots supported), please let us know!\n\n" +
-    "點此填寫回饋表單 Click here to fill out the feedback form：\n" + googleFormUrl + "\n\n" +
-    "收到您的回饋後，幹部會盡快查看並處理喔！After receiving your feedback, the club officers will review and handle it as soon as possible!🏔️";
-
-  replyMessage(replyToken, msg);
-}
-
-// ⭐️ 表單送出觸發器 - 意見回饋 (自動寄送 Email)
-
-// 📧 表單提交觸發：自動寄送完整內容 Email (動態掃描表頭版)
-function onFeedbackSubmit(e) {
-  try {
-    var adminEmail = "ntustmountain@gmail.com";
-    var sheet = e.range.getSheet();
-    if (sheet.getName() !== "Feedbacks") return;
-
-    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var rowData = e.range.getValues()[0];
-
-    var nameIdx = headers.findIndex(function (h) {
-      return String(h).includes("姓名");
-    });
-    var emailIdx = headers.findIndex(function (h) {
-      return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱");
-    });
-    var feedbackIdx = headers.findIndex(function (h) {
-      return String(h).includes("想說的話") || String(h).includes("內容") || String(h).includes("回饋");
-    });
-    var fileIdx = headers.findIndex(function (h) {
-      return String(h).includes("檔案") || String(h).includes("附件") || String(h).includes("上傳");
-    });
-
-    var name = (nameIdx > -1 && rowData[nameIdx]) ? String(rowData[nameIdx]).trim() : "匿名";
-    var email = (emailIdx > -1 && rowData[emailIdx]) ? String(rowData[emailIdx]).trim() : "未提供";
-    var feedback = (feedbackIdx > -1 && rowData[feedbackIdx]) ? String(rowData[feedbackIdx]).trim() : "無內容";
-    var fileUrl = (fileIdx > -1 && rowData[fileIdx]) ? String(rowData[fileIdx]).trim() : "無附件";
-
-    var subject = "【社團意見回饋】收到來自 " + name + " 的新訊息";
-    var body = "幹部您好，\n\n" +
-      "系統剛剛收到了一筆新的意見與回饋，詳細內容如下：\n" +
-      "──────────────────────\n" +
-      "姓名：" + name + "\n" +
-      "聯絡信箱：" + email + "\n" +
-      "想說的話：\n" + feedback + "\n\n" +
-      "附檔連結：" + fileUrl + "\n" +
-      "──────────────────────\n\n" +
-      "請幹部盡快查閱並評估是否需要回覆喔！🏕️\n" +
-      "(此信件由系統自動發送)";
-
-    MailApp.sendEmail(adminEmail, subject, body);
-  } catch (err) {
-    console.error("寄送信件失敗：" + err.message);
-  }
-}
-
-// ⭐️ 升級版：提供給 LIFF 前端呼叫的 API 路由器
-function doGet(e) {
-  try {
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-    // 檢查前端是否有傳入 action 參數，若無則預設為 "get_equipments"
-    var action = (e.parameter && e.parameter.action) ? e.parameter.action : "get_equipments";
-
-    // 🛡️ 身分認證校驗：若存取非公開個資與後台資料，透過 Token 檢驗真實身分
-    var authUser = { ok: true, userId: (e.parameter && e.parameter.userId) ? e.parameter.userId : "" };
-    if (action !== "get_equipments") {
-      authUser = getAuthenticatedUserId(e.parameter, e.parameter ? e.parameter.userId : "");
-      if (!authUser.ok) {
-        return _errorResponse(authUser.error);
-      }
-    }
-    var userId = authUser.userId;
-
-    var userRequiredActions = ["get_unpaid", "get_profile", "get_my_status", "get_payment_history", "get_past_activities"];
-    if (userRequiredActions.indexOf(action) > -1 && !userId) {
-      return _errorResponse("缺少 userId 參數");
-    }
-
-    if (action === "get_unpaid") {
-      return getUnpaidListAPI(ss, userId);
-    } else if (action === "get_profile") {
-      return getMemberProfileAPI(ss, userId);
-    } else if (action === "get_my_status") {
-      return getMyStatusAPI(ss, userId);
-    } else if (action === "get_payment_history") {
-      return getPaymentHistoryAPI(ss, userId);
-    } else if (action === "get_past_activities") {
-      return getPastActivitiesAPI(ss, userId);
-    } else if (action === "check_officer_status") {
-      return checkOfficerStatusAPI(ss, userId);
-    } else if (action === "get_admin_events") {
-      return getAdminEventsAPI(ss, userId);
-    } else if (action === "get_event_signups") {
-      var eventId = e.parameter.eventId;
-      return getEventSignupsAPI(ss, eventId, userId);
-    } else if (action === "update_signup_status") {
-      var payload = {
-        userId: userId,
-        eventId: e.parameter.eventId || "",
-        signupCode: e.parameter.signupCode || "",
-        targetUserId: e.parameter.targetUserId || "",
-        rowNumber: e.parameter.rowNumber ? parseInt(e.parameter.rowNumber, 10) : undefined,
-        name: e.parameter.name || "",
-        reviewResult: e.parameter.reviewResult || ""
-      };
-      return processUpdateSignupStatus(payload);
-    } else if (action === "update_event_status") {
-      var payload = {
-        userId: userId,
-        eventId: e.parameter.eventId || "",
-        status: e.parameter.status || ""
-      };
-      return processUpdateEventStatus(payload);
-    } else if (action === "send_event_notifications") {
-      var payload = {
-        userId: userId,
-        eventId: e.parameter.eventId || ""
-      };
-      return processSendEventNotifications(payload);
-    } else if (action === "get_equipments") {
-      // 呼叫原本的裝備清單處理引擎
-      return getEquipmentsListAPI(ss);
-    } else {
-      return _errorResponse("未知的 action 參數");
-    }
-
-  } catch (error) {
-    return _errorResponse("GAS 後端執行錯誤: " + error.toString());
-  }
-}
-
-// ------------------------------------------------------------------
-// 引擎 1：取得可借用裝備清單 (原本 doGet 的邏輯)
-// ------------------------------------------------------------------
-function getEquipmentsListAPI(ss) {
-  var equipSheet = ss.getSheetByName("Equipments");
-  if (!equipSheet) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到名為 Equipments 的裝備表" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var data = equipSheet.getDataRange().getDisplayValues();
-  var headers = data[0];
-
-  if (typeof _fi !== "function") {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統缺少 _fi 共用函式" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var hIdx = {
-    id: _fi(headers, "裝備代號"),
-    name: _fi(headers, "裝備名稱"),
-    remainQty: _fi(headers, "剩餘數量"),
-    borrowable: _fi(headers, "是否外借"),
-    price2Days: _fi(headers, "2天"),
-    priceExtra: _fi(headers, "+1天"),
-    status: _fi(headers, "狀態"),
-    imageUrl: _fi(headers, "圖片網址"),
-    remarkCol: headers.findIndex(function (h) {
-      var s = String(h).trim();
-      return s.includes("備註") || s.includes("備注");
-    }),
-    descCol: headers.findIndex(function (h) {
-      var s = String(h).trim();
-      return s.includes("說明") || s.includes("詳細資訊") || s.includes("規格");
-    })
-  };
-
-  // 找出 5 欄照片網址欄位 (圖片網址1 ~ 圖片網址5，相容傳統「圖片網址」)
-  var imgColIndices = [];
-  for (var k = 1; k <= 5; k++) {
-    var cIdx = headers.findIndex(function (h) {
-      var s = String(h).trim();
-      return s === ("圖片網址" + k) || s === ("圖片網址 " + k);
-    });
-    if (cIdx === -1 && k === 1) {
-      cIdx = _fi(headers, "圖片網址");
-    }
-    imgColIndices.push(cIdx);
-  }
-
-  var availableEquipments = [];
-
-  for (var i = 1; i < data.length; i++) {
-    var isBorrowable = hIdx.borrowable > -1 ? data[i][hIdx.borrowable] : "";
-    var status = hIdx.status > -1 ? data[i][hIdx.status] : "";
-    var remainQty = hIdx.remainQty > -1 ? parseInt(data[i][hIdx.remainQty], 10) : 0;
-
-    // 依序蒐集 1~5 欄中的所有圖片網址
-    var itemImgUrls = [];
-    imgColIndices.forEach(function (colIdx) {
-      if (colIdx > -1) {
-        var val = String(data[i][colIdx] || "").trim();
-        if (val) {
-          var subParts = val.split(/[\n,，;\s]+/).map(function (u) { return u.trim(); }).filter(function (u) { return u.startsWith("http"); });
-          subParts.forEach(function (u) {
-            if (itemImgUrls.indexOf(u) === -1 && itemImgUrls.length < 5) {
-              itemImgUrls.push(u);
-            }
-          });
-        }
-      }
-    });
-
-    // 優先對應備註欄位，其次為說明/規格欄位
-    var itemDesc = "";
-    if (hIdx.remarkCol > -1 && String(data[i][hIdx.remarkCol] || "").trim()) {
-      itemDesc = String(data[i][hIdx.remarkCol]).trim();
-    } else if (hIdx.descCol > -1 && String(data[i][hIdx.descCol] || "").trim()) {
-      itemDesc = String(data[i][hIdx.descCol]).trim();
-    }
-
-    if (isBorrowable === "可外借" && remainQty > 0 && status !== "維修中" && status !== "報廢" && status !== "需汰換" && status !== "待測") {
-      availableEquipments.push({
-        id: hIdx.id > -1 ? data[i][hIdx.id] : "",
-        name: hIdx.name > -1 ? data[i][hIdx.name] : "未知裝備",
-        remainQty: remainQty,
-        price: hIdx.price2Days > -1 ? parseInt(data[i][hIdx.price2Days], 10) || 0 : 0,
-        priceExtra: hIdx.priceExtra > -1 ? parseInt(data[i][hIdx.priceExtra], 10) || 0 : 0,
-        imageUrl: itemImgUrls.join(","),
-        description: itemDesc
-      });
-    }
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({ status: "success", data: availableEquipments })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// ------------------------------------------------------------------
-// 引擎 2：取得社員未繳費清單 (為繳費系統打造)
-// ------------------------------------------------------------------
-function getUnpaidListAPI(ss, userId) {
-  var responseData = {
-    membership: [],
-    activities: [],
-    equipments: []
-  };
-
-  // 📌 1. 抓取社費欠款
-  var mSheet = ss.getSheetByName("Members");
-  if (mSheet) {
-    var mData = mSheet.getDataRange().getValues();
-    var mSysIdx = _fi(mData[0], "系統識別碼");
-    var mPayIdx = _fi(mData[0], "繳費狀態");
-    var mExpireIdx = mData[0].findIndex(function (h) {
-      return String(h).includes("到期日") || String(h).includes("社籍");
-    });
-    var mIntendIdx = mData[0].findIndex(function (h) {
-      return String(h).includes("加入社員意願") || (String(h).includes("意願") && String(h).includes("社"));
-    });
-
-    for (var i = 1; i < mData.length; i++) {
-      if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
-        var payStatus = mPayIdx > -1 ? String(mData[i][mPayIdx]).trim() : "";
-        var expireVal = mExpireIdx > -1 ? mData[i][mExpireIdx] : "";
-        var intendVal = mIntendIdx > -1 ? String(mData[i][mIntendIdx]).trim() : "";
-        var isExpired = _isEventExpired(expireVal);
-        var intendOfficial = (intendVal === "是" || intendVal.indexOf("有意願") > -1 || intendVal.toLowerCase() === "true");
-
-        // 若社籍到期且原本狀態為已繳費，即時將試算表狀態重置為「未繳費 Unpaid」
-        if (isExpired && (payStatus === "已繳費 Paid" || payStatus === "是") && mPayIdx > -1) {
-          payStatus = "未繳費 Unpaid";
-          mSheet.getRange(i + 1, mPayIdx + 1).setValue("未繳費 Unpaid");
-        }
-
-        // 只要不是「待確認 Checking」：
-        // 1. 若繳費狀態為未繳費，或者社籍已過期
-        // 2. 且有加入意願（或曾有社籍到期日）
-        // 則列入社費欠款清單 ($200)
-        var isUnpaid = (payStatus !== "已繳費 Paid" && payStatus !== "是");
-        if (payStatus !== "待確認 Checking") {
-          if ((isUnpaid || isExpired) && (intendOfficial || expireVal)) {
-            responseData.membership.push({
-              id: "fee_membership",
-              name: "社籍與社費 (Membership Fee)",
-              amount: 200 // 依據社團規章設定，社費預設為 200
-            });
-          }
-        }
-        break; // 系統識別碼唯一，找到即可跳出
-      }
-    }
-  }
-
-  // 📌 2. 抓取活動報名欠款
-  var sSheet = ss.getSheetByName("Signups");
-  var eSheet = ss.getSheetByName("Events");
-  if (sSheet && eSheet) {
-    var sData = sSheet.getDataRange().getValues();
-    var eData = eSheet.getDataRange().getDisplayValues();
-
-    var sSysIdx = _fi(sData[0], "系統識別碼");
-    var sStatIdx = _fi(sData[0], "審核結果");
-    var sPayIdx = _fi(sData[0], "繳費狀態");
-    var sEvtIdx = _fi(sData[0], "活動編號");
-
-    var eIdIdx = _fi(eData[0], "活動編號");
-    var eNameIdx = _fi(eData[0], "活動名稱");
-    var eCostIdx = eData[0].findIndex(function (h) { return String(h).includes("預計費用") || String(h).includes("費用"); });
-
-    for (var s = 1; s < sData.length; s++) {
-      if (sSysIdx > -1 && sData[s][sSysIdx] === userId) {
-        var st = String(sData[s][sStatIdx]);
-        var pay = String(sData[s][sPayIdx]).trim();
-        // 條件：正取且未取消，且狀態不為已繳或待確認
-        if (st.indexOf("正取") > -1 && st.indexOf("取消") === -1 && pay !== "已繳費 Paid" && pay !== "待確認 Checking") {
-          var evId = String(sData[s][sEvtIdx]).trim();
-          for (var e = 1; e < eData.length; e++) {
-            if (eIdIdx > -1 && String(eData[e][eIdIdx]).trim() === evId) {
-              var costStr = eCostIdx > -1 ? String(eData[e][eCostIdx]) : "0";
-              var cost = parseInt(costStr.replace(/\D/g, ''), 10) || 0;
-              if (cost >= 0) {
-                responseData.activities.push({
-                  id: "act_" + evId,
-                  name: "活動：" + (eNameIdx > -1 ? String(eData[e][eNameIdx]).replace(/[&=]/g, '') : "未知活動"),
-                  amount: cost
-                });
-              }
-              break;
-            }
-          }
-        }
-      }
-    }
-  }
-  // 📌 3. 抓取裝備租借欠款
-  var lSheet = ss.getSheetByName("Loan_Records");
-  if (lSheet) {
-    var lData = lSheet.getDataRange().getValues();
-    var lSysIdx = _fi(lData[0], "系統識別碼");
-    var lStatIdx = _fi(lData[0], "領取/歸還");
-    var lPayIdx = _fi(lData[0], "繳費狀態");
-    var lOrderIdx = _fi(lData[0], "租借編號");
-    var lNameIdx = _fi(lData[0], "裝備名稱");
-    var lQtyIdx = _fi(lData[0], "數量");
-    var lPickupIdx = _fi(lData[0], "預計領取");
-    if (lPickupIdx === -1) lPickupIdx = _fi(lData[0], "pickup");
-    if (lPickupIdx === -1) lPickupIdx = _fi(lData[0], "領取");
-
-    var lReturnIdx = _fi(lData[0], "預計歸還");
-    if (lReturnIdx === -1) lReturnIdx = _fi(lData[0], "return");
-    if (lReturnIdx === -1) lReturnIdx = _fi(lData[0], "歸還");
-
-    var lPurposeIdx = _fi(lData[0], "用途");
-    var lOfficialIdx = _fi(lData[0], "是否為社員");
-    var lCostIdx = lData[0].findIndex(function (h) { return String(h).includes("應繳費用") || String(h).includes("費用"); });
-
-    var formatVal = function (val) {
-      if (!val) return "";
-
-      // 若為原生 Date 物件，直接格式化輸出
-      if (val instanceof Date) {
-        return Utilities.formatDate(val, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
-      }
-
-      var str = String(val).trim();
-
-      // 1. 匹配 YYYY-MM-DD 或 YYYY/MM/DD
-      var matchYMD = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-      if (matchYMD) {
-        var y = matchYMD[1];
-        var m = matchYMD[2].length === 1 ? "0" + matchYMD[2] : matchYMD[2];
-        var d = matchYMD[3].length === 1 ? "0" + matchYMD[3] : matchYMD[3];
-        return y + "-" + m + "-" + d;
-      }
-
-      // 2. 匹配 DD/MM/YYYY 或 DD-MM-YYYY (例如 24/03/2026)
-      var matchDMY = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-      if (matchDMY) {
-        var d = matchDMY[1].length === 1 ? "0" + matchDMY[1] : matchDMY[1];
-        var m = matchDMY[2].length === 1 ? "0" + matchDMY[2] : matchDMY[2];
-        var y = matchDMY[3];
-        return y + "-" + m + "-" + d;
-      }
-
-      // 3. 回退至 JavaScript 日期物件解析
-      var dObj = new Date(str);
-      if (!isNaN(dObj.getTime())) {
-        return Utilities.formatDate(dObj, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
-      }
-
-      if (str.indexOf("T") > -1) {
-        return str.split("T")[0];
-      }
-      return str.split(" ")[0];
-    };
-
-    for (var l = 1; l < lData.length; l++) {
-      if (lSysIdx > -1 && lData[l][lSysIdx] === userId) {
-        var lst = String(lData[l][lStatIdx]);
-        var lpay = String(lData[l][lPayIdx]).trim();
-        // 條件：未取消、未歸還，且狀態不為已繳或待確認
-        if (lst.indexOf("取消") === -1 && lst.indexOf("歸還") === -1 && lpay !== "已繳費 Paid" && lpay !== "待確認 Checking") {
-          var costStr = lCostIdx > -1 ? String(lData[l][lCostIdx]) : "0";
-          var cost = parseInt(costStr.replace(/\D/g, ''), 10) || 0;
-          var orderId = lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : "未知訂單";
-          if (cost >= 0) {
-            responseData.equipments.push({
-              id: "eq_" + orderId,
-              name: lNameIdx > -1 ? String(lData[l][lNameIdx]).trim() : "未知裝備",
-              amount: cost,
-              orderId: orderId,
-              qty: lQtyIdx > -1 ? parseInt(lData[l][lQtyIdx], 10) || 1 : 1,
-              pickupDate: lPickupIdx > -1 ? formatVal(lData[l][lPickupIdx]) : "",
-              returnDate: lReturnIdx > -1 ? formatVal(lData[l][lReturnIdx]) : "",
-              purpose: lPurposeIdx > -1 ? String(lData[l][lPurposeIdx]).trim() : "",
-              isOfficial: lOfficialIdx > -1 ? String(lData[l][lOfficialIdx]).trim() : "否"
-            });
-          }
-        }
-      }
-    }
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({ status: "success", data: responseData })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// ⭐️ 新增：處理 LIFF 多選裝備租借的專屬引擎
-function processMultiLoan(payload) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName("Loan_Records");
-  var equipSheet = ss.getSheetByName("Equipments");
-  var mSheet = ss.getSheetByName("Members");
-
-  var userId = payload.userId;
-  var details = payload.details;
-
-  // 日期合理性防呆驗證
-  if (!details || !details.pickupDate || !details.returnDate) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少領取或歸還日期" })).setMimeType(ContentService.MimeType.JSON);
-  }
-  var pDate = new Date(String(details.pickupDate).replace(/-/g, "/"));
-  var rDate = new Date(String(details.returnDate).replace(/-/g, "/"));
-  if (rDate.getTime() < pDate.getTime()) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "歸還日期不得早於領取日期" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  // 1. 取得社員基本資料
-  var mData = mSheet.getDataRange().getValues();
-  var sysIdx = _fi(mData[0], "系統識別碼");
-  var userName = "未知社員";
-  var isOfficial = "否";
-
-  for (var i = 1; i < mData.length; i++) {
-    if (sysIdx > -1 && mData[i][sysIdx] === userId) {
-      userName = mData[i][_fi(mData[0], "姓名")] || "未知社員";
-      var payStatus = mData[i][_fi(mData[0], "繳費狀態")] || "";
-      if (String(payStatus).trim() === "已繳費 Paid") isOfficial = "是";
-      break;
-    }
-  }
-
-  // 2. 準備寫入資料與鎖定庫存
-  var orderId = "R" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MMddHHmmss");
-  var lHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var eData = equipSheet.getDataRange().getValues();
-  var eIdIdx = _fi(eData[0], "裝備代號");
-
-  var totalCost = 0;
-  var summaryText = [];
-
-  // 為了安全起見，這裡應該要加上 LockService (如同你原本的寫法)
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-
-    // 遍歷購物車內的每一項裝備
-    var cartKeys = Object.keys(details.cart);
-    for (var k = 0; k < cartKeys.length; k++) {
-      var equipId = cartKeys[k];
-      var qty = details.cart[equipId];
-
-      for (var j = 1; j < eData.length; j++) {
-        if (eIdIdx > -1 && eData[j][eIdIdx] === equipId) {
-          var equipName = eData[j][_fi(eData[0], "裝備名稱")];
-          var eStockIdx = _fi(eData[0], "剩餘數量");
-          var currentStock = parseInt(eData[j][eStockIdx], 10) || 0;
-
-          // 扣除庫存
-          equipSheet.getRange(j + 1, eStockIdx + 1).setValue(currentStock - qty);
-
-          // 計算費用 (依照借用天數計算：前 2 天為基本價，超過 2 天按日加價)
-          var pickupDate = new Date(details.pickupDate);
-          var returnDate = new Date(details.returnDate);
-          var diffTime = Math.abs(returnDate - pickupDate);
-          var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-
-          var price2 = parseInt(eData[j][_fi(eData[0], "2天")], 10) || 0;
-          var priceExtra = parseInt(eData[j][_fi(eData[0], "+1天")], 10) || 0;
-
-          var extraDays = Math.max(0, diffDays - 2);
-          var baseCost = price2 + extraDays * priceExtra;
-
-          var itemCost = (isOfficial === "是") ? Math.ceil((baseCost * qty) / 2) : (baseCost * qty);
-          totalCost += itemCost;
-
-          summaryText.push(equipName + " x" + qty);
-
-          // 寫入 Loan_Records
-          var newRow = new Array(lHeaders.length).fill("");
-          newRow[_fi(lHeaders, "系統識別碼")] = userId;
-          newRow[_fi(lHeaders, "姓名")] = userName;
-          newRow[_fi(lHeaders, "租借編號")] = orderId;
-          newRow[_fi(lHeaders, "裝備代號")] = equipId;
-          newRow[_fi(lHeaders, "裝備名稱")] = equipName;
-          newRow[_fi(lHeaders, "數量")] = qty;
-          newRow[_fi(lHeaders, "預計領取")] = details.pickupDate;
-          newRow[_fi(lHeaders, "預計歸還")] = details.returnDate;
-
-          var purposeStr = details.purpose;
-          if (purposeStr === "其他用途" && details.otherPurpose) {
-            purposeStr = "其他：" + details.otherPurpose;
-          }
-          newRow[_fi(lHeaders, "用途")] = purposeStr;
-          newRow[_fi(lHeaders, "應繳費用")] = itemCost;
-          newRow[_fi(lHeaders, "領取/歸還")] = "待領取 To Be Collected";
-          newRow[_fi(lHeaders, "繳費狀態")] = "未繳費 Unpaid";
-          newRow[_fi(lHeaders, "是否為社員")] = isOfficial;
-
-          sheet.appendRow(newRow);
-          break;
-        }
-      }
-    }
-  } catch (e) {
-    console.error("處理多選訂單失敗", e);
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中" })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    _safeReleaseLock(lock);
-  }
-
-  // 3. 發送幹部通知推播
-  var purposeStrForAdmin = details.purpose;
-  if (purposeStrForAdmin === "其他用途" && details.otherPurpose) {
-    purposeStrForAdmin = "其他：" + details.otherPurpose;
-  }
-  var adminMsg = "【幹部通知：新裝備預約 (多選合併)】\n\n申請人：" + userName + " (" + isOfficial + "社員)\n用途：" + purposeStrForAdmin + "\n訂單編號：" + orderId + "\n領取：" + details.pickupDate + "\n歸還：" + details.returnDate + "\n\n借用明細：\n" + summaryText.join("\n") + "\n\n總金額：$" + totalCost;
-  if (typeof pushAdminMessage === "function") pushAdminMessage(adminMsg);
-
-  // 4. 回傳成功狀態給 LIFF 前端
-  return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// ⭐️ 新增：處理 LIFF 繳費申報的專屬引擎
-function processPaymentSubmit(payload) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var paySheet = ss.getSheetByName("Payments");
-  var mSheet = ss.getSheetByName("Members");
-  var sSheet = ss.getSheetByName("Signups");
-  var lSheet = ss.getSheetByName("Loan_Records");
-
-  var userId = payload.userId;
-  var details = payload.details; // details: { selectedIds: string[], last5Digits: string, totalAmount: number, note?: string }
-  var paymentNote = details.note ? String(details.note).trim() : "";
-
-  // 1. 取得姓名與社員狀態
-  var mData = mSheet.getDataRange().getValues();
-  var sysIdx = _fi(mData[0], "系統識別碼");
-  var userName = "未知社員";
-  var isOfficial = "否";
-  for (var i = 1; i < mData.length; i++) {
-    if (sysIdx > -1 && mData[i][sysIdx] === userId) {
-      userName = mData[i][_fi(mData[0], "姓名")] || "未知社員";
-      var payStatus = mData[i][_fi(mData[0], "繳費狀態")] || "";
-      if (String(payStatus).trim() === "已繳費 Paid") isOfficial = "是";
-      break;
-    }
-  }
-
-  var confirmedItems = [];
-  var insertedRowIndex = 0;
-
-  // 2. 鎖定並更改狀態為 "待確認 Checking" (加鎖防止並發衝突)
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-
-    var rawSelectedIds = details.selectedIds || [];
-    var selectedIds = [];
-    for (var u = 0; u < rawSelectedIds.length; u++) {
-      if (selectedIds.indexOf(rawSelectedIds[u]) === -1) {
-        selectedIds.push(rawSelectedIds[u]);
-      }
-    }
-
-    for (var k = 0; k < selectedIds.length; k++) {
-      var itemId = selectedIds[k];
-
-      // A. 社費
-      if (itemId === "fee_membership") {
-        var mPayIdx = _fi(mData[0], "繳費狀態");
-        for (var m = 1; m < mData.length; m++) {
-          if (sysIdx > -1 && mData[m][sysIdx] === userId) {
-            mSheet.getRange(m + 1, mPayIdx + 1).setValue("待確認 Checking");
-            var membershipLabel = "🔸 社籍與社費 (Membership Fee)";
-            if (details.membershipExpiryDate) {
-              membershipLabel += " (有效至 " + details.membershipExpiryDate + ")";
-            }
-            confirmedItems.push(membershipLabel);
-            break;
-          }
-        }
-      }
-      // B. 活動
-      else if (itemId.startsWith("act_")) {
-        var targetEventId = itemId.substring(4);
-        var sData = sSheet.getDataRange().getValues();
-        var sSysIdx = _fi(sData[0], "系統識別碼");
-        var sPayIdx = _fi(sData[0], "繳費狀態");
-        var sEvtIdx = _fi(sData[0], "活動編號");
-        for (var s = 1; s < sData.length; s++) {
-          if (sSysIdx > -1 && sData[s][sSysIdx] === userId && sEvtIdx > -1 && String(sData[s][sEvtIdx]).trim() === targetEventId) {
-            sSheet.getRange(s + 1, sPayIdx + 1).setValue("待確認 Checking");
-            var eventName = _getEventName(ss, targetEventId);
-            confirmedItems.push("🔸 活動：" + eventName);
-            break;
-          }
-        }
-      }
-      // C. 裝備
-      else if (itemId.startsWith("eq_")) {
-        var targetOrderId = itemId.substring(3);
-        var lData = lSheet.getDataRange().getValues();
-        var lSysIdx = _fi(lData[0], "系統識別碼");
-        var lPayIdx = _fi(lData[0], "繳費狀態");
-        var lOrderIdx = _fi(lData[0], "租借編號");
-        var lName1Idx = _fi(lData[0], "裝備名稱");
-        var lName2Idx = _fi(lData[0], "租借項目");
-        var lIdIdx = _fi(lData[0], "裝備代號");
-        var lPurposeIdx = _fi(lData[0], "用途");
-        var lOfficialIdx = _fi(lData[0], "是否為社員");
-        var lCostIdx = lData[0].findIndex(function (h) { return String(h).includes("應繳費用") || String(h).includes("費用"); });
-        var hasMembership = selectedIds.indexOf("fee_membership") > -1;
-
-        for (var l = 1; l < lData.length; l++) {
-          if (lSysIdx > -1 && lData[l][lSysIdx] === userId && lOrderIdx > -1 && String(lData[l][lOrderIdx]).trim() === targetOrderId) {
-            lSheet.getRange(l + 1, lPayIdx + 1).setValue("待確認 Checking");
-
-            // ⭐️ 若同時繳納社費且該筆為非社員個人租借，同步將 Loan_Records 的應繳費用打 5 折並註記社員狀態為「是」
-            var lPurpose = lPurposeIdx > -1 ? String(lData[l][lPurposeIdx]).trim() : "";
-            var lOfficial = lOfficialIdx > -1 ? String(lData[l][lOfficialIdx]).trim() : "否";
-            var isClub = lPurpose === "社團出隊" || lPurpose === "社團出團";
-            var isDiscountApplied = false;
-
-            if (hasMembership && !isClub && lOfficial !== "是") {
-              if (lCostIdx > -1) {
-                var origCostStr = String(lData[l][lCostIdx]);
-                var origCost = parseInt(origCostStr.replace(/\D/g, ''), 10) || 0;
-                if (origCost > 0) {
-                  var discountedCost = Math.round(origCost * 0.5);
-                  lSheet.getRange(l + 1, lCostIdx + 1).setValue(discountedCost);
-                  isDiscountApplied = true;
-                }
-              }
-              if (lOfficialIdx > -1) {
-                lSheet.getRange(l + 1, lOfficialIdx + 1).setValue("是");
-              }
-            }
-
-            var equipName = _getEquipName(lData[l], lName1Idx, lName2Idx, lIdIdx, "未知裝備");
-            confirmedItems.push("🔹 裝備：" + equipName + (isDiscountApplied ? " (社員5折)" : ""));
-          }
-        }
-      }
-    }
-
-    // 3. 寫入 Payments 工作表 (防呆：絕不修改試算表表頭，嚴格對齊既有欄位)
-    if (paySheet) {
-      var pHeaders = paySheet.getRange(1, 1, 1, paySheet.getLastColumn()).getValues()[0];
-      var aIdx = _findAmountColIdx(pHeaders);
-      var newRow = new Array(pHeaders.length).fill("");
-
-      var tIdx = _fi(pHeaders, "繳款時間") > -1 ? _fi(pHeaders, "繳款時間") : (_fi(pHeaders, "時間") > -1 ? _fi(pHeaders, "時間") : _fi(pHeaders, "Timestamp"));
-      var nIdx = _fi(pHeaders, "姓名");
-      var sIdx = _fi(pHeaders, "系統識別碼");
-      var iIdx = _fi(pHeaders, "繳費項目");
-      var actColIdx = _fi(pHeaders, "活動名稱");
-      var eqColIdx = _fi(pHeaders, "裝備名稱");
-      var pIdx = _fi(pHeaders, "帳號末5碼") > -1 ? _fi(pHeaders, "帳號末5碼") : _fi(pHeaders, "帳號末5碼/備註");
-      var ntIdx = _fi(pHeaders, "備註");
-      var stIdx = _fi(pHeaders, "對帳狀態");
-
-      var submitAmount = (typeof details.totalAmount === 'number' && !isNaN(details.totalAmount)) ? details.totalAmount : (parseInt(String(details.totalAmount || 0).replace(/\D/g, ''), 10) || 0);
-
-      var actItems = confirmedItems.filter(function (it) { return it.indexOf("活動") > -1; });
-      var eqItems = confirmedItems.filter(function (it) { return it.indexOf("裝備") > -1; });
-
-      var fullPaymentNote = paymentNote;
-      if (aIdx === -1 && submitAmount > 0) {
-        fullPaymentNote = "[金額: $" + submitAmount + "] " + (paymentNote || "");
-      }
-
-      if (tIdx > -1) newRow[tIdx] = new Date();
-      if (nIdx > -1) newRow[nIdx] = userName;
-      if (sIdx > -1) newRow[sIdx] = userId;
-      if (iIdx > -1) newRow[iIdx] = confirmedItems.join(", ") + (aIdx === -1 && submitAmount > 0 ? " ($" + submitAmount + ")" : "");
-      if (actColIdx > -1) newRow[actColIdx] = actItems.join("\n");
-      if (eqColIdx > -1) newRow[eqColIdx] = eqItems.join("\n");
-      if (aIdx > -1) newRow[aIdx] = submitAmount;
-      if (pIdx > -1) newRow[pIdx] = details.last5Digits;
-      if (ntIdx > -1) newRow[ntIdx] = fullPaymentNote;
-      if (stIdx > -1) newRow[stIdx] = "待確認";
-
-      paySheet.appendRow(newRow);
-      insertedRowIndex = paySheet.getLastRow();
-    }
-
-    // ⚡ 同步提交至 Supabase
-    _syncPaymentToSupabase(userId, details, userName);
-
-  } catch (e) {
-    console.error("處理繳費申報失敗", e);
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中：" + e.toString() })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    _safeReleaseLock(lock);
-  }
-
-  // 4. 發送推播通知幹部對帳 Flex Message
-  var altText = "收到一筆新對帳申報！";
-  var hasMembership = selectedIds.indexOf("fee_membership") > -1;
-  var actIds = selectedIds.filter(function(id) { return id.startsWith("act_"); });
-  var eqIds = selectedIds.filter(function(id) { return id.startsWith("eq_"); });
-
-  var determinedType = "combined";
-  if (hasMembership && actIds.length === 0 && eqIds.length === 0) {
-    determinedType = "繳交社費";
-  } else if (!hasMembership && actIds.length > 0 && eqIds.length === 0) {
-    if (actIds.length === 1) {
-      var singleEvtId = actIds[0].substring(4);
-      var singleEvtName = _getEventName(ss, singleEvtId);
-      determinedType = "活動：" + singleEvtName;
-    } else {
-      determinedType = "activity";
-    }
-  } else if (!hasMembership && actIds.length === 0 && eqIds.length > 0) {
-    if (eqIds.length === 1) {
-      determinedType = "裝備：" + eqIds[0].substring(3);
-    } else {
-      determinedType = "equipment";
-    }
-  } else {
-    determinedType = "combined";
-  }
-
-  var postbackData = "action=admin_confirm&row=" + insertedRowIndex + "&userId=" + userId + (details.membershipExpiryDate ? "&expire=" + encodeURIComponent(details.membershipExpiryDate) : "") + "&type=" + encodeURIComponent(determinedType);
-
-  var bodyContents = [
-    {
-      "type": "text",
-      "text": "申報人：" + userName,
-      "weight": "bold",
-      "size": "md"
-    },
-    {
-      "type": "text",
-      "text": "申報金額：$" + details.totalAmount,
-      "weight": "bold",
-      "size": "md",
-      "color": "#059669",
-      "margin": "sm"
-    },
-    {
-      "type": "text",
-      "text": "帳號末5碼：" + details.last5Digits,
-      "weight": "bold",
-      "size": "md",
-      "margin": "sm"
-    }
-  ];
-
-  if (paymentNote) {
-    bodyContents.push({
-      "type": "text",
-      "text": "備註：" + paymentNote,
-      "wrap": true,
-      "size": "sm",
-      "color": "#d97706",
-      "margin": "sm"
-    });
-  }
-
-  bodyContents.push(
-    {
-      "type": "separator",
-      "margin": "md"
-    },
-    {
-      "type": "text",
-      "text": "申報明細：\n" + confirmedItems.join("\n"),
-      "wrap": true,
-      "size": "sm",
-      "color": "#475569",
-      "margin": "md"
-    }
-  );
-
-  var flexContent = {
-    "type": "bubble",
-    "header": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": [
-        {
-          "type": "text",
-          "text": "繳費核對申請",
-          "weight": "bold",
-          "size": "lg",
-          "color": "#ffffff"
-        }
-      ],
-      "backgroundColor": "#10b981"
-    },
-    "body": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": bodyContents
-    },
-    "footer": {
-      "type": "box",
-      "layout": "vertical",
-      "contents": [
-        {
-          "type": "button",
-          "style": "primary",
-          "color": "#10b981",
-          "action": {
-            "type": "postback",
-            "label": "✅ 確認無誤並發送通知",
-            "data": postbackData
-          }
+          ]
         }
       ]
     }
   };
-
-  if (typeof pushAdminFlexMessage === "function") {
-    pushAdminFlexMessage(altText, flexContent);
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
 }
-
-// ------------------------------------------------------------------
-// 引擎 4：查詢社員基本資料 API (供 LIFF 前端註冊/更新預載資料)
-// ------------------------------------------------------------------
-function getMemberProfileAPI(ss, userId) {
-  var memberSheet = ss.getSheetByName("Members");
-  if (!memberSheet) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Members 資料表" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var mData = memberSheet.getDataRange().getValues();
-  var mH = mData.length > 0 ? mData[0] : [];
-  var mSysIdx = _fi(mH, "系統識別碼");
-
-  var profile = null;
-  var isMember = false;
-
-  for (var i = 1; i < mData.length; i++) {
-    if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
-      isMember = true;
-      profile = {};
-
-      profile.name = mData[i][_fi(mH, "姓名")] || "";
-      profile.gender = mData[i][_fi(mH, "性別")] || "";
-      profile.realLineId = mData[i][mH.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); })] || "";
-      profile.email = mData[i][mH.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); })] || "";
-      profile.phone = mData[i][mH.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); })] || "";
-      profile.department = mData[i][_fi(mH, "系所")] || "";
-      profile.identityStatus = mData[i][_fi(mH, "身分狀態")] || "";
-      profile.studentId = mData[i][_fi(mH, "學號")] || "";
-
-      var birthdayVal = mData[i][_fi(mH, "生日")];
-      if (birthdayVal instanceof Date) {
-        profile.birthday = Utilities.formatDate(birthdayVal, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
-      } else if (birthdayVal) {
-        // 如果是字串或數字，安全處理為 YYYY-MM-DD 格式
-        var bStr = String(birthdayVal).trim();
-        if (bStr.indexOf("T") > -1) {
-          profile.birthday = bStr.split("T")[0];
-        } else {
-          profile.birthday = bStr;
-        }
-      } else {
-        profile.birthday = "";
-      }
-
-      profile.idNumber = mData[i][_fi(mH, "證件")] || "";
-
-      var addrIdx = mH.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
-      profile.studentAddr = addrIdx > -1 ? mData[i][addrIdx] : "";
-
-      var emerNameIdx = mH.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
-      profile.emerName = emerNameIdx > -1 ? mData[i][emerNameIdx] : "";
-
-      profile.emerRel = _getEmerRelValue(mH, mData[i]);
-      profile.emerPhone = mData[i][_fi(mH, "緊急聯絡人電話")] || "";
-
-      var emerAddrIdx = mH.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
-      profile.emerAddr = emerAddrIdx > -1 ? mData[i][emerAddrIdx] : "";
-
-      profile.exp = mData[i][_fi(mH, "經驗")] || "";
-      profile.strength = mData[i][_fi(mH, "體能")] || "";
-      profile.strengthProof = mData[i][_fi(mH, "證明")] || "";
-
-      // 智慧檢查並回補 Google Drive 系統圖庫/體能登山證明 中的歷史證明檔案
-      try {
-        var existingProofList = String(profile.strengthProof).split(/[\n,，;\s]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.startsWith("http"); });
-        if (existingProofList.length < 5 && profile.name) {
-          var rootFolders = DriveApp.getFoldersByName("系統圖庫");
-          if (!rootFolders.hasNext()) {
-            rootFolders = DriveApp.getFoldersByName("LINE_Uploads"); // 向後相容既有目錄
-          }
-          if (rootFolders.hasNext()) {
-            var rootFolder = rootFolders.next();
-            var proofFolders = rootFolder.getFoldersByName("體能登山證明");
-            var targetFolder = proofFolders.hasNext() ? proofFolders.next() : rootFolder;
-            var searchFiles = targetFolder.searchFiles("title contains '" + profile.name + "_體能證明' and trashed = false");
-            while (searchFiles.hasNext() && existingProofList.length < 5) {
-              var fObj = searchFiles.next();
-              var fUrl = fObj.getUrl();
-              if (existingProofList.indexOf(fUrl) === -1) {
-                existingProofList.push(fUrl);
-              }
-            }
-            if (existingProofList.length > 5) {
-              existingProofList = existingProofList.slice(-5);
-            }
-            profile.strengthProof = existingProofList.join(",");
-          }
-        }
-      } catch (driveErr) {
-        // 若查詢 Drive 失敗則維持試算表原有值，確保不中斷 API
-      }
-
-      var medIdx = mH.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
-      profile.medicalHistory = medIdx > -1 ? mData[i][medIdx] : "";
-
-      profile.intendOfficial = mData[i][_fi(mH, "加入社員意願")] || "";
-      profile.intendOfficer = mData[i][_fi(mH, "擔任幹部意願")] || "";
-      break;
-    }
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    isMember: isMember,
-    profile: profile
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// ------------------------------------------------------------------
-// 📌 取得個人儀表板狀態 (My Dashboard API)
-// ------------------------------------------------------------------
-function getMyStatusAPI(ss, userId) {
-  var responseData = {
-    profile: {
-      name: "",
-      department: "",
-      studentId: "",
-      isOfficial: false,
-      isOfficer: false,
-      officerRole: "",
-      expireDate: "尚未核發/尚未繳費 (Not issued/Unpaid)"
-    },
-    activities: [],
-    equipments: []
-  };
-
-  // 1. 取得 Members 資料
-  var mSheet = ss.getSheetByName("Members");
-  if (mSheet) {
-    var mData = mSheet.getDataRange().getValues();
-    var mH = mData.length > 0 ? mData[0] : [];
-    var mSysIdx = _fi(mH, "系統識別碼");
-
-    for (var i = 1; i < mData.length; i++) {
-      if (mSysIdx > -1 && mData[i][mSysIdx] === userId) {
-        responseData.profile.name = mData[i][_fi(mH, "姓名")] || "";
-        responseData.profile.department = mData[i][_fi(mH, "系所")] || "";
-        responseData.profile.studentId = mData[i][_fi(mH, "學號")] || "";
-
-        var mPayIdx = _fi(mH, "繳費狀態");
-        var payStatus = (mPayIdx > -1 && mData[i][mPayIdx]) ? String(mData[i][mPayIdx]).trim() : "";
-        var hasPaid = (payStatus === "已繳費" || payStatus === "已繳費 Paid" || payStatus === "已繳" || payStatus === "是");
-
-        var mExpireIdx = mH.findIndex(function (h) {
-          return String(h).includes("到期日") || String(h).includes("社籍");
-        });
-
-        var hasExpireDate = false;
-        var isExpired = false;
-        if (mExpireIdx > -1 && mData[i][mExpireIdx]) {
-          var d = new Date(mData[i][mExpireIdx]);
-          if (!isNaN(d.getTime())) {
-            hasExpireDate = true;
-            responseData.profile.expireDate = Utilities.formatDate(d, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
-            if (d.getTime() >= new Date().getTime()) {
-              responseData.profile.isOfficial = true;
-            } else {
-              isExpired = true;
-            }
-          } else {
-            var rawExp = String(mData[i][mExpireIdx]).trim();
-            if (rawExp !== "") {
-              hasExpireDate = true;
-              responseData.profile.expireDate = rawExp;
-              if (rawExp.indexOf("過期") === -1 && rawExp.indexOf("未") === -1 && !_isEventExpired(rawExp)) {
-                responseData.profile.isOfficial = true;
-              } else {
-                isExpired = true;
-              }
-            }
-          }
-        }
-
-        // 若社籍已過期且狀態仍為「已繳費」，即時將試算表標註為「未繳費 Unpaid」
-        if (isExpired && hasPaid && mPayIdx > -1) {
-          mSheet.getRange(i + 1, mPayIdx + 1).setValue("未繳費 Unpaid");
-          hasPaid = false;
-        }
-
-        if (hasPaid && !hasExpireDate) {
-          responseData.profile.isOfficial = true;
-          responseData.profile.expireDate = "尚未提供，請聯繫幹部確認";
-        }
-        break;
-      }
-    }
-  }
-
-  // 檢查是否具備幹部身分
-  var officerCheck = checkOfficerInternal(ss, userId, responseData.profile.name);
-  responseData.profile.isOfficer = officerCheck.isOfficer;
-  responseData.profile.officerRole = officerCheck.role;
-
-  // 2. 取得活動報名 (Signups & Events)
-  var sSheet = ss.getSheetByName("Signups");
-  var eSheet = ss.getSheetByName("Events");
-  if (sSheet && eSheet) {
-    var sData = sSheet.getDataRange().getValues();
-    var eData = eSheet.getDataRange().getDisplayValues();
-
-    var sSysIdx = _fi(sData[0], "系統識別碼");
-    var sStatIdx = _fi(sData[0], "審核結果");
-    var sPayIdx = _fi(sData[0], "繳費狀態");
-    var sEvtIdx = _fi(sData[0], "活動編號");
-    var sCodeIdx = _fi(sData[0], "專屬碼");
-
-    var eIdIdx = _fi(eData[0], "活動編號");
-    var eNameIdx = _fi(eData[0], "活動名稱");
-    var eDateIdx = _fi(eData[0], "活動開始日期") > -1 ? _fi(eData[0], "活動開始日期") : _fi(eData[0], "日期");
-
-    for (var s = 1; s < sData.length; s++) {
-      if (sSysIdx > -1 && sData[s][sSysIdx] === userId) {
-        var evId = String(sData[s][sEvtIdx]).trim();
-        var reviewStatus = String(sData[s][sStatIdx]).trim();
-        var payStatus = String(sData[s][sPayIdx]).trim();
-        var codeVal = sCodeIdx > -1 ? String(sData[s][sCodeIdx]).trim() : "";
-
-        var sNoteIdx = _fi(sData[0], "備註");
-        var noteVal = sNoteIdx > -1 ? String(sData[s][sNoteIdx] || "") : "";
-        if (reviewStatus.indexOf("已取消") > -1 && (noteVal.indexOf("待退款") > -1 || payStatus.indexOf("已繳費") > -1 || payStatus.indexOf("待確認") > -1)) {
-          reviewStatus = "已取消 (待退款)";
-        }
-
-        // 找出活動詳情
-        var eventName = "未知活動";
-        var eventDate = "";
-        for (var e = 1; e < eData.length; e++) {
-          if (eIdIdx > -1 && String(eData[e][eIdIdx]).trim() === evId) {
-            eventName = eNameIdx > -1 ? String(eData[e][eNameIdx]) : "未知活動";
-            eventDate = eDateIdx > -1 ? String(eData[e][eDateIdx]) : "";
-            break;
-          }
-        }
-
-        responseData.activities.push({
-          eventId: evId,
-          eventName: eventName,
-          date: eventDate,
-          reviewStatus: reviewStatus,
-          payStatus: payStatus,
-          code: codeVal
-        });
-      }
-    }
-  }
-
-  // 3. 取得裝備租借 (Loan_Records)
-  var lSheet = ss.getSheetByName("Loan_Records");
-  if (lSheet) {
-    var lData = lSheet.getDataRange().getValues();
-    var lSysIdx = _fi(lData[0], "系統識別碼");
-    var lOrderIdx = _fi(lData[0], "租借編號");
-    var lNameIdx = _fi(lData[0], "裝備名稱");
-    var lQtyIdx = _fi(lData[0], "數量");
-    var lPickupIdx = _fi(lData[0], "預計領取");
-    var lReturnIdx = _fi(lData[0], "預計歸還");
-    var lStatusIdx = _fi(lData[0], "領取/歸還");
-
-    for (var l = 1; l < lData.length; l++) {
-      if (lSysIdx > -1 && lData[l][lSysIdx] === userId) {
-        var statusStr = String(lData[l][lStatusIdx] || "");
-        if (statusStr.indexOf("取消") === -1 || statusStr.indexOf("待退款") > -1) {
-          var pickupVal = lData[l][lPickupIdx];
-          var returnVal = lData[l][lReturnIdx];
-          var pickupStr = "";
-          var returnStr = "";
-
-          if (pickupVal instanceof Date) {
-            pickupStr = Utilities.formatDate(pickupVal, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
-          } else if (pickupVal) {
-            pickupStr = String(pickupVal).split("T")[0].replace(/-/g, "/");
-          }
-
-          if (returnVal instanceof Date) {
-            returnStr = Utilities.formatDate(returnVal, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
-          } else if (returnVal) {
-            returnStr = String(returnVal).split("T")[0].replace(/-/g, "/");
-          }
-
-          responseData.equipments.push({
-            orderId: lOrderIdx > -1 ? String(lData[l][lOrderIdx]).trim() : "未知訂單",
-            itemName: (lNameIdx > -1 ? String(lData[l][lNameIdx]) : "未知裝備") + " x" + (lQtyIdx > -1 ? String(lData[l][lQtyIdx]) : "1"),
-            pickupDate: pickupStr,
-            returnDate: returnStr,
-            status: statusStr
-          });
-        }
-      }
-    }
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    data: responseData
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// ------------------------------------------------------------------
-// 引擎 5：儲存社員基本資料 API (供 LIFF 前端註冊/更新送出)
-// ------------------------------------------------------------------
-function processSaveProfile(payload) {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000); // 鎖定 10 秒防衝突
-
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var memberSheet = ss.getSheetByName("Members");
-    if (!memberSheet) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Members 資料表" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var userId = payload.userId;
-    if (!userId) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少 userId 參數" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var data = payload.data || {};
-    var name = data.name || "未具名";
-    var studentId = data.studentId || "無學號";
-
-    // 處理多張檔案上傳至 Google Drive，並用逗號區隔多個 URL
-    if (payload.strengthProofFiles && payload.strengthProofFiles.length > 0) {
-      var fileUrls = [];
-      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
-      for (var f = 0; f < payload.strengthProofFiles.length; f++) {
-        var fileObj = payload.strengthProofFiles[f];
-        if (fileObj && fileObj.base64 && fileObj.name) {
-          var ext = fileObj.name.split('.').pop() || "jpg";
-          var customFileName = name + "_體能證明_" + todayStr;
-          if (payload.strengthProofFiles.length > 1) {
-            customFileName += "_" + (f + 1);
-          }
-          customFileName += "." + ext;
-          var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName, "體能登山證明");
-          if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
-            fileUrls.push(uploadedUrl);
-          }
-        }
-      }
-      if (fileUrls.length > 0) {
-        data.strengthProof = fileUrls.join(",");
-      }
-    }
-
-    var mData = memberSheet.getDataRange().getValues();
-    var headers = mData[0];
-
-    // 確保或建立所有需要的欄位
-    var sysIdx = getOrCreateColIdx(memberSheet, headers, "系統識別碼");
-    var nameIdx = getOrCreateColIdx(memberSheet, headers, "姓名");
-    var genderIdx = getOrCreateColIdx(memberSheet, headers, "性別");
-
-    var lineIdx = headers.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
-    if (lineIdx === -1) lineIdx = getOrCreateColIdx(memberSheet, headers, "真實 LINE ID");
-
-    var emailIdx = headers.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); });
-    if (emailIdx === -1) emailIdx = getOrCreateColIdx(memberSheet, headers, "聯絡信箱 Email");
-
-    var phoneIdx = headers.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); });
-    if (phoneIdx === -1) phoneIdx = getOrCreateColIdx(memberSheet, headers, "聯絡電話");
-
-    var deptIdx = getOrCreateColIdx(memberSheet, headers, "系所");
-    var identityIdx = getOrCreateColIdx(memberSheet, headers, "身分狀態");
-    var studentIdIdx = getOrCreateColIdx(memberSheet, headers, "學號");
-    var birthdayIdx = getOrCreateColIdx(memberSheet, headers, "生日");
-    var idNumberIdx = getOrCreateColIdx(memberSheet, headers, "證件");
-
-    var studentAddrIdx = headers.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
-    if (studentAddrIdx === -1) studentAddrIdx = getOrCreateColIdx(memberSheet, headers, "聯絡地址");
-
-    var emerNameIdx = headers.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
-    if (emerNameIdx === -1) emerNameIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人姓名");
-
-    // 找出所有與緊急聯絡人關係相關的欄位（如「與緊急聯絡人關係」、「緊急聯絡人關係」、「關係」），嚴格排除經驗/登山相關欄位
-    var emerRelCols = [];
-    headers.forEach(function (h, idx) {
-      var hStr = String(h);
-      if (hStr.includes("經驗") || hStr.includes("登山") || hStr.includes("爬山") || hStr.includes("經歷") || hStr.toLowerCase().includes("exp")) {
-        return;
-      }
-      if (hStr.includes("關係") || hStr.toLowerCase().includes("relation")) {
-        emerRelCols.push(idx);
-      }
-    });
-    if (emerRelCols.length === 0) {
-      var newRelIdx = getOrCreateColIdx(memberSheet, headers, "與緊急聯絡人關係");
-      emerRelCols.push(newRelIdx);
-    }
-    var emerRelIdx = _findEmerRelColIdx(headers);
-    if (emerRelIdx === -1) emerRelIdx = emerRelCols[0];
-
-    var emerAddrIdx = headers.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
-    if (emerAddrIdx === -1) emerAddrIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人地址");
-
-    var emerPhoneIdx = getOrCreateColIdx(memberSheet, headers, "緊急聯絡人電話");
-    var expIdx = getOrCreateColIdx(memberSheet, headers, "經驗");
-    var strengthIdx = getOrCreateColIdx(memberSheet, headers, "體能");
-    var strengthProofIdx = getOrCreateColIdx(memberSheet, headers, "證明");
-
-    var medIdx = headers.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
-    if (medIdx === -1) medIdx = getOrCreateColIdx(memberSheet, headers, "個人特殊病史或過敏");
-
-    var payIdx = getOrCreateColIdx(memberSheet, headers, "繳費狀態");
-    var intendOfficialIdx = getOrCreateColIdx(memberSheet, headers, "加入社員意願");
-    var intendOfficerIdx = getOrCreateColIdx(memberSheet, headers, "擔任幹部意願");
-
-    // 搜尋是否已存在該社員
-    var userRow = -1;
-    for (var i = 1; i < mData.length; i++) {
-      if (mData[i][sysIdx] === userId) {
-        userRow = i + 1;
-        break;
-      }
-    }
-
-    var isUpdate = (userRow !== -1);
-    var rowData = new Array(headers.length).fill("");
-
-    // 若為更新，預先複製原有整列的所有舊資料值，以防漏掉某些不在此程式寫入範圍內的欄位 (例如社籍到期日) 被覆蓋為空值！
-    if (isUpdate) {
-      var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
-      for (var col = 0; col < headers.length; col++) {
-        rowData[col] = oldValues[col];
-      }
-    }
-
-    // 填入對應欄位資料
-    rowData[sysIdx] = userId;
-    rowData[nameIdx] = data.name || "";
-    rowData[genderIdx] = data.gender || "";
-    rowData[lineIdx] = data.realLineId || "";
-    rowData[emailIdx] = data.email || "";
-    rowData[phoneIdx] = data.phone ? "'" + String(data.phone) : "";
-    rowData[deptIdx] = data.department || "";
-    rowData[identityIdx] = data.identityStatus || "";
-    rowData[studentIdIdx] = data.studentId || "";
-    rowData[birthdayIdx] = data.birthday ? "'" + String(data.birthday).replace(/-/g, "/") : "";
-    rowData[idNumberIdx] = data.idNumber || "";
-    rowData[studentAddrIdx] = data.studentAddr || "";
-    rowData[emerNameIdx] = data.emerName || "";
-    // 同步寫入所有關係欄位，避免欄位名稱不同或多欄位導致遺漏
-    emerRelCols.forEach(function (colIdx) {
-      rowData[colIdx] = data.emerRel || "";
-    });
-    rowData[emerAddrIdx] = data.emerAddr || "";
-    rowData[emerPhoneIdx] = data.emerPhone ? "'" + String(data.emerPhone) : "";
-    rowData[expIdx] = data.exp || "";
-    rowData[strengthIdx] = data.strength || "";
-
-    var oldValuesForCompare = null;
-    if (isUpdate) {
-      var oldValues = memberSheet.getRange(userRow, 1, 1, headers.length).getValues()[0];
-      oldValuesForCompare = JSON.parse(JSON.stringify(oldValues)); // 深拷貝一份舊值做比對
-
-      // 合併舊有證明與新上傳證明，去重並最多保留最新 5 張
-      var combinedProofList = [];
-      if (oldValues[strengthProofIdx]) {
-        combinedProofList = String(oldValues[strengthProofIdx]).split(/[\n,，;\s]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.startsWith("http"); });
-      }
-      if (data.strengthProof) {
-        var newProofList = String(data.strengthProof).split(/[\n,，;\s]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.startsWith("http"); });
-        newProofList.forEach(function(u) {
-          if (combinedProofList.indexOf(u) === -1) {
-            combinedProofList.push(u);
-          }
-        });
-      }
-      if (combinedProofList.length > 5) {
-        combinedProofList = combinedProofList.slice(-5);
-      }
-      rowData[strengthProofIdx] = combinedProofList.length > 0 ? combinedProofList.join(",") : (oldValues[strengthProofIdx] || "");
-
-      var curPayStatus = oldValues[payIdx] || "未繳費 Unpaid";
-      var mExpireIdx = headers.findIndex(function (h) {
-        return String(h).includes("到期日") || String(h).includes("社籍");
-      });
-      var curExpVal = mExpireIdx > -1 ? oldValues[mExpireIdx] : "";
-      var isExpired = _isEventExpired(curExpVal);
-
-      // 若社籍已過期且原狀態為已繳費，自動將試算表標記為「未繳費 Unpaid」
-      if (isExpired && (curPayStatus === "已繳費 Paid" || curPayStatus === "是")) {
-        curPayStatus = "未繳費 Unpaid";
-      }
-      // 若有意願成為社員且社籍已到期，且非待審核中，確保狀態為「未繳費 Unpaid」
-      var isIntendOfficial = (data.intendOfficial === "是" || String(data.intendOfficial).indexOf("有意願") > -1 || String(data.intendOfficial).toLowerCase() === "true");
-      if (isIntendOfficial && isExpired && curPayStatus !== "待確認 Checking") {
-        curPayStatus = "未繳費 Unpaid";
-      }
-
-      rowData[payIdx] = curPayStatus;
-    } else {
-      rowData[strengthProofIdx] = data.strengthProof || "";
-      rowData[payIdx] = "未繳費 Unpaid";
-    }
-
-    rowData[medIdx] = data.medicalHistory || "";
-    rowData[intendOfficialIdx] = data.intendOfficial || "";
-    rowData[intendOfficerIdx] = data.intendOfficer || "";
-
-    // 寫入/更新試算表
-    if (isUpdate) {
-      memberSheet.getRange(userRow, 1, 1, rowData.length).setValues([rowData]);
-    } else {
-      memberSheet.appendRow(rowData);
-    }
-
-    // ⭐️ 資料填寫更新同步至 Signups 頁面 (嚴格保護「是否為社員」及活動審核繳費狀態)
-    try {
-      syncProfileToSignups(ss, userId, data, rowData[strengthProofIdx]);
-    } catch (syncErr) {
-      console.error("同步更新 Signups 表資料失敗:", syncErr);
-    }
-
-    // 幹部意願通知處理
-    try {
-      var shouldNotifyOfficer = false;
-      if (data.intendOfficer === "我有意願成為社團幹部") {
-        if (!isUpdate) {
-          shouldNotifyOfficer = true;
-        } else if (oldValuesForCompare && String(oldValuesForCompare[intendOfficerIdx] || "").trim() !== "我有意願成為社團幹部") {
-          shouldNotifyOfficer = true;
-        }
-      }
-
-      if (shouldNotifyOfficer) {
-        var officerNotifyMsg = "幹部意願新通知\n" +
-          "─────────────\n" +
-          "有社員表達擔任幹部意願！\n\n" +
-          "姓名：" + (data.name || "未填") + "\n" +
-          "性別：" + (data.gender || "未填") + "\n" +
-          "系所：" + (data.department || "未填") + "\n" +
-          "學號：" + (data.studentId || "未填") + "\n" +
-          "登山經驗：" + (data.exp || "未填") + "\n" +
-          "體能：" + (data.strength || "未填");
-        pushAdminMessage(officerNotifyMsg);
-      }
-    } catch (err) {
-      console.error("發送幹部群組意願通知失敗: " + err.toString());
-    }
-
-    // 主動推送 LINE 通知確認信 (動態欄位修改偵測，支援中英雙語)
-    try {
-      var isEn = (payload.lang === "en" || (payload.data && payload.data.lang === "en"));
-      var pushMsg = "";
-      var fieldMappings = [
-        { label: "姓名", enLabel: "Name", value: data.name || "", oldVal: isUpdate ? oldValuesForCompare[nameIdx] : "" },
-        { label: "性別", enLabel: "Gender", value: data.gender || "", oldVal: isUpdate ? oldValuesForCompare[genderIdx] : "" },
-        { label: "LINE ID", enLabel: "LINE ID", value: data.realLineId || "", oldVal: isUpdate ? oldValuesForCompare[lineIdx] : "" },
-        { label: "聯絡信箱", enLabel: "Email", value: data.email || "", oldVal: isUpdate ? oldValuesForCompare[emailIdx] : "" },
-        { label: "聯絡電話", enLabel: "Phone", value: data.phone || "", oldVal: isUpdate ? oldValuesForCompare[phoneIdx] : "" },
-        { label: "在校系所/校外單位", enLabel: "Department / Affiliation", value: data.department || "", oldVal: isUpdate ? oldValuesForCompare[deptIdx] : "" },
-        { label: "身分狀態", enLabel: "Status", value: data.identityStatus || "", oldVal: isUpdate ? oldValuesForCompare[identityIdx] : "" },
-        { label: "學號", enLabel: "Student ID", value: data.studentId || "", oldVal: isUpdate ? oldValuesForCompare[studentIdIdx] : "" },
-        { label: "生日", enLabel: "Birthday", value: data.birthday ? String(data.birthday).split("T")[0] : "", oldVal: isUpdate ? (oldValuesForCompare[birthdayIdx] instanceof Date ? Utilities.formatDate(oldValuesForCompare[birthdayIdx], "GMT+8", "yyyy-MM-dd") : String(oldValuesForCompare[birthdayIdx])) : "" },
-        { label: "身份證字號/護照號碼", enLabel: "ID / Passport No.", value: data.idNumber || "", oldVal: isUpdate ? oldValuesForCompare[idNumberIdx] : "" },
-        { label: "聯絡地址", enLabel: "Address", value: data.studentAddr || "", oldVal: isUpdate ? oldValuesForCompare[studentAddrIdx] : "" },
-        { label: "緊急聯絡人姓名", enLabel: "Emergency Contact", value: data.emerName || "", oldVal: isUpdate ? oldValuesForCompare[emerNameIdx] : "" },
-        { label: "關係", enLabel: "Relationship", value: data.emerRel || "", oldVal: isUpdate ? oldValuesForCompare[emerRelIdx] : "" },
-        { label: "緊急聯絡人地址", enLabel: "Emergency Contact Address", value: data.emerAddr || "", oldVal: isUpdate ? oldValuesForCompare[emerAddrIdx] : "" },
-        { label: "緊急聯絡人電話", enLabel: "Emergency Contact Phone", value: data.emerPhone || "", oldVal: isUpdate ? oldValuesForCompare[emerPhoneIdx] : "" },
-        { label: "登山/戶外經驗", enLabel: "Outdoor Experience", value: data.exp || "", oldVal: isUpdate ? oldValuesForCompare[expIdx] : "" },
-        { label: "體能證明描述", enLabel: "Fitness Description", value: data.strength || "", oldVal: isUpdate ? oldValuesForCompare[strengthIdx] : "" },
-        { label: "個人特殊病史或過敏", enLabel: "Medical History / Allergies", value: data.medicalHistory || "", oldVal: isUpdate ? oldValuesForCompare[medIdx] : "" },
-        { label: "加入社員意願", enLabel: "Join Club Membership", value: data.intendOfficial || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficialIdx] : "" },
-        { label: "擔任幹部意願", enLabel: "Officer Interest", value: data.intendOfficer || "", oldVal: isUpdate ? oldValuesForCompare[intendOfficerIdx] : "" }
-      ];
-
-      if (isUpdate) {
-        var changes = [];
-        fieldMappings.forEach(function (item) {
-          var newValStr = String(item.value).trim();
-          var oldValStr = String(item.oldVal).trim();
-
-          if (item.label === "生日") {
-            // 標準化：去掉時間部分，只保留日期（支援 ISO 8601 T 分隔或空格分隔格式）
-            newValStr = newValStr.split("T")[0].split(" ")[0].replace(/\//g, "-");
-            oldValStr = oldValStr.split("T")[0].split(" ")[0].replace(/\//g, "-");
-          }
-
-          if (newValStr !== oldValStr) {
-            if (isEn) {
-              changes.push("• " + item.enLabel + ": " + (oldValStr || "(empty)") + " -> " + (newValStr || "(empty)"));
-            } else {
-              changes.push("• " + item.label + "：" + (oldValStr || "(空)") + " -> " + (newValStr || "(空)"));
-            }
-          }
-        });
-
-        // 檢查是否上傳了新圖片證明
-        if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
-          var oldProofStr = isUpdate ? String(oldValuesForCompare[strengthProofIdx]).trim() : "";
-          if (data.strengthProof !== oldProofStr) {
-            if (isEn) {
-              changes.push("• Fitness & Hiking Proof: New file re-uploaded");
-            } else {
-              changes.push("• 體能與登山證明：已重新上傳新檔案");
-            }
-          }
-        }
-
-        if (changes.length > 0) {
-          if (isEn) {
-            pushMsg = "✅ Your member profile has been successfully updated!\n\n" +
-              "Modified items:\n" +
-              changes.join("\n") + "\n\n" +
-              "Thank you for keeping your profile updated!";
-          } else {
-            pushMsg = "✅ 您的社員資料已成功更新！\n\n" +
-              "本次修改項目：\n" +
-              changes.join("\n") + "\n\n" +
-              "感謝您的填寫！";
-          }
-        } else {
-          if (isEn) {
-            pushMsg = "✅ Your member profile has been updated (no changes detected)!";
-          } else {
-            pushMsg = "✅ 您的社員資料已成功更新（內容無變更）！";
-          }
-        }
-      } else {
-        var infoList = [];
-        fieldMappings.forEach(function (item) {
-          if (item.value && String(item.value).trim() !== "") {
-            if (isEn) {
-              infoList.push("• " + item.enLabel + ": " + item.value);
-            } else {
-              infoList.push("• " + item.label + "：" + item.value);
-            }
-          }
-        });
-        if (data.strengthProof && data.strengthProof !== "" && !data.strengthProof.startsWith("上傳失敗")) {
-          if (isEn) {
-            infoList.push("• Fitness & Hiking Proof: Proof file uploaded");
-          } else {
-            infoList.push("• 體能與登山證明：已上傳證明檔案");
-          }
-        }
-        if (isEn) {
-          pushMsg = "🎉 Welcome to NTUST Mountaineering Club! Your profile has been successfully registered:\n\n" +
-            infoList.join("\n") + "\n\n" +
-            "Thank you for registering!";
-        } else {
-          pushMsg = "🎉 歡迎加入台科大登山社！您的個人資料已建立成功：\n\n" +
-            infoList.join("\n") + "\n\n" +
-            "感謝您的填寫！";
-        }
-      }
-
-      pushMessage(userId, pushMsg);
-    } catch (err) {
-      console.error("發送 LINE 註冊成功通知失敗: " + err.toString());
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      message: isUpdate ? (isEn ? "Profile updated successfully!" : "資料已成功更新！") : (isEn ? "Registration successful!" : "註冊成功！")
-    })).setMimeType(ContentService.MimeType.JSON);
-
-  } catch (err) {
-    console.error("儲存個人資料失敗:", err);
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    _safeReleaseLock(lock);
-  }
-}
-
-// ⭐️ 將更新後的個人基本資料同步至 Signups 活動報名表
-// 說明：若社員報名活動後修改個人資料，即時同步更新其名下所有報名紀錄
-// ⚠️ 嚴格保護活動專屬資料：不修改「是否為社員」、「活動編號」、「專屬碼」、「活動名稱」、「審核結果」、「通知狀態」、「繳費狀態」、「報名時間」、「備註」等欄位！
-function syncProfileToSignups(ss, userId, data, updatedStrengthProof) {
-  var sSheet = ss.getSheetByName("Signups");
-  if (!sSheet || !userId) return;
-
-  var sData = sSheet.getDataRange().getValues();
-  if (sData.length <= 1) return;
-
-  var sHeaders = sData[0];
-  var sSysIdx = sHeaders.findIndex(function (h) {
-    var s = String(h).toLowerCase();
-    return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
-  });
-  if (sSysIdx === -1) return;
-
-  // 動態定位 Signups 中個人基本資料欄位
-  var sNameIdx = _fi(sHeaders, "姓名");
-  var sGenderIdx = _fi(sHeaders, "性別");
-  var sLineIdx = sHeaders.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
-  var sEmailIdx = sHeaders.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); });
-  var sPhoneIdx = sHeaders.findIndex(function (h) { return String(h).includes("電話") && !String(h).includes("緊急"); });
-  var sBirthdayIdx = _fi(sHeaders, "生日");
-  var sIdNumberIdx = _fi(sHeaders, "證件");
-  var sAddrIdx = sHeaders.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
-  var sEmerNameIdx = sHeaders.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話"); });
-
-  // 找出所有緊急聯絡人關係欄位（嚴格排除經驗與登山相關）
-  var sEmerRelCols = [];
-  sHeaders.forEach(function (h, idx) {
-    var hStr = String(h);
-    if (hStr.includes("經驗") || hStr.includes("登山") || hStr.includes("爬山") || hStr.includes("經歷") || hStr.toLowerCase().includes("exp")) {
-      return;
-    }
-    if (hStr.includes("關係") || hStr.toLowerCase().includes("relation")) {
-      sEmerRelCols.push(idx);
-    }
-  });
-
-  var sEmerPhoneIdx = sHeaders.findIndex(function (h) { return String(h).includes("電話") && String(h).includes("緊急"); });
-  var sEmerAddrIdx = sHeaders.findIndex(function (h) { return String(h).includes("地址") && String(h).includes("緊急"); });
-  var sExpIdx = _fi(sHeaders, "經驗");
-  var sStrengthIdx = _fi(sHeaders, "體能");
-  var sProofIdx = sHeaders.findIndex(function (h) { return String(h).includes("證明"); });
-  var sDeptIdx = _fi(sHeaders, "系所");
-  var sStuIdx = _fi(sHeaders, "學號");
-  var sMedIdx = sHeaders.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
-
-  for (var i = 1; i < sData.length; i++) {
-    if (String(sData[i][sSysIdx]).trim() === String(userId).trim()) {
-      var row = sData[i];
-      var rowNum = i + 1;
-
-      if (sNameIdx > -1 && data.name) row[sNameIdx] = data.name;
-      if (sGenderIdx > -1 && data.gender) row[sGenderIdx] = data.gender;
-      if (sLineIdx > -1 && data.realLineId !== undefined) row[sLineIdx] = data.realLineId;
-      if (sEmailIdx > -1 && data.email !== undefined) row[sEmailIdx] = data.email;
-      if (sPhoneIdx > -1 && data.phone) row[sPhoneIdx] = "'" + String(data.phone);
-      if (sBirthdayIdx > -1 && data.birthday) row[sBirthdayIdx] = "'" + String(data.birthday).replace(/-/g, "/");
-      if (sIdNumberIdx > -1 && data.idNumber !== undefined) row[sIdNumberIdx] = data.idNumber;
-      if (sAddrIdx > -1 && data.studentAddr !== undefined) row[sAddrIdx] = data.studentAddr;
-      if (sEmerNameIdx > -1 && data.emerName !== undefined) row[sEmerNameIdx] = data.emerName;
-
-      sEmerRelCols.forEach(function (cIdx) {
-        if (data.emerRel !== undefined) row[cIdx] = data.emerRel;
-      });
-
-      if (sEmerPhoneIdx > -1 && data.emerPhone) row[sEmerPhoneIdx] = "'" + String(data.emerPhone);
-      if (sEmerAddrIdx > -1 && data.emerAddr !== undefined) row[sEmerAddrIdx] = data.emerAddr;
-      if (sExpIdx > -1 && data.exp !== undefined) row[sExpIdx] = data.exp;
-      if (sStrengthIdx > -1 && data.strength !== undefined) row[sStrengthIdx] = data.strength;
-      if (sProofIdx > -1 && updatedStrengthProof !== undefined) row[sProofIdx] = updatedStrengthProof;
-      if (sDeptIdx > -1 && data.department !== undefined) row[sDeptIdx] = data.department;
-      if (sStuIdx > -1 && data.studentId !== undefined) row[sStuIdx] = data.studentId;
-      if (sMedIdx > -1 && data.medicalHistory !== undefined) row[sMedIdx] = data.medicalHistory;
-
-      // ⚠️ 特別注意：完全不修改 row 中的「是否為社員」以及其他審核/活動欄位！
-      sSheet.getRange(rowNum, 1, 1, row.length).setValues([row]);
-    }
-  }
-}
-
-// 動態查找或建立試算表欄位，並擴展 headers 陣列
-function getOrCreateColIdx(sheet, headers, columnName) {
-  var idx = headers.findIndex(function (h) { return String(h).includes(columnName); });
-  if (idx === -1) {
-    sheet.getRange(1, headers.length + 1).setValue(columnName);
-    headers.push(columnName);
-    idx = headers.length - 1;
-  }
-  return idx;
-}
-
-// 將上傳檔案存入雲端硬碟指定資料夾 (預設為 系統圖庫，可指定多層子資料夾路徑) 並設為公開連結
-function uploadFileToDrive(base64Str, fileName, folderPath) {
-  if (!base64Str) return "";
-  try {
-    var splitData = base64Str.split(",");
-    var contentType = "";
-    var rawData = "";
-    if (splitData.length > 1) {
-      contentType = splitData[0].split(";")[0].split(":")[1];
-      rawData = splitData[1];
-    } else {
-      rawData = splitData[0];
-    }
-
-    var decoded = Utilities.base64Decode(rawData);
-    var blob = Utilities.newBlob(decoded, contentType, fileName);
-
-    // 1. 取得或建立主資料夾 系統圖庫 (具備 LINE_Uploads 自動平滑過渡遷移)
-    var currentFolder;
-    var rootFolders = DriveApp.getFoldersByName("系統圖庫");
-    if (rootFolders.hasNext()) {
-      currentFolder = rootFolders.next();
-    } else {
-      var legacyFolders = DriveApp.getFoldersByName("LINE_Uploads");
-      if (legacyFolders.hasNext()) {
-        currentFolder = legacyFolders.next();
-        try { currentFolder.setName("系統圖庫"); } catch (e) {}
-      } else {
-        currentFolder = DriveApp.createFolder("系統圖庫");
-      }
-    }
-
-    // 2. 支援深層子資料夾路徑 (字串如 "心得照片/20260911-七星山" 或 "體能登山證明")
-    if (folderPath) {
-      var parts = Array.isArray(folderPath) ? folderPath : String(folderPath).split("/");
-      for (var i = 0; i < parts.length; i++) {
-        var partName = parts[i].trim();
-        if (!partName) continue;
-        var subFolders = currentFolder.getFoldersByName(partName);
-        if (subFolders.hasNext()) {
-          currentFolder = subFolders.next();
-        } else {
-          currentFolder = currentFolder.createFolder(partName);
-        }
-      }
-    }
-
-    var file = currentFolder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return file.getUrl();
-  } catch (err) {
-    console.error("檔案上傳 Google Drive 失敗: " + err.toString());
-    return "上傳失敗: " + err.toString();
-  }
-}
-
-// 📜 全新功能：個人歷史對帳明細打包查詢 API
-function getPaymentHistoryAPI(ss, userId) {
-  // ⚡ 1. 優先從 Supabase 秒級讀取個人歷史繳費紀錄 (< 50ms)
-  var sbData = _fetchPaymentHistoryFromSupabase(userId);
-  if (sbData && Array.isArray(sbData.history) && sbData.history.length > 0) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", data: sbData })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  // 2. 若無 Supabase 資料，由 Google Sheets Payments 表備援讀取 (純記憶體運算，嚴禁修改試算表表頭)
-  var paySheet = ss.getSheetByName("Payments");
-  if (!paySheet) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", data: { totalSpent: 0, history: [] } })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var data = paySheet.getDataRange().getValues();
-  if (data.length <= 1) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", data: { totalSpent: 0, history: [] } })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var headers = data[0];
-  var sysIdx = _fi(headers, "系統識別碼");
-  var timeIdx = _fi(headers, "繳款時間") > -1 ? _fi(headers, "繳款時間") : (_fi(headers, "時間") > -1 ? _fi(headers, "時間") : _fi(headers, "Timestamp"));
-  var itemIdx = _fi(headers, "繳費項目");
-  var eventIdx = _fi(headers, "活動名稱");
-  var equipIdx = _fi(headers, "裝備名稱");
-  var amountIdx = _findAmountColIdx(headers);
-  var proofIdx = _fi(headers, "帳號末5碼") > -1 ? _fi(headers, "帳號末5碼") : _fi(headers, "帳號末5碼/備註");
-  var noteIdx = _fi(headers, "備註");
-  var statusIdx = _fi(headers, "對帳狀態");
-
-  var historyList = [];
-  var totalSpent = 0;
-
-  for (var i = 1; i < data.length; i++) {
-    if (sysIdx > -1 && String(data[i][sysIdx]).trim() === userId) {
-      var rawDate = timeIdx > -1 ? data[i][timeIdx] : "";
-      var dateStr = "";
-      if (rawDate) {
-        var d = new Date(rawDate);
-        dateStr = !isNaN(d.getTime()) ? Utilities.formatDate(d, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd HH:mm:ss") : String(rawDate);
-      }
-
-      var rawAmount = amountIdx > -1 ? data[i][amountIdx] : 0;
-      var amount = parseInt(String(rawAmount).replace(/\D/g, ''), 10) || 0;
-
-      var title = itemIdx > -1 ? String(data[i][itemIdx]).trim() : "未命名項目";
-      var eventName = eventIdx > -1 ? String(data[i][eventIdx]).trim() : "";
-      var equipName = equipIdx > -1 ? String(data[i][equipIdx]).trim() : "";
-      var status = statusIdx > -1 ? String(data[i][statusIdx]).trim() : "待確認";
-      var last5Digits = proofIdx > -1 ? String(data[i][proofIdx]).trim() : "";
-      var note = noteIdx > -1 ? String(data[i][noteIdx]).trim() : "";
-
-      // 判斷類型 (社費、活動、裝備)
-      var type = "全部";
-      if (title.indexOf("社籍") > -1 || title.indexOf("社費") > -1 || title.indexOf("Membership") > -1) {
-        type = "社費";
-      } else if (title.indexOf("活動") > -1 || title.indexOf("登山") > -1 || title.indexOf("act_") > -1) {
-        type = "活動";
-      } else if (title.indexOf("裝備") > -1 || title.indexOf("租用") > -1 || title.indexOf("eq_") > -1) {
-        type = "裝備";
-      }
-
-      historyList.push({
-        id: "row_" + i,
-        date: dateStr,
-        type: type,
-        title: title,
-        amount: amount,
-        last5Digits: last5Digits,
-        note: note,
-        status: status
-      });
-
-      // 只有對帳狀態為「已確認無誤」或「已確認」或「已繳費」或「已核對」才加總 (排除「待確認」與「待核對」)
-      var isConfirmed = (status.indexOf("已確認") > -1 || status.indexOf("已核對") > -1 || status.indexOf("已繳") > -1 || status === "Paid") && status.indexOf("待確認") === -1 && status.indexOf("待核對") === -1 && status.indexOf("Checking") === -1;
-      if (isConfirmed) {
-        totalSpent += amount;
-      }
-    }
-  }
-
-  // 按日期降冪排序 (由新到舊)
-  historyList.sort(function (a, b) {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  });
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    data: {
-      totalSpent: totalSpent,
-      history: historyList
-    }
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// 📜 全新功能：取得已結束且正取的歷史活動，及已撰寫之心得
-function getPastActivitiesAPI(ss, userId) {
-  var sSheet = ss.getSheetByName("Signups");
-  var eSheet = ss.getSheetByName("Events");
-  var rSheet = ss.getSheetByName("Reflections");
-
-  var pastList = [];
-  var totalAttended = 0;
-  var reflectionsCount = 0;
-
-  if (!sSheet || !eSheet) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      data: { totalAttended: 0, reflectionsCount: 0, activities: [] }
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  // 1. 載入活動地圖
-  var eData = eSheet.getDataRange().getValues();
-  var eHeaders = eData[0];
-  var eIdIdx = _fi(eHeaders, "活動編號");
-  var eNameIdx = _fi(eHeaders, "活動名稱");
-  var eEndIdx = eHeaders.findIndex(function (h) {
-    return String(h).includes("結束日期") || String(h).includes("活動日期");
-  });
-  var eImgIdx = eHeaders.findIndex(function (h) {
-    return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片");
-  });
-
-  var eventMap = {};
-  for (var j = 1; j < eData.length; j++) {
-    var eid = eIdIdx > -1 ? String(eData[j][eIdIdx]).trim() : "";
-    if (eid) {
-      eventMap[eid] = {
-        name: eNameIdx > -1 ? String(eData[j][eNameIdx]).trim() : "未命名活動",
-        endDateStr: eEndIdx > -1 ? String(eData[j][eEndIdx]).trim() : "",
-        imgUrl: eImgIdx > -1 ? String(eData[j][eImgIdx]).trim() : ""
-      };
-    }
-  }
-
-  // 2. 載入心得地圖
-  var refMap = {};
-  if (rSheet) {
-    var rData = rSheet.getDataRange().getValues();
-    if (rData.length > 1) {
-      var rHeaders = rData[0];
-      var rSysIdx = _fi(rHeaders, "系統識別碼");
-      var rEidIdx = _fi(rHeaders, "活動編號");
-      var rDiffIdx = _fi(rHeaders, "難易度評分");
-      var rViewIdx = _fi(rHeaders, "風景評分");
-      var rContIdx = _fi(rHeaders, "心得內容");
-      var rImgIdx = _fi(rHeaders, "登頂照片網址");
-
-      for (var k = 1; k < rData.length; k++) {
-        var rUid = rSysIdx > -1 ? String(rData[k][rSysIdx]).trim() : "";
-        var rEid = rEidIdx > -1 ? String(rData[k][rEidIdx]).trim() : "";
-        if (rUid === userId && rEid) {
-          refMap[rEid] = {
-            difficulty: rDiffIdx > -1 ? parseInt(rData[k][rDiffIdx], 10) || 5 : 5,
-            beauty: rViewIdx > -1 ? parseInt(rData[k][rViewIdx], 10) || 5 : 5,
-            content: rContIdx > -1 ? String(rData[k][rContIdx]).trim() : "",
-            imageUrl: rImgIdx > -1 ? String(rData[k][rImgIdx]).trim() : ""
-          };
-          reflectionsCount++;
-        }
-      }
-    }
-  }
-
-  // 3. 載入報名表
-  var sData = sSheet.getDataRange().getValues();
-  var sHeaders = sData[0];
-  var sSysIdx = _fi(sHeaders, "系統識別碼");
-  var sEidIdx = _fi(sHeaders, "活動編號");
-  var sResultIdx = _fi(sHeaders, "審核結果");
-  var sDateIdx = sHeaders.findIndex(function (h) {
-    return String(h).includes("時間") || String(h).includes("日期");
-  });
-
-  var today = new Date();
-
-  for (var i = 1; i < sData.length; i++) {
-    if (sSysIdx > -1 && String(sData[i][sSysIdx]).trim() === userId) {
-      var status = sResultIdx > -1 ? String(sData[i][sResultIdx]).trim() : "";
-      // 判斷是否為「正取」
-      if (status.indexOf("正取") > -1 || status.indexOf("錄取") > -1 || status.indexOf("已錄取") > -1 || status.indexOf("Confirmed") > -1) {
-        var eid = sEidIdx > -1 ? String(sData[i][sEidIdx]).trim() : "";
-        var evt = eventMap[eid];
-        if (evt) {
-          // 判斷活動是否已經結束
-          var isPast = false;
-          var displayDate = "";
-          if (evt.endDateStr) {
-            var ed = new Date(evt.endDateStr);
-            if (!isNaN(ed.getTime())) {
-              isPast = ed.getTime() < today.getTime();
-              displayDate = Utilities.formatDate(ed, Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
-            } else {
-              // 字串比對 fallback
-              isPast = true;
-              displayDate = evt.endDateStr;
-            }
-          } else {
-            isPast = true; // 預設為已參與
-          }
-
-          if (isPast) {
-            totalAttended++;
-            var hasReflected = !!refMap[eid];
-            pastList.push({
-              eventId: eid,
-              title: evt.name,
-              date: displayDate,
-              img: evt.imgUrl || "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400",
-              hasReflected: hasReflected,
-              reflection: hasReflected ? refMap[eid] : null
-            });
-          }
-        }
-      }
-    }
-  }
-
-  // 依日期降冪排序
-  pastList.sort(function (a, b) {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  });
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    data: {
-      totalAttended: totalAttended,
-      reflectionsCount: reflectionsCount,
-      activities: pastList
-    }
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// 📜 全新功能：送出心得回饋 API
-function processSubmitReflection(payload) {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000); // 鎖定 10 秒防衝突
-
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var rSheet = ss.getSheetByName("Reflections");
-    if (!rSheet) {
-      rSheet = ss.insertSheet("Reflections");
-      rSheet.appendRow(["Timestamp", "系統識別碼", "姓名", "活動編號", "活動名稱", "難易度評分", "風景評分", "心得內容", "登頂照片網址"]);
-    }
-
-    var userId = payload.userId;
-    var details = payload.details; // details: { eventId, eventName, difficulty, beauty, content, imageUrl }
-
-    // 取得姓名
-    var mSheet = ss.getSheetByName("Members");
-    var userName = "未知社員";
-    if (mSheet) {
-      var mData = mSheet.getDataRange().getValues();
-      var sysIdx = _fi(mData[0], "系統識別碼");
-      for (var i = 1; i < mData.length; i++) {
-        if (sysIdx > -1 && mData[i][sysIdx] === userId) {
-          userName = mData[i][_fi(mData[0], "姓名")] || "未知社員";
-          break;
-        }
-      }
-    }
-
-    // 處理登頂照片上傳至 Google Drive (最多5張，檔名格式：日期-活動名稱-姓名)
-    var photoUrls = [];
-    var formattedDate = String(details.eventDate || "").replace(/[\/\-]/g, "");
-    if (!formattedDate) {
-      var today = new Date();
-      var y = today.getFullYear();
-      var m = ("0" + (today.getMonth() + 1)).slice(-2);
-      var d = ("0" + today.getDate()).slice(-2);
-      formattedDate = y + m + d;
-    }
-    var eventSubFolder = "心得照片/" + formattedDate + "-" + (details.eventName || "活動");
-
-    if (payload.reflectionPhotoFiles && payload.reflectionPhotoFiles.length > 0) {
-      for (var f = 0; f < payload.reflectionPhotoFiles.length; f++) {
-        var fileObj = payload.reflectionPhotoFiles[f];
-        if (fileObj && fileObj.base64 && fileObj.name) {
-          var ext = fileObj.name.split('.').pop() || "jpg";
-          var customFileName = formattedDate + "_" + details.eventName + "_" + userName;
-          if (payload.reflectionPhotoFiles.length > 1) {
-            customFileName += "_" + (f + 1);
-          }
-          customFileName += "." + ext;
-          var uploadedUrl = uploadFileToDrive(fileObj.base64, customFileName, eventSubFolder);
-          if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
-            photoUrls.push(uploadedUrl);
-          }
-        }
-      }
-    }
-
-    if (photoUrls.length === 0 && payload.reflectionPhotoFile && payload.reflectionPhotoFile.base64 && payload.reflectionPhotoFile.name) {
-      var ext = payload.reflectionPhotoFile.name.split('.').pop() || "jpg";
-      var customFileName = formattedDate + "_" + details.eventName + "_" + userName + "." + ext;
-      var uploadedUrl = uploadFileToDrive(payload.reflectionPhotoFile.base64, customFileName, eventSubFolder);
-      if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
-        photoUrls.push(uploadedUrl);
-      }
-    }
-
-    var finalPhotoUrl = photoUrls.length > 0 ? photoUrls.join(",") : (details.imageUrl || "");
-
-    // 檢查是否重複寫入
-    var rData = rSheet.getDataRange().getValues();
-    var rHeaders = rData[0];
-    var rSysIdx = _fi(rHeaders, "系統識別碼");
-    var rEidIdx = _fi(rHeaders, "活動編號");
-    var targetRow = -1;
-
-    for (var k = 1; k < rData.length; k++) {
-      if (rSysIdx > -1 && String(rData[k][rSysIdx]).trim() === userId && rEidIdx > -1 && String(rData[k][rEidIdx]).trim() === details.eventId) {
-        targetRow = k + 1;
-        break;
-      }
-    }
-
-    var now = new Date();
-    var rHeaders = rSheet.getRange(1, 1, 1, rSheet.getLastColumn()).getValues()[0];
-    var newRow = new Array(rHeaders.length).fill("");
-
-    newRow[_fi(rHeaders, "Timestamp")] = now;
-    newRow[_fi(rHeaders, "系統識別碼")] = userId;
-    newRow[_fi(rHeaders, "姓名")] = userName;
-    newRow[_fi(rHeaders, "活動編號")] = details.eventId;
-    newRow[_fi(rHeaders, "活動名稱")] = details.eventName;
-    newRow[_fi(rHeaders, "難易度評分")] = details.difficulty;
-    newRow[_fi(rHeaders, "風景評分")] = details.beauty;
-    newRow[_fi(rHeaders, "心得內容")] = details.content;
-    newRow[_fi(rHeaders, "登頂照片網址")] = finalPhotoUrl;
-
-    if (targetRow > -1) {
-      // 更新
-      for (var col = 0; col < newRow.length; col++) {
-        rSheet.getRange(targetRow, col + 1).setValue(newRow[col]);
-      }
-    } else {
-      // 新增
-      rSheet.appendRow(newRow);
-    }
-
-    // 推送給幹部群組 (通知有新心得)
-    var alertMsg = "【社員心得回饋通知】\n\n👤 社員：" + userName + "\n活動：" + details.eventName + "\n路線難易：" + "★".repeat(details.difficulty) + "\n風景推薦：" + "★".repeat(details.beauty) + "\n心得內容：\n" + details.content;
-    pushAdminMessage(alertMsg);
-
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      message: "心得已成功提交"
-    })).setMimeType(ContentService.MimeType.JSON);
-
-  } catch (err) {
-    console.error("提交心得回饋失敗:", err);
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    _safeReleaseLock(lock);
-  }
-}
-
-// ------------------------------------------------------------------
-// 引擎 11：LIFF 取消活動報名 API
-// ------------------------------------------------------------------
-function processLiffCancelEvent(payload) {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000); // 鎖定 10 秒防衝突
-
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var userId = payload.userId;
-    var targetId = payload.targetId; // code
-    var reason = payload.reason || "";
-
-    if (!userId || !targetId) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少必要參數" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var signupSheet = ss.getSheetByName("Signups");
-    if (!signupSheet) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Signups 資料表" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var sData = signupSheet.getDataRange().getValues();
-    var sH = sData[0];
-    var sCodeIdx = _fi(sH, "專屬碼");
-    var sSysIdx = _fi(sH, "系統識別碼");
-    var sStatusIdx = _fi(sH, "審核結果");
-    var sEventIdIdx = _fi(sH, "活動編號");
-    var sNameIdx = _fi(sH, "姓名");
-    var sNoteIdx = _fi(sH, "備註");
-
-    for (var k = 1; k < sData.length; k++) {
-      var rowUser = sSysIdx > -1 ? String(sData[k][sSysIdx]).trim() : "";
-      var rowCode = sCodeIdx > -1 ? String(sData[k][sCodeIdx]).trim() : "";
-      var rowEvtId = sEventIdIdx > -1 ? String(sData[k][sEventIdIdx]).trim() : "";
-
-      var matchesUser = (rowUser === String(userId).trim());
-      var matchesId = (rowCode && rowCode === String(targetId).trim()) || (rowEvtId && rowEvtId === String(targetId).trim());
-
-      if (matchesUser && matchesId) {
-        var eventName = _getEventName(ss, rowEvtId);
-        var userName = sNameIdx > -1 ? String(sData[k][sNameIdx] || "未知社員") : "未知社員";
-        var currentStatus = sStatusIdx > -1 ? String(sData[k][sStatusIdx] || "") : "";
-
-        var sPayIdx = _fi(sH, "繳費狀態");
-        var payStatus = sPayIdx > -1 ? String(sData[k][sPayIdx] || "").trim() : "";
-        var isPaid = (payStatus === "已繳費 Paid" || payStatus === "已繳費" || payStatus.indexOf("待確認") > -1 || currentStatus.indexOf("已繳費") > -1);
-
-        // 如果是正取，必須提供取消原因
-        if (currentStatus.indexOf("正取") > -1) {
-          if (!reason.trim()) {
-            return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "正取資格取消必須填寫取消原因" })).setMimeType(ContentService.MimeType.JSON);
-          }
-
-          var newStatus = "已取消 Cancelled";
-
-          // 寫入已取消狀態與取消原因 (嚴格遵從試算表資料驗證規範)
-          if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue(newStatus);
-          if (sNoteIdx === -1) {
-            signupSheet.getRange(1, signupSheet.getLastColumn() + 1).setValue("備註");
-            sH = signupSheet.getRange(1, 1, 1, signupSheet.getLastColumn()).getValues()[0];
-            sNoteIdx = _fi(sH, "備註");
-          }
-          if (sNoteIdx > -1) {
-            var oldNote = sData[k][sNoteIdx] ? String(sData[k][sNoteIdx]) + " | " : "";
-            signupSheet.getRange(k + 1, sNoteIdx + 1).setValue(oldNote + (isPaid ? "【已繳費待退款】" : "") + "取消原因: " + reason);
-          }
-
-          // 同步取消報名至 Supabase
-          try {
-            _syncSignupCancelToSupabase(userId, rowEvtId, rowCode, reason);
-          } catch (sbCancelErr) {
-            console.warn("LIFF 取消報名同步至 Supabase 失敗:", sbCancelErr);
-          }
-
-          // 推送 LINE 給幹部
-          if (isPaid) {
-            pushAdminMessage("🔔 【幹部通知：正取取消（需安排替補與退費）】\n申請人：" + userName + "\n活動：" + eventName + "\n取消原因：" + reason + "\n⚠️ 該正取者已完成繳費／待對帳，請幹部安排備取遞補與退費事宜！");
-          } else {
-            pushAdminMessage("🔔 【幹部通知：正取取消】\n申請人：" + userName + "\n活動：" + eventName + "\n原因：" + reason + "\n請幹部儘速進行備取遞補！");
-          }
-        } else {
-          // 備取或審核中直接取消
-          if (sStatusIdx > -1) signupSheet.getRange(k + 1, sStatusIdx + 1).setValue("已取消 Cancelled");
-          try {
-            _syncSignupCancelToSupabase(userId, rowEvtId, rowCode, "自願取消");
-          } catch (sbCancelErr) {
-            console.warn("LIFF 取消報名同步至 Supabase 失敗:", sbCancelErr);
-          }
-        }
-
-        return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "活動報名已成功取消" })).setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆報名紀錄" })).setMimeType(ContentService.MimeType.JSON);
-
-  } catch (err) {
-    console.error("取消活動報名失敗:", err);
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    _safeReleaseLock(lock);
-  }
-}
-
-// ------------------------------------------------------------------
-// 引擎 12：LIFF 取消裝備預約 API
-// ------------------------------------------------------------------
-function processLiffCancelLoan(payload) {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000); // 鎖定 10 秒防衝突
-
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var userId = payload.userId;
-    var targetId = payload.targetId; // orderId
-
-    if (!userId || !targetId) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "缺少必要參數" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var loanSheet = ss.getSheetByName("Loan_Records");
-    if (!loanSheet) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Loan_Records 資料表" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var lData = loanSheet.getDataRange().getValues();
-    var lH = lData[0];
-    var lOrderIdx = _fi(lH, "租借編號");
-    var lSysIdx = _fi(lH, "系統識別碼");
-    var lStatusIdx = _fi(lH, "領取/歸還");
-    var lEquipIdIdx = _fi(lH, "裝備代號");
-    var lQtyIdx = _fi(lH, "數量");
-    var lNameIdx = _fi(lH, "姓名");
-    var lPayIdx = _fi(lH, "繳費狀態");
-    var lEquipNameIdx = _fi(lH, "裝備名稱");
-
-    var cancelledItems = [];
-    var isAnyPaid = false;
-    var userName = "";
-    var hasFoundMatch = false;
-
-    for (var i = 1; i < lData.length; i++) {
-      var isTarget = (lOrderIdx > -1 && String(lData[i][lOrderIdx]).trim() === String(targetId).trim()) || (lEquipIdIdx > -1 && String(lData[i][lEquipIdIdx]).trim() === String(targetId).trim());
-
-      if (isTarget && lSysIdx > -1 && lData[i][lSysIdx] === userId) {
-        hasFoundMatch = true;
-        var currentStatus = lStatusIdx > -1 ? String(lData[i][lStatusIdx]) : "";
-        if (currentStatus === "待領取 To Be Collected") {
-          if (!userName && lNameIdx > -1) userName = String(lData[i][lNameIdx]);
-          var payStatus = lPayIdx > -1 ? String(lData[i][lPayIdx]).trim() : "";
-          if (payStatus === "已繳費 Paid" || payStatus === "待確認 Checking") {
-            isAnyPaid = true;
-          }
-          var equipId = lEquipIdIdx > -1 ? String(lData[i][lEquipIdIdx]) : "";
-          var equipName = lEquipNameIdx > -1 && lData[i][lEquipNameIdx] ? String(lData[i][lEquipNameIdx]) : "";
-          var qty = lQtyIdx > -1 ? Number(lData[i][lQtyIdx]) : 1;
-          cancelledItems.push({
-            row: i + 1,
-            equipId: equipId,
-            equipName: equipName,
-            qty: qty
-          });
-        }
-      }
-    }
-
-    if (!hasFoundMatch) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆租借預約紀錄" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (cancelledItems.length === 0) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "該預約已非待領取狀態，無法取消" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var newStatus = isAnyPaid ? "已取消 (待退款)" : "已取消 Cancelled";
-    var equipSheet = ss.getSheetByName("Equipments");
-    var equipStockUpdates = {}; // equipId -> qty to add
-
-    for (var j = 0; j < cancelledItems.length; j++) {
-      var item = cancelledItems[j];
-      loanSheet.getRange(item.row, lStatusIdx + 1).setValue(newStatus);
-      if (item.equipId) {
-        equipStockUpdates[item.equipId] = (equipStockUpdates[item.equipId] || 0) + item.qty;
-      }
-    }
-
-    // 依序回補庫存
-    var cancelledEquipNames = [];
-    if (equipSheet && Object.keys(equipStockUpdates).length > 0) {
-      var eData = equipSheet.getDataRange().getValues();
-      var eH = eData[0];
-      var eIdIdx = _fi(eH, "裝備代號");
-      var eStockIdx = _fi(eH, "在庫數量");
-      var eNameIdx = _fi(eH, "裝備名稱");
-
-      for (var m = 1; m < eData.length; m++) {
-        var eId = eIdIdx > -1 ? String(eData[m][eIdIdx]) : "";
-        if (equipStockUpdates[eId]) {
-          var curStock = eStockIdx > -1 ? Number(eData[m][eStockIdx]) : 0;
-          var addQty = equipStockUpdates[eId];
-          equipSheet.getRange(m + 1, eStockIdx + 1).setValue(curStock + addQty);
-          var realName = eNameIdx > -1 ? String(eData[m][eNameIdx]) : eId;
-          cancelledEquipNames.push(realName + " x" + addQty);
-        }
-      }
-    }
-
-    if (cancelledEquipNames.length === 0) {
-      cancelledItems.forEach(function (ci) {
-        cancelledEquipNames.push((ci.equipName || ci.equipId || "裝備") + " x" + ci.qty);
-      });
-    }
-
-    // 推送幹部通知
-    if (isAnyPaid) {
-      var officerMsg = "🔔 【幹部通知：裝備預約取消（需安排退款）】\n" +
-        "─────────────\n" +
-        "申請人：" + (userName || "未知社員") + "\n" +
-        "租借編號：" + targetId + "\n" +
-        "取消裝備：\n• " + cancelledEquipNames.join("\n• ") + "\n\n" +
-        "⚠️ 該租借預約已繳費／待確認，請幹部依社團退費規範安排退款事宜！（庫存已自動回補）";
-      pushAdminMessage(officerMsg);
-    } else {
-      var officerMsgNormal = "【幹部通知：裝備取消】\n" +
-        "申請人：" + (userName || "未知社員") + "\n" +
-        "租借編號：" + targetId + "\n" +
-        "取消裝備：\n• " + cancelledEquipNames.join("\n• ") + "\n" +
-        "庫存已自動回補！";
-      pushAdminMessage(officerMsgNormal);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      message: isAnyPaid ? "裝備預約已取消，因您已繳費，幹部將為您安排退費！" : "裝備預約已成功取消"
-    })).setMimeType(ContentService.MimeType.JSON);
-
-  } catch (err) {
-    console.error("取消裝備預約失敗:", err);
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    _safeReleaseLock(lock);
-  }
-}
-
-// ==================================================================
-// ⭐️ 幹部專屬活動管理與名單審核系統 (Admin Events Management)
-// ==================================================================
-
-// 內部輔助：檢驗使用者是否為登山社幹部
-function checkOfficerInternal(ss, userId, userName) {
-  try {
-    var oSheet = ss.getSheetByName("Officers");
-    if (!oSheet) return { isOfficer: false, role: "", name: "" };
-    var oData = oSheet.getDataRange().getDisplayValues();
-    if (oData.length <= 1) return { isOfficer: false, role: "", name: "" };
-
-    var oH = oData[0];
-    var nameIdx = oH.findIndex(function (h) { return String(h).includes("姓名") || String(h).includes("名字"); });
-    var roleIdx = oH.findIndex(function (h) { return String(h).includes("職稱") || String(h).includes("職位"); });
-    var sysIdx = oH.findIndex(function (h) {
-      var s = String(h).toLowerCase();
-      return s.includes("識別碼") || s.includes("userid") || s.includes("user id") || s.includes("uid") || s.includes("幹部 id") || s.includes("幹部id");
-    });
-    var lineIdx = oH.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
-
-    // 1. 若有傳入 userId，先比對 Officers 表中的識別碼或 LINE ID
-    if (userId) {
-      var cleanUserId = String(userId).trim();
-      for (var i = 1; i < oData.length; i++) {
-        var rowSysId = (sysIdx > -1 && oData[i][sysIdx]) ? String(oData[i][sysIdx]).trim() : "";
-        var rowLineId = (lineIdx > -1 && oData[i][lineIdx]) ? String(oData[i][lineIdx]).trim() : "";
-
-        if ((rowSysId && (rowSysId === cleanUserId || cleanUserId.indexOf(rowSysId) > -1 || rowSysId.indexOf(cleanUserId) > -1)) ||
-          (rowLineId && rowLineId === cleanUserId)) {
-          var role = (roleIdx > -1 && oData[i][roleIdx]) ? String(oData[i][roleIdx]).trim() : "幹部";
-          return { isOfficer: true, role: role, name: (nameIdx > -1) ? String(oData[i][nameIdx]).trim() : "" };
-        }
-      }
-    }
-
-    // 2. 若未提供 userName，從 Members 表反查該 userId 之姓名
-    if (!userName && userId) {
-      var mSheet = ss.getSheetByName("Members");
-      if (mSheet) {
-        var mData = mSheet.getDataRange().getValues();
-        var mH = mData[0];
-        var mSysIdx = _fi(mH, "系統識別碼");
-        var mNameIdx = _fi(mH, "姓名");
-        if (mSysIdx > -1 && mNameIdx > -1) {
-          for (var m = 1; m < mData.length; m++) {
-            if (mData[m][mSysIdx] === userId) {
-              userName = String(mData[m][mNameIdx] || "").trim();
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // 3. 以姓名比對 Officers 表
-    if (userName && nameIdx > -1) {
-      var cleanUserName = userName.trim();
-      for (var j = 1; j < oData.length; j++) {
-        var oName = oData[j][nameIdx].trim();
-        if (oName !== "" && (oName === cleanUserName || cleanUserName.indexOf(oName) > -1 || oName.indexOf(cleanUserName) > -1)) {
-          var officerRole = (roleIdx > -1) ? oData[j][roleIdx].trim() : "幹部";
-          // 若 Officers 表已有系統識別碼欄位但為空，自動補齊以利下次精準比對
-          if (userId && sysIdx > -1 && !oData[j][sysIdx]) {
-            try {
-              oSheet.getRange(j + 1, sysIdx + 1).setValue(userId);
-            } catch (e) { }
-          }
-          return { isOfficer: true, role: officerRole, name: oName };
-        }
-      }
-    }
-
-    return { isOfficer: false, role: "", name: "" };
-  } catch (err) {
-    console.error("幹部身分檢驗出錯:", err);
-    return { isOfficer: false, role: "", name: "" };
-  }
-}
-
-// API: 查詢幹部身分 (GET)
-function checkOfficerStatusAPI(ss, userId) {
-  var res = checkOfficerInternal(ss, userId);
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    isOfficer: res.isOfficer,
-    officerRole: res.role,
-    officerName: res.name
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// API: 取得後台所有活動與統計名冊 (GET)
-function getAdminEventsAPI(ss, userId) {
-  var officerCheck = checkOfficerInternal(ss, userId);
-  if (!officerCheck.isOfficer) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: "權限不足，僅限登山社幹部存取！"
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var eventSheet = ss.getSheetByName("Events");
-  if (!eventSheet) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: "找不到 Events 試算表"
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var eData = eventSheet.getDataRange().getDisplayValues();
-  if (eData.length <= 0) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", events: [] })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var eHeaders = eData[0];
-  var eHIdx = {
-    id: _fi(eHeaders, "活動編號"),
-    name: _fi(eHeaders, "活動名稱"),
-    startDate: _fi(eHeaders, "活動開始日期"),
-    endDate: _fi(eHeaders, "活動結束日期"),
-    deadline: _fi(eHeaders, "報名截止日期"),
-    cost: eHeaders.findIndex(function (h) { return String(h).includes("預計費用") || String(h).includes("費用"); }),
-    status: eHeaders.findIndex(function (h) { return String(h).includes("報名狀態") || String(h).includes("狀態"); }),
-    shortDesc: _fi(eHeaders, "簡介"),
-    fullDesc: eHeaders.findIndex(function (h) { return String(h).includes("詳細行程") || String(h).includes("行程"); }),
-    img: eHeaders.findIndex(function (h) { return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片"); }),
-    driveFolderUrl: _fi(eHeaders, "雲端資料夾網址"),
-    spreadsheetUrl: _fi(eHeaders, "報名名冊網址"),
-    spreadsheetId: _fi(eHeaders, "試算表ID")
-  };
-
-  // 掃描 Signups 統計每場活動的報名狀態
-  var signupStats = {};
-  var sSheet = ss.getSheetByName("Signups");
-  if (sSheet) {
-    var sData = sSheet.getDataRange().getDisplayValues();
-    if (sData.length > 1) {
-      var sH = sData[0];
-      var sEvtIdIdx = _fi(sH, "活動編號");
-      var sResultIdx = _fi(sH, "審核結果");
-      for (var s = 1; s < sData.length; s++) {
-        var eid = (sEvtIdIdx > -1) ? sData[s][sEvtIdIdx].trim() : "";
-        var res = (sResultIdx > -1) ? sData[s][sResultIdx].trim() : "";
-        if (!eid || res.indexOf("取消") > -1) continue;
-
-        if (!signupStats[eid]) {
-          signupStats[eid] = { total: 0, accepted: 0, waitlisted: 0, pending: 0 };
-        }
-        signupStats[eid].total++;
-        if (res.indexOf("正取") > -1) {
-          signupStats[eid].accepted++;
-        } else if (res.indexOf("備取") > -1) {
-          signupStats[eid].waitlisted++;
-        } else {
-          signupStats[eid].pending++;
-        }
-      }
-    }
-  }
-
-  var events = [];
-  for (var i = 1; i < eData.length; i++) {
-    var row = eData[i];
-    var eventId = (eHIdx.id > -1) ? row[eHIdx.id].trim() : "";
-    if (!eventId && (!row[eHIdx.name] || !row[eHIdx.name].trim())) continue;
-
-    var stats = signupStats[eventId] || { total: 0, accepted: 0, waitlisted: 0, pending: 0 };
-    events.push({
-      id: eventId,
-      name: (eHIdx.name > -1) ? row[eHIdx.name] : "",
-      startDate: (eHIdx.startDate > -1) ? row[eHIdx.startDate] : "",
-      endDate: (eHIdx.endDate > -1) ? row[eHIdx.endDate] : "",
-      deadline: (eHIdx.deadline > -1) ? row[eHIdx.deadline] : "",
-      cost: (eHIdx.cost > -1) ? row[eHIdx.cost] : "",
-      status: (eHIdx.status > -1 && row[eHIdx.status]) ? row[eHIdx.status].trim() : "關閉",
-      shortDesc: (eHIdx.shortDesc > -1) ? row[eHIdx.shortDesc] : "",
-      fullDesc: (eHIdx.fullDesc > -1) ? row[eHIdx.fullDesc] : "",
-      imageUrl: (eHIdx.img > -1) ? row[eHIdx.img] : "",
-      driveFolderUrl: (eHIdx.driveFolderUrl > -1) ? row[eHIdx.driveFolderUrl] : "",
-      spreadsheetUrl: (eHIdx.spreadsheetUrl > -1) ? row[eHIdx.spreadsheetUrl] : "",
-      spreadsheetId: (eHIdx.spreadsheetId > -1) ? row[eHIdx.spreadsheetId] : "",
-      stats: stats,
-      rowNumber: i + 1
-    });
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    isOfficer: true,
-    officerRole: officerCheck.role,
-    officerName: officerCheck.name,
-    events: events
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// API: 取得單一活動之報名社員名單 (GET)
-function getEventSignupsAPI(ss, eventId, userId) {
-  var officerCheck = checkOfficerInternal(ss, userId);
-  if (!officerCheck.isOfficer) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: "權限不足"
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var sSheet = ss.getSheetByName("Signups");
-  if (!sSheet) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", signups: [] })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var sData = sSheet.getDataRange().getDisplayValues();
-  if (sData.length <= 1) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", signups: [] })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  // 檢查該活動是否尚未開始
-  var eventSheet = ss.getSheetByName("Events");
-  var isEventNotStarted = true;
-  if (eventSheet) {
-    var eData = eventSheet.getDataRange().getDisplayValues();
-    if (eData.length > 1) {
-      var eH = eData[0];
-      var eIdCol = _fi(eH, "活動編號");
-      var eStartCol = _fi(eH, "活動開始日期");
-      if (eStartCol === -1) eStartCol = _fi(eH, "開始日期");
-      if (eStartCol === -1) eStartCol = _fi(eH, "活動日期");
-      if (eIdCol > -1 && eStartCol > -1) {
-        for (var ei = 1; ei < eData.length; ei++) {
-          if (String(eData[ei][eIdCol]).trim() === String(eventId).trim()) {
-            var evStartVal = eData[ei][eStartCol];
-            if (evStartVal && _isEventStarted(evStartVal)) {
-              isEventNotStarted = false;
-            }
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  // 建立 Members 快取，提取體能證明、系所、學號、病史、緊急聯絡人關係、繳費與社籍狀態
-  var mSheet = ss.getSheetByName("Members") || ss.getSheetByName("社員資料");
-  var memberMap = {};
-  if (mSheet) {
-    var mData = mSheet.getDataRange().getDisplayValues();
-    if (mData.length > 1) {
-      var mH = mData[0];
-      var mSysIdx = mH.findIndex(function (h) {
-        var s = String(h).toLowerCase();
-        return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
-      });
-      var mProofIdx = mH.findIndex(function (h) {
-        var s = String(h);
-        return s.includes("體能證明") || s.includes("證明");
-      });
-      var mDeptIdx = _fi(mH, "系所");
-      var mStuIdx = _fi(mH, "學號");
-      var mMedIdx = mH.findIndex(function (h) { return String(h).includes("病史") || String(h).includes("過敏"); });
-      var mRelIdx = _findEmerRelColIdx(mH);
-      var mPhoneIdx = _fi(mH, "電話");
-      var mPayIdx = _fi(mH, "繳費狀態");
-      var mExpIdx = _fi(mH, "社籍到期日");
-      if (mExpIdx === -1) {
-        mExpIdx = mH.findIndex(function (h) { return String(h).includes("到期日") || String(h).includes("社籍"); });
-      }
-
-      if (mSysIdx > -1 || mPhoneIdx > -1) {
-        for (var m = 1; m < mData.length; m++) {
-          var mUid = (mSysIdx > -1) ? String(mData[m][mSysIdx] || "").trim() : "";
-          var mPhone = (mPhoneIdx > -1) ? String(mData[m][mPhoneIdx] || "").trim().replace(/[^0-9]/g, "") : "";
-          var mPay = (mPayIdx > -1) ? String(mData[m][mPayIdx] || "").trim() : "";
-          var mExp = (mExpIdx > -1) ? String(mData[m][mExpIdx] || "").trim() : "";
-          var isPaidMem = (mPay === "已繳費 Paid" || mPay === "已繳費" || mPay === "已繳" || mPay === "是") && (!mExp || !_isEventExpired(mExp));
-          var memberInfo = {
-            proof: (mProofIdx > -1) ? String(mData[m][mProofIdx] || "").trim() : "",
-            department: (mDeptIdx > -1) ? String(mData[m][mDeptIdx] || "").trim() : "",
-            studentId: (mStuIdx > -1) ? String(mData[m][mStuIdx] || "").trim() : "",
-            medicalHistory: (mMedIdx > -1) ? String(mData[m][mMedIdx] || "").trim() : "",
-            emerRel: _getEmerRelValue(mH, mData[m]),
-            isOfficial: isPaidMem ? "是" : "否"
-          };
-          if (mUid) memberMap[mUid] = memberInfo;
-          if (mPhone) memberMap["phone_" + mPhone] = memberInfo;
-        }
-      }
-    }
-  }
-
-  var sH = sData[0];
-  var sEvtIdIdx = _fi(sH, "活動編號");
-  var sSysIdx = _fi(sH, "系統識別碼");
-  var sCodeIdx = _fi(sH, "專屬碼");
-  var sNameIdx = _fi(sH, "姓名");
-  var sGenderIdx = _fi(sH, "性別");
-  var sPhoneIdx = _fi(sH, "聯絡電話");
-  var sLineIdx = sH.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
-  var sEmailIdx = sH.findIndex(function (h) { return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱"); });
-  var sAddrIdx = sH.findIndex(function (h) { return String(h).includes("地址") && !String(h).includes("緊急"); });
-  var sBirthdayIdx = _fi(sH, "生日");
-  var sIdNumberIdx = _fi(sH, "證件");
-  var sEmerNameIdx = sH.findIndex(function (h) { return String(h).includes("緊急聯絡人") && !String(h).includes("電話") && !String(h).includes("地址") && !String(h).includes("關係"); });
-  var sEmerRelIdx = _findEmerRelColIdx(sH);
-  var sEmerPhoneIdx = _fi(sH, "緊急聯絡人電話");
-  var sEmerAddrIdx = sH.findIndex(function (h) { return String(h).includes("緊急聯絡人") && String(h).includes("地址"); });
-  var sExpIdx = _fi(sH, "經驗");
-  var sFitnessIdx = _fi(sH, "體能測驗");
-  var sProofIdx = sH.findIndex(function (h) { return String(h).includes("證明"); });
-  var sOfficialIdx = _fi(sH, "是否為社員");
-  var sResultIdx = _fi(sH, "審核結果");
-  var sNotifyIdx = _fi(sH, "通知狀態");
-  var sPayIdx = _fi(sH, "繳費狀態");
-  var sRemarkIdx = _fi(sH, "備註");
-
-  var signups = [];
-  for (var i = 1; i < sData.length; i++) {
-    var row = sData[i];
-    if (sEvtIdIdx > -1 && row[sEvtIdIdx].trim() === eventId) {
-      var applicantUid = (sSysIdx > -1) ? String(row[sSysIdx] || "").trim() : "";
-      var rawPhone = (sPhoneIdx > -1) ? String(row[sPhoneIdx] || "").trim().replace(/[^0-9]/g, "") : "";
-      var mem = (applicantUid && memberMap[applicantUid])
-        ? memberMap[applicantUid]
-        : (rawPhone && memberMap["phone_" + rawPhone] ? memberMap["phone_" + rawPhone] : {});
-      var proofVal = (sProofIdx > -1) ? String(row[sProofIdx] || "").trim() : "";
-      if (!proofVal && mem.proof) {
-        proofVal = mem.proof;
-      }
-      var relVal = _getEmerRelValue(sH, row);
-      if (!relVal && applicantUid && memberMap[applicantUid] && memberMap[applicantUid].emerRel) {
-        relVal = memberMap[applicantUid].emerRel;
-      } else if (!relVal && rawPhone && memberMap["phone_" + rawPhone] && memberMap["phone_" + rawPhone].emerRel) {
-        relVal = memberMap["phone_" + rawPhone].emerRel;
-      }
-
-      // 若活動尚未開始且該社員已具備社員資格，將原本為否動態更新為是
-      var curOfficial = (sOfficialIdx > -1) ? String(row[sOfficialIdx] || "").trim() : "";
-      if (isEventNotStarted && mem.isOfficial === "是" && curOfficial !== "是") {
-        curOfficial = "是";
-        if (sOfficialIdx > -1) {
-          try {
-            sSheet.getRange(i + 1, sOfficialIdx + 1).setValue("是");
-          } catch (e) {
-            console.error("即時更新 Signups 是否為社員失敗", e);
-          }
-        }
-      }
-
-      signups.push({
-        rowNumber: i + 1,
-        signupCode: (sCodeIdx > -1) ? row[sCodeIdx] : "",
-        userId: applicantUid,
-        name: (sNameIdx > -1) ? row[sNameIdx] : "",
-        gender: (sGenderIdx > -1) ? row[sGenderIdx] : "",
-        phone: (sPhoneIdx > -1) ? row[sPhoneIdx] : "",
-        lineId: (sLineIdx > -1) ? row[sLineIdx] : "",
-        email: (sEmailIdx > -1) ? row[sEmailIdx] : "",
-        address: (sAddrIdx > -1) ? row[sAddrIdx] : "",
-        birthday: (sBirthdayIdx > -1) ? row[sBirthdayIdx] : "",
-        idNumber: (sIdNumberIdx > -1) ? row[sIdNumberIdx] : "",
-        emerName: (sEmerNameIdx > -1) ? row[sEmerNameIdx] : "",
-        emerPhone: (sEmerPhoneIdx > -1) ? row[sEmerPhoneIdx] : "",
-        emerRel: relVal,
-        emerAddr: (sEmerAddrIdx > -1) ? row[sEmerAddrIdx] : "",
-        experience: (sExpIdx > -1) ? row[sExpIdx] : "",
-        fitnessTest: (sFitnessIdx > -1) ? row[sFitnessIdx] : "",
-        strengthProof: proofVal,
-        department: mem.department || "",
-        studentId: mem.studentId || "",
-        medicalHistory: mem.medicalHistory || "",
-        isOfficial: curOfficial,
-        reviewResult: (sResultIdx > -1) ? row[sResultIdx] : "",
-        notifyStatus: (sNotifyIdx > -1) ? row[sNotifyIdx] : "",
-        payStatus: (sPayIdx > -1) ? row[sPayIdx] : "",
-        remark: (sRemarkIdx > -1) ? row[sRemarkIdx] : ""
-      });
-    }
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    signups: signups
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
 // ==============================================================================
-// 🏔️ 雲端硬碟活動專屬資料夾與報名名冊試算表管理引擎
+// 🧠 野境戶外系統 GAS 模組 4：Gemini AI 智慧客服與知識庫 (04_Ai_Gemini.js)
 // ==============================================================================
 
 /**
- * 安全設置或更新 _CONFIG 工作表中的鍵值對
+ * 處理 Gemini AI 問答核心
  */
-function _setOrUpdateConfigRow(configSheet, key, value) {
-  if (!configSheet || !key) return;
-  var cData = configSheet.getDataRange().getValues();
-  for (var i = 0; i < cData.length; i++) {
-    if (String(cData[i][0]).trim().toUpperCase() === String(key).trim().toUpperCase()) {
-      configSheet.getRange(i + 1, 2).setValue(value !== undefined && value !== null ? value : "");
-      return;
-    }
-  }
-  configSheet.appendRow([key, value !== undefined && value !== null ? value : ""]);
-}
+function _handleGeminiChat(userId, userQuery) {
+  if (!GEMINI_API_KEY) return null;
 
-/**
- * 建立活動專屬雲端硬碟資料夾 (YYYY/MM/DD_活動名稱) 與報名名冊試算表
- */
-function _createEventDriveFolderAndSheet(payload, eventId) {
   try {
-    var rawDate = payload.startDate || "";
-    var datePart = "";
-    if (rawDate) {
-      datePart = String(rawDate).trim().replace(/-/g, "/").split(" ")[0].split("T")[0];
-    }
-    if (!datePart) {
-      datePart = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
-    }
+    // 1. 取得 Docs 知識庫與開放活動摘要
+    var knowledgeBase = _fetchDocsKnowledgeBase();
+    var eventsContext = _fetchOpenEventsContext();
 
-    var eventName = (payload.name || "未命名活動").trim();
-    var folderName = datePart + "_" + eventName;
+    var systemInstruction = "你是一位熱情、專業的「野境戶外社」AI 智慧客服嚮導。\n" +
+      "請根據以下社團規章、活動與知識庫回答使用者的問題。若資訊不足，請禮貌引導向幹部洽詢。\n\n" +
+      "【當前開放活動資訊】：\n" + eventsContext + "\n\n" +
+      "【社團知識庫規章】：\n" + knowledgeBase + "\n";
 
-    // 1. 於 Google Drive 根目錄建立專屬活動資料夾
-    var folder = DriveApp.getRootFolder().createFolder(folderName);
-    var folderUrl = folder.getUrl();
-    var folderId = folder.getId();
-
-    // 2. 建立活動專屬報名試算表 (優先從 EVENT_SHEET_TEMPLATE_ID 範本自動複製，自帶完整 Apps Script 綁定腳本與頂部選單)
-    var sheetName = folderName + "_報名名冊";
-    var templateId = PropertiesService.getScriptProperties().getProperty("EVENT_SHEET_TEMPLATE_ID");
-    var newSS = null;
-    var ssId = "";
-    var ssUrl = "";
-
-    if (templateId) {
-      try {
-        var templateFile = DriveApp.getFileById(templateId.trim());
-        var copiedFile = templateFile.makeCopy(sheetName, folder);
-        ssId = copiedFile.getId();
-        ssUrl = copiedFile.getUrl();
-        newSS = SpreadsheetApp.open(copiedFile);
-        console.log("⚡ [Template] 成功複製範本試算表 (自帶綁定腳本與選單): " + ssId);
-      } catch (tmplErr) {
-        console.warn("複製範本試算表失敗，切換為程式化動態生成:", tmplErr);
-      }
-    }
-
-    if (!newSS) {
-      newSS = SpreadsheetApp.create(sheetName);
-      ssId = newSS.getId();
-      ssUrl = newSS.getUrl();
-
-      // 移動試算表至新資料夾中
-      var file = DriveApp.getFileById(ssId);
-      folder.addFile(file);
-      DriveApp.getRootFolder().removeFile(file);
-
-      // 初始化「報名名冊」工作表與符合社團規範之 22 欄標準表頭
-      var signupSheet = newSS.getSheets()[0];
-      signupSheet.setName("報名名冊");
-
-      var headers = [
-        "系統識別碼", "專屬碼", "姓名", "性別", "LINE ID", "聯絡信箱", "聯絡電話", "聯絡地址",
-        "生日", "證件號碼", "緊急聯絡人姓名", "緊急聯絡人電話", "緊急聯絡人聯絡地址", "緊急聯絡人關係",
-        "爬山經驗", "體能測驗", "體能證明", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註"
-      ];
-      signupSheet.appendRow(headers);
-
-      // 美化表頭：置頂凍結、背景色與文字粗體
-      var headerRange = signupSheet.getRange(1, 1, 1, headers.length);
-      headerRange.setFontWeight("bold");
-      headerRange.setBackground("#2563eb");
-      headerRange.setFontColor("#ffffff");
-      signupSheet.setFrozenRows(1);
-    }
-
-    // 3. 建立或動態更新隱藏之 _CONFIG 工作表，記錄活動編號並全自動注入 Supabase 與 LINE Bot 連線金鑰
-    var configSheet = newSS.getSheetByName("_CONFIG");
-    if (!configSheet) {
-      configSheet = newSS.insertSheet("_CONFIG");
-      configSheet.appendRow(["KEY", "VALUE"]);
-    }
-
-    var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL") || "";
-    var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY") || "";
-    var botToken = PropertiesService.getScriptProperties().getProperty("MEMBER_BOT_TOKEN") || PropertiesService.getScriptProperties().getProperty("LINE_BOT_TOKEN") || "";
-
-    _setOrUpdateConfigRow(configSheet, "EVENT_ID", eventId);
-    _setOrUpdateConfigRow(configSheet, "EVENT_NAME", eventName);
-    _setOrUpdateConfigRow(configSheet, "FOLDER_ID", folderId);
-    _setOrUpdateConfigRow(configSheet, "CREATED_AT", new Date().toISOString());
-    if (sbUrl) _setOrUpdateConfigRow(configSheet, "SUPABASE_URL", sbUrl);
-    if (sbKey) _setOrUpdateConfigRow(configSheet, "SUPABASE_SERVICE_ROLE_KEY", sbKey);
-    if (botToken) _setOrUpdateConfigRow(configSheet, "MEMBER_BOT_TOKEN", botToken);
-    configSheet.hideSheet();
-
-    return {
-      folderUrl: folderUrl,
-      folderId: folderId,
-      spreadsheetUrl: ssUrl,
-      spreadsheetId: ssId
-    };
-  } catch (err) {
-    console.error("建立活動專屬雲端資料夾與試算表失敗:", err);
-    return null;
-  }
-}
-
-/**
- * 將活動雲端資料夾與試算表連結同步至 Supabase events 表 (若紀錄尚不存在則自動補全 Upsert)
- */
-function _syncEventDriveUrlsToSupabase(eventId, driveFolderUrl, spreadsheetUrl, spreadsheetId) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !eventId) return;
-  try {
-    var updatePayload = {
-      updated_at: new Date().toISOString()
-    };
-    if (driveFolderUrl) updatePayload.drive_folder_url = driveFolderUrl;
-    if (spreadsheetUrl) updatePayload.spreadsheet_url = spreadsheetUrl;
-    if (spreadsheetId) updatePayload.spreadsheet_id = spreadsheetId;
-
-    var url = SUPABASE_URL + "/rest/v1/events?id=eq." + encodeURIComponent(eventId);
-    var res = UrlFetchApp.fetch(url, {
-      method: "patch",
-      contentType: "application/json",
-      headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-        "Prefer": "return=representation"
-      },
-      payload: JSON.stringify(updatePayload),
-      muteHttpExceptions: true
-    });
-
-    var updated = [];
-    try {
-      if (res.getResponseCode() === 200) {
-        updated = JSON.parse(res.getContentText());
-      }
-    } catch (parseErr) {}
-
-    // 若 PATCH 發現無此 row (更新筆數為 0，尚未建立該活動)，改用 POST upsert 自動補齊
-    if (!updated || updated.length === 0) {
-      var upsertUrl = SUPABASE_URL + "/rest/v1/events?on_conflict=id";
-      updatePayload.id = eventId;
-      if (!updatePayload.title) updatePayload.title = eventId;
-      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
-      updatePayload.fee = 0;
-      updatePayload.start_date = todayStr;
-      updatePayload.end_date = todayStr;
-      updatePayload.status = "開放";
-      UrlFetchApp.fetch(upsertUrl, {
-        method: "post",
-        contentType: "application/json",
-        headers: {
-          "apikey": SUPABASE_SERVICE_ROLE_KEY,
-          "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-          "Prefer": "resolution=merge-duplicates,return=minimal"
-        },
-        payload: JSON.stringify(updatePayload),
-        muteHttpExceptions: true
-      });
-    }
-    console.log("⚡ [Supabase] 已成功將活動雲端連結同步至 Supabase events 表: " + eventId);
-  } catch (err) {
-    console.warn("同步活動雲端連結至 Supabase 失敗:", err);
-  }
-}
-
-/**
- * 將活動完整資料 (包含雲端資料夾與試算表 ID/URL) 同步/Upsert 至 Supabase events 表
- */
-function _syncEventToSupabase(eventData) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !eventData || !eventData.id) return;
-  try {
-    var url = SUPABASE_URL + "/rest/v1/events?on_conflict=id";
-    var costNum = 0;
-    if (eventData.cost !== undefined && eventData.cost !== null) {
-      costNum = parseInt(String(eventData.cost).replace(/[^\d]/g, ""), 10) || 0;
-    }
-
-    var startStr = null;
-    if (eventData.startDate) {
-      startStr = String(eventData.startDate).replace(/\//g, "-").split(" ")[0].split("T")[0];
-    }
-    var endStr = null;
-    if (eventData.endDate) {
-      endStr = String(eventData.endDate).replace(/\//g, "-").split(" ")[0].split("T")[0];
-    } else {
-      endStr = startStr;
-    }
-    var deadlineIso = null;
-    if (eventData.deadline) {
-      var dStr = String(eventData.deadline).replace(/\//g, "-").trim();
-      deadlineIso = dStr.includes("T") ? dStr : (dStr + "T23:59:59Z");
-    }
-
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
     var payload = {
-      id: eventData.id,
-      title: eventData.name || eventData.title || eventData.id,
-      fee: costNum,
-      start_date: startStr,
-      end_date: endStr,
-      deadline: deadlineIso,
-      status: eventData.status || "未來開放",
-      summary: eventData.shortDesc || "",
-      itinerary: eventData.fullDesc || "",
-      cover_image_url: eventData.imageUrl || "",
-      drive_folder_url: eventData.driveFolderUrl || null,
-      spreadsheet_url: eventData.spreadsheetUrl || null,
-      spreadsheet_id: eventData.spreadsheetId || null,
-      updated_at: new Date().toISOString()
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: systemInstruction },
+            { text: "使用者提問：" + userQuery }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 600
+      }
     };
 
     var res = UrlFetchApp.fetch(url, {
       method: "post",
       contentType: "application/json",
-      headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-        "Prefer": "resolution=merge-duplicates,return=representation"
-      },
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
     });
-    var code = res.getResponseCode();
-    if (code >= 200 && code < 300) {
-      console.log("⚡ [Supabase] 已成功 Upsert 活動至 events 表: " + eventData.id + " (試算表 ID: " + (eventData.spreadsheetId || "無") + ")");
-    } else {
-      console.warn("⚠️ [Supabase] Upsert 活動失敗 (" + code + "): " + res.getContentText());
-    }
-  } catch (err) {
-    console.warn("同步活動至 Supabase 例外:", err);
-  }
-}
 
-/**
- * 將活動報名紀錄同步寫入 Supabase (包含 upsert members 與 insert/upsert event_signups)
- */
-function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus, eventName) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.error("❌ [Supabase] 尚未配置指令碼屬性 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY，無法寫入報名資料至 Supabase！");
-    return false;
-  }
-  if (!userId || !eventId || !signupCode) {
-    console.warn("❌ [Supabase] 缺少必要參數: userId=" + userId + ", eventId=" + eventId + ", signupCode=" + signupCode);
-    return false;
-  }
-  try {
-    p = p || {};
-    var isOfficial = (p.isOfficial === "是" || p.isOfficial === true);
-
-    // 0. 確保 events 表有此活動紀錄 (避免外鍵約束失敗)
-    try {
-      var eventUrl = SUPABASE_URL + "/rest/v1/events?on_conflict=id";
-      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
-      var deadlineIso = new Date(Date.now() + 30 * 86400000).toISOString();
-      var evRes = UrlFetchApp.fetch(eventUrl, {
-        method: "post",
-        contentType: "application/json",
-        headers: {
-          "apikey": SUPABASE_SERVICE_ROLE_KEY,
-          "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-          "Prefer": "resolution=ignore-duplicates,return=minimal"
-        },
-        payload: JSON.stringify({
-          id: eventId,
-          title: eventName || eventId,
-          fee: 0,
-          start_date: todayStr,
-          end_date: todayStr,
-          deadline: deadlineIso,
-          status: "開放",
-          updated_at: new Date().toISOString()
-        }),
-        muteHttpExceptions: true
-      });
-      if (evRes.getResponseCode() >= 400) {
-        console.warn("⚠️ [Supabase] 確保 events 記錄回應 (" + evRes.getResponseCode() + "): " + evRes.getContentText());
+    if (res.getResponseCode() === 200) {
+      var data = JSON.parse(res.getContentText());
+      if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+        return data.candidates[0].content.parts[0].text;
       }
-    } catch (evErr) {
-      console.warn("⚠️ [Supabase] 確保 events 記錄例外:", evErr);
-    }
-
-    // 1. 先 Upsert members 表，確保外鍵約束滿足且個資為最新
-    var memberPayload = {
-      line_user_id: userId,
-      name: p.name || "社員",
-      gender: p.gender || null,
-      line_id: p.lineId || p.realLineId || null,
-      email: p.email || null,
-      phone: p.phone || null,
-      department: p.department || null,
-      student_id: p.studentId || null,
-      birthday: p.birthday || null,
-      id_card: p.idNumber || p.idCard || null,
-      address: p.studentAddr || p.address || null,
-      outdoor_experience: p.exp || null,
-      fitness_desc: p.strength || null,
-      emergency_contact_name: p.emerName || null,
-      emergency_contact_rel: p.emerRel || null,
-      emergency_contact_phone: p.emerPhone || null,
-      emergency_contact_address: p.emerAddr || null,
-      medical_history: p.medicalHistory || null,
-      is_official_member: isOfficial,
-      updated_at: new Date().toISOString()
-    };
-
-    var memberUrl = SUPABASE_URL + "/rest/v1/members?on_conflict=line_user_id";
-    var mRes = UrlFetchApp.fetch(memberUrl, {
-      method: "post",
-      contentType: "application/json",
-      headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-        "Prefer": "resolution=merge-duplicates,return=minimal"
-      },
-      payload: JSON.stringify(memberPayload),
-      muteHttpExceptions: true
-    });
-    if (mRes.getResponseCode() >= 400) {
-      console.warn("⚠️ [Supabase] Upsert members 回應失敗 (HTTP " + mRes.getResponseCode() + "): " + mRes.getContentText());
-    }
-
-    // 2. 寫入或更新 event_signups 表
-    var signupPayload = {
-      id: signupCode,
-      event_id: eventId,
-      line_user_id: userId,
-      name: p.name || "",
-      status: signupStatus || "審核中 Checking",
-      is_official_member_snapshot: isOfficial,
-      notes: "",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    var signupUrl = SUPABASE_URL + "/rest/v1/event_signups?on_conflict=id";
-    var res = UrlFetchApp.fetch(signupUrl, {
-      method: "post",
-      contentType: "application/json",
-      headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-        "Prefer": "resolution=merge-duplicates,return=minimal"
-      },
-      payload: JSON.stringify(signupPayload),
-      muteHttpExceptions: true
-    });
-
-    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
-      console.log("⚡ [Supabase] 報名資料已成功寫入 Supabase event_signups: " + signupCode);
-      return true;
     } else {
-      console.error("❌ [Supabase] 寫入 event_signups 失敗 (HTTP " + res.getResponseCode() + "): " + res.getContentText());
-      return false;
+      console.warn("Gemini API 回應異常 (HTTP " + res.getResponseCode() + "):", res.getContentText());
     }
   } catch (err) {
-    console.error("❌ [Supabase] 同步報名至 Supabase 拋出例外:", err);
-    return false;
+    console.error("Gemini AI 客服執行失敗:", err);
   }
+  return null;
 }
 
 /**
- * 🛠️ 測試 Supabase 報名同步連線 (可在 GAS 編輯器直接按「執行」測試)
+ * 讀取開放活動摘要作為 AI 上下文
  */
-function testSupabaseSignupSync() {
-  console.log("=== 正在測試 Supabase 連線與報名寫入 ===");
-  console.log("SUPABASE_URL 配置狀態:", SUPABASE_URL ? "已設定 (" + SUPABASE_URL + ")" : "❌ 尚未設定！請在專案設定新增 SUPABASE_URL");
-  console.log("SUPABASE_SERVICE_ROLE_KEY 配置狀態:", SUPABASE_SERVICE_ROLE_KEY ? "已設定 (長度: " + (SUPABASE_SERVICE_ROLE_KEY ? SUPABASE_SERVICE_ROLE_KEY.length : 0) + ")" : "❌ 尚未設定！請在專案設定新增 SUPABASE_SERVICE_ROLE_KEY");
-
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error("請先在 Apps Script 的「專案設定 ➔ 指令碼屬性」中加入 SUPABASE_URL 與 SUPABASE_SERVICE_ROLE_KEY！");
-  }
-
-  var testUserId = "U_TEST_DIAGNOSTIC";
-  var testEventId = "EVT_TEST_DIAGNOSTIC";
-  var testCode = "S_TEST_" + new Date().getTime();
-  var testProfile = {
-    name: "測試報名社員",
-    gender: "男",
-    phone: "0900000000",
-    email: "test@example.com",
-    isOfficial: "是"
-  };
-
-  console.log("正在執行 _syncSignupToSupabase 測試寫入...");
-  var result = _syncSignupToSupabase(testUserId, testEventId, testCode, testProfile, "審核中 Checking", "測試診斷活動");
-  if (result) {
-    console.log("🎉 測試成功！資料已成功寫入 Supabase members 與 event_signups 表！");
-  } else {
-    console.error("❌ 測試失敗，請檢查上方日誌中的錯誤細節。");
-  }
-}
-
-/**
- * 同步取消報名狀態至 Supabase event_signups
- */
-function _syncSignupCancelToSupabase(userId, eventId, targetCode, reason) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !userId) return false;
+function _fetchOpenEventsContext() {
   try {
-    var query = "";
-    if (targetCode) {
-      query = "id=eq." + encodeURIComponent(targetCode);
-    } else if (eventId) {
-      query = "event_id=eq." + encodeURIComponent(eventId) + "&line_user_id=eq." + encodeURIComponent(userId);
-    } else {
-      return false;
-    }
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName("Events");
+    if (!sheet) return "目前無活動資料。";
 
-    var url = SUPABASE_URL + "/rest/v1/event_signups?" + query;
-    var res = UrlFetchApp.fetch(url, {
+    var data = sheet.getDataRange().getValues();
+    var headers = data[0];
+    var summaryArr = [];
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var status = String(row[_fi(headers, "報名狀態")] || "").trim();
+      if (status === "開放" || status === "Open") {
+        var title = row[_fi(headers, "活動名稱")] || "";
+        var fee = row[_fi(headers, "費用")] || 0;
+        var start = row[_fi(headers, "開始日期")] || "";
+        var desc = row[_fi(headers, "簡介")] || "";
+        summaryArr.push("• " + title + " (開始日：" + start + "，費用：$" + fee + ")：" + desc);
+      }
+    }
+    return summaryArr.join("\n");
+  } catch (e) {
+    return "無法讀取活動清單。";
+  }
+}
+
+/**
+ * 讀取 Google Docs 雲端大腦知識庫
+ */
+function _fetchDocsKnowledgeBase() {
+  var docId = PropertiesService.getScriptProperties().getProperty("KNOWLEDGE_DOC_ID");
+  if (!docId) return "社團裝備租借依社籍收費，出隊請遵守領隊指導。";
+
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get("docs_kb_text");
+  if (cached) return cached;
+
+  try {
+    var doc = DocumentApp.openById(docId);
+    var text = doc.getBody().getText();
+    if (text && text.length > 5000) {
+      text = text.substring(0, 5000); // 截取前 5000 字避免上下文膨脹
+    }
+    cache.put("docs_kb_text", text, 1800); // 快取 30 分鐘
+    return text;
+  } catch (e) {
+    console.warn("讀取 Docs 知識庫失敗:", e);
+    return "社團常態運作規章。";
+  }
+}
+// ==============================================================================
+// 🔄 野境戶外系統 GAS 模組 5：Supabase sync_queue 背景單向同步排程 (05_Sync_Worker.js)
+// 目的：定時排程執行，消費 Supabase 的 sync_queue 並單向批次寫回 Google Sheets
+// ==============================================================================
+
+/**
+ * 主要排程執行入口：可設定在 GAS 觸發條件（每 1 分鐘或每 5 分鐘執行一次）
+ */
+function syncPendingQueueFromSupabase() {
+  var props = PropertiesService.getScriptProperties();
+  var supabaseUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
+  var serviceKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+  var spreadsheetId = props.getProperty('SPREADSHEET_ID') || SPREADSHEET_ID;
+
+  if (!supabaseUrl || !serviceKey || !spreadsheetId) {
+    Logger.log("❌ 缺少必要之指令碼屬性 (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SPREADSHEET_ID)");
+    return;
+  }
+
+  // 1. 自 Supabase 撈取 status = 'pending' 的佇列 (每次最多 50 筆批次處理，避免超時)
+  var queueUrl = supabaseUrl + "/rest/v1/sync_queue?status=eq.pending&order=created_at.asc&limit=50";
+  var res = UrlFetchApp.fetch(queueUrl, {
+    method: "get",
+    headers: {
+      "apikey": serviceKey,
+      "Authorization": "Bearer " + serviceKey
+    },
+    muteHttpExceptions: true
+  });
+
+  if (res.getResponseCode() !== 200) {
+    Logger.log("❌ 讀取 sync_queue 失敗 (HTTP " + res.getResponseCode() + "): " + res.getContentText());
+    return;
+  }
+
+  var queue = JSON.parse(res.getContentText());
+  if (!queue || queue.length === 0) {
+    return; // 無待同步事件
+  }
+
+  Logger.log("🔄 開始處理 " + queue.length + " 筆待同步事件...");
+  var ss = SpreadsheetApp.openById(spreadsheetId);
+  var completedIds = [];
+  var failedItems = [];
+
+  // 2. 逐筆處理異動
+  for (var i = 0; i < queue.length; i++) {
+    var item = queue[i];
+    try {
+      _processSingleSyncItem(ss, item);
+      completedIds.push(item.id);
+    } catch (err) {
+      Logger.log("⚠️ 處理事件失敗 (Queue ID " + item.id + "): " + err.toString());
+      failedItems.push({ id: item.id, error: err.toString(), retry: (item.retry_count || 0) + 1 });
+    }
+  }
+
+  // 3. 批次將成功的項目標記為 completed
+  if (completedIds.length > 0) {
+    var patchUrl = supabaseUrl + "/rest/v1/sync_queue?id=in.(" + completedIds.join(",") + ")";
+    UrlFetchApp.fetch(patchUrl, {
       method: "patch",
       contentType: "application/json",
       headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-        "Prefer": "return=minimal"
+        "apikey": serviceKey,
+        "Authorization": "Bearer " + serviceKey
       },
       payload: JSON.stringify({
-        status: "已取消 Cancelled",
-        cancel_reason: reason || "",
-        updated_at: new Date().toISOString()
+        status: "completed",
+        processed_at: new Date().toISOString()
       }),
       muteHttpExceptions: true
     });
+    Logger.log("✅ 成功同步並回寫 completed: " + completedIds.length + " 筆");
+  }
 
-    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
-      console.log("⚡ [Supabase] 報名已成功標記為取消: " + (targetCode || eventId));
-      return true;
+  // 4. 若有失敗項目，更新 retry_count 與 error_message
+  for (var f = 0; f < failedItems.length; f++) {
+    var fail = failedItems[f];
+    var failUrl = supabaseUrl + "/rest/v1/sync_queue?id=eq." + fail.id;
+    UrlFetchApp.fetch(failUrl, {
+      method: "patch",
+      contentType: "application/json",
+      headers: {
+        "apikey": serviceKey,
+        "Authorization": "Bearer " + serviceKey
+      },
+      payload: JSON.stringify({
+        status: fail.retry >= 3 ? "failed" : "pending",
+        retry_count: fail.retry,
+        error_message: fail.error
+      }),
+      muteHttpExceptions: true
+    });
+  }
+}
+
+/**
+ * 單筆事件分流處理器
+ */
+function _processSingleSyncItem(ss, item) {
+  var table = item.table_name;
+  var payload = item.payload;
+
+  if (table === "members") {
+    _syncMemberToSheet(ss, payload);
+  } else if (table === "events") {
+    _syncEventToSheet(ss, payload);
+  } else if (table === "event_signups") {
+    _syncSignupToSheet(ss, payload);
+  } else if (table === "equipments") {
+    _syncEquipmentToSheet(ss, payload);
+  } else if (table === "loans") {
+    _syncLoanToSheet(ss, payload);
+  } else if (table === "payments") {
+    _syncPaymentToSheet(ss, payload);
+  } else if (table === "reflections") {
+    _syncReflectionToSheet(ss, payload);
+  }
+}
+
+function _syncMemberToSheet(ss, p) {
+  if (!p || !p.line_user_id) return;
+  var sheet = ss.getSheetByName("Members");
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var uIdx = _fi(headers, "系統識別碼");
+  if (uIdx === -1) return;
+
+  var targetRow = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][uIdx]).trim() === String(p.line_user_id).trim()) {
+      targetRow = i + 1;
+      break;
     }
-  } catch (err) {
-    console.warn("同步取消報名至 Supabase 拋出例外:", err);
   }
-  return false;
+
+  var offVal = p.is_official_member ? "是" : "否";
+  var proofStr = Array.isArray(p.proof_urls) ? p.proof_urls.join("\n") : (p.proof_urls || "");
+
+  if (targetRow > -1) {
+    _setCellVal(sheet, targetRow, headers, "姓名", p.name);
+    _setCellVal(sheet, targetRow, headers, "電話", p.phone);
+    _setCellVal(sheet, targetRow, headers, "信箱", p.email);
+    _setCellVal(sheet, targetRow, headers, "是否為正式社員", offVal);
+    if (p.membership_expires_at) {
+      _setCellVal(sheet, targetRow, headers, "社籍到期日", p.membership_expires_at);
+    }
+  } else {
+    sheet.appendRow([
+      p.line_user_id, p.name, p.student_id || "", p.department || "", p.gender || "",
+      p.phone || "", p.email || "", p.birthday || "", p.id_card || "",
+      p.emergency_contact_name || "", p.emergency_contact_rel || "", p.emergency_contact_phone || "", p.emergency_contact_address || "",
+      p.outdoor_experience || "", p.fitness_desc || "", proofStr, offVal, p.membership_expires_at || ""
+    ]);
+  }
 }
 
-/**
- * 安全自文字或網址中提取 Google 試算表 ID
- */
-function _extractSpreadsheetId(input) {
-  if (!input) return "";
-  var str = String(input).trim();
-  var match = str.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (match && match[1]) {
-    return match[1];
+function _syncEventToSheet(ss, p) {
+  var sheet = ss.getSheetByName("Events");
+  if (!sheet || !p || !p.id) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var idIdx = _fi(headers, "活動編號");
+  if (idIdx === -1) return;
+
+  var targetRow = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIdx]).trim() === String(p.id).trim()) {
+      targetRow = i + 1;
+      break;
+    }
   }
-  if (str.indexOf("/") === -1 && str.length > 20) {
-    return str;
+
+  if (targetRow > -1) {
+    if (p.title) _setCellVal(sheet, targetRow, headers, "活動名稱", p.title);
+    if (p.status) _setCellVal(sheet, targetRow, headers, "報名狀態", p.status);
+    if (p.fee !== undefined) _setCellVal(sheet, targetRow, headers, "費用", p.fee);
+    if (p.deadline) _setCellVal(sheet, targetRow, headers, "報名截止", p.deadline);
   }
-  return str;
 }
 
-/**
- * 非同步將報名資料同步寫入該活動之專屬試算表
- */
-function _asyncAppendToEventSpreadsheet(eventId, signupData, eventName) {
-  if (!eventId || !signupData) return;
-  try {
-    var ssId = "";
-    var evtName = eventName || (signupData && signupData.eventName) || "";
+function _syncSignupToSheet(ss, p) {
+  var sheet = ss.getSheetByName("Signups");
+  if (!sheet || !p || !p.id) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var sIdx = _fi(headers, "專屬碼");
+  var stCol = _fi(headers, "審核結果");
+  var nCol = _fi(headers, "備註");
+  var rCol = _fi(headers, "取消原因");
 
-    // 1. 優先從 Supabase 快速取得專屬試算表 ID (支援 spreadsheet_id 與 spreadsheet_url)
-    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      try {
-        var url = SUPABASE_URL + "/rest/v1/events?id=eq." + encodeURIComponent(eventId) + "&select=title,spreadsheet_id,spreadsheet_url";
-        var res = UrlFetchApp.fetch(url, {
-          method: "get",
-          headers: {
-            "apikey": SUPABASE_SERVICE_ROLE_KEY,
-            "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY
-          },
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][sIdx]).trim() === String(p.id).trim()) {
+      if (stCol > -1 && p.status) sheet.getRange(i + 1, stCol + 1).setValue(p.status);
+      if (nCol > -1 && p.notes !== undefined) sheet.getRange(i + 1, nCol + 1).setValue(p.notes);
+      if (rCol > -1 && p.cancel_reason !== undefined) sheet.getRange(i + 1, rCol + 1).setValue(p.cancel_reason);
+      break;
+    }
+  }
+}
+
+function _syncEquipmentToSheet(ss, p) {
+  var sheet = ss.getSheetByName("Equipments");
+  if (!sheet || !p || !p.id) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var idIdx = _fi(headers, "裝備代號");
+  var rQtyCol = _fi(headers, "剩餘數量");
+  var tQtyCol = _fi(headers, "總數量");
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIdx]).trim() === String(p.id).trim()) {
+      if (rQtyCol > -1 && p.available_qty !== undefined) sheet.getRange(i + 1, rQtyCol + 1).setValue(p.available_qty);
+      if (tQtyCol > -1 && p.total_qty !== undefined) sheet.getRange(i + 1, tQtyCol + 1).setValue(p.total_qty);
+      break;
+    }
+  }
+}
+
+function _syncLoanToSheet(ss, p) {
+  var sheet = ss.getSheetByName("Loan_Records");
+  if (!sheet || !p || !p.id) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var ordIdx = _fi(headers, "租借單號") > -1 ? _fi(headers, "租借單號") : _fi(headers, "租借編號");
+  var stCol = _fi(headers, "租借狀態") > -1 ? _fi(headers, "租借狀態") : _fi(headers, "領取/歸還");
+  var payCol = _fi(headers, "繳費狀態");
+
+  if (ordIdx === -1) return;
+
+  var found = false;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][ordIdx]).trim() === String(p.id).trim()) {
+      found = true;
+      if (stCol > -1 && p.status) sheet.getRange(i + 1, stCol + 1).setValue(p.status);
+      if (payCol > -1 && p.payment_status) sheet.getRange(i + 1, payCol + 1).setValue(p.payment_status);
+    }
+  }
+
+  // 若試算表中尚無此訂單，自 Supabase 讀取關聯細項並寫入新列
+  if (!found) {
+    try {
+      var props = PropertiesService.getScriptProperties();
+      var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
+      var sKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+      if (sbUrl && sKey) {
+        var itemsUrl = sbUrl + "/rest/v1/loan_items?loan_id=eq." + encodeURIComponent(p.id) + "&select=quantity,subtotal,equipment_id,equipments(id,name)";
+        var res = UrlFetchApp.fetch(itemsUrl, {
+          headers: { "apikey": sKey, "Authorization": "Bearer " + sKey },
           muteHttpExceptions: true
         });
         if (res.getResponseCode() === 200) {
-          var evts = JSON.parse(res.getContentText());
-          if (evts && evts.length > 0) {
-            if (evts[0].spreadsheet_id) ssId = _extractSpreadsheetId(evts[0].spreadsheet_id);
-            if (!ssId && evts[0].spreadsheet_url) ssId = _extractSpreadsheetId(evts[0].spreadsheet_url);
-            if (!evtName && evts[0].title) evtName = evts[0].title;
-          }
-        }
-      } catch (sbErr) {
-        console.warn("從 Supabase 讀取 spreadsheet_id 失敗，嘗試從 Sheets 備援:", sbErr);
-      }
-    }
+          var items = JSON.parse(res.getContentText());
+          var purposeStr = p.purpose || "社團出隊";
+          if (p.purpose_other) purposeStr += " (" + p.purpose_other + ")";
 
-    // 2. 若 Supabase 未查到，由主試算表 Events 表備援查找 (相容多種試算表欄位名稱與完整 URL)
-    if (!ssId && SPREADSHEET_ID) {
-      try {
-        var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-        var eSheet = ss.getSheetByName("Events");
-        if (eSheet) {
-          var eData = eSheet.getDataRange().getValues();
-          var headers = eData[0];
-          var idCol = _fi(headers, "活動編號");
-          var nameCol = _fi(headers, "活動名稱");
-          var sidCol = headers.findIndex(function (h) {
-            var s = String(h);
-            return s.includes("試算表ID") || s.includes("試算表 ID") || s.includes("報名名冊網址") || s.includes("試算表網址") || s.includes("試算表連結") || s.includes("試算表");
-          });
-          if (idCol > -1) {
-            for (var r = 1; r < eData.length; r++) {
-              if (String(eData[r][idCol]).trim() === String(eventId).trim()) {
-                if (sidCol > -1 && eData[r][sidCol]) {
-                  ssId = _extractSpreadsheetId(eData[r][sidCol]);
-                }
-                if (!evtName && nameCol > -1 && eData[r][nameCol]) {
-                  evtName = String(eData[r][nameCol]).trim();
-                }
-                break;
-              }
-            }
-          }
-        }
-      } catch (eErr) {
-        console.warn("從主試算表 Events 查找專屬試算表失敗:", eErr);
-      }
-    }
-
-    // 3. 若仍未查到試算表 ID，啟動 Google Drive 智慧檔名搜尋備援 (DriveApp.searchFiles)
-    if (!ssId && evtName) {
-      try {
-        // 清理活動名稱 (去除括號註記如 (測試) 或日期前綴)，以核心活動名搜尋
-        var cleanName = evtName.replace(/\(.*?\)/g, "").replace(/\[.*?\]/g, "").trim();
-        if (cleanName) {
-          var query = "title contains '" + cleanName.replace(/'/g, "\\'") + "' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false";
-          var files = DriveApp.searchFiles(query);
-          while (files.hasNext()) {
-            var f = files.next();
-            var fn = f.getName();
-            // 優先挑選包含「名冊」或「報名」的試算表
-            if (fn.includes("名冊") || fn.includes("報名") || !ssId) {
-              ssId = f.getId();
-              var foundUrl = f.getUrl();
-              console.log("⚡ [EventSheet] 透過 Google Drive 智慧搜尋找到專屬試算表: " + fn + " (" + ssId + ")");
-              // 自動回寫修補 Supabase 試算表 ID 與網址，供日後秒開
-              _syncEventDriveUrlsToSupabase(eventId, "", foundUrl, ssId);
-              if (fn.includes("名冊") || fn.includes("報名")) break;
-            }
-          }
-        }
-      } catch (driveErr) {
-        console.warn("DriveApp 搜尋專屬試算表失敗:", driveErr);
-      }
-    }
-
-    if (!ssId) {
-      console.warn("⚠️ [EventSheet] 此活動尚未關聯專屬試算表 ID (eventId=" + eventId + ")，略過專屬試算表追加。");
-      return;
-    }
-
-    console.log("⚡ [EventSheet] 正在開啟活動試算表 (" + ssId + ") 進行寫入...");
-
-    // 3. 開啟活動專屬試算表並動態對齊欄位寫入 (相容 16 欄、17 欄與 22 欄結構)
-    var eventSS = SpreadsheetApp.openById(ssId);
-
-    // ⚡ 自動巡檢並補齊該活動試算表 _CONFIG 中的 Supabase 與 Bot 連線設定 (自癒機制)
-    try {
-      var cfgSheet = eventSS.getSheetByName("_CONFIG");
-      if (cfgSheet) {
-        var curSbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL") || "";
-        var curSbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY") || "";
-        var curBotToken = PropertiesService.getScriptProperties().getProperty("MEMBER_BOT_TOKEN") || PropertiesService.getScriptProperties().getProperty("LINE_BOT_TOKEN") || "";
-        _setOrUpdateConfigRow(cfgSheet, "EVENT_ID", eventId);
-        if (evtName) _setOrUpdateConfigRow(cfgSheet, "EVENT_NAME", evtName);
-        if (curSbUrl) _setOrUpdateConfigRow(cfgSheet, "SUPABASE_URL", curSbUrl);
-        if (curSbKey) _setOrUpdateConfigRow(cfgSheet, "SUPABASE_SERVICE_ROLE_KEY", curSbKey);
-        if (curBotToken) _setOrUpdateConfigRow(cfgSheet, "MEMBER_BOT_TOKEN", curBotToken);
-        cfgSheet.hideSheet();
-      }
-    } catch (cfgErr) {
-      console.warn("自癒更新專屬試算表 _CONFIG 警告:", cfgErr);
-    }
-
-    var sheet = eventSS.getSheetByName("報名名冊") || eventSS.getSheets()[0];
-    var phoneStr = signupData.phone ? ("'" + String(signupData.phone)) : "";
-    var emerPhoneStr = signupData.emerPhone ? ("'" + String(signupData.emerPhone)) : "";
-    var expAndStrength = (signupData.exp || "") + (signupData.strength ? (" / " + signupData.strength) : "");
-
-    var sData = sheet.getDataRange().getValues();
-    var sHeaders = (sData.length > 0) ? sData[0] : [];
-
-    if (sHeaders.length > 0) {
-      var row = new Array(sHeaders.length).fill("");
-      function setCol(keywords, val) {
-        if (!Array.isArray(keywords)) keywords = [keywords];
-        for (var k = 0; k < keywords.length; k++) {
-          var idx = _fi(sHeaders, keywords[k]);
-          if (idx > -1) {
-            row[idx] = val;
-            return;
+          for (var j = 0; j < items.length; j++) {
+            var itm = items[j];
+            var eqName = (itm.equipments && itm.equipments.name) ? itm.equipments.name : itm.equipment_id;
+            var newRow = new Array(headers.length).fill("");
+            if (_fi(headers, "系統識別碼") > -1) newRow[_fi(headers, "系統識別碼")] = p.line_user_id || "";
+            if (_fi(headers, "姓名") > -1) newRow[_fi(headers, "姓名")] = p.name || "";
+            newRow[ordIdx] = p.id;
+            if (_fi(headers, "裝備代號") > -1) newRow[_fi(headers, "裝備代號")] = itm.equipment_id;
+            if (_fi(headers, "裝備名稱") > -1) newRow[_fi(headers, "裝備名稱")] = eqName;
+            if (_fi(headers, "數量") > -1) newRow[_fi(headers, "數量")] = itm.quantity;
+            if (_fi(headers, "預計領取") > -1) newRow[_fi(headers, "預計領取")] = p.start_date || "";
+            if (_fi(headers, "預計歸還") > -1) newRow[_fi(headers, "預計歸還")] = p.end_date || "";
+            if (_fi(headers, "用途") > -1) newRow[_fi(headers, "用途")] = purposeStr;
+            if (_fi(headers, "應繳費用") > -1) newRow[_fi(headers, "應繳費用")] = itm.subtotal || 0;
+            if (stCol > -1) newRow[stCol] = p.status || "待領取 To Be Collected";
+            if (payCol > -1) newRow[payCol] = p.payment_status || "未繳費";
+            sheet.appendRow(newRow);
           }
         }
       }
-      setCol(["系統識別碼"], signupData.userId || "");
-      setCol(["專屬碼", "報名專屬碼"], signupData.signupCode || "");
-      setCol(["姓名"], signupData.name || "");
-      setCol(["性別"], signupData.gender || "");
-      setCol(["LINE ID", "Line ID"], signupData.lineId || "");
-      setCol(["聯絡信箱", "信箱", "Email"], signupData.email || "");
-      setCol(["聯絡電話", "手機電話", "電話"], phoneStr);
-      setCol(["聯絡地址", "地址"], signupData.address || "");
-      setCol(["生日", "出生年月日"], signupData.birthday || "");
-      setCol(["證件號碼", "身分證字號", "身分證"], signupData.idCard ? ("'" + String(signupData.idCard)) : "");
-      setCol(["緊急聯絡人姓名", "緊急聯絡人"], signupData.emerName || "");
-      setCol(["緊急聯絡人電話", "聯絡人電話"], emerPhoneStr);
-      setCol(["緊急聯絡人聯絡地址", "緊急聯絡人地址"], signupData.emerAddr || "");
-      setCol(["緊急聯絡人關係", "關係"], signupData.emerRel || "");
-      setCol(["爬山經驗", "登山經驗"], expAndStrength);
-      setCol(["體能測驗", "體能"], signupData.strength || "");
-      setCol(["體能證明"], signupData.strengthProof || "");
-      setCol(["是否為社員"], signupData.isOfficial || "");
-      setCol(["審核結果", "審核狀態"], signupData.status || "審核中 Checking");
-      setCol(["通知狀態"], signupData.notifyStatus || "");
-      setCol(["繳費狀態"], signupData.payStatus || "未繳費 Unpaid");
-      setCol(["備註"], signupData.notes || "");
-      sheet.appendRow(row);
+    } catch (err) {
+      Logger.log("⚠️ 寫入 Loan_Records 細項失敗: " + err.toString());
+    }
+  }
+}
+
+function _syncPaymentToSheet(ss, p) {
+  var sheet = ss.getSheetByName("Payments");
+  if (!sheet || !p || !p.id) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var pidIdx = _fi(headers, "繳費單號");
+  var stCol = _fi(headers, "對帳狀態") > -1 ? _fi(headers, "對帳狀態") : _fi(headers, "審核狀態");
+
+  for (var i = 1; i < data.length; i++) {
+    if (pidIdx > -1 && String(data[i][pidIdx]).trim() === String(p.id).trim()) {
+      if (stCol > -1 && p.status) sheet.getRange(i + 1, stCol + 1).setValue(p.status);
+      break;
+    }
+  }
+}
+
+function _syncReflectionToSheet(ss, p) {
+  var sheet = ss.getSheetByName("Reflections");
+  if (!sheet || !p) return;
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var eIdx = _fi(headers, "活動編號");
+  var uIdx = _fi(headers, "系統識別碼");
+
+  var targetRow = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][eIdx]).trim() === String(p.event_id).trim() &&
+        String(data[i][uIdx]).trim() === String(p.line_user_id).trim()) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  var photoStr = Array.isArray(p.photo_urls) ? p.photo_urls.join("\n") : (p.photo_urls || "");
+
+  if (targetRow > -1) {
+    if (p.content) _setCellVal(sheet, targetRow, headers, "心得內容", p.content);
+    if (photoStr) _setCellVal(sheet, targetRow, headers, "照片連結", photoStr);
+  } else {
+    sheet.appendRow([
+      p.event_id, p.line_user_id, p.name || "", p.difficulty_rating || 3, p.beauty_rating || 3,
+      p.content || "", photoStr, new Date()
+    ]);
+  }
+}
+
+function _setCellVal(sheet, row, headers, colName, value) {
+  var idx = _fi(headers, colName);
+  if (idx > -1 && value !== undefined && value !== null) {
+    sheet.getRange(row, idx + 1).setValue(value);
+  }
+}
+// ==============================================================================
+// ⚡ 野境戶外系統 GAS 模組 6：LIFF 輕量 Helper API (06_Helper_Services.js)
+// 目的：僅處理 Google Drive 檔案上傳與 LINE 推播通知，徹底移除所有試算表寫入依賴
+// ==============================================================================
+
+/**
+ * 處理來自 LIFF 前端之輕量非同步 Helper 請求
+ */
+function handleLiffHelperApi(json) {
+  var action = json.action;
+
+  // 1. Google Drive 照片上傳 Helper (純上傳，不碰試算表)
+  if (action === "upload_drive_file") {
+    return _handleDriveUploadHelper(json);
+  }
+
+  // 2. 裝備租借幹部推播 Helper (純發訊息，不碰試算表)
+  if (action === "notify_officers_loan") {
+    return _handleNotifyOfficersLoan(json);
+  }
+
+  // 3. 繳費申報幹部推播 Helper (純發訊息，不碰試算表)
+  if (action === "notify_officers_payment") {
+    return _handleNotifyOfficersPayment(json);
+  }
+
+  // 4. 幹部身分檢查 (輕量唯讀)
+  if (action === "check_officer_status") {
+    return _handleCheckOfficerStatus(json);
+  }
+
+  return _errorResponse("未支援的 Helper Action: " + action);
+}
+
+/**
+ * Google Drive 檔案上傳處理核心 (絕不觸碰試算表)
+ */
+function _handleDriveUploadHelper(json) {
+  try {
+    var userId = json.userId || "guest";
+    var folderType = json.folderType || "general";
+    var files = json.files || [];
+
+    if (!Array.isArray(files) || files.length === 0) {
+      return _errorResponse("缺少上傳檔案內容");
+    }
+
+    // 取得或建立對應的 Google Drive 資料夾
+    var rootFolder;
+    var folderId = PropertiesService.getScriptProperties().getProperty("DRIVE_FOLDER_ID");
+    if (folderId) {
+      rootFolder = DriveApp.getFolderById(folderId);
     } else {
-      sheet.appendRow([
-        signupData.userId || "",
-        signupData.signupCode || "",
-        signupData.name || "",
-        signupData.gender || "",
-        signupData.lineId || "",
-        signupData.email || "",
-        phoneStr,
-        signupData.address || "",
-        signupData.birthday || "",
-        signupData.idCard ? ("'" + String(signupData.idCard)) : "",
-        signupData.emerName || "",
-        emerPhoneStr,
-        signupData.emerAddr || "",
-        signupData.emerRel || "",
-        expAndStrength,
-        signupData.strength || "",
-        signupData.strengthProof || "",
-        signupData.isOfficial || "",
-        signupData.status || "審核中 Checking",
-        signupData.notifyStatus || "",
-        signupData.payStatus || "未繳費 Unpaid",
-        signupData.notes || ""
-      ]);
+      rootFolder = DriveApp.getRootFolder();
     }
 
-    console.log("⚡ [EventSheet] 已將報名資料同步至活動專屬試算表: " + signupData.signupCode);
+    var subFolderName = "Wilderness_" + folderType;
+    var subFolders = rootFolder.getFoldersByName(subFolderName);
+    var targetFolder = subFolders.hasNext() ? subFolders.next() : rootFolder.createFolder(subFolderName);
+
+    var uploadedUrls = [];
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      var base64Data = f.data || f.base64 || "";
+      var mimeType = f.mimeType || f.type || "image/jpeg";
+      var fileName = (f.name || ("upload_" + Date.now() + "_" + i)).replace(/[^a-zA-Z0-9._-]/g, "_");
+
+      if (base64Data.indexOf(",") > -1) {
+        base64Data = base64Data.split(",")[1];
+      }
+
+      var decoded = Utilities.base64Decode(base64Data);
+      var blob = Utilities.newBlob(decoded, mimeType, fileName);
+      var driveFile = targetFolder.createFile(blob);
+      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+      var fileUrl = driveFile.getUrl();
+      uploadedUrls.push(fileUrl);
+    }
+
+    return _successResponse({
+      urls: uploadedUrls,
+      message: "成功上傳 " + uploadedUrls.length + " 個檔案至 Google Drive！"
+    });
   } catch (err) {
-    console.warn("寫入活動專屬試算表失敗:", err);
+    console.error("Google Drive 上傳失敗:", err);
+    return _errorResponse("Drive 上傳例外: " + err.toString());
   }
 }
 
 /**
- * 🛠️ 測試活動專屬試算表寫入 (可在 GAS 編輯器直接按「執行」測試)
+ * 裝備租借幹部推播 Helper (純推播訊息)
  */
-function testEventSpreadsheetAppend() {
-  console.log("=== 正在測試活動專屬試算表追加寫入 ===");
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var eSheet = ss.getSheetByName("Events");
-  var testEvtId = "";
-  if (eSheet) {
-    var eData = eSheet.getDataRange().getValues();
-    if (eData.length > 1) {
-      var idCol = _fi(eData[0], "活動編號");
-      if (idCol > -1 && eData[1][idCol]) {
-        testEvtId = String(eData[1][idCol]).trim();
-      }
-    }
-  }
-  console.log("使用測試活動編號 (可手動於程式中指定):", testEvtId);
-
-  var testSignup = {
-    userId: "U_TEST_SHEET",
-    signupCode: "S_TEST_" + new Date().getTime(),
-    name: "測試試算表寫入",
-    gender: "男",
-    lineId: "test_line_id",
-    email: "test@example.com",
-    phone: "0911222333",
-    address: "台北市信義區忠孝東路五段",
-    birthday: "1998-08-08",
-    idCard: "B123456789",
-    emerName: "測試聯絡人",
-    emerPhone: "0922333444",
-    emerAddr: "台北市大安區",
-    emerRel: "父子",
-    exp: "初級百岳",
-    strength: "良好",
-    strengthProof: "",
-    isOfficial: "是",
-    status: "審核中 Checking",
-    notifyStatus: "",
-    payStatus: "未繳費 Unpaid",
-    notes: "系統診斷測試列"
-  };
-
-  _asyncAppendToEventSpreadsheet(testEvtId, testSignup);
-}
-
-// API: 儲存或新增活動 (POST)
-function processSaveEvent(payload) {
-  var lock = LockService.getScriptLock();
+function _handleNotifyOfficersLoan(json) {
   try {
-    lock.waitLock(10000);
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var officerCheck = checkOfficerInternal(ss, payload.userId);
-    if (!officerCheck.isOfficer) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足，無法儲存活動！" })).setMimeType(ContentService.MimeType.JSON);
-    }
+    var userId = json.userId;
+    var details = json.details || {};
+    var loanId = json.loanId || "新訂單";
+    var totalRent = json.totalRent !== undefined ? json.totalRent : 0;
 
-    var eventSheet = ss.getSheetByName("Events");
-    if (!eventSheet) {
-      eventSheet = ss.insertSheet("Events");
-      eventSheet.appendRow(["活動編號", "活動名稱", "活動開始日期", "活動結束日期", "報名截止日期", "預計費用", "報名狀態", "簡介", "詳細行程", "封面圖網址", "雲端資料夾網址", "報名名冊網址", "試算表ID"]);
-    }
-
-    var eData = eventSheet.getDataRange().getDisplayValues();
-    var headers = eData[0];
-    var hIdx = {
-      id: getOrCreateColIdx(eventSheet, headers, "活動編號"),
-      name: getOrCreateColIdx(eventSheet, headers, "活動名稱"),
-      startDate: getOrCreateColIdx(eventSheet, headers, "活動開始日期"),
-      endDate: getOrCreateColIdx(eventSheet, headers, "活動結束日期"),
-      deadline: getOrCreateColIdx(eventSheet, headers, "報名截止日期"),
-      cost: getOrCreateColIdx(eventSheet, headers, "預計費用"),
-      status: getOrCreateColIdx(eventSheet, headers, "報名狀態"),
-      shortDesc: getOrCreateColIdx(eventSheet, headers, "簡介"),
-      fullDesc: getOrCreateColIdx(eventSheet, headers, "詳細行程"),
-      img: getOrCreateColIdx(eventSheet, headers, "封面圖網址"),
-      driveFolder: getOrCreateColIdx(eventSheet, headers, "雲端資料夾網址"),
-      sheetUrl: getOrCreateColIdx(eventSheet, headers, "報名名冊網址"),
-      sheetId: getOrCreateColIdx(eventSheet, headers, "試算表ID")
-    };
-
-    var eventId = payload.eventId ? String(payload.eventId).trim() : "";
-    var isUpdate = false;
-    var targetRow = -1;
-
-    if (eventId) {
-      for (var i = 1; i < eData.length; i++) {
-        if (eData[i][hIdx.id] === eventId) {
-          isUpdate = true;
-          targetRow = i + 1;
-          break;
-        }
+    var cart = details.cart || {};
+    var itemsSummary = [];
+    for (var eqId in cart) {
+      if (cart[eqId] > 0) {
+        itemsSummary.push("• " + eqId + " x" + cart[eqId]);
       }
     }
 
-    // 若為新活動且未提供編號，自動產生編號：E + 年月 + 序號 (如 E2609-01)
-    if (!isUpdate && !eventId) {
-      var datePrefix = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyMM");
-      var maxSeq = 0;
-      for (var j = 1; j < eData.length; j++) {
-        var existingId = String(eData[j][hIdx.id] || "").trim();
-        if (existingId.indexOf("E" + datePrefix) === 0) {
-          var numPart = parseInt(existingId.replace("E" + datePrefix, "").replace("-", ""), 10);
-          if (!isNaN(numPart) && numPart > maxSeq) maxSeq = numPart;
-        }
-      }
-      var nextSeqStr = (maxSeq + 1 < 10) ? ("0" + (maxSeq + 1)) : String(maxSeq + 1);
-      eventId = "E" + datePrefix + "-" + nextSeqStr;
-    }
+    var msg = "【🎒 幹部通知：新裝備租借申請】\n\n" +
+      "單號：" + loanId + "\n" +
+      "借用者 ID：" + userId + "\n" +
+      "預計領取：" + (details.pickupDate || "") + "\n" +
+      "預計歸還：" + (details.returnDate || "") + "\n" +
+      "用途：" + (details.purpose || "") + (details.otherPurpose ? " (" + details.otherPurpose + ")" : "") + "\n" +
+      "預估總租金：$" + totalRent + "\n\n" +
+      "品項明細：\n" + itemsSummary.join("\n") + "\n\n" +
+      "⚡ 本資料已安全寫入 Supabase，請至幹部後台確認備用！";
 
-    // 若為新活動，自動於 Google Drive 建立專屬資料夾與報名名冊試算表
-    var driveFolderUrl = payload.driveFolderUrl || "";
-    var spreadsheetUrl = payload.spreadsheetUrl || "";
-    var spreadsheetId = payload.spreadsheetId || "";
-
-    if (!isUpdate && (!driveFolderUrl || !spreadsheetUrl)) {
-      var driveInfo = _createEventDriveFolderAndSheet(payload, eventId);
-      if (driveInfo) {
-        driveFolderUrl = driveInfo.folderUrl;
-        spreadsheetUrl = driveInfo.spreadsheetUrl;
-        spreadsheetId = driveInfo.spreadsheetId;
-        _syncEventDriveUrlsToSupabase(eventId, driveFolderUrl, spreadsheetUrl, spreadsheetId);
-      }
-    }
-
-    // 處理圖片上傳
-    var imageUrl = payload.imageUrl || "";
-    if (payload.coverImageFile && payload.coverImageFile.base64) {
-      var eventFirstDate = payload.startDate ? String(payload.startDate).replace(/\D/g, "").substring(0, 8) : Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
-      var eventCleanName = (payload.name || "活動").trim();
-      var fileName = eventFirstDate + "_" + eventCleanName + "_封面.jpg";
-      var uploadResult = uploadFileToDrive(payload.coverImageFile.base64, fileName, "活動封面");
-      if (uploadResult && !uploadResult.startsWith("上傳失敗")) {
-        var driveMatch = uploadResult.match(/(?:file\/d\/|id=)([^/&?]+)/);
-        if (driveMatch && driveMatch[1]) {
-          imageUrl = "https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000";
-        } else {
-          imageUrl = uploadResult;
-        }
-      }
-    }
-
-    var rowValues = new Array(headers.length).fill("");
-    if (isUpdate) {
-      rowValues = eventSheet.getRange(targetRow, 1, 1, headers.length).getValues()[0];
-    }
-
-    rowValues[hIdx.id] = eventId;
-    rowValues[hIdx.name] = payload.name || "";
-    rowValues[hIdx.startDate] = payload.startDate || "";
-    rowValues[hIdx.endDate] = payload.endDate || "";
-    rowValues[hIdx.deadline] = payload.deadline || "";
-    rowValues[hIdx.cost] = payload.cost || "";
-    rowValues[hIdx.status] = payload.status || "未來開放";
-    rowValues[hIdx.shortDesc] = payload.shortDesc || "";
-    rowValues[hIdx.fullDesc] = payload.fullDesc || "";
-    if (imageUrl) rowValues[hIdx.img] = imageUrl;
-    if (driveFolderUrl) rowValues[hIdx.driveFolder] = driveFolderUrl;
-    if (spreadsheetUrl) rowValues[hIdx.sheetUrl] = spreadsheetUrl;
-    if (spreadsheetId) rowValues[hIdx.sheetId] = spreadsheetId;
-
-    if (isUpdate) {
-      eventSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
-    } else {
-      eventSheet.appendRow(rowValues);
-    }
-
-    // ⚡ 即時完整同步至 Supabase events 表 (包含 drive_folder_url, spreadsheet_url, spreadsheet_id)
-    try {
-      _syncEventToSupabase({
-        id: eventId,
-        name: payload.name,
-        startDate: payload.startDate,
-        endDate: payload.endDate,
-        deadline: payload.deadline,
-        cost: payload.cost,
-        status: payload.status,
-        shortDesc: payload.shortDesc,
-        fullDesc: payload.fullDesc,
-        imageUrl: imageUrl,
-        driveFolderUrl: driveFolderUrl,
-        spreadsheetUrl: spreadsheetUrl,
-        spreadsheetId: spreadsheetId
-      });
-    } catch (sbSyncErr) {
-      console.warn("同步活動資料至 Supabase 警告:", sbSyncErr);
-    }
-
-    // 若有勾選推播至幹部群組
-    if (payload.notifyOfficerGroup) {
-      try {
-        var groupMsg = "【幹部通知：新活動發布】\n\n" +
-          "活動名稱：" + payload.name + "\n" +
-          "活動編號：" + eventId + "\n" +
-          "出隊日期：" + payload.startDate + " ~ " + payload.endDate + "\n" +
-          "報名截止：" + payload.deadline + "\n" +
-          "預計費用：" + payload.cost + "\n" +
-          "狀態：" + (payload.status || "開放") + "\n\n" +
-          "已上架完成，社員可在「最新活動」瀏覽與報名！";
-        pushAdminMessage(groupMsg);
-      } catch (err) {
-        console.error("推播至幹部群組失敗: " + err.toString());
-      }
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      eventId: eventId,
-      imageUrl: imageUrl,
-      driveFolderUrl: driveFolderUrl,
-      spreadsheetUrl: spreadsheetUrl,
-      spreadsheetId: spreadsheetId,
-      message: isUpdate ? "活動資訊更新成功！" : "新活動發布成功！"
-    })).setMimeType(ContentService.MimeType.JSON);
-
+    pushAdminMessage(msg);
+    return _successResponse({ message: "幹部推播已成功送出" });
   } catch (err) {
-    console.error("儲存活動失敗:", err);
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "系統忙碌中，請稍後再試！" })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    _safeReleaseLock(lock);
+    console.warn("裝備租借幹部推播失敗:", err);
+    return _errorResponse(err.toString());
   }
 }
 
-// API: 快速更新活動狀態 (POST)
-function processUpdateEventStatus(payload) {
-  var lock = LockService.getScriptLock();
+/**
+ * 繳費申報幹部推播 Helper (純推播訊息)
+ */
+function _handleNotifyOfficersPayment(json) {
   try {
-    lock.waitLock(5000);
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var officerCheck = checkOfficerInternal(ss, payload.userId);
-    if (!officerCheck.isOfficer) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足" })).setMimeType(ContentService.MimeType.JSON);
-    }
+    var userId = json.userId;
+    var details = json.details || {};
+    var totalAmount = details.totalAmount || 0;
+    var last5Digits = details.last5Digits || "無";
+    var note = details.note ? "\n備註：" + details.note : "";
 
-    var eventSheet = ss.getSheetByName("Events");
-    if (!eventSheet) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Events 表" })).setMimeType(ContentService.MimeType.JSON);
-    }
+    var msg = "【💳 幹部通知：新繳費申報】\n\n" +
+      "申報人 ID：" + userId + "\n" +
+      "申報金額：$" + totalAmount + "\n" +
+      "帳號末五碼：" + last5Digits +
+      note + "\n\n" +
+      "⚡ 資料已安全記錄於 Supabase，請幹部核對網銀後至系統核銷！";
 
-    var eData = eventSheet.getDataRange().getDisplayValues();
-    var headers = eData[0];
-    var idIdx = _fi(headers, "活動編號");
-    var statusIdx = headers.findIndex(function (h) { return String(h).includes("報名狀態") || String(h).includes("狀態"); });
-
-    if (idIdx === -1 || statusIdx === -1) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "試算表欄位缺失" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    for (var i = 1; i < eData.length; i++) {
-      if (eData[i][idIdx] === payload.eventId) {
-        eventSheet.getRange(i + 1, statusIdx + 1).setValue(payload.status);
-        return ContentService.createTextOutput(JSON.stringify({
-          status: "success",
-          message: "活動狀態已更新為【" + payload.status + "】"
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該場活動" })).setMimeType(ContentService.MimeType.JSON);
+    pushAdminMessage(msg);
+    return _successResponse({ message: "繳費申報推播已成功送出" });
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    _safeReleaseLock(lock);
+    console.warn("繳費申報幹部推播失敗:", err);
+    return _errorResponse(err.toString());
   }
 }
 
-// API: 審核社員報名結果 (正取/備取) (POST)
-function processUpdateSignupStatus(payload) {
-  var lock = LockService.getScriptLock();
+/**
+ * 幹部身分檢查 (輕量唯讀)
+ */
+function _handleCheckOfficerStatus(json) {
   try {
-    lock.waitLock(5000);
+    var userId = json.userId;
+    if (!userId) return _jsonResponse({ isOfficer: false });
+
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var officerCheck = checkOfficerInternal(ss, payload.userId);
-    if (!officerCheck.isOfficer) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足" })).setMimeType(ContentService.MimeType.JSON);
-    }
+    var sheet = ss.getSheetByName("Officers");
+    if (!sheet) return _jsonResponse({ isOfficer: false });
 
-    var sSheet = ss.getSheetByName("Signups");
-    if (!sSheet) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到 Signups 表" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var sData = sSheet.getDataRange().getDisplayValues();
-    var headers = sData[0];
-    var codeIdx = headers.findIndex(function (h) {
-      var s = String(h);
-      if (s.includes("活動")) return false;
-      return s.includes("專屬碼") || s.includes("報名代碼") || s.includes("報名編號") || s.includes("代碼") || s.includes("序號");
-    });
-    var sysIdx = headers.findIndex(function (h) {
-      var s = String(h).toLowerCase();
-      return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
-    });
-    var evtIdx = _fi(headers, "活動編號");
-    var nameIdx = _fi(headers, "姓名");
-    var resultIdx = headers.findIndex(function (h) {
-      return String(h).includes("審核") || String(h).includes("結果");
-    });
-    if (resultIdx === -1) {
-      resultIdx = getOrCreateColIdx(sSheet, headers, "審核結果");
-    }
-
-    var notifyIdx = headers.findIndex(function (h) {
-      return String(h).includes("通知");
-    });
-    if (notifyIdx === -1) {
-      notifyIdx = getOrCreateColIdx(sSheet, headers, "通知狀態");
-    }
-
-    var targetRow = -1;
-
-    // 優先 1：若前端傳入明確 rowNumber，核驗後精準鎖定
-    if (payload.rowNumber && payload.rowNumber > 1 && payload.rowNumber <= sData.length) {
-      var rIdx = payload.rowNumber - 1;
-      var rCode = codeIdx > -1 ? String(sData[rIdx][codeIdx] || "").trim() : "";
-      var rSys = sysIdx > -1 ? String(sData[rIdx][sysIdx] || "").trim() : "";
-      var rEvt = evtIdx > -1 ? String(sData[rIdx][evtIdx] || "").trim() : "";
-      var rName = nameIdx > -1 ? String(sData[rIdx][nameIdx] || "").trim() : "";
-
-      if ((payload.signupCode && rCode === String(payload.signupCode).trim()) ||
-        (payload.targetUserId && rSys === String(payload.targetUserId).trim()) ||
-        (payload.name && rName === String(payload.name).trim()) ||
-        (payload.eventId && rEvt === String(payload.eventId).trim())) {
-        targetRow = payload.rowNumber;
-      }
-    }
-
-    // 優先 2：遍歷比對專屬碼、系統識別碼或姓名
-    if (targetRow === -1) {
-      var pCode = payload.signupCode ? String(payload.signupCode).trim() : "";
-      var pSys = payload.targetUserId ? String(payload.targetUserId).trim() : "";
-      var pEvt = payload.eventId ? String(payload.eventId).trim() : "";
-      var pName = payload.name ? String(payload.name).trim() : "";
-
-      for (var i = 1; i < sData.length; i++) {
-        var rowCode = codeIdx > -1 ? String(sData[i][codeIdx] || "").trim() : "";
-        var rowSys = sysIdx > -1 ? String(sData[i][sysIdx] || "").trim() : "";
-        var rowEvt = evtIdx > -1 ? String(sData[i][evtIdx] || "").trim() : "";
-        var rowName = nameIdx > -1 ? String(sData[i][nameIdx] || "").trim() : "";
-
-        if (pCode && rowCode && rowCode === pCode) {
-          targetRow = i + 1;
-          break;
-        }
-        if (pSys && pEvt && rowSys === pSys && rowEvt === pEvt) {
-          targetRow = i + 1;
-          break;
-        }
-        if (pName && pEvt && rowName === pName && rowEvt === pEvt) {
-          targetRow = i + 1;
-          break;
-        }
-      }
-    }
-
-    if (targetRow > 1) {
-      // 🛡️ 規範化審核結果，嚴格對齊試算表下拉選單之「資料驗證規則」
-      var rawResult = String(payload.reviewResult || "").trim();
-      var finalResult = rawResult;
-      if (rawResult.indexOf("正取") > -1) {
-        if (rawResult.indexOf("已繳費") > -1 || rawResult.indexOf("Paid") > -1) {
-          finalResult = "正取（已繳費）Confirmed(Paid)";
-        } else {
-          finalResult = "正取 Confirmed";
-        }
-      } else if (rawResult.indexOf("備取") > -1) {
-        if (rawResult.indexOf("有意願") > -1 || rawResult.indexOf("Interested") > -1) {
-          finalResult = "備取（有意願）Waitlisted (Interested)";
-        } else {
-          finalResult = "備取 Waitlisted";
-        }
-      } else if (rawResult.indexOf("審核中") > -1 || rawResult.indexOf("Checking") > -1) {
-        finalResult = "審核中 Checking";
-      } else if (rawResult.indexOf("取消") > -1 || rawResult.indexOf("Cancelled") > -1) {
-        finalResult = "已取消 Cancelled";
-      }
-
-      sSheet.getRange(targetRow, resultIdx + 1).setValue(finalResult);
-      if (notifyIdx > -1) {
-        sSheet.getRange(targetRow, notifyIdx + 1).setValue("");
-      }
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "success",
-        message: "審核狀態已更新為【" + finalResult + "】"
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到該筆報名紀錄" })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    _safeReleaseLock(lock);
-  }
-}
-
-// API: 一鍵發送審核結果推播通知 (POST)
-function processSendEventNotifications(payload) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var officerCheck = checkOfficerInternal(ss, payload.userId);
-  if (!officerCheck.isOfficer) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var sSheet = ss.getSheetByName("Signups");
-  var eventSheet = ss.getSheetByName("Events");
-  if (!sSheet || !eventSheet) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "試算表缺失" })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var sData = sSheet.getDataRange().getValues();
-  var eData = eventSheet.getDataRange().getDisplayValues();
-  var eIdIdx = _fi(eData[0], "活動編號");
-  var eNameIdx = _fi(eData[0], "活動名稱");
-
-  var sysIdx = sData[0].findIndex(function (h) {
-    var s = String(h).toLowerCase();
-    return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
-  });
-  var nameIdx = _fi(sData[0], "姓名");
-  var evtIdx = _fi(sData[0], "活動編號");
-  var resultIdx = sData[0].findIndex(function (h) {
-    return String(h).includes("審核") || String(h).includes("結果");
-  });
-  var notifyIdx = sData[0].findIndex(function (h) {
-    return String(h).includes("通知");
-  });
-
-  var notifiedCount = 0;
-  var targetEventId = payload.eventId ? String(payload.eventId).trim() : "";
-
-  for (var i = 1; i < sData.length; i++) {
-    var rowEventId = (evtIdx > -1) ? String(sData[i][evtIdx] || "").trim() : "";
-    if (targetEventId && rowEventId !== targetEventId) continue;
-
-    var result = (resultIdx > -1) ? String(sData[i][resultIdx] || "") : "";
-    var notifyStatus = (notifyIdx > -1) ? String(sData[i][notifyIdx] || "") : "";
-    var targetUid = (sysIdx > -1) ? String(sData[i][sysIdx] || "").trim() : "";
-    var name = (nameIdx > -1 && sData[i][nameIdx]) ? String(sData[i][nameIdx]) : "社員";
-
-    var isAcceptedOrWaitlisted = (result.indexOf("正取") > -1 || result.indexOf("備取") > -1);
-    if (isAcceptedOrWaitlisted && notifyStatus !== "已通知" && result.indexOf("取消") === -1 && targetUid.startsWith("U")) {
-      var eventName = rowEventId;
-      for (var e = 1; e < eData.length; e++) {
-        if (eData[e][eIdIdx > -1 ? eIdIdx : 0] === rowEventId) {
-          eventName = eData[e][eNameIdx > -1 ? eNameIdx : 1];
-          break;
-        }
-      }
-
-      if (result.indexOf("正取") > -1) {
-        var acceptedFlex = {
-          "type": "bubble",
-          "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-              { "type": "text", "text": "審核結果出爐 Result", "weight": "bold", "color": "#1DB446", "size": "sm" },
-              { "type": "text", "text": "活動正取通知", "weight": "bold", "size": "xl", "margin": "md" },
-              { "type": "text", "text": "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", "margin": "md", "size": "sm", "wrap": true },
-              { "type": "text", "text": eventName, "weight": "bold", "color": "#111111", "size": "md", "wrap": true, "margin": "sm" },
-              { "type": "text", "text": "審核結果為 Result：", "margin": "md", "size": "sm" },
-              { "type": "text", "text": "【 " + result + " 】", "weight": "bold", "color": "#1DB446", "size": "lg", "align": "center", "margin": "md" },
-              { "type": "separator", "margin": "md" },
-              { "type": "text", "text": "恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入出隊群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!", "wrap": true, "margin": "md", "size": "xs", "color": "#666666" }
-            ]
-          },
-          "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [{
-              "type": "button",
-              "style": "primary",
-              "color": "#1DB446",
-              "action": {
-                "type": "uri",
-                "label": "前往繳費系統 Pay",
-                "uri": "https://liff.line.me/2009217429-u7OCkmQO"
-              }
-            }]
-          }
-        };
-        pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
-      } else {
-        var waitlistFlex = {
-          "type": "bubble",
-          "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-              { "type": "text", "text": "審核結果出爐 Result", "weight": "bold", "color": "#FF9800", "size": "sm" },
-              { "type": "text", "text": "活動備取通知", "weight": "bold", "size": "xl", "margin": "md" },
-              { "type": "text", "text": "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", "margin": "md", "size": "sm", "wrap": true },
-              { "type": "text", "text": eventName, "weight": "bold", "color": "#111111", "size": "md", "wrap": true, "margin": "sm" },
-              { "type": "text", "text": "審核結果為 Result：", "margin": "md", "size": "sm" },
-              { "type": "text", "text": "【 " + result + " 】", "weight": "bold", "color": "#FF9800", "size": "lg", "align": "center", "margin": "md" },
-              { "type": "separator", "margin": "md" },
-              { "type": "text", "text": "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!", "wrap": true, "margin": "md", "size": "xs", "color": "#666666" }
-            ]
-          },
-          "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [{
-              "type": "button",
-              "style": "primary",
-              "color": "#FF9800",
-              "action": {
-                "type": "postback",
-                "label": "確認備取意願 Confirm Waitlist",
-                "data": "action=confirm_waitlist&eventId=" + rowEventId + "&userId=" + targetUid
-              }
-            }]
-          }
-        };
-        pushFlexMessage(targetUid, "【活動備取通知 Waitlist】", waitlistFlex);
-      }
-
-      sSheet.getRange(i + 1, notifyIdx + 1).setValue("已通知");
-      notifiedCount++;
-    }
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "success",
-    notifiedCount: notifiedCount,
-    message: "已成功發送 " + notifiedCount + " 則審核推播通知！"
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-// ------------------------------------------------------------------
-// API: 幹部更新裝備照片 (POST action=update_equipment_images)
-// ------------------------------------------------------------------
-function processUpdateEquipmentImages(payload) {
-  try {
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var officerCheck = checkOfficerInternal(ss, payload.userId);
-    if (!officerCheck.isOfficer) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "權限不足，僅限社團幹部操作" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var equipSheet = ss.getSheetByName("Equipments") || ss.getSheetByName("裝備清單") || ss.getSheetByName("裝備");
-    if (!equipSheet) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到裝備試算表" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var data = equipSheet.getDataRange().getValues();
+    var data = sheet.getDataRange().getValues();
     var headers = data[0];
-    var idIdx = _fi(headers, "裝備代號");
-    var nameIdx = _fi(headers, "裝備名稱");
-    var imgIdx = _fi(headers, "圖片網址");
-
-    if (idIdx === -1 || imgIdx === -1) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "試算表欄位缺失 (裝備代號或圖片網址)" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var equipId = String(payload.equipId || "").trim();
-    var equipName = String(payload.equipName || "").trim();
-    var targetRow = -1;
+    var uidIdx = _fi(headers, "系統識別碼");
+    if (uidIdx === -1) uidIdx = 3; // 預設第 4 欄
 
     for (var i = 1; i < data.length; i++) {
-      if (String(data[i][idIdx]).trim() === equipId) {
-        targetRow = i + 1;
-        if (!equipName && nameIdx > -1) {
-          equipName = String(data[i][nameIdx]).trim();
-        }
-        break;
+      if (String(data[i][uidIdx]).trim() === String(userId).trim()) {
+        return _jsonResponse({
+          isOfficer: true,
+          name: data[i][0] || "幹部",
+          role: data[i][1] || "幹部"
+        });
       }
     }
-
-    if (targetRow === -1) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到指定的裝備資料" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var finalUrls = [];
-    // 1. 加入幹部保留的既有照片 URL
-    if (payload.keptUrls && Array.isArray(payload.keptUrls)) {
-      payload.keptUrls.forEach(function (u) {
-        var s = String(u || "").trim();
-        if (s.startsWith("http") && finalUrls.indexOf(s) === -1) {
-          finalUrls.push(s);
-        }
-      });
-    }
-
-    // 2. 上傳新照片至 Google Drive: 系統圖庫/裝備照片/裝備名稱/
-    // 檔案命名格式：裝備名稱_YYYYMMDD_序號.jpg
-    if (payload.newPhotoFiles && Array.isArray(payload.newPhotoFiles) && payload.newPhotoFiles.length > 0) {
-      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
-      var folderPath = "裝備照片/" + (equipName || "未命名裝備");
-
-      for (var f = 0; f < payload.newPhotoFiles.length; f++) {
-        if (finalUrls.length >= 5) break; // 最多 5 張
-        var fileObj = payload.newPhotoFiles[f];
-        if (fileObj && fileObj.base64) {
-          var ext = (fileObj.name && fileObj.name.split('.').pop()) || "jpg";
-          var fileName = (equipName || "裝備") + "_" + todayStr + "_" + (finalUrls.length + 1) + "." + ext;
-          var uploadedUrl = uploadFileToDrive(fileObj.base64, fileName, folderPath);
-          if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
-            var driveMatch = uploadedUrl.match(/(?:file\/d\/|id=)([^/&?]+)/);
-            if (driveMatch && driveMatch[1]) {
-              finalUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000");
-            } else {
-              finalUrls.push(uploadedUrl);
-            }
-          }
-        }
-      }
-    }
-
-    // 3. 截斷至最多 5 張
-    if (finalUrls.length > 5) {
-      finalUrls = finalUrls.slice(0, 5);
-    }
-
-    // 4. 取得或建立 5 欄照片欄位 (圖片網址1 ~ 圖片網址5)
-    var imgColIndices = [];
-    var currentHeaders = equipSheet.getRange(1, 1, 1, equipSheet.getLastColumn()).getValues()[0];
-
-    for (var k = 1; k <= 5; k++) {
-      var targetColName = "圖片網址" + k;
-      var foundIdx = currentHeaders.findIndex(function (h) {
-        var s = String(h).trim();
-        return s === targetColName || s === ("圖片網址 " + k);
-      });
-
-      if (foundIdx === -1 && k === 1) {
-        var legacyIdx = _fi(currentHeaders, "圖片網址");
-        if (legacyIdx > -1) {
-          equipSheet.getRange(1, legacyIdx + 1).setValue(targetColName);
-          currentHeaders[legacyIdx] = targetColName;
-          foundIdx = legacyIdx;
-        }
-      }
-
-      if (foundIdx === -1) {
-        foundIdx = getOrCreateColIdx(equipSheet, currentHeaders, targetColName);
-        currentHeaders = equipSheet.getRange(1, 1, 1, equipSheet.getLastColumn()).getValues()[0];
-      }
-      imgColIndices.push(foundIdx);
-    }
-
-    // 5. 將 5 張照片分別寫入對應獨立欄位 (一欄一個網址，未使用的欄位清空)
-    for (var c = 0; c < 5; c++) {
-      var cIdx = imgColIndices[c];
-      if (cIdx > -1) {
-        var cellVal = (c < finalUrls.length) ? finalUrls[c] : "";
-        equipSheet.getRange(targetRow, cIdx + 1).setValue(cellVal);
-      }
-    }
-
-    var finalUrlStr = finalUrls.join(",");
-
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      message: "裝備照片更新成功",
-      imageUrl: finalUrlStr,
-      equipId: equipId
-    })).setMimeType(ContentService.MimeType.JSON);
-  } catch (error) {
-    console.error("更新裝備照片失敗:", error);
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: "更新裝備照片時發生後端錯誤: " + error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-/**
- * 一鍵修復特定活動試算表的 _CONFIG 連線參數
- * 幹部可直接在 Apps Script 執行此函數並帶入活動試算表 ID 或網址
- */
-function repairEventSheetConfig(spreadsheetIdOrUrl) {
-  var ssId = _extractSpreadsheetId(spreadsheetIdOrUrl);
-  if (!ssId) {
-    console.error("❌ 請提供有效的試算表 ID 或網址！");
-    return false;
-  }
-  try {
-    var ss = SpreadsheetApp.openById(ssId);
-    var cfg = ss.getSheetByName("_CONFIG");
-    if (!cfg) {
-      cfg = ss.insertSheet("_CONFIG");
-      cfg.appendRow(["KEY", "VALUE"]);
-    }
-    var curSbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL") || "";
-    var curSbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY") || "";
-    var curBotToken = PropertiesService.getScriptProperties().getProperty("MEMBER_BOT_TOKEN") || PropertiesService.getScriptProperties().getProperty("LINE_BOT_TOKEN") || "";
-    if (curSbUrl) _setOrUpdateConfigRow(cfg, "SUPABASE_URL", curSbUrl);
-    if (curSbKey) _setOrUpdateConfigRow(cfg, "SUPABASE_SERVICE_ROLE_KEY", curSbKey);
-    if (curBotToken) _setOrUpdateConfigRow(cfg, "MEMBER_BOT_TOKEN", curBotToken);
-    cfg.hideSheet();
-    console.log("✅ 成功修復試算表 (" + ssId + ") 的 _CONFIG 連線設定！");
-    return true;
+    return _jsonResponse({ isOfficer: false });
   } catch (err) {
-    console.error("❌ 修復失敗:", err);
-    return false;
-  }
-}
-
-// ==============================================================================
-// 🧹 測試診斷資料清理引擎 (Cleanup Diagnostic Data)
-// ==============================================================================
-
-/**
- * 徹底清理主試算表與 Supabase 中遺留的測試診斷資料 (U_TEST_DIAGNOSTIC)
- */
-function cleanupDiagnosticData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet() || (SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : null);
-  var deletedRows = 0;
-
-  // 1. 清理主試算表 Members 分頁
-  if (ss) {
-    var mSheet = ss.getSheetByName("Members");
-    if (mSheet) {
-      var mData = mSheet.getDataRange().getValues();
-      for (var i = mData.length - 1; i >= 1; i--) {
-        var uid = String(mData[i][0] || "").trim();
-        var uname = String(mData[i][1] || "").trim();
-        if (uid.includes("TEST_DIAGNOSTIC") || uname.includes("測試報名社員")) {
-          mSheet.deleteRow(i + 1);
-          deletedRows++;
-        }
-      }
-    }
-
-    // 2. 清理主試算表 Signups 分頁
-    var sSheet = ss.getSheetByName("Signups");
-    if (sSheet) {
-      var sData = sSheet.getDataRange().getValues();
-      for (var j = sData.length - 1; j >= 1; j--) {
-        var sCode = String(sData[j][1] || "").trim();
-        var sUid = String(sData[j][0] || "").trim();
-        if (sCode.includes("TEST_") || sUid.includes("TEST_DIAGNOSTIC")) {
-          sSheet.deleteRow(j + 1);
-          deletedRows++;
-        }
-      }
-    }
-  }
-
-  // 3. 自 Supabase 刪除測試假資料
-  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-    try {
-      UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/event_signups?line_user_id=eq.U_TEST_DIAGNOSTIC", {
-        method: "delete",
-        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
-        muteHttpExceptions: true
-      });
-      UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/events?id=eq.EVT_TEST_DIAGNOSTIC", {
-        method: "delete",
-        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
-        muteHttpExceptions: true
-      });
-      UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/members?line_user_id=eq.U_TEST_DIAGNOSTIC", {
-        method: "delete",
-        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
-        muteHttpExceptions: true
-      });
-    } catch (sbErr) {
-      console.warn("自 Supabase 刪除測試資料例外:", sbErr);
-    }
-  }
-
-  try {
-    SpreadsheetApp.getUi().alert("✅ 清理完成！\n已自 Members/Signups 表與 Supabase 刪除測試診斷假資料 (共刪除 " + deletedRows + " 列)。");
-  } catch (uiErr) {
-    console.log("✅ 清理測試資料完成 (刪除試算表 " + deletedRows + " 列)");
-  }
-}
-
-// ==============================================================================
-// 🔄 社團主試算表 ⇄ Supabase 雙向比對與同步核心引擎
-// 支援 Members (24欄)、Equipments (14欄)、Events (14欄) 實體欄位完全對齊
-// ==============================================================================
-
-/**
- * 開啟主試算表雙向同步側邊欄
- */
-function openMainSyncSidebar() {
-  var html = HtmlService.createHtmlOutput(_getMainSyncSidebarHtml())
-    .setTitle("社團主表與 Supabase 雙向同步")
-    .setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
-}
-
-/**
- * 取得當前工作表與 Supabase 的差異比對清單 (由側邊欄前端呼叫)
- */
-function getMainSyncDiffAPI() {
-  try {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return { status: "error", message: "未設定 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY！" };
-    }
-
-    var ss = SpreadsheetApp.getActiveSpreadsheet() || (SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : null);
-    if (!ss) {
-      return { status: "error", message: "找不到試算表" };
-    }
-
-    var sheet = ss.getActiveSheet();
-    var sName = sheet.getName();
-    var sheetType = "";
-
-    if (sName === "Members" || sName.includes("社員")) {
-      sheetType = "Members";
-    } else if (sName === "Equipments" || sName.includes("裝備")) {
-      sheetType = "Equipments";
-    } else if (sName === "Events" || sName.includes("活動")) {
-      sheetType = "Events";
-    } else {
-      return {
-        status: "error",
-        message: "目前分頁「" + sName + "」非 Members、Equipments 或 Events。\n請切換至該工作表後再重新整理比對！"
-      };
-    }
-
-    var values = sheet.getDataRange().getValues();
-    if (!values || values.length < 2) {
-      return { status: "success", sheetType: sheetType, sheetName: sName, diffs: [], totalCount: 0 };
-    }
-
-    var headers = values[0];
-
-    // ============================================================================
-    // 1. Members 社員資料表比對 (24 欄位，以 系統識別碼 為主鍵)
-    // ============================================================================
-    if (sheetType === "Members") {
-      var mCols = {
-        line_user_id: _fi(headers, "系統識別碼"),
-        name: _fi(headers, "姓名"),
-        gender: _fi(headers, "性別"),
-        line_id: _fi(headers, "Line ID") > -1 ? _fi(headers, "Line ID") : _fi(headers, "LINE ID"),
-        email: _fi(headers, "聯絡信箱") > -1 ? _fi(headers, "聯絡信箱") : _fi(headers, "信箱"),
-        phone: _fi(headers, "聯絡電話") > -1 ? _fi(headers, "聯絡電話") : _fi(headers, "電話"),
-        department: _fi(headers, "系所"),
-        student_id: _fi(headers, "學號"),
-        payment_status: _fi(headers, "繳費狀態"),
-        membership_expires_at: _fi(headers, "社籍到期日"),
-        birthday: _fi(headers, "生日"),
-        id_card: _fi(headers, "證件號碼"),
-        address: _fi(headers, "聯絡地址") > -1 ? _fi(headers, "聯絡地址") : _fi(headers, "地址"),
-        outdoor_experience: _fi(headers, "爬山經驗"),
-        fitness_desc: _fi(headers, "體能測驗"),
-        proof_urls: _fi(headers, "體能證明"),
-        emergency_contact_name: _fi(headers, "緊急聯絡人姓名"),
-        emergency_contact_rel: _fi(headers, "緊急聯絡人關係"),
-        emergency_contact_phone: _fi(headers, "緊急聯絡人電話"),
-        emergency_contact_address: _fi(headers, "緊急聯絡人聯絡地址"),
-        medical_history: _fi(headers, "個人特殊病史或過敏"),
-        identity_status: _fi(headers, "身分狀態"),
-        join_membership_intent: _fi(headers, "加入社員意願"),
-        officer_intent: _fi(headers, "擔任幹部意願")
-      };
-
-      if (mCols.line_user_id === -1) {
-        return { status: "error", message: "Members 表中缺少「系統識別碼」主鍵欄位！" };
-      }
-
-      var mRes = UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/members?select=*&limit=2000", {
-        method: "get",
-        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
-        muteHttpExceptions: true
-      });
-      if (mRes.getResponseCode() !== 200) {
-        return { status: "error", message: "Supabase 讀取 members 失敗: " + mRes.getContentText() };
-      }
-
-      var sbMembers = JSON.parse(mRes.getContentText()) || [];
-      var sbMap = {};
-      for (var sm = 0; sm < sbMembers.length; sm++) {
-        sbMap[String(sbMembers[sm].line_user_id).trim()] = sbMembers[sm];
-      }
-
-      var mDiffs = [];
-      for (var r = 1; r < values.length; r++) {
-        var row = values[r];
-        var uid = String(row[mCols.line_user_id] || "").trim();
-        if (!uid || uid.includes("TEST_DIAGNOSTIC")) continue;
-
-        var sbItem = sbMap[uid];
-        var changes = [];
-
-        function checkField(colIdx, sbField, label) {
-          if (colIdx === -1) return;
-          var cellVal = row[colIdx];
-          var cellStr = (cellVal instanceof Date) ? Utilities.formatDate(cellVal, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd") : String(cellVal !== undefined && cellVal !== null ? cellVal : "").trim();
-          var sbVal = (sbItem && sbItem[sbField] !== undefined && sbItem[sbField] !== null) ? String(sbItem[sbField]).trim() : "";
-          if (cellStr !== sbVal) {
-            changes.push({ field: sbField, label: label, sheetVal: cellStr, dbVal: sbVal });
-          }
-        }
-
-        checkField(mCols.name, "name", "姓名");
-        checkField(mCols.payment_status, "payment_status", "繳費狀態");
-        checkField(mCols.membership_expires_at, "membership_expires_at", "社籍到期日");
-        checkField(mCols.phone, "phone", "電話");
-        checkField(mCols.email, "email", "信箱");
-        checkField(mCols.department, "department", "系所");
-        checkField(mCols.student_id, "student_id", "學號");
-        checkField(mCols.birthday, "birthday", "生日");
-        checkField(mCols.id_card, "id_card", "證件號碼");
-        checkField(mCols.address, "address", "地址");
-        checkField(mCols.gender, "gender", "性別");
-        checkField(mCols.line_id, "line_id", "Line ID");
-        checkField(mCols.outdoor_experience, "outdoor_experience", "爬山經驗");
-        checkField(mCols.fitness_desc, "fitness_desc", "體能測驗");
-        checkField(mCols.emergency_contact_name, "emergency_contact_name", "緊急聯絡人姓名");
-        checkField(mCols.emergency_contact_rel, "emergency_contact_rel", "緊急聯絡人關係");
-        checkField(mCols.emergency_contact_phone, "emergency_contact_phone", "緊急聯絡人電話");
-        checkField(mCols.emergency_contact_address, "emergency_contact_address", "緊急聯絡人地址");
-        checkField(mCols.medical_history, "medical_history", "特殊病史");
-        checkField(mCols.identity_status, "identity_status", "身分狀態");
-        checkField(mCols.join_membership_intent, "join_membership_intent", "入社意願");
-        checkField(mCols.officer_intent, "officer_intent", "幹部意願");
-
-        if (!sbItem) {
-          mDiffs.push({
-            id: uid,
-            name: String(row[mCols.name] || uid),
-            type: "new",
-            changes: changes,
-            fullData: _extractMemberRowData(row, mCols)
-          });
-        } else if (changes.length > 0) {
-          mDiffs.push({
-            id: uid,
-            name: String(row[mCols.name] || sbItem.name || uid),
-            type: "modified",
-            changes: changes,
-            fullData: _extractMemberRowData(row, mCols)
-          });
-        }
-      }
-
-      return {
-        status: "success",
-        sheetType: "Members",
-        sheetName: sName,
-        diffs: mDiffs,
-        totalCount: values.length - 1
-      };
-    }
-
-    // ============================================================================
-    // 2. Equipments 裝備品項表比對 (14 欄位，以 裝備代號 為主鍵)
-    // ============================================================================
-    if (sheetType === "Equipments") {
-      var eqCols = {
-        id: _fi(headers, "裝備代號"),
-        name: _fi(headers, "裝備名稱"),
-        total_qty: _fi(headers, "總數量"),
-        available_qty: _fi(headers, "剩餘數量"),
-        is_borrowable: _fi(headers, "是否外借"),
-        member_price: _fi(headers, "租金（2天）") > -1 ? _fi(headers, "租金（2天）") : _fi(headers, "租金(2天)"),
-        extra_price: _fi(headers, "租金（+1天）") > -1 ? _fi(headers, "租金（+1天）") : _fi(headers, "租金(+1天)"),
-        specs: _fi(headers, "狀態"),
-        notes: _fi(headers, "備注") > -1 ? _fi(headers, "備注") : _fi(headers, "備註"),
-        img1: _fi(headers, "圖片網址1"),
-        img2: _fi(headers, "圖片網址2"),
-        img3: _fi(headers, "圖片網址3"),
-        img4: _fi(headers, "圖片網址4"),
-        img5: _fi(headers, "圖片網址5")
-      };
-
-      if (eqCols.id === -1) {
-        return { status: "error", message: "Equipments 表中缺少「裝備代號」主鍵欄位！" };
-      }
-
-      var eqRes = UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/equipments?select=*&limit=1000", {
-        method: "get",
-        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
-        muteHttpExceptions: true
-      });
-      if (eqRes.getResponseCode() !== 200) {
-        return { status: "error", message: "Supabase 讀取 equipments 失敗: " + eqRes.getContentText() };
-      }
-
-      var sbEquips = JSON.parse(eqRes.getContentText()) || [];
-      var eqMap = {};
-      for (var se = 0; se < sbEquips.length; se++) {
-        eqMap[String(sbEquips[se].id).trim()] = sbEquips[se];
-      }
-
-      var eqDiffs = [];
-      for (var er = 1; er < values.length; er++) {
-        var eqRow = values[er];
-        var eqId = String(eqRow[eqCols.id] || "").trim();
-        if (!eqId) continue;
-
-        var sbEq = eqMap[eqId];
-        var eqChanges = [];
-
-        function checkEqField(colIdx, sbField, label, isNum) {
-          if (colIdx === -1) return;
-          var val = eqRow[colIdx];
-          var str = isNum ? String(parseInt(String(val).replace(/[^\d]/g, ""), 10) || 0) : String(val !== undefined && val !== null ? val : "").trim();
-          var sbStr = (sbEq && sbEq[sbField] !== undefined && sbEq[sbField] !== null) ? String(sbEq[sbField]).trim() : "";
-          if (str !== sbStr) {
-            eqChanges.push({ field: sbField, label: label, sheetVal: str, dbVal: sbStr });
-          }
-        }
-
-        checkEqField(eqCols.name, "name", "裝備名稱");
-        checkEqField(eqCols.total_qty, "total_qty", "總數量", true);
-        checkEqField(eqCols.available_qty, "available_qty", "剩餘數量", true);
-        checkEqField(eqCols.member_price, "member_price_per_day", "租金(2天)", true);
-        checkEqField(eqCols.extra_price, "non_member_price_per_day", "租金(+1天)", true);
-        checkEqField(eqCols.specs, "specs", "狀態規格");
-        checkEqField(eqCols.notes, "notes", "備註");
-
-        var isBorrowableStr = (eqRow[eqCols.is_borrowable] === "是" || eqRow[eqCols.is_borrowable] === true) ? "true" : "false";
-        var sbBorrowableStr = (sbEq && sbEq.is_borrowable !== undefined) ? String(sbEq.is_borrowable) : "true";
-        if (isBorrowableStr !== sbBorrowableStr) {
-          eqChanges.push({ field: "is_borrowable", label: "是否外借", sheetVal: (isBorrowableStr === "true" ? "是" : "否"), dbVal: (sbBorrowableStr === "true" ? "是" : "否") });
-        }
-
-        if (!sbEq) {
-          eqDiffs.push({
-            id: eqId,
-            name: String(eqRow[eqCols.name] || eqId),
-            type: "new",
-            changes: eqChanges,
-            fullData: _extractEquipmentRowData(eqRow, eqCols)
-          });
-        } else if (eqChanges.length > 0) {
-          eqDiffs.push({
-            id: eqId,
-            name: String(eqRow[eqCols.name] || sbEq.name || eqId),
-            type: "modified",
-            changes: eqChanges,
-            fullData: _extractEquipmentRowData(eqRow, eqCols)
-          });
-        }
-      }
-
-      return {
-        status: "success",
-        sheetType: "Equipments",
-        sheetName: sName,
-        diffs: eqDiffs,
-        totalCount: values.length - 1
-      };
-    }
-
-    // ============================================================================
-    // 3. Events 活動資訊表比對 (14 欄位，以 活動編號 為主鍵)
-    // ============================================================================
-    if (sheetType === "Events") {
-      var evCols = {
-        id: _fi(headers, "活動編號"),
-        name: _fi(headers, "活動名稱"),
-        cost: _fi(headers, "預計費用") > -1 ? _fi(headers, "預計費用") : _fi(headers, "費用"),
-        startDate: _fi(headers, "活動開始日期") > -1 ? _fi(headers, "活動開始日期") : _fi(headers, "開始日期"),
-        endDate: _fi(headers, "活動結束日期") > -1 ? _fi(headers, "活動結束日期") : _fi(headers, "結束日期"),
-        deadline: _fi(headers, "報名截止日期") > -1 ? _fi(headers, "報名截止日期") : _fi(headers, "截止日期"),
-        status: _fi(headers, "報名狀態") > -1 ? _fi(headers, "報名狀態") : _fi(headers, "狀態"),
-        summary: _fi(headers, "簡介"),
-        itinerary: _fi(headers, "詳細行程") > -1 ? _fi(headers, "詳細行程") : _fi(headers, "行程"),
-        cover_image_url: _fi(headers, "封面圖網址") > -1 ? _fi(headers, "封面圖網址") : _fi(headers, "圖片網址"),
-        drive_folder_url: _fi(headers, "雲端資料夾網址"),
-        spreadsheet_url: _fi(headers, "報名名冊網址"),
-        spreadsheet_id: _fi(headers, "試算表ID")
-      };
-
-      if (evCols.id === -1) {
-        return { status: "error", message: "Events 表中缺少「活動編號」主鍵欄位！" };
-      }
-
-      var evRes = UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/events?select=*&limit=1000", {
-        method: "get",
-        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
-        muteHttpExceptions: true
-      });
-      if (evRes.getResponseCode() !== 200) {
-        return { status: "error", message: "Supabase 讀取 events 失敗: " + evRes.getContentText() };
-      }
-
-      var sbEvents = JSON.parse(evRes.getContentText()) || [];
-      var evMap = {};
-      for (var sev = 0; sev < sbEvents.length; sev++) {
-        evMap[String(sbEvents[sev].id).trim()] = sbEvents[sev];
-      }
-
-      var evDiffs = [];
-      for (var vr = 1; vr < values.length; vr++) {
-        var evRow = values[vr];
-        var evId = String(evRow[evCols.id] || "").trim();
-        if (!evId || evId.includes("TEST_DIAGNOSTIC")) continue;
-
-        var sbEv = evMap[evId];
-        var evChanges = [];
-
-        function checkEvField(colIdx, sbField, label, isDate, isNum) {
-          if (colIdx === -1) return;
-          var val = evRow[colIdx];
-          var str = "";
-          if (isDate && val instanceof Date) {
-            str = Utilities.formatDate(val, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
-          } else if (isNum) {
-            str = String(parseInt(String(val).replace(/[^\d]/g, ""), 10) || 0);
-          } else {
-            str = String(val !== undefined && val !== null ? val : "").trim();
-          }
-
-          var sbStr = (sbEv && sbEv[sbField] !== undefined && sbEv[sbField] !== null) ? String(sbEv[sbField]).trim() : "";
-          if (isDate && sbStr.includes("T")) sbStr = sbStr.split("T")[0];
-          if (str !== sbStr) {
-            evChanges.push({ field: sbField, label: label, sheetVal: str, dbVal: sbStr });
-          }
-        }
-
-        checkEvField(evCols.name, "title", "活動名稱");
-        checkEvField(evCols.cost, "fee", "費用", false, true);
-        checkEvField(evCols.startDate, "start_date", "開始日期", true);
-        checkEvField(evCols.endDate, "end_date", "結束日期", true);
-        checkEvField(evCols.status, "status", "狀態");
-        checkEvField(evCols.summary, "summary", "簡介");
-        checkEvField(evCols.itinerary, "itinerary", "行程");
-        checkEvField(evCols.spreadsheet_id, "spreadsheet_id", "試算表ID");
-
-        if (!sbEv) {
-          evDiffs.push({
-            id: evId,
-            name: String(evRow[evCols.name] || evId),
-            type: "new",
-            changes: evChanges,
-            fullData: _extractEventRowData(evRow, evCols)
-          });
-        } else if (evChanges.length > 0) {
-          evDiffs.push({
-            id: evId,
-            name: String(evRow[evCols.name] || sbEv.title || evId),
-            type: "modified",
-            changes: evChanges,
-            fullData: _extractEventRowData(evRow, evCols)
-          });
-        }
-      }
-
-      return {
-        status: "success",
-        sheetType: "Events",
-        sheetName: sName,
-        diffs: evDiffs,
-        totalCount: values.length - 1
-      };
-    }
-
-  } catch (err) {
-    console.error("getMainSyncDiffAPI 例外:", err);
-    return { status: "error", message: "比對發生例外錯誤: " + err.toString() };
-  }
-}
-
-function _extractMemberRowData(row, cols) {
-  function getStr(idx) {
-    if (idx === -1) return "";
-    var v = row[idx];
-    if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
-    return String(v !== undefined && v !== null ? v : "").trim();
-  }
-  var payStatus = getStr(cols.payment_status);
-  var isOfficial = payStatus.includes("已繳費") || payStatus.includes("Paid");
-
-  return {
-    line_user_id: getStr(cols.line_user_id),
-    name: getStr(cols.name),
-    gender: getStr(cols.gender),
-    line_id: getStr(cols.line_id),
-    email: getStr(cols.email),
-    phone: getStr(cols.phone),
-    department: getStr(cols.department),
-    student_id: getStr(cols.student_id),
-    payment_status: payStatus,
-    membership_expires_at: getStr(cols.membership_expires_at) || null,
-    birthday: getStr(cols.birthday),
-    id_card: getStr(cols.id_card),
-    address: getStr(cols.address),
-    outdoor_experience: getStr(cols.outdoor_experience),
-    fitness_desc: getStr(cols.fitness_desc),
-    emergency_contact_name: getStr(cols.emergency_contact_name),
-    emergency_contact_rel: getStr(cols.emergency_contact_rel),
-    emergency_contact_phone: getStr(cols.emergency_contact_phone),
-    emergency_contact_address: getStr(cols.emergency_contact_address),
-    medical_history: getStr(cols.medical_history),
-    identity_status: getStr(cols.identity_status),
-    join_membership_intent: getStr(cols.join_membership_intent),
-    officer_intent: getStr(cols.officer_intent),
-    is_official_member: isOfficial,
-    updated_at: new Date().toISOString()
-  };
-}
-
-function _extractEquipmentRowData(row, cols) {
-  function getVal(idx) {
-    return idx > -1 ? row[idx] : "";
-  }
-  var images = [];
-  for (var k = 1; k <= 5; k++) {
-    var u = String(getVal(cols["img" + k]) || "").trim();
-    if (u && u.startsWith("http")) images.push(u);
-  }
-
-  var isBorrow = (getVal(cols.is_borrowable) === "是" || getVal(cols.is_borrowable) === true);
-
-  return {
-    id: String(getVal(cols.id) || "").trim(),
-    name: String(getVal(cols.name) || "").trim(),
-    total_qty: parseInt(String(getVal(cols.total_qty) || 0).replace(/[^\d]/g, ""), 10) || 0,
-    available_qty: parseInt(String(getVal(cols.available_qty) || 0).replace(/[^\d]/g, ""), 10) || 0,
-    is_borrowable: isBorrow,
-    member_price_per_day: parseInt(String(getVal(cols.member_price) || 0).replace(/[^\d]/g, ""), 10) || 0,
-    non_member_price_per_day: parseInt(String(getVal(cols.extra_price) || 0).replace(/[^\d]/g, ""), 10) || 0,
-    specs: String(getVal(cols.specs) || "").trim(),
-    notes: String(getVal(cols.notes) || "").trim(),
-    images: images,
-    updated_at: new Date().toISOString()
-  };
-}
-
-function _extractEventRowData(row, cols) {
-  function getStr(idx) {
-    if (idx === -1) return "";
-    var v = row[idx];
-    if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
-    return String(v !== undefined && v !== null ? v : "").trim();
-  }
-  var startD = getStr(cols.startDate).replace(/\//g, "-").split(" ")[0];
-  var endD = getStr(cols.endDate).replace(/\//g, "-").split(" ")[0] || startD;
-  var dLine = getStr(cols.deadline).replace(/\//g, "-");
-  var deadlineIso = dLine ? (dLine.includes("T") ? dLine : dLine + "T23:59:59Z") : null;
-
-  return {
-    id: getStr(cols.id),
-    title: getStr(cols.name),
-    fee: parseInt(getStr(cols.cost).replace(/[^\d]/g, ""), 10) || 0,
-    start_date: startD || null,
-    end_date: endD || null,
-    deadline: deadlineIso,
-    status: getStr(cols.status) || "未來開放",
-    summary: getStr(cols.summary),
-    itinerary: getStr(cols.itinerary),
-    cover_image_url: getStr(cols.cover_image_url),
-    drive_folder_url: getStr(cols.drive_folder_url) || null,
-    spreadsheet_url: getStr(cols.spreadsheet_url) || null,
-    spreadsheet_id: getStr(cols.spreadsheet_id) || null,
-    updated_at: new Date().toISOString()
-  };
-}
-
-/**
- * 批次將主試算表異動確認同步至 Supabase (由側邊欄確認按鈕呼叫)
- */
-function commitMainSyncToSupabaseAPI(sheetType, diffs) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return { status: "error", message: "缺少 Supabase 連線設定" };
-  }
-  if (!diffs || !diffs.length) {
-    return { status: "success", message: "無任何需同步的項目", count: 0 };
-  }
-
-  try {
-    var tableName = "";
-    var pk = "";
-    if (sheetType === "Members") {
-      tableName = "members";
-      pk = "line_user_id";
-    } else if (sheetType === "Equipments") {
-      tableName = "equipments";
-      pk = "id";
-    } else if (sheetType === "Events") {
-      tableName = "events";
-      pk = "id";
-    } else {
-      return { status: "error", message: "未知的工作表類型: " + sheetType };
-    }
-
-    var url = SUPABASE_URL + "/rest/v1/" + tableName + "?on_conflict=" + pk;
-    var batchPayload = [];
-    for (var i = 0; i < diffs.length; i++) {
-      if (diffs[i].fullData) {
-        batchPayload.push(diffs[i].fullData);
-      }
-    }
-
-    if (batchPayload.length === 0) {
-      return { status: "success", message: "無有效資料", count: 0 };
-    }
-
-    var res = UrlFetchApp.fetch(url, {
-      method: "post",
-      contentType: "application/json",
-      headers: {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-        "Prefer": "resolution=merge-duplicates,return=representation"
-      },
-      payload: JSON.stringify(batchPayload),
-      muteHttpExceptions: true
-    });
-
-    var code = res.getResponseCode();
-    if (code >= 200 && code < 300) {
-      console.log("⚡ [MainSync] 成功同步 " + batchPayload.length + " 筆 " + tableName + " 至 Supabase！");
-      return {
-        status: "success",
-        message: "成功同步 " + batchPayload.length + " 筆資料至 Supabase！",
-        count: batchPayload.length
-      };
-    } else {
-      return {
-        status: "error",
-        message: "寫入 Supabase 失敗 (HTTP " + code + "): " + res.getContentText()
-      };
-    }
-  } catch (err) {
-    console.error("commitMainSyncToSupabaseAPI 例外:", err);
-    return { status: "error", message: "同步例外: " + err.toString() };
+    return _jsonResponse({ isOfficer: false });
   }
 }
 
 /**
- * 產生主表同步專用的現代化響應式 HTML 側邊欄介面
+ * GAS GET 請求入口 (健康檢查)
  */
-function _getMainSyncSidebarHtml() {
-  return '<!DOCTYPE html>' +
-    '<html><head><meta charset="utf-8">' +
-    '<style>' +
-    ':root{--p:#2563eb;--p-h:#1d4ed8;--bg:#f8fafc;--card:#ffffff;--txt:#0f172a;--mut:#64748b;--border:#e2e8f0;--succ:#16a34a;--warn:#ea580c;}' +
-    '*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}' +
-    'body{background:var(--bg);color:var(--txt);padding:14px;font-size:13px;line-height:1.5;}' +
-    '.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);}' +
-    '.title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:6px;}' +
-    '.badge{font-size:11px;padding:2px 8px;border-radius:12px;background:#e0e7ff;color:#3730a3;font-weight:600;}' +
-    '.btn-refresh{background:#f1f5f9;border:1px solid var(--border);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;}' +
-    '.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,0.03);}' +
-    '.card-title{font-weight:600;font-size:13px;margin-bottom:4px;display:flex;justify-content:space-between;}' +
-    '.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}' +
-    '.stat-box{background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center;}' +
-    '.stat-val{font-size:18px;font-weight:700;color:var(--p);}' +
-    '.stat-lbl{font-size:11px;color:var(--mut);}' +
-    '.diff-list{max-height:360px;overflow-y:auto;margin-bottom:12px;}' +
-    '.diff-item{background:#ffffff;border-left:3px solid var(--p);border-radius:4px;padding:8px;margin-bottom:8px;border:1px solid var(--border);border-left-width:3px;}' +
-    '.diff-item.new{border-left-color:var(--succ);}' +
-    '.diff-header{font-weight:600;font-size:12px;display:flex;justify-content:space-between;margin-bottom:4px;}' +
-    '.diff-tag{font-size:10px;padding:1px 5px;border-radius:4px;font-weight:bold;}' +
-    '.diff-tag.mod{background:#fef3c7;color:#92400e;}' +
-    '.diff-tag.new{background:#dcfce7;color:#166534;}' +
-    '.change-row{font-size:11px;color:var(--mut);margin-top:2px;}' +
-    '.val-old{text-decoration:line-through;color:#94a3b8;margin-right:4px;}' +
-    '.val-new{color:#0f172a;font-weight:600;}' +
-    '.btn-commit{width:100%;padding:10px;background:var(--p);color:#fff;border:none;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;display:flex;justify-content:center;align-items:center;gap:6px;}' +
-    '.btn-commit:disabled{background:#94a3b8;cursor:not-allowed;}' +
-    '.loading{text-align:center;padding:24px 0;color:var(--mut);font-size:12px;}' +
-    '.alert-err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:8px 10px;border-radius:6px;margin-bottom:10px;font-size:12px;}' +
-    '</style></head>' +
-    '<body>' +
-    '<div class="hdr">' +
-    '  <div class="title">🔄 主表同步 <span id="sheetBadge" class="badge">偵測中...</span></div>' +
-    '  <button class="btn-refresh" onclick="loadDiff()">重新整理</button>' +
-    '</div>' +
-    '<div id="alertBox"></div>' +
-    '<div class="stat-grid">' +
-    '  <div class="stat-box"><div id="statTotal" class="stat-val">-</div><div class="stat-lbl">試算表總筆數</div></div>' +
-    '  <div class="stat-box"><div id="statDiff" class="stat-val">-</div><div class="stat-lbl">待同步異動筆數</div></div>' +
-    '</div>' +
-    '<div id="contentArea"><div class="loading">正在比對試算表與 Supabase 資料庫...</div></div>' +
-    '<div id="actionArea" style="display:none;">' +
-    '  <button id="btnSync" class="btn-commit" onclick="commitSync()">確認同步至 Supabase</button>' +
-    '</div>' +
-    '<script>' +
-    'var currentDiffs = []; var currentSheetType = "";' +
-    'function loadDiff(){' +
-    '  document.getElementById("alertBox").innerHTML = "";' +
-    '  document.getElementById("actionArea").style.display = "none";' +
-    '  document.getElementById("contentArea").innerHTML = \'<div class="loading">正在比對試算表與 Supabase...</div>\';' +
-    '  google.script.run.withSuccessHandler(onDiffLoaded).withFailureHandler(onError).getMainSyncDiffAPI();' +
-    '}' +
-    'function onDiffLoaded(res){' +
-    '  if(res.status === "error"){' +
-    '    document.getElementById("sheetBadge").innerText = "無法比對";' +
-    '    document.getElementById("contentArea").innerHTML = "";' +
-    '    document.getElementById("alertBox").innerHTML = \'<div class="alert-err">\' + res.message.replace(/\\n/g, "<br>") + \'</div>\';' +
-    '    return;' +
-    '  }' +
-    '  currentDiffs = res.diffs || [];' +
-    '  currentSheetType = res.sheetType;' +
-    '  document.getElementById("sheetBadge").innerText = res.sheetName;' +
-    '  document.getElementById("statTotal").innerText = res.totalCount || 0;' +
-    '  document.getElementById("statDiff").innerText = currentDiffs.length;' +
-    '  if(currentDiffs.length === 0){' +
-    '    document.getElementById("contentArea").innerHTML = \'<div class="card" style="text-align:center;color:#16a34a;padding:24px 10px;">✅ 試算表內容與 Supabase 資料庫完全一致！無待同步異動。</div>\';' +
-    '    return;' +
-    '  }' +
-    '  var html = \'<div class="diff-list">\';' +
-    '  for(var i=0; i<currentDiffs.length; i++){' +
-    '    var d = currentDiffs[i];' +
-    '    var isNew = (d.type === "new");' +
-    '    html += \'<div class="diff-item \' + (isNew ? "new" : "") + \'">\';' +
-    '    html += \'  <div class="diff-header"><span>\' + d.name + \' <span style="font-weight:normal;color:#64748b;">(\' + d.id + \')</span></span><span class="diff-tag \' + (isNew ? "new" : "mod") + \'">\' + (isNew ? "新增列" : "有異動") + \'</span></div>\';' +
-    '    if(isNew){' +
-    '      html += \'  <div class="change-row">試算表新加入之列，將直接 Upsert 寫入資料庫。</div>\';' +
-    '    } else {' +
-    '      for(var c=0; c<d.changes.length; c++){' +
-    '        var ch = d.changes[c];' +
-    '        html += \'  <div class="change-row">\' + ch.label + \': <span class="val-old">\' + (ch.dbVal || "(空)") + \'</span> ➔ <span class="val-new">\' + (ch.sheetVal || "(空)") + \'</span></div>\';' +
-    '      }' +
-    '    }' +
-    '    html += \'</div>\';' +
-    '  }' +
-    '  html += \'</div>\';' +
-    '  document.getElementById("contentArea").innerHTML = html;' +
-    '  document.getElementById("actionArea").style.display = "block";' +
-    '}' +
-    'function commitSync(){' +
-    '  var btn = document.getElementById("btnSync");' +
-    '  btn.disabled = true;' +
-    '  btn.innerText = "正在同步寫入 Supabase...";' +
-    '  google.script.run.withSuccessHandler(onSyncCommitted).withFailureHandler(onError).commitMainSyncToSupabaseAPI(currentSheetType, currentDiffs);' +
-    '}' +
-    'function onSyncCommitted(res){' +
-    '  if(res.status === "success"){' +
-    '    alert("🎉 " + res.message);' +
-    '    loadDiff();' +
-    '  } else {' +
-    '    alert("❌ 同步失敗: " + res.message);' +
-    '    document.getElementById("btnSync").disabled = false;' +
-    '    document.getElementById("btnSync").innerText = "確認同步至 Supabase";' +
-    '  }' +
-    '}' +
-    'function onError(err){' +
-    '  alert("系統錯誤: " + err.toString());' +
-    '  document.getElementById("contentArea").innerHTML = "";' +
-    '}' +
-    'window.onload = loadDiff;' +
-    '</script>' +
-    '</body></html>';
+function doGet(e) {
+  return _jsonResponse({
+    status: "ok",
+    service: "Wilderness GAS Microservices",
+    version: "2.0.0",
+    architecture: "Modular (Supabase Primary, GAS Helper & Background Sync)"
+  });
 }

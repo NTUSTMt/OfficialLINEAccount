@@ -38,7 +38,7 @@ interface UploadedFile {
 }
 
 function Register({ userId }: { userId: string }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -384,32 +384,41 @@ function Register({ userId }: { userId: string }) {
     setIsSubmitting(true);
     let sbSaved = false;
     try {
-      // 1. 優先極速寫入 Supabase (< 50ms，以安全 RPC 限制本人存取)
-      if (userId && userId !== 'TEST_USER_ID') {
-        sbSaved = await saveMemberProfileToSupabase(userId, formData);
+      let finalFormData = { ...formData };
+
+      // 1. 若有新上傳的體能證明照片，呼叫輕量 Helper 上傳 Drive 取得連結 (純 Drive API，不接觸試算表)
+      if (strengthProofFiles.length > 0) {
+        try {
+          const uploadRes = await fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(withAuthPayload({
+              action: 'upload_drive_file',
+              userId: userId || 'TEST_USER_ID',
+              folderType: 'proofs',
+              files: strengthProofFiles
+            }))
+          });
+          const uploadResult = await uploadRes.json();
+          if (uploadResult.status === 'success' && uploadResult.urls) {
+            const combinedProofs = [finalFormData.strengthProof, ...uploadResult.urls]
+              .filter(Boolean)
+              .join('\n');
+            finalFormData.strengthProof = combinedProofs;
+          }
+        } catch (uploadErr) {
+          console.warn('[Register] 上傳體能證明照例外，繼續儲存資料:', uploadErr);
+        }
       }
 
-      // 2. 呼叫 GAS：處理 Google Drive 檔案上傳、發送 LINE Push 通知或雙軌寫入 Sheets
-      const currentLang = i18n.language?.startsWith('en') ? 'en' : 'zh';
-      const payload = {
-        action: 'save_profile',
-        userId: userId || 'TEST_USER_ID',
-        lang: currentLang,
-        data: {
-          ...formData,
-          lang: currentLang,
-        },
-        strengthProofFiles: strengthProofFiles.length > 0 ? strengthProofFiles : null,
-      };
+      // 2. ⚡ 100% 直寫 Supabase (< 50ms，以安全 RPC 限制本人存取，DB Triggers 自動排入 sync_queue)
+      if (userId && userId !== 'TEST_USER_ID') {
+        sbSaved = await saveMemberProfileToSupabase(userId, finalFormData);
+      } else {
+        sbSaved = true;
+      }
 
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload)),
-      });
-      const result = await res.json();
-
-      if (result.status === 'success' || sbSaved) {
+      if (sbSaved) {
         const draftKey = 'register_draft_' + (userId || 'guest');
         localStorage.removeItem(draftKey);
         setHasDraftRestored(false);
@@ -418,7 +427,7 @@ function Register({ userId }: { userId: string }) {
           liff.closeWindow();
         }
       } else {
-        alert(t('register.alert.saveFailed', { message: result.message || t('register.alert.contactAdmin') }));
+        alert(t('register.alert.saveFailed', { message: t('register.alert.contactAdmin') }));
       }
     } catch (err) {
       console.error('提交表單失敗:', err);
