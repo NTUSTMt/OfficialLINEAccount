@@ -346,8 +346,19 @@ function Payment({ userId }: { userId: string }) {
       const hasMembership = selectedIds.includes('fee_membership');
       const uniqueSelectedIds = Array.from(new Set(selectedIds));
 
+      const selectedItems = allItemsFlat
+        .filter(item => uniqueSelectedIds.includes(item.id));
+
+      const selectedNames = selectedItems.map(item => {
+        if (item.type === 'equipment' && item.isDiscounted) {
+          return `${item.name} (${t('payment.equip.discountApplied')})`;
+        }
+        return item.name;
+      });
+
       const detailsPayload = {
         selectedIds: uniqueSelectedIds,
+        selectedNames: selectedNames,
         last5Digits: finalDigits,
         totalAmount,
         note: note.trim(),
@@ -367,7 +378,7 @@ function Payment({ userId }: { userId: string }) {
       }
 
       if (sbSubmitted) {
-        // 2. 發送 LINE 幹部審核推播 (純通知 API，絕不碰 Google Sheets)
+        // 2. 發送 LINE 幹部審核推播與個人保底推播 (純通知 API，絕不碰 Google Sheets)
         const notifyPromise = fetch(GAS_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -390,16 +401,6 @@ function Payment({ userId }: { userId: string }) {
 
         // 發送 LINE 明細訊息並關閉 LIFF (非阻塞式發話，避免 iOS LIFF sendMessages 掛起卡死)
         if (liff.isInClient()) {
-          const selectedItems = allItemsFlat
-            .filter(item => uniqueSelectedIds.includes(item.id));
-
-          const selectedNames = selectedItems.map(item => {
-            if (item.type === 'equipment' && item.isDiscounted) {
-              return `${item.name} (${t('payment.equip.discountApplied')})`;
-            }
-            return item.name;
-          });
-            
           const msgText = `【繳費申報完成 / Payment Submitted】\n\n` +
             `您好！已成功收到您的繳費申報資訊：\n` +
             `• 申報金額：$${totalAmount}\n` +
@@ -424,7 +425,7 @@ function Payment({ userId }: { userId: string }) {
                 type: 'text',
                 text: msgText
               }]),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 800))
+              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
             ]).catch(liffErr => {
               console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
             })

@@ -239,17 +239,58 @@ function _handleNotifyOfficersPayment(json) {
     var details = json.details || {};
     var totalAmount = details.totalAmount || 0;
     var last5Digits = details.last5Digits || "無";
-    var note = details.note ? "\n備註：" + details.note : "";
+    var noteZh = details.note ? "\n• 備註：" + details.note : "";
+    var noteEn = details.note ? "\n• Note: " + details.note : "";
+    var userName = details.userName || "";
+    var selectedNames = details.selectedNames || [];
 
-    var msg = "【💳 幹部通知：新繳費申報】\n\n" +
+    // 若未傳入 selectedNames，根據 selectedIds 自動轉換品項名稱
+    if ((!selectedNames || selectedNames.length === 0) && details.selectedIds && Array.isArray(details.selectedIds)) {
+      selectedNames = details.selectedIds.map(function(id) {
+        if (id === 'fee_membership') return '社籍與社費 (Membership Fee)';
+        if (id.indexOf('act_') === 0) return '活動費用 (' + id + ')';
+        if (id.indexOf('eq_') === 0) return '裝備租借 (' + id + ')';
+        return id;
+      });
+    }
+
+    var itemsZh = selectedNames.length > 0 ? selectedNames.map(function(n) { return "  - " + n; }).join("\n") : "  - 無項目";
+    var itemsEn = selectedNames.length > 0 ? selectedNames.map(function(n) { return "  - " + n; }).join("\n") : "  - None";
+
+    // 1. 推播給幹部管理群組
+    var adminMsg = "【💳 幹部通知：新繳費申報】\n\n" +
+      (userName ? "申報人：" + userName + "\n" : "") +
       "申報人 ID：" + userId + "\n" +
-      "申報金額：$" + totalAmount + "\n" +
-      "帳號末五碼：" + last5Digits +
-      note + "\n\n" +
+      "申報金額：$" + totalAmount + " 元\n" +
+      "帳號末五碼：" + last5Digits + "\n" +
+      "申報項目：\n" + itemsZh +
+      noteZh + "\n\n" +
       "⚡ 資料已安全記錄於 Supabase，請幹部核對網銀後至系統核銷！";
 
-    pushAdminMessage(msg);
-    return _successResponse({ message: "繳費申報推播已成功送出" });
+    pushAdminMessage(adminMsg);
+
+    // 2. ⭐️ 同步保底推播給使用者個人 LINE 聊天室 (個人繳費收據)
+    if (userId && userId !== "TEST_USER_ID") {
+      var userMsg = "【💳 繳費申報已成功送出】\n\n" +
+        "您好" + (userName ? " " + userName : "") + "！系統已成功收到您的繳費申報資訊：\n\n" +
+        "• 申報金額：$" + totalAmount + " 元\n" +
+        "• 帳號末五碼：" + last5Digits + "\n" +
+        "• 申報項目：\n" + itemsZh +
+        noteZh + "\n\n" +
+        "幹部會於核對款項後自動更新您的繳費狀態。謝謝！\n" +
+        "─────────────\n" +
+        "【💳 Payment Report Submitted】\n\n" +
+        "Hello" + (userName ? " " + userName : "") + "! Your payment report has been submitted:\n\n" +
+        "• Amount: $" + totalAmount + " TWD\n" +
+        "• Last 5 Digits: " + last5Digits + "\n" +
+        "• Items:\n" + itemsEn +
+        noteEn + "\n\n" +
+        "Officers will verify your payment and update your status soon. Thank you!";
+
+      _pushMessage(userId, userMsg);
+    }
+
+    return _successResponse({ message: "繳費申報幹部與個人推播已成功送出" });
   } catch (err) {
     console.warn("繳費申報幹部推播失敗:", err);
     return _errorResponse(err.toString());

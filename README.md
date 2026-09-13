@@ -3,11 +3,37 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.99` (v0.1.99)
+- **當前版本**：`0.1.100` (v0.1.100)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 200. 修復幹部群組綁定防洗版攔截、雙機器人 Token 智慧回覆與繳費申報雙向保底推播 (v0.1.100)
+- **問題回報與根本原因分析 (Problem & Root Cause)**：
+  1. **幹部群組從未收到任何測試通知，且在群組輸入「綁定幹部群組」毫無回應**：
+     - **群組防洗版過濾優先級 Bug**：在 [gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js) 中，第 79 行直接判定 `if (isGroup && !isMentioned) return;`。當幹部在群組直接輸入「`綁定幹部群組`」而未 @小岳 時，程式在第一步便被靜默丟棄，永遠無法執行綁定邏輯，導致 `ADMIN_GROUP_ID` 始終為 null。
+     - **雙機器人 Token 跨帳號回覆衝突**：`_replyMessage` 原始碼硬編碼使用 `MEMBER_BOT_TOKEN`。當群組中僅加入幹部專用機器人時，用社員機器人的 Token 去 reply 幹部機器人的 replyToken 會被 LINE API 回絕 (HTTP 400)，導致回覆消失。
+     - **幹部機器人 Webhook 未配置**：幹部機器人在 LINE Developers Console 尚未設定 Webhook URL 指向 GAS 部署網址，導致群組訊息根本無法送達 GAS。
+     - 由於 `ADMIN_GROUP_ID` 始終為空，系統所有的 `pushAdminMessage` 在第一道檢查 `if (!adminGroupId || !text) return;` 就被略過，因此幹部群整天收不到任何推播。
+  2. **繳費完成後使用者個人 LINE 聊天室收不到確認通知**：
+     - 原先僅依賴前端 LIFF `liff.sendMessages` 發送，若使用者在外部瀏覽器開啟或遇到 800ms 逾時便會被略過，後端未提供保底機制。
+- **修復與防護機制 (Architecture & Implementation)**：
+  - **1. 綁定指令特例優先處理與群組 ID 自動探測 (`02_LineBot_Webhook.js`)**：
+    - 將「`綁定幹部群組`」與「`#bind_admin`」移至防洗版過濾之前，群組輸入即刻判定執行綁定。
+    - 新增自動探測機制：若 `ADMIN_GROUP_ID` 尚未配置，且群組訊息提及「幹部」，自動補齊群組 ID 註冊。
+  - **2. 雙機器人 Token 智慧分流與容錯回覆 (`_replyMessageSmart`)**：
+    - 新增 `_replyMessageSmart(replyToken, text, preferAdmin)`，群組環境與幹部指令優先採用 `ADMIN_BOT_TOKEN` 回覆，若失敗自動以 `MEMBER_BOT_TOKEN` 備援重試，徹底解決 Invalid reply token 錯誤。
+  - **3. 繳費申報後端保底雙向推播 (`_handleNotifyOfficersPayment`)**：
+    - 在 [gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js) 中，當收到繳費申報時：
+      - 除了發送詳細查帳通知至幹部群組 (`pushAdminMessage`)。
+      - **同步主動調用 `_pushMessage(userId, userMsg)` 推播一份完整格式的繳費收據至使用者的個人 LINE 聊天室**。
+      - 訊息格式符合「純中文（完整）\n─────────────\n純英文（完整）」單一分隔線標準規範，列出金額、帳號末五碼、申報項目與備註。
+  - **4. 前端繳費中心強化 (`src/pages/Payment.tsx`)**：
+    - 送出時提前計算已選項目名稱 `selectedNames` 並封裝至 `detailsPayload`，延長 LIFF 發話超時至 2000ms，並與後端推播雙軌並行。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過。
+  - 前端建置：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
 
 ### 199. 徹底修復裝備租借推播發送失敗、繳費中心訂單消失與社費勾選框異常 (v0.1.99)
 - **問題回報與根本原因分析 (Problem & Root Cause)**：

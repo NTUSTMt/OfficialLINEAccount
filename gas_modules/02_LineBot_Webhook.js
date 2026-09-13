@@ -60,7 +60,29 @@ function _handleLineWebhookEvents(events) {
  */
 function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   var lowerText = text.toLowerCase();
-  var isGroup = !!groupId || (ev && ev.source && (ev.source.type === "group" || ev.source.type === "room"));
+  var targetGroupId = groupId || (ev && ev.source && ev.source.groupId) || "";
+  var isGroup = !!targetGroupId || (ev && ev.source && (ev.source.type === "group" || ev.source.type === "room"));
+
+  // ⭐️ 0. 幹部群組綁定指令（特例最高優先級，絕不被防洗版過濾阻擋）
+  var isBindCommand = (text === "綁定幹部群組" || text === "#bind_admin" || text.indexOf("綁定幹部群組") > -1 || text.indexOf("#bind_admin") > -1);
+  if (isBindCommand) {
+    if (targetGroupId) {
+      PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', targetGroupId);
+      var replySuccessText = "✅ 已成功將此群組設定為【幹部管理推播群組】！\n(群組 ID: " + targetGroupId + ")\n未來所有裝備租借、繳費申報與新幹部意願將自動推播至此！";
+      _replyMessageSmart(replyToken, replySuccessText, true);
+    } else {
+      _replyMessageSmart(replyToken, "⚠️ 此指令僅能在幹部 LINE 群組內執行。", false);
+    }
+    return;
+  }
+
+  // ⭐️ 0.1 自動探測：若目前群組尚未設定 ADMIN_GROUP_ID，且在群組中提及「幹部」，自動補齊綁定
+  if (targetGroupId && !PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID')) {
+    if (text.indexOf("幹部") > -1) {
+      PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', targetGroupId);
+      console.log("已自動探測並綁定幹部群組 ID: " + targetGroupId);
+    }
+  }
 
   // 檢查是否提及機器人 (@小岳 或 mention.mentionees.isSelf 或 以「小岳」開頭)
   var isMentioned = false;
@@ -101,24 +123,13 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
       "💡 幹部小提醒：\n" +
       "若需要查詢或審核，請直接點擊上方幹部系統連結開啟管理後台進行操作。\n" +
       "若有其他問題，也可以直接在群組 @我 詢問登山社相關庶務！";
-    _replyMessage(replyToken, adminCard);
+    _replyMessageSmart(replyToken, adminCard, true);
     return;
   }
 
   // 若在群組中呼叫小岳帶有其他問題，將 cleanText 作為有效問題處理
   var queryText = (isGroup && isMentioned && cleanText) ? cleanText : text;
   var lowerQueryText = queryText.toLowerCase();
-
-  // 2. 幹部群組綁定指令
-  if (queryText === "綁定幹部群組" || queryText === "#bind_admin") {
-    if (groupId) {
-      PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', groupId);
-      _replyMessage(replyToken, "✅ 已成功將此群組設定為【幹部管理推播群組】！");
-    } else {
-      _replyMessage(replyToken, "⚠️ 此指令僅能在幹部群組內執行。");
-    }
-    return;
-  }
 
   // 3. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
   if (queryText.indexOf("最新活動") > -1 || lowerQueryText.indexOf("activities") > -1 || queryText.indexOf("報名活動") > -1 || lowerQueryText === "events") {
@@ -197,19 +208,39 @@ function _handlePostback(replyToken, userId, postbackData) {
 }
 
 /**
- * LINE 訊息發送工具函式
+ * LINE 訊息發送工具函式 (支援雙機器人智慧 Token 分流與容錯)
  */
 function _replyMessage(replyToken, text) {
+  _replyMessageSmart(replyToken, text, false);
+}
+
+function _replyMessageSmart(replyToken, text, preferAdmin) {
   if (!replyToken || !text) return;
-  _lineAPI('reply', MEMBER_BOT_TOKEN, {
-    replyToken: replyToken,
-    messages: [{ type: 'text', text: text }]
-  });
+  var token = preferAdmin ? (ADMIN_BOT_TOKEN || MEMBER_BOT_TOKEN) : (MEMBER_BOT_TOKEN || ADMIN_BOT_TOKEN);
+  if (!token) return;
+  try {
+    var res = _lineAPI('reply', token, {
+      replyToken: replyToken,
+      messages: [{ type: 'text', text: text }]
+    });
+    var code = res ? res.getResponseCode() : 0;
+    // 若特定 Token 回覆失敗且有另一組 Token 可供備援
+    if (code !== 200 && ADMIN_BOT_TOKEN && MEMBER_BOT_TOKEN) {
+      var fbToken = (token === ADMIN_BOT_TOKEN) ? MEMBER_BOT_TOKEN : ADMIN_BOT_TOKEN;
+      _lineAPI('reply', fbToken, {
+        replyToken: replyToken,
+        messages: [{ type: 'text', text: text }]
+      });
+    }
+  } catch (e) {
+    console.error("_replyMessageSmart 例外:", e);
+  }
 }
 
 function _replyFlexMessage(replyToken, altText, flexContents) {
   if (!replyToken || !flexContents) return;
-  _lineAPI('reply', MEMBER_BOT_TOKEN, {
+  var token = MEMBER_BOT_TOKEN || ADMIN_BOT_TOKEN;
+  _lineAPI('reply', token, {
     replyToken: replyToken,
     messages: [{
       type: 'flex',
