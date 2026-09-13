@@ -248,10 +248,10 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
         }
       }
 
-      // 🚀 分流優化 2：若有新上傳照片檔案，送往 GAS Drive 上傳
-      const res = await fetch(appendAuthToken(GAS_API_URL), {
+      // 🚀 分流優化 2：若有新上傳照片檔案，送往 GAS 上傳 Google Drive 並寫回 Supabase
+      const res = await fetch(GAS_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(withAuthPayload({
           action: 'update_equipment_images',
           equipId: equipment.id,
@@ -259,7 +259,8 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
           keptUrls,
           newPhotoFiles,
           userId
-        }))
+        })),
+        redirect: 'follow'
       });
       const text = await res.text();
       let data: any;
@@ -268,6 +269,9 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
       } catch {
         if (text.includes('找不到以下指令碼函式：doPost')) {
           throw new Error('Google Apps Script 尚未部署最新版程式碼（找不到 doPost 函式），請於 GAS 管理部署中建立新版本！');
+        }
+        if (text.includes('未支援的 Helper Action')) {
+          throw new Error('線上 GAS 尚未發布包含 update_equipment_images 的新版本，請至 GAS 管理部署建立新版本！');
         }
         throw new Error(text.slice(0, 120) || '伺服器回應非預期格式');
       }
@@ -285,10 +289,10 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
       }
     } catch (err: any) {
       console.error('儲存裝備照片失敗:', err);
-      // 依 Rule 直接印出完整錯誤訊息，包含 Load failed 與具體原因
+      // 依 Rule 直接印出完整錯誤訊息，包含具體診斷
       const errorMsg = err?.message || String(err);
       if (errorMsg.includes('Load failed')) {
-        alert(`照片更新失敗：Load failed (iOS 瀏覽器跨域重導向限制，建議於一般瀏覽器開啟或重試)`);
+        alert(`照片更新失敗：Load failed\n（原因：Google Apps Script 尚未部署最新版本，或 Web App 存取權限未設為「所有人 Anyone」。請至 GAS 管理部署中發布新版本！）`);
       } else {
         alert(`照片更新失敗：${errorMsg}`);
       }

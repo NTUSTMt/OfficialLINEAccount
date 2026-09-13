@@ -3,11 +3,28 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.78` (v0.1.78)
+- **當前版本**：`0.1.79` (v0.1.79)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 179. 裝備照片上傳傳輸標頭優化 (移除 OPTIONS 觸發因子與 URL Token) 與 GAS 多模組架構部署深度解析 (v0.1.79)
+- **前端請求傳輸標頭與轉址優化 (`src/components/borrow/EquipmentDetailModal.tsx`)**：
+  - **根本原因排查**：在 iOS Safari / LINE 內建 WebKit 瀏覽器環境中，若發送 POST 請求時帶有帶參數之 Content-Type（如 `text/plain;charset=utf-8`）或於 URL 上附加過長的 JWT Token（`?idToken=...`），WebKit 會將其判定為非簡單請求 (Non-Simple Request) 並發送 `OPTIONS` 預檢請求。而 Google Apps Script Web App 完全不支援 `OPTIONS` 方法，直接中斷連線拋出 `TypeError: Load failed`。
+  - **傳輸優化實作**：
+    - 嚴格使用標準純 `'Content-Type': 'text/plain'`，杜絕 WebKit 發送 `OPTIONS` 預檢請求。
+    - 移除 URL 上的冗餘查詢 Token，身分驗證一律內嵌於 POST JSON Payload（`withAuthPayload`）。
+    - 明確設定 `redirect: 'follow'`，確保行動裝置瀏覽器遵循 Google Apps Script 必要的 `302 Found` 跨域轉址。
+    - 錯誤訊息透明化升級：若捕獲 `Load failed`，明確提示 Google Apps Script 部署版本與「所有人 (Anyone)」存取權限檢查，協助社團幹部秒級除錯。
+- **Google Apps Script 6 大模組分檔部署原理深度解析**：
+  - 確認將 `01_Config_Auth.gs` 至 `06_Helper_Services.gs` 拆檔上傳至 GAS 專案與合併為單一 `gas.js` 在執行期無任何功能差異（GAS 在執行期會自動將專案內所有 `.gs` 檔合併於同一全域作用域）。
+  - 因前綴編號 `01_` ~ `06_` 嚴格遵守 Alphabetical Order，全域常數與環境變數保證優先載入，模組間函式職責清晰且無重複衝突。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 78/78 項測試 100% 全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+
 
 ### 178. 觸發器雙向防遞迴守衛 (根治 stack depth limit exceeded)、裝備照片直更分流 (徹底免除 iOS Load failed) 與全域錯誤透明印出規範 (v0.1.78)
 - **觸發器雙向防遞迴守衛 (`supabase/member_officer_sync.sql`, `supabase/fix_trigger_recursion.sql`)**：
