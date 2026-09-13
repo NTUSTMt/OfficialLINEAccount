@@ -276,9 +276,34 @@ function _handleNotifyProfileSaved(json) {
     var emerRel = data.emerRel || "未填寫";
     var offIntent = data.intendOfficial || "未填寫";
 
-    var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功 / Welcome! Registration Success】" : "【✅ 基本資料已成功更新 / Profile Updated Successfully】";
-    var intro = "";
-    var details = [];
+    function _translateValueToEn(val) {
+      if (val === null || val === undefined) return "Updated";
+      var s = String(val).trim();
+      if (!s || s === "未填寫") return "Not provided";
+      if (s === "已更新") return "Updated";
+      if (s.indexOf("我有意願成為社團幹部") > -1) return "Willing to be an officer";
+      if (s === "一般社員") return "General Member";
+      if (s === "正式社員") return "Official Member";
+      if (s === "暫不加入") return "Not joining yet";
+      if (s === "男") return "Male";
+      if (s === "女") return "Female";
+      if (s === "其他") return "Other";
+      if (s === "校內學生") return "NTUST Student";
+      if (s === "校友") return "NTUST Alumnus";
+      if (s === "外校學生") return "Non-NTUST Student";
+      if (s === "校外人士") return "Community Member";
+      if (s === "教職員") return "Faculty / Staff";
+      if (s === "父子" || s === "父女") return "Father";
+      if (s === "母子" || s === "母女") return "Mother";
+      if (s === "父母") return "Parents";
+      if (s === "朋友") return "Friend";
+      if (s === "配偶") return "Spouse";
+      if (s === "兄弟" || s === "姊妹") return "Sibling";
+      return s;
+    }
+
+    var titleZh = isNew ? "【🎉 歡迎加入！基本資料註冊成功】" : "【✅ 基本資料已成功更新】";
+    var titleEn = isNew ? "【🎉 Welcome! Registration Success】" : "【✅ Profile Updated Successfully】";
 
     // 檢查活動出隊保險與審核必備之 13 項資料完整度 (與 handleSignup 保持完全一致)
     var activityMissing = [];
@@ -298,9 +323,11 @@ function _handleNotifyProfileSaved(json) {
     var isActivityReady = (activityMissing.length === 0);
 
     // 依據資料完整度動態生成結尾引導話
-    var footer = "";
+    var footerZh = "";
+    var footerEn = "";
     if (isActivityReady) {
-      footer = "💡 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！\n─────────────\n💡 Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via \"Activities\", or reserve gear via \"Equipment Rental\" anytime!";
+      footerZh = "💡 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！";
+      footerEn = "💡 Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via \"Activities\", or reserve gear via \"Equipment Loan\" anytime!";
     } else {
       var fieldEnMap = {
         "姓名": "Name", "性別": "Gender", "聯絡電話": "Phone", "生日": "Birthday",
@@ -309,70 +336,174 @@ function _handleNotifyProfileSaved(json) {
         "體能自評": "Fitness Self-Assessment", "體能證明": "Fitness Proof", "爬山經驗": "Hiking Experience"
       };
       var missingText = activityMissing.slice(0, 4).join("、") + (activityMissing.length > 4 ? " 等 " + activityMissing.length + " 項" : "");
-      var missingEnText = activityMissing.slice(0, 4).map(function(f) { return fieldEnMap[f] || f; }).join(", ") + (activityMissing.length > 4 ? " and " + (activityMissing.length - 4) + " more" : "");
+      var missingEnText = activityMissing.slice(0, 4).map(function (f) { return fieldEnMap[f] || f; }).join(", ") + (activityMissing.length > 4 ? " and " + (activityMissing.length - 4) + " more" : "");
 
-      footer = "💡 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n⚠️ 提醒：出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！🏕️\n─────────────\n💡 You can reserve outdoor gear anytime via \"Equipment Rental\" without full trip details!\n\n⚠️ Trip Notice: Participating in hiking events requires safety insurance and qualification review. You currently have missing trip information (" + missingEnText + "). If you plan to join upcoming events, please update your profile via \"Register\" in the menu to enable one-click signup! 🏕️";
+      footerZh = "💡 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n⚠️ 提醒：出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！🏕️";
+      footerEn = "💡 You can reserve outdoor gear anytime via \"Equipment Loan\" without full trip details!\n\n⚠️ Trip Notice: Participating in hiking events requires safety insurance and qualification review. You currently have missing trip information (" + missingEnText + "). If you plan to join upcoming events, please update your profile via \"Register\" in the menu to enable one-click signup! 🏕️";
     }
+
+    var introZh = "";
+    var introEn = "";
+    var detailsZh = [];
+    var detailsEn = [];
+
+    var deptEn = (dept === "未填寫" ? "Not provided" : dept);
+    var studentIdEn = (studentId === "未填寫" ? "Not provided" : studentId);
+    var phoneEn = (phone === "未填寫" ? "Not provided" : phone);
 
     if (isNew) {
       // 1. 新註冊使用者：顯示完整註冊資料
-      intro = "您好 " + name + "！感謝您完成台科登山社社團系統個人資料註冊：";
-      if (data.name) details.push("• 姓名：" + name);
-      if (data.department || data.studentId) details.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
-      if (data.phone) details.push("• 聯絡電話：" + phone);
-      if (data.emerName || data.emerRel) details.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
-      if (data.intendOfficial) details.push("• 加入社員意願：" + offIntent);
-      if (data.exp) details.push("• 爬山經歷：已更新");
-      if (data.strength || data.strengthProof) details.push("• 體能自評：已更新");
+      introZh = "您好 " + name + "！感謝您完成台科登山社社團系統個人資料註冊：";
+      introEn = "Hello " + name + "! Thank you for registering your profile with the NTUST Mountaineering Club:";
+      if (data.name) {
+        detailsZh.push("• 姓名：" + name);
+        detailsEn.push("• Name: " + name);
+      }
+      if (data.department || data.studentId) {
+        detailsZh.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
+        detailsEn.push("• Dept / Student ID: " + deptEn + " (" + studentIdEn + ")");
+      }
+      if (data.phone) {
+        detailsZh.push("• 聯絡電話：" + phone);
+        detailsEn.push("• Phone Number: " + phoneEn);
+      }
+      if (data.emerName || data.emerRel) {
+        detailsZh.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
+        detailsEn.push("• Emergency Contact: " + (emerName === "未填寫" ? "Not provided" : emerName) + " (" + _translateValueToEn(emerRel) + ")");
+      }
+      if (data.intendOfficial) {
+        detailsZh.push("• 加入社員意願：" + offIntent);
+        detailsEn.push("• Club Membership Intent: " + _translateValueToEn(offIntent));
+      }
+      if (data.exp) {
+        detailsZh.push("• 爬山經歷：已更新");
+        detailsEn.push("• Hiking Experience: Updated");
+      }
+      if (data.strength || data.strengthProof) {
+        detailsZh.push("• 體能自評：已更新");
+        detailsEn.push("• Fitness Self-Assessment: Updated");
+      }
     } else if (Array.isArray(json.changedFields)) {
       // 2. 既有使用者更新個人檔案：依據實際變更欄位動態顯示
       var cFields = json.changedFields;
       if (cFields.length === 0) {
-        intro = "您好 " + name + "！您的個人檔案未有變更，資料已為最新狀態。";
+        introZh = "您好 " + name + "！您的個人檔案未有變更，資料已為最新狀態。";
+        introEn = "Hello " + name + "! No changes were made to your profile; your information is up to date.";
       } else {
-        intro = "您好 " + name + "！您已於系統中成功更新個人檔案：";
-        if (cFields.indexOf("name") > -1) details.push("• 姓名：" + name);
-        if (cFields.indexOf("gender") > -1) details.push("• 性別：" + (data.gender || "已更新"));
-        if (cFields.indexOf("birthday") > -1) details.push("• 生日：" + (data.birthday || "已更新"));
+        introZh = "您好 " + name + "！您已於系統中成功更新個人檔案：";
+        introEn = "Hello " + name + "! You have successfully updated your profile:";
+        if (cFields.indexOf("name") > -1) {
+          detailsZh.push("• 姓名：" + name);
+          detailsEn.push("• Name: " + name);
+        }
+        if (cFields.indexOf("gender") > -1) {
+          detailsZh.push("• 性別：" + (data.gender || "已更新"));
+          detailsEn.push("• Gender: " + _translateValueToEn(data.gender || "已更新"));
+        }
+        if (cFields.indexOf("birthday") > -1) {
+          detailsZh.push("• 生日：" + (data.birthday || "已更新"));
+          detailsEn.push("• Birthday: " + (data.birthday || "Updated"));
+        }
         if (cFields.indexOf("idNumber") > -1) {
           var maskedId = data.idNumber ? _maskString(data.idNumber, 2, 2) : "已更新";
-          details.push("• 身分證/護照：" + maskedId);
+          detailsZh.push("• 身分證/護照：" + maskedId);
+          detailsEn.push("• ID / Passport: " + (maskedId === "已更新" ? "Updated" : maskedId));
         }
-        if (cFields.indexOf("department_studentId") > -1) details.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
-        if (cFields.indexOf("identityStatus") > -1) details.push("• 身分別：" + (data.identityStatus || "已更新"));
-        if (cFields.indexOf("phone") > -1) details.push("• 聯絡電話：" + phone);
-        if (cFields.indexOf("email") > -1) details.push("• 電子信箱：" + (data.email || "已更新"));
-        if (cFields.indexOf("realLineId") > -1) details.push("• LINE ID：" + (data.realLineId || "已更新"));
-        if (cFields.indexOf("studentAddr") > -1) details.push("• 現居地址：" + (data.studentAddr || "已更新"));
-        if (cFields.indexOf("emergency_contact") > -1) details.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
+        if (cFields.indexOf("department_studentId") > -1) {
+          detailsZh.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
+          detailsEn.push("• Dept / Student ID: " + deptEn + " (" + studentIdEn + ")");
+        }
+        if (cFields.indexOf("identityStatus") > -1) {
+          detailsZh.push("• 身分別：" + (data.identityStatus || "已更新"));
+          detailsEn.push("• Identity Status: " + _translateValueToEn(data.identityStatus || "已更新"));
+        }
+        if (cFields.indexOf("phone") > -1) {
+          detailsZh.push("• 聯絡電話：" + phone);
+          detailsEn.push("• Phone Number: " + phoneEn);
+        }
+        if (cFields.indexOf("email") > -1) {
+          detailsZh.push("• 電子信箱：" + (data.email || "已更新"));
+          detailsEn.push("• Email: " + (data.email || "Updated"));
+        }
+        if (cFields.indexOf("realLineId") > -1) {
+          detailsZh.push("• LINE ID：" + (data.realLineId || "已更新"));
+          detailsEn.push("• LINE ID: " + (data.realLineId || "Updated"));
+        }
+        if (cFields.indexOf("studentAddr") > -1) {
+          detailsZh.push("• 現居地址：" + (data.studentAddr || "已更新"));
+          detailsEn.push("• Current Address: " + (data.studentAddr || "Updated"));
+        }
+        if (cFields.indexOf("emergency_contact") > -1) {
+          detailsZh.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
+          detailsEn.push("• Emergency Contact: " + (emerName === "未填寫" ? "Not provided" : emerName) + " (" + _translateValueToEn(emerRel) + ")");
+        }
         if (cFields.indexOf("emerPhone") > -1) {
           var maskedEmerPhone = data.emerPhone ? _maskString(data.emerPhone, 4, 3) : "已更新";
-          details.push("• 緊急聯絡人電話：" + maskedEmerPhone);
+          detailsZh.push("• 緊急聯絡人電話：" + maskedEmerPhone);
+          detailsEn.push("• Emergency Contact Phone: " + (maskedEmerPhone === "已更新" ? "Updated" : maskedEmerPhone));
         }
-        if (cFields.indexOf("emerAddr") > -1) details.push("• 緊急聯絡人地址：" + (data.emerAddr || "已更新"));
-        if (cFields.indexOf("medicalHistory") > -1) details.push("• 特殊病史：已更新");
-        if (cFields.indexOf("exp") > -1) details.push("• 爬山經歷：已更新");
-        if (cFields.indexOf("strength") > -1) details.push("• 體能自評：已更新");
-        if (cFields.indexOf("intendOfficial") > -1) details.push("• 加入社員意願：" + offIntent);
-        if (cFields.indexOf("intendOfficer") > -1) details.push("• 擔任幹部意願：" + (data.intendOfficer || "已更新"));
+        if (cFields.indexOf("emerAddr") > -1) {
+          detailsZh.push("• 緊急聯絡人地址：" + (data.emerAddr || "已更新"));
+          detailsEn.push("• Emergency Contact Address: " + (data.emerAddr || "Updated"));
+        }
+        if (cFields.indexOf("medicalHistory") > -1) {
+          detailsZh.push("• 特殊病史：已更新");
+          detailsEn.push("• Medical History: Updated");
+        }
+        if (cFields.indexOf("exp") > -1) {
+          detailsZh.push("• 爬山經歷：已更新");
+          detailsEn.push("• Hiking Experience: Updated");
+        }
+        if (cFields.indexOf("strength") > -1) {
+          detailsZh.push("• 體能自評：已更新");
+          detailsEn.push("• Fitness Assessment: Updated");
+        }
+        if (cFields.indexOf("intendOfficial") > -1) {
+          detailsZh.push("• 加入社員意願：" + offIntent);
+          detailsEn.push("• Club Membership Intent: " + _translateValueToEn(offIntent));
+        }
+        if (cFields.indexOf("intendOfficer") > -1) {
+          detailsZh.push("• 擔任幹部意願：" + (data.intendOfficer || "已更新"));
+          detailsEn.push("• Officer Intent: " + _translateValueToEn(data.intendOfficer || "已更新"));
+        }
       }
     } else {
       // 3. 既有使用者且未傳入 changedFields 之向下相容 fallback
-      intro = "您好 " + name + "！您已於系統中成功更新個人檔案：";
-      details.push("• 姓名：" + name);
-      details.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
-      details.push("• 聯絡電話：" + phone);
-      details.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
-      details.push("• 加入社員意願：" + offIntent);
-      if (data.exp) details.push("• 爬山經歷：已更新");
-      if (data.strength) details.push("• 體能自評：已更新");
+      introZh = "您好 " + name + "！您已於系統中成功更新個人檔案：";
+      introEn = "Hello " + name + "! You have successfully updated your profile:";
+      detailsZh.push("• 姓名：" + name);
+      detailsEn.push("• Name: " + name);
+      detailsZh.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
+      detailsEn.push("• Dept / Student ID: " + deptEn + " (" + studentIdEn + ")");
+      detailsZh.push("• 聯絡電話：" + phone);
+      detailsEn.push("• Phone Number: " + phoneEn);
+      detailsZh.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
+      detailsEn.push("• Emergency Contact: " + (emerName === "未填寫" ? "Not provided" : emerName) + " (" + _translateValueToEn(emerRel) + ")");
+      detailsZh.push("• 加入社員意願：" + offIntent);
+      detailsEn.push("• Club Membership Intent: " + _translateValueToEn(offIntent));
+      if (data.exp) {
+        detailsZh.push("• 爬山經歷：已更新");
+        detailsEn.push("• Hiking Experience: Updated");
+      }
+      if (data.strength) {
+        detailsZh.push("• 體能自評：已更新");
+        detailsEn.push("• Fitness Assessment: Updated");
+      }
     }
 
-    var msg = title + "\n\n" + intro;
-    if (details.length > 0) {
-      msg += "\n\n" + details.join("\n");
+    var zhBlock = introZh;
+    if (detailsZh.length > 0) {
+      zhBlock += "\n\n" + detailsZh.join("\n");
     }
-    msg += "\n\n" + footer;
+    zhBlock += "\n\n" + footerZh;
+
+    var enBlock = introEn;
+    if (detailsEn.length > 0) {
+      enBlock += "\n\n" + detailsEn.join("\n");
+    }
+    enBlock += "\n\n" + footerEn;
+
+    var msg = titleZh + "\n\n" + zhBlock + "\n─────────────\n" + titleEn + "\n\n" + enBlock;
 
     _pushMessage(userId, msg);
 
@@ -438,7 +569,7 @@ function _handleCheckOfficerStatus(json) {
     var ss = null;
     try {
       if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    } catch (e) {}
+    } catch (e) { }
 
     var res = checkOfficerInternal(ss, userId);
     return _jsonResponse({
@@ -532,7 +663,7 @@ function uploadFileToDrive(base64Str, fileName, folderPath) {
       var legacyFolders = DriveApp.getFoldersByName("LINE_Uploads");
       if (legacyFolders.hasNext()) {
         currentFolder = legacyFolders.next();
-        try { currentFolder.setName("系統圖庫"); } catch (e) {}
+        try { currentFolder.setName("系統圖庫"); } catch (e) { }
       } else {
         currentFolder = DriveApp.createFolder("系統圖庫");
       }
@@ -776,7 +907,7 @@ function checkOfficerInternal(ss, userId, userName) {
               if (oName !== "" && (oName === cleanUserName || cleanUserName.indexOf(oName) > -1 || oName.indexOf(cleanUserName) > -1)) {
                 var officerRole = (roleIdx > -1) ? oData[j][roleIdx].trim() : "幹部";
                 if (userId && sysIdx > -1 && !oData[j][sysIdx]) {
-                  try { oSheet.getRange(j + 1, sysIdx + 1).setValue(userId); } catch (e) {}
+                  try { oSheet.getRange(j + 1, sysIdx + 1).setValue(userId); } catch (e) { }
                 }
                 return { isOfficer: true, role: officerRole, name: oName };
               }
@@ -978,7 +1109,7 @@ function _syncEventDriveUrlsToSupabase(eventId, driveFolderUrl, spreadsheetUrl, 
       if (res.getResponseCode() === 200) {
         updated = JSON.parse(res.getContentText());
       }
-    } catch (parseErr) {}
+    } catch (parseErr) { }
 
     if (!updated || updated.length === 0) {
       var upsertUrl = sbUrl + "/rest/v1/events?on_conflict=id";
@@ -1287,7 +1418,7 @@ function _handleSendEventNotifications(json) {
     var ss = null;
     try {
       if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    } catch (e) {}
+    } catch (e) { }
 
     var officerCheck = checkOfficerInternal(ss, userId);
     if (!officerCheck.isOfficer) {
@@ -1456,7 +1587,7 @@ function _handleGetAdminEvents(userId) {
     var ss = null;
     try {
       if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    } catch (e) {}
+    } catch (e) { }
 
     var officerCheck = checkOfficerInternal(ss, userId);
     if (!officerCheck.isOfficer) {
@@ -1520,7 +1651,7 @@ function _handleGetEventSignups(eventId, userId) {
     var ss = null;
     try {
       if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    } catch (e) {}
+    } catch (e) { }
 
     var officerCheck = checkOfficerInternal(ss, userId);
     if (!officerCheck.isOfficer) {

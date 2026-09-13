@@ -65,7 +65,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   // 檢查是否提及機器人 (@小岳 或 mention.mentionees.isSelf 或 以「小岳」開頭)
   var isMentioned = false;
   if (ev && ev.message && ev.message.mention && Array.isArray(ev.message.mention.mentionees)) {
-    isMentioned = ev.message.mention.mentionees.some(function(m) {
+    isMentioned = ev.message.mention.mentionees.some(function (m) {
       return m.isSelf === true;
     });
   }
@@ -154,7 +154,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   }
 
   // 若無特定處理，回傳友善提示（群組中若有召喚但未辨識且 AI 未回時才提示）
-  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！\n─────────────\nHello! Please use the rich menu below to explore Events, Equipment Rental, or Dashboard. If you have any questions, feel free to leave a message for the officers!");
+  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！\n─────────────\nHello! Please use the rich menu below to explore Events, Equipment Loan, or Dashboard. If you have any questions, feel free to leave a message for the officers!");
 }
 
 /**

@@ -29,6 +29,7 @@ ALTER TABLE loans ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS unit_price_snapshot INTEGER DEFAULT 0;
 ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS subtotal INTEGER DEFAULT 0;
+ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 3. 雙向資料回填：若舊欄位有值但新欄位為 0，或新欄位有值但舊欄位為 0，自動同步
 UPDATE equipments 
@@ -36,6 +37,31 @@ SET price_2day = COALESCE(NULLIF(price_2day, 0), member_price_per_day, 0),
     member_price_per_day = COALESCE(NULLIF(member_price_per_day, 0), price_2day, 0),
     price_extra_day = COALESCE(NULLIF(price_extra_day, 0), non_member_price_per_day, 0),
     non_member_price_per_day = COALESCE(NULLIF(non_member_price_per_day, 0), price_extra_day, 0);
+
+-- 3.5 確保 text 隱式轉換至 payment_status_enum (杜絕 column "payment_status" is of type payment_status_enum but expression is of type text)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status_enum') THEN
+        CREATE OR REPLACE FUNCTION text_to_payment_status_enum(val text)
+        RETURNS payment_status_enum AS $cast$
+        BEGIN
+            IF val IS NULL THEN
+                RETURN NULL;
+            ELSIF val LIKE '%已繳費%' OR val LIKE '%Paid%' THEN
+                RETURN '已繳費 Paid'::payment_status_enum;
+            ELSIF val LIKE '%待確認%' OR val LIKE '%Checking%' THEN
+                RETURN '待確認 Checking'::payment_status_enum;
+            ELSE
+                RETURN '未繳費 Unpaid'::payment_status_enum;
+            END IF;
+        END;
+        $cast$ LANGUAGE plpgsql IMMUTABLE;
+
+        DROP CAST IF EXISTS (text AS payment_status_enum);
+        CREATE CAST (text AS payment_status_enum)
+        WITH FUNCTION text_to_payment_status_enum(text) AS IMPLICIT;
+    END IF;
+END $$;
 
 -- 4. 重建原子性租借提交 RPC (submit_equipment_loan_rpc)
 CREATE OR REPLACE FUNCTION submit_equipment_loan_rpc(
@@ -67,6 +93,8 @@ DECLARE
     v_total_deposit INTEGER := 0;
     v_loan_id TEXT;
     v_item_count INTEGER := 0;
+    v_loan_status loans.status%TYPE := '待領取 To Be Collected';
+    v_loan_payment_status loans.payment_status%TYPE;
 BEGIN
     -- 1. 身分安全性防呆校驗
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
@@ -175,6 +203,13 @@ BEGIN
         RETURN jsonb_build_object('status', 'error', 'message', '購物車內無有效數量之品項');
     END IF;
 
+    -- 決定付款狀態 (對齊 payment_status_enum 值)
+    IF v_total_rent = 0 THEN
+        v_loan_payment_status := '已繳費 Paid';
+    ELSE
+        v_loan_payment_status := '未繳費 Unpaid';
+    END IF;
+
     -- 6. 建立主租借紀錄 (loans)
     INSERT INTO loans (
         id,
@@ -201,8 +236,8 @@ BEGIN
         v_days,
         v_purpose,
         v_other_purpose,
-        '待領取 To Be Collected',
-        CASE WHEN v_total_rent = 0 THEN '已繳費 Paid' ELSE '未繳費' END,
+        v_loan_status,
+        v_loan_payment_status,
         v_total_deposit,
         v_total_rent,
         CASE 

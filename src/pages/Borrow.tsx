@@ -97,7 +97,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
   // 外部瀏覽器阻擋防護狀態
   const isLocalhost = typeof window !== 'undefined' && (
-    window.location.hostname === 'localhost' || 
+    window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1' ||
     window.location.hostname.includes('192.168.')
   );
@@ -408,8 +408,8 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
       const totalRentValue = result.totalRent !== undefined ? result.totalRent : totalPrice;
 
-      // 3. 非同步背景發送 LINE 幹部審核推播 (包含 LINE ID、中文名稱清單、電話與租金)
-      fetch(GAS_API_URL, {
+      // 3. 發送 LINE 幹部審核推播 (包含 LINE ID、中文名稱清單、電話與租金)
+      const notifyPromise = fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(withAuthPayload({
@@ -425,7 +425,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
           cartDetails: selectedCartItems,
           totalRent: totalRentValue
         }))
-      }).catch(err => console.warn('[Borrow] 非同步推播通知略過:', err));
+      }).catch(err => console.warn('[Borrow] 幹部推播通知略過:', err));
 
       removeCache(CACHE_KEY_EQUIPMENTS);
       setIsCartOpen(false);
@@ -443,8 +443,8 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         : (isOfficial ? '社員個人 (享5折) / Member (50% Off)' : '非社員 (原價) / Non-member (Regular)');
       const itemsListText = selectedCartItems.map(item => `• ${item.name} x ${item.quantity}`).join('\n');
 
-      const userMessageText = 
-        `【🎒 我的裝備租借預訂單 / Equipment Rental Order】\n` +
+      const userMessageText =
+        `【🎒 我的裝備租借預訂單 / Equipment Loan Order】\n` +
         `────────────────────\n` +
         `• 訂單編號 (Order ID)：${result.loanId || '已建立 Created'}\n` +
         `• 借用人 (Borrower)：${userProfile.name || '社員'} (${identityText})\n` +
@@ -459,26 +459,33 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         `1. 幹部已收到您的預約申請，將為您備齊裝備。\n` +
         `   Officers have received your request and will prepare the gear.\n` +
         `2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n` +
-        `   If fees apply, please complete payment in "Payment Declaration" before pickup.\n` +
+        `   If fees apply, please complete payment in "Payment Center" before pickup.\n` +
         `3. 將有幹部主動聯繫你，確認領取時間以及地點。\n` +
         `   An officer will contact you to confirm pickup time and location.`;
 
       if (liff.isInClient()) {
         try {
-          await liff.sendMessages([{
-            type: 'text',
-            text: userMessageText
-          }]);
+          // 同時確保幹部推播已抵達 GAS，以及 liff.sendMessages 成功送入聊天室
+          await Promise.allSettled([
+            notifyPromise,
+            liff.sendMessages([{
+              type: 'text',
+              text: userMessageText
+            }])
+          ]);
         } catch (liffErr) {
           console.warn('liff.sendMessages 略過:', liffErr);
         } finally {
-          try {
-            liff.closeWindow();
-          } catch (e) {
-            console.warn('liff.closeWindow 略過:', e);
-          }
+          setTimeout(() => {
+            try {
+              liff.closeWindow();
+            } catch (e) {
+              console.warn('liff.closeWindow 略過:', e);
+            }
+          }, 300);
         }
       } else {
+        await notifyPromise;
         alert(t('borrow.alert.submitSuccessBrowser'));
       }
     } catch (error) {
@@ -672,9 +679,9 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         <div className="equipment-filter-container" style={{ marginBottom: '16px' }}>
           {/* 搜尋輸入框 */}
           <div className="equipment-search-wrapper" style={{ position: 'relative', marginBottom: '10px' }}>
-            <Search 
-              size={18} 
-              style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} 
+            <Search
+              size={18}
+              style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }}
             />
             <input
               type="text"
@@ -724,12 +731,12 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
           </div>
 
           {/* 水平滑動分類標籤列 (Category Chips) */}
-          <div 
-            className="equipment-category-scroll-container" 
-            style={{ 
-              display: 'flex', 
-              gap: '8px', 
-              overflowX: 'auto', 
+          <div
+            className="equipment-category-scroll-container"
+            style={{
+              display: 'flex',
+              gap: '8px',
+              overflowX: 'auto',
               paddingBottom: '4px',
               WebkitOverflowScrolling: 'touch',
               scrollbarWidth: 'none',
@@ -758,12 +765,12 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
               }}
             >
               <span>{t('borrow.category.all', '全部')}</span>
-              <span style={{ 
-                fontSize: '11px', 
-                background: selectedCategory === 'all' ? '#059669' : '#f1f5f9', 
+              <span style={{
+                fontSize: '11px',
+                background: selectedCategory === 'all' ? '#059669' : '#f1f5f9',
                 color: selectedCategory === 'all' ? '#ffffff' : '#64748b',
-                borderRadius: '10px', 
-                padding: '1px 6px' 
+                borderRadius: '10px',
+                padding: '1px 6px'
               }}>
                 {categoryCounts.all}
               </span>
@@ -796,12 +803,12 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
                   }}
                 >
                   <span>{cat}</span>
-                  <span style={{ 
-                    fontSize: '11px', 
-                    background: isSelected ? '#059669' : '#f1f5f9', 
+                  <span style={{
+                    fontSize: '11px',
+                    background: isSelected ? '#059669' : '#f1f5f9',
                     color: isSelected ? '#ffffff' : '#64748b',
-                    borderRadius: '10px', 
-                    padding: '1px 6px' 
+                    borderRadius: '10px',
+                    padding: '1px 6px'
                   }}>
                     {count}
                   </span>

@@ -33,8 +33,6 @@ DECLARE
     v_member members%ROWTYPE;
     v_is_official BOOLEAN := FALSE;
     v_is_expired BOOLEAN := FALSE;
-    v_is_unpaid BOOLEAN := FALSE;
-    v_has_intent BOOLEAN := FALSE;
 BEGIN
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
         RETURN jsonb_build_object(
@@ -51,21 +49,14 @@ BEGIN
             v_is_expired := TRUE;
         END IF;
 
-        IF v_member.payment_status IS NULL 
-           OR (v_member.payment_status::text NOT LIKE '%已繳費%' AND v_member.payment_status::text NOT LIKE '%Paid%') THEN
-            v_is_unpaid := TRUE;
-        END IF;
+        v_is_official := COALESCE(v_member.is_official_member, FALSE) AND NOT v_is_expired;
 
-        IF v_member.join_membership_intent IS TRUE 
-           OR v_member.join_membership_intent ILIKE '%是%' 
-           OR v_member.join_membership_intent ILIKE '%意願%' 
-           OR v_member.membership_expires_at IS NOT NULL THEN
-            v_has_intent := TRUE;
-        END IF;
-
-        -- 只要不是「待確認 Checking」且（未繳費或過期）且有加入意願
-        IF (v_member.payment_status IS NULL OR (v_member.payment_status::text NOT LIKE '%待確認%' AND v_member.payment_status::text NOT LIKE '%Checking%')) THEN
-            IF (v_is_unpaid OR v_is_expired) AND v_has_intent THEN
+        -- 只要不是有效正式社員（尚未入社或社籍已過期），且目前無待審核社費，即提供繳社交費選項
+        IF NOT v_is_official THEN
+            IF (v_member.payment_status IS NULL OR (
+                v_member.payment_status::text NOT LIKE '%待確認%' 
+                AND v_member.payment_status::text NOT LIKE '%Checking%'
+            )) THEN
                 v_membership := jsonb_build_array(
                     jsonb_build_object(
                         'id', 'fee_membership',
@@ -75,8 +66,15 @@ BEGIN
                 );
             END IF;
         END IF;
-
-        v_is_official := COALESCE(v_member.is_official_member, FALSE) AND NOT v_is_expired;
+    ELSE
+        -- members 表中尚無該使用者，肯定非社員，提供繳社交費選項
+        v_membership := jsonb_build_array(
+            jsonb_build_object(
+                'id', 'fee_membership',
+                'name', '社籍與社費 (Membership Fee)',
+                'amount', 200
+            )
+        );
     END IF;
 
     -- 2. 查詢正取活動欠款 (從 event_signups 與 events 關聯)
@@ -93,12 +91,19 @@ BEGIN
         WHERE s.line_user_id = p_line_user_id
           AND (s.status::text LIKE '%正取%' OR s.status::text LIKE '%Confirmed%')
           AND s.status::text NOT LIKE '%取消%'
-          AND (s.payment_status IS NULL OR (
-              s.payment_status::text NOT LIKE '%已繳費%' 
-              AND s.payment_status::text NOT LIKE '%Paid%'
-              AND s.payment_status::text NOT LIKE '%待確認%'
-              AND s.payment_status::text NOT LIKE '%Checking%'
-          ))
+          AND COALESCE(e.fee, 0) > 0
+          AND (
+              s.payment_status IS NULL 
+              OR s.payment_status::text LIKE '%未繳費%'
+              OR s.payment_status::text LIKE '%Unpaid%'
+              OR (
+                  s.payment_status::text NOT LIKE '%已繳費%' 
+                  AND s.payment_status::text NOT LIKE '%待確認%' 
+                  AND s.payment_status::text NOT LIKE '%Checking%'
+                  AND s.payment_status::text != '已繳費 Paid'
+                  AND s.payment_status::text != 'Paid'
+              )
+          )
         ORDER BY e.start_date ASC
     ) t;
 
@@ -126,12 +131,19 @@ BEGIN
         WHERE l.line_user_id = p_line_user_id
           AND l.status::text NOT LIKE '%取消%'
           AND l.status::text NOT LIKE '%歸還%'
-          AND (l.payment_status IS NULL OR (
-              l.payment_status::text NOT LIKE '%已繳費%' 
-              AND l.payment_status::text NOT LIKE '%Paid%'
-              AND l.payment_status::text NOT LIKE '%待確認%'
-              AND l.payment_status::text NOT LIKE '%Checking%'
-          ))
+          AND COALESCE(l.total_rent, 0) > 0
+          AND (
+              l.payment_status IS NULL 
+              OR l.payment_status::text LIKE '%未繳費%'
+              OR l.payment_status::text LIKE '%Unpaid%'
+              OR (
+                  l.payment_status::text NOT LIKE '%已繳費%' 
+                  AND l.payment_status::text NOT LIKE '%待確認%' 
+                  AND l.payment_status::text NOT LIKE '%Checking%'
+                  AND l.payment_status::text != '已繳費 Paid'
+                  AND l.payment_status::text != 'Paid'
+              )
+          )
         ORDER BY l.start_date ASC
     ) t;
 

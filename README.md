@@ -3,25 +3,137 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.94` (v0.1.94)
+- **當前版本**：`0.1.99` (v0.1.99)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
 
+### 199. 徹底修復裝備租借推播發送失敗、繳費中心訂單消失與社費勾選框異常 (v0.1.99)
+- **問題回報與根本原因分析 (Problem & Root Cause)**：
+  1. **裝備租借送出後，申請人與幹部群組皆未收到通知**：
+     - **前端原因**：在 [src/pages/Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 中，送出租借表單時觸發的幹部推播 `fetch(GAS_API_URL, ...)` 未加上 `await` 等待，且下一行立即呼叫 `liff.closeWindow()`。LIFF 視窗瞬間被瀏覽器銷毀，導致推播 HTTP 請求在尚未發送完成前即被中斷（Connection Aborted）。
+     - **幹部群組原因**：LINE Bot 必須知道幹部群組的 `groupId` 才能進行推播，若幹部群組尚未於 LINE 對話中輸入「`綁定幹部群組`」，系統查無 `OFFICER_GROUP_ID`，推播便無法送達群組。
+  2. **繳費系統（Payment Center）沒有出現剛送出的裝備租借待繳項目**：
+     - **SQL 子字串碰撞重大 Bug**：在 [supabase/payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/payment_rpc.sql) 的 `get_unpaid_payments` 函式中，過濾未繳費項目的條件原寫為 `AND l.payment_status::text NOT LIKE '%Paid%'`。
+     - 然而，裝備租借表單產生的預設未繳費狀態為 `'未繳費 Unpaid'`，字串內含子字串 `'Paid'`！這導致 PostgreSQL 在執行 `NOT LIKE '%Paid%'` 時判定為 `FALSE`，將所有真正的未繳費訂單強行過濾掉。
+     - 此外，底層自訂轉型函式 `text_to_payment_status_enum` 先前亦因 `LIKE '%Paid%'` 判定優先度問題，有將 `'未繳費 Unpaid'` 誤轉為 `'已繳費 Paid'` 之潛在風險。
+  3. **不是社員時，繳費系統也沒有出現繳社費的勾選框**：
+     - 原先 SQL 對於社費顯示綁定了過於嚴格的意願條件 `v_has_intent`，且社員狀態比對亦同受 `NOT LIKE '%Paid%'` 誤殺。
+- **修復與防護機制 (Architecture & Implementation)**：
+  - **1. 前端推播非同步安全防護 (`Borrow.tsx` & `Payment.tsx`)**：
+    - 將呼叫 GAS 發送幹部推播的 `fetch(...)` 宣告為 Promise，並與使用者本地發送確認訊息之 `liff.sendMessages(...)` 一併納入 `Promise.allSettled` 並行處理。
+    - 待所有推播請求確實完成後，額外加入 300ms 安全非同步延遲，確保連線完整發出後才調用 `liff.closeWindow()`，徹底杜絕關閉視窗造成的網路中斷。
+  - **2. 徹底消除 SQL 子字串碰撞 (`payment_rpc.sql` & `fix_payment_status_enum_typecast.sql`)**：
+    - 重新編寫 `get_unpaid_payments` 查詢：
+      - 欠費判定改採明確的正向匹配與嚴格排除：`(payment_status IS NULL OR payment_status::text LIKE '%未繳費%' OR payment_status::text LIKE '%Unpaid%' OR (payment_status::text NOT LIKE '%已繳費%' AND payment_status::text NOT LIKE '%待確認%' AND payment_status::text NOT LIKE '%Checking%' AND payment_status::text != '已繳費 Paid' AND payment_status::text != 'Paid'))`。
+      - 裝備租借追加 `AND COALESCE(l.total_rent, 0) > 0`，社團出隊 0 元免租單自動過濾，不造成使用者困擾。
+    - 修正 `text_to_payment_status_enum` 轉型函式：優先判斷 `LIKE '%未繳費%' OR LIKE '%Unpaid%'`，杜絕型別轉型誤判。
+  - **3. 放寬繳納社費選項顯示邏輯**：
+    - 在 `get_unpaid_payments` 中調整規則：只要使用者「非有效正式社員」（包含尚未入社或社籍已過期），且目前無審核中（`待確認 Checking`）之社費申報，進入繳費中心一律提供「社籍與社費 (Membership Fee) 200 元」選項供自由勾選。
+  - **4. 一鍵修復腳本全面升級**：
+    - 將上述修復全數整合進 [supabase/fix_payment_status_enum_typecast.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_payment_status_enum_typecast.sql)，管理員僅需至 Supabase SQL Editor 執行一次即可修復所有資料表轉型與 RPC 函式。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過（涵蓋裝備計費公式、LIFF 通知機制、RPC 權限等）。
+  - 前端建置：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
+
+### 198. 徹底修復裝備租借細項 loan_items.created_at 欄位不存在錯誤與雙重防護機制 (v0.1.98)
+- **問題回報與根本原因 (Problem & Root Cause)**：
+  - 使用者在裝備租借送出時，系統彈出錯誤：`系統發生錯誤：column "created_at" of relation "loan_items" does not exist`。
+  - **根本原因**：
+    1. 在 Supabase PostgreSQL 中，`loan_items` 細項資料表原始設計僅包含 `id`, `loan_id`, `equipment_id`, `quantity`, `unit_price_snapshot`, `subtotal` 六大核心欄位，本身並未建立 `created_at`。
+    2. `submit_equipment_loan_rpc` 儲存程序在第 7 步建立細項時，於 `INSERT INTO loan_items (..., created_at) VALUES (..., NOW())` 多寫入了 `created_at`，導致 PostgreSQL 拋出欄位不存在錯誤阻斷租借提交。
+- **修復與防護機制 (Architecture & Implementation)**：
+  - **第一道防線：簡化 INSERT 明細欄位**：
+    - 在 `submit_equipment_loan_rpc` 中，將 `INSERT INTO loan_items` 調整為僅插入必備的 5 大欄位 `(loan_id, equipment_id, quantity, unit_price_snapshot, subtotal)`，徹底斷絕欄位不存在的錯誤。
+  - **第二道防線：自動補齊資料表欄位 (DDL 防呆)**：
+    - 在修復腳本開頭加入 `ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();`，即使未來任何其他程序需要查詢 `created_at` 亦能完美相容。
+  - **同步修復檔案**：
+    - [supabase/fix_payment_status_enum_typecast.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_payment_status_enum_typecast.sql)
+    - [supabase/fix_equipment_loan_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_equipment_loan_rpc.sql)
+    - [supabase/equipment_loan_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/equipment_loan_rpc.sql)
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 錯誤。
+
+### 197. 徹底修復裝備租借 payment_status_enum 型別轉型錯誤與 IMPLICIT CAST 全域防護 (v0.1.97)
+- **問題回報與根本原因 (Problem & Root Cause)**：
+  - 使用者在裝備租借詳情頁點選「Submitting...」送出租借單時，系統彈出警示錯誤：`System error: column "payment_status" is of type payment_status_enum but expression is of type text`。
+  - **根本原因**：
+    1. 在 Supabase PostgreSQL 中，`loans.payment_status` 為自訂列舉型別 `payment_status_enum`（有效值為 `'已繳費 Paid'`, `'待確認 Checking'`, `'未繳費 Unpaid'`）。
+    2. `submit_equipment_loan_rpc` 在執行 `INSERT INTO loans` 時，使用了 `CASE WHEN v_total_rent = 0 THEN '已繳費 Paid' ELSE '未繳費' END` 表達式。PL/pgSQL 將該運算式推導為 `text` 類型，而 PostgreSQL 預設沒有 `text -> payment_status_enum` 的隱式轉型，且 `'未繳費'` 亦不符合列舉定義，導致 PostgreSQL 嚴格型別檢查阻斷並拋出此錯誤。
+- **修復與防護機制 (Architecture & Implementation)**：
+  - **全域隱式轉型規則 (IMPLICIT CAST)**：
+    - 建立 `text_to_payment_status_enum` 轉型函式，並註冊 `CREATE CAST (text AS payment_status_enum) WITH FUNCTION text_to_payment_status_enum(text) AS IMPLICIT;`。
+    - 徹底實現雙向容錯：無論前端、外部 API 或 CASE WHEN 字串寫入，PostgreSQL 均在底層自動映射至合法 ENUM 值，永遠杜絕 `expression is of type text` 錯誤。
+  - **RPC 動態型別宣告與安全賦值 (`submit_equipment_loan_rpc`)**：
+    - 在 PL/pgSQL 中宣告 `v_loan_payment_status loans.payment_status%TYPE;` 與 `v_loan_status loans.status%TYPE := '待領取 To Be Collected';`。
+    - 根據租金計算結果賦予合法枚舉值（免租/0元為 `'已繳費 Paid'`，其餘為 `'未繳費 Unpaid'`），於 INSERT 時直接傳入同型別變數。
+  - **取消預約防護 (`cancel_rpc.sql`)**：
+    - 在比較 `loans.payment_status` 時全面加入 `::text` 轉型保護，防止列舉型別比較時可能發生的運算子衝突。
+  - **一鍵修復腳本 (`supabase/fix_payment_status_enum_typecast.sql`)**：
+    - 提供獨立 SQL 腳本，方便管理員至 Supabase SQL Editor 一鍵執行立即生效。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過（含裝備租借計費公式、Supabase 雙軌相容各項驗證）。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+### 196. 重構個人檔案通知為「純中文（完整）\n─────────────\n純英文（完整）」單一分隔線架構與欄位值徹底英文化 (v0.1.96)
+- **問題回報與需求 (Problem & Requirements)**：
+  - 先前個人檔案更新/註冊推播採用標題雙語混搭、中間穿插中文清單、英文清單、底部又穿插中文結尾與英文結尾，造成視覺上有 4~5 個段落被分隔線碎片化切割。
+  - 英文清單項目中的變更值（如 `• Officer Intent: 我有意願成為社團幹部`）直接輸出中文原文，導致英文版面夾雜中文句子。
+  - 使用者指示：「改成 中文（完整）\n─────────────\n英文（完整），而不是拆成好幾個段落，更新了什麼也要用英文」。
+- **架構重構與實作 (Implementation Details)**：
+  - **單一分隔線獨立大區塊 (`06_Helper_Services.js` & `src/gas.js`)**：
+    - 上半部【純中文完整區塊】：包含純中文標題（`【✅ 基本資料已成功更新】` 或 `【🎉 歡迎加入！基本資料註冊成功】`）、中文問候引言、中文變更欄位清單，以及中文結尾引導話（出隊資格齊全或補齊提醒）。
+    - 中間分隔線：全訊息僅保留一條標準分隔線 `─────────────`。
+    - 下半部【純英文完整區塊】：包含純英文標題（`【✅ Profile Updated Successfully】` 或 `【🎉 Welcome! Registration Success】`）、英文問候引言、英文變更欄位清單，以及英文結尾引導話。
+  - **欄位選項值徹底英文化 (`_translateValueToEn`)**：
+    - 針對各欄位的值進行自動英文轉換，徹底解決中英夾雜問題：
+      - 幹部意願：`我有意願成為社團幹部` -> `Willing to be an officer`
+      - 社員身分：`一般社員` -> `General Member`、`正式社員` -> `Official Member`
+      - 性別：`男` -> `Male`、`女` -> `Female`、`其他` -> `Other`
+      - 身分別：`校內學生` -> `NTUST Student`、`校友` -> `NTUST Alumnus`、`外校學生` -> `Non-NTUST Student`
+      - 緊急聯絡人關係：`母子` -> `Mother`、`父子` -> `Father`、`朋友` -> `Friend` 等
+      - 未填寫 / 已更新：自動對應 `Not provided` / `Updated`
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過（含測試 16 個人檔案推播模擬與出隊資格引導驗證）。
+  - 前端編譯：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+### 195. 全面落實個人檔案變更明細與使用者聊天室訊息「上面中文、下面英文」雙語結構 (v0.1.95)
+- **需求與視覺架構 (Requirements & Visual Architecture)**：
+  - 依使用者具體指示：「更新了什麼也要用英文，可以寫成上面中文，下面英文的樣式（請套用到其他訊息）」。
+  - 聊天室通知全面落實**「【中文區塊】\n─────────────\n【英文區塊】」**乾淨對稱排版，確保台灣與外籍社員均能一眼看懂自己的操作紀錄與更新項目。
+- **架構設計與實作 (Implementation Details)**：
+  - **個人檔案更新/註冊推播 (`06_Helper_Services.js` & `src/gas.js`)**：
+    - 將 `intro` 與 `details` 重構為 `introZh` / `introEn` 與 `detailsZh` / `detailsEn` 兩套對照清單。
+    - 支援 18 項基本欄位與變更項目的精準英文對照（如 `• 擔任幹部意願：已更新` 對應 `• Officer Intent: Updated`、`• 聯絡電話` 對應 `• Phone Number`、`• 緊急聯絡人` 對應 `• Emergency Contact` 等）。
+    - 訊息版面依序呈現：
+      1. 標題：`【✅ 基本資料已成功更新 / Profile Updated Successfully】`
+      2. 中文區塊：引言 + 中文變更明細列表
+      3. 分隔線：`─────────────`
+      4. 英文區塊：英文引言 + 英文變更明細列表
+      5. 結尾引導：中文出隊資格/裝備免審核提示 + 分隔線 + 英文出隊資格/裝備免審核提示
+  - **繳費申報完成聊天室明細 (`src/pages/Payment.tsx`)**：
+    - 前端送出申報後傳至 LINE 聊天室之明細訊息，全面採用「上方中文、中間分隔線、下方英文」對稱樣式，包含申報金額（Amount）、末5碼（Last 5 Digits）、申報項目（Items）與對帳提醒。
+  - **裝備租借聊天室明細 (`src/pages/Borrow.tsx`)**：
+    - 訂單編號、預計領取、預計歸還、預約裝備清單、預估總租金與提醒事項皆同步完成雙語對照。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過（含個人檔案動態推播與出隊資格引導各項測試）。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
 ### 194. 精準重構個人檔案儲存推播之出隊資格與裝備租借引導英文翻譯 (v0.1.94)
 - **問題回報與分析 (Problem & Rationale)**：
   - 先前個人檔案儲存推播結尾之英文翻譯過於籠統（`Some required info is missing. Please complete your profile`），容易讓使用者與外籍社員產生誤解，以為進入社團系統就必須強制填齊所有保險與出隊資料才能使用任何功能。
   - 事實上：
-    1. **裝備租借商城（Equipment Rental）隨時皆可直接使用**，無須出隊保險與體能審核資料即可送單借裝備。
+    1. **裝備租借商城（Equipment Loan）隨時皆可直接使用**，無須出隊保險與體能審核資料即可送單借裝備。
     2. **僅有報名登山出隊活動（Club Trips/Events）**時，因涉及高山戶外安全、主管機關平安保險投保與資格審核，才需要補齊必填項目。
 - **架構設計與修復實作 (Architecture & Implementation)**：
   - **精確中英雙語重構 (`06_Helper_Services.js` & `src/gas.js`)**：
     - 當出隊資料齊全時：明確提示已具備出隊活動報名資格，並可隨時租借裝備。
-      `💡 Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via "Activities", or reserve gear via "Equipment Rental" anytime!`
+      `💡 Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via "Activities", or reserve gear via "Equipment Loan" anytime!`
     - 當出隊資料尚有缺漏時：
       1. 第一段開宗明義告知外籍生**隨時可以預約戶外器材，不需要完整出隊資料**：  
-         `💡 You can reserve outdoor gear anytime via "Equipment Rental" without full trip details!`
+         `💡 You can reserve outdoor gear anytime via "Equipment Loan" without full trip details!`
       2. 第二段清晰點出**只有要參加登山出隊行程時，才需要保險與資格審核**：  
          `⚠️ Trip Notice: Participating in hiking events requires safety insurance and qualification review.`
       3. 精確列出具體缺漏的欄位英文（如 `Emergency Contact Name`, `ID/ARC/Passport`, `Fitness Proof` 等），清楚引導欲出隊者至選單「填寫資料」補齊即可啟用一鍵報名。
@@ -34,7 +146,7 @@
   - **精簡 Webhook 文字關鍵字導流 (`02_LineBot_Webhook.js` & `src/gas.js`)**：
     - 依使用者指示，刪除第 6 ~ 9 項文字攔截（裝備租借、繳費系統、個人主頁、填寫資料）。由於 LINE 官方帳號圖文選單（Rich Menu）已直接綁定 LIFF URL，手動輸入相關文字時回歸 Gemini AI 客服進行智慧應答與貼心引導，不再發送生硬死板的文字連結。
   - **全面補齊使用者聊天室各項訊息之中英雙語對照 (Bilingual Support)**：
-    1. **Webhook 預設未命中提示**：加入英文說明 `Hello! Please use the rich menu below to explore Events, Equipment Rental, or Dashboard. If you have any questions, feel free to leave a message for the officers!`。
+    1. **Webhook 預設未命中提示**：加入英文說明 `Hello! Please use the rich menu below to explore Events, Equipment Loan, or Dashboard. If you have any questions, feel free to leave a message for the officers!`。
     2. **活動報名個人資料缺漏提示 (`03_Flex_Templates.js` & `src/gas.js`)**：
        - 建立 18 項社員欄位中英對照字典（如 `姓名 (Name)`、`身分別 (Identity Status)`、`緊急聯絡人 (Emergency Contact)` 等），在隊員資料未填齊時直接列出中英對照缺漏欄位並提示英文補齊引導。
     3. **活動報名收據重要審核提醒**：補全後半段審核機制與名額限制之英文版說明。

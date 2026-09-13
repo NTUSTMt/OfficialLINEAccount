@@ -367,8 +367,8 @@ function Payment({ userId }: { userId: string }) {
       }
 
       if (sbSubmitted) {
-        // 2. 非同步背景發送 LINE 幹部審核推播 (純通知 API，絕不碰 Google Sheets)
-        fetch(GAS_API_URL, {
+        // 2. 發送 LINE 幹部審核推播 (純通知 API，絕不碰 Google Sheets)
+        const notifyPromise = fetch(GAS_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(withAuthPayload({
@@ -376,7 +376,7 @@ function Payment({ userId }: { userId: string }) {
             userId,
             details: detailsPayload
           }))
-        }).catch(err => console.warn('[Payment] 非同步推播通知略過:', err));
+        }).catch(err => console.warn('[Payment] 幹部推播通知略過:', err));
 
         // 本地立即將已申報項目自待繳清單中排除，杜絕重複勾選申報
         setUnpaidList(prev => ({
@@ -400,31 +400,43 @@ function Payment({ userId }: { userId: string }) {
             return item.name;
           });
             
-          const msgText = `【${t('payment.msg.title')}】\n\n` +
-            `${t('payment.msg.success')}\n` +
-            `${t('payment.msg.amount')}：$${totalAmount}\n` +
-            `${t('payment.msg.digits')}：${finalDigits}\n` +
-            (note.trim() ? `備註：${note.trim()}\n` : '') +
-            `\n` +
-            `${t('payment.msg.items')}：\n` +
-            selectedNames.map(n => `• ${n}`).join('\n') + `\n\n` +
-            `${t('payment.msg.footer')}`;
+          const msgText = `【繳費申報完成 / Payment Submitted】\n\n` +
+            `您好！已成功收到您的繳費申報資訊：\n` +
+            `• 申報金額：$${totalAmount}\n` +
+            `• 帳號末5碼：${finalDigits}\n` +
+            (note.trim() ? `• 備註：${note.trim()}\n` : '') +
+            `• 申報項目：\n` +
+            selectedNames.map(n => `  - ${n}`).join('\n') + `\n\n` +
+            `幹部會於核對款項後自動更新您的狀態。謝謝！\n` +
+            `─────────────\n` +
+            `Hello! Your payment submission has been received successfully:\n` +
+            `• Amount: $${totalAmount}\n` +
+            `• Last 5 Digits: ${finalDigits}\n` +
+            (note.trim() ? `• Note: ${note.trim()}\n` : '') +
+            `• Items:\n` +
+            selectedNames.map(n => `  - ${n}`).join('\n') + `\n\n` +
+            `Officers will update your status after verifying the transaction. Thank you!`;
 
-          Promise.race([
-            liff.sendMessages([{
-              type: 'text',
-              text: msgText
-            }]),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 800))
-          ]).catch(liffErr => {
-            console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
-          }).finally(() => {
+          await Promise.allSettled([
+            notifyPromise,
+            Promise.race([
+              liff.sendMessages([{
+                type: 'text',
+                text: msgText
+              }]),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 800))
+            ]).catch(liffErr => {
+              console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
+            })
+          ]);
+
+          setTimeout(() => {
             try {
               liff.closeWindow();
             } catch (e) {
               console.warn('liff.closeWindow 略過:', e);
             }
-          });
+          }, 300);
         }
       } else {
         alert(t('payment.alert.submitFailed', { message: t('payment.alert.contactAdmin') }));

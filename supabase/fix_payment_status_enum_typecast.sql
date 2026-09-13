@@ -1,37 +1,11 @@
 -- ==============================================================================
--- 🎒 台科登山社社團系統：裝備租借原子性提交 RPC (submit_equipment_loan_rpc)
--- 目的：完全取代舊版 GAS doPost('submit_multi_loan')，在資料庫層原子扣減庫存與計算費用
--- 計費模型：2天基本租金 + 每日加成、社團出隊免租、社員個人5折 (完全對齊前端)
+-- 🎒 台科登山社社團系統：修復裝備租借 payment_status_enum 型別轉型錯誤 (一鍵修復檔)
+-- 目的：徹底解決 column "payment_status" is of type payment_status_enum but expression is of type text
+-- 執行方式：將本檔案內容整段複製，至 Supabase Dashboard -> SQL Editor 貼上執行 (Run) 即可秒級修復！
 -- ==============================================================================
 
--- 1. 確保 equipments 欄位完全雙軌相容
-ALTER TABLE equipments ADD COLUMN IF NOT EXISTS price_2day INTEGER DEFAULT 0;
-ALTER TABLE equipments ADD COLUMN IF NOT EXISTS price_extra_day INTEGER DEFAULT 0;
-ALTER TABLE equipments ADD COLUMN IF NOT EXISTS member_price_per_day INTEGER DEFAULT 0;
-ALTER TABLE equipments ADD COLUMN IF NOT EXISTS non_member_price_per_day INTEGER DEFAULT 0;
-
--- 2. 確保 loans 與 loan_items 欄位完整存在
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS name TEXT;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS start_date DATE;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS end_date DATE;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS days INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS purpose TEXT DEFAULT '社團出隊';
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS purpose_other TEXT;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS status TEXT DEFAULT '待領取 To Be Collected';
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT '未繳費';
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS total_deposit INTEGER DEFAULT 0;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS total_rent INTEGER DEFAULT 0;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS notes TEXT;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS refund_needed BOOLEAN DEFAULT FALSE;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-
-ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS unit_price_snapshot INTEGER DEFAULT 0;
-ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS subtotal INTEGER DEFAULT 0;
-ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
-
--- 確保 text 隱式轉換至 payment_status_enum (杜絕 column "payment_status" is of type payment_status_enum but expression is of type text)
+-- 1. 建立 text 自動隱式轉換為 payment_status_enum 的轉型規則 (IMPLICIT CAST)
+-- 如此一來，無論外部傳入字串、CASE WHEN 表達式或 API 寫入，PostgreSQL 均自動完成轉型，杜絕型別衝突
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status_enum') THEN
@@ -40,10 +14,12 @@ BEGIN
         BEGIN
             IF val IS NULL THEN
                 RETURN NULL;
-            ELSIF val LIKE '%已繳費%' OR val LIKE '%Paid%' THEN
-                RETURN '已繳費 Paid'::payment_status_enum;
+            ELSIF val LIKE '%未繳費%' OR val LIKE '%Unpaid%' THEN
+                RETURN '未繳費 Unpaid'::payment_status_enum;
             ELSIF val LIKE '%待確認%' OR val LIKE '%Checking%' THEN
                 RETURN '待確認 Checking'::payment_status_enum;
+            ELSIF val LIKE '%已繳費%' OR val = 'Paid' OR val LIKE '%已繳費 Paid%' THEN
+                RETURN '已繳費 Paid'::payment_status_enum;
             ELSE
                 RETURN '未繳費 Unpaid'::payment_status_enum;
             END IF;
@@ -56,6 +32,25 @@ BEGIN
     END IF;
 END $$;
 
+-- 2. 確保 loans 表結構完備
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS start_date DATE;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS end_date DATE;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS days INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS purpose TEXT DEFAULT '社團出隊';
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS purpose_other TEXT;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS status TEXT DEFAULT '待領取 To Be Collected';
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS total_deposit INTEGER DEFAULT 0;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS total_rent INTEGER DEFAULT 0;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS refund_needed BOOLEAN DEFAULT FALSE;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
+-- 3. 重建原子性租借提交 RPC (submit_equipment_loan_rpc)
+-- 採用動態欄位型別 (loans.status%TYPE 與 loans.payment_status%TYPE)，達到 100% 型別相容
 CREATE OR REPLACE FUNCTION submit_equipment_loan_rpc(
     p_line_user_id TEXT,
     p_details JSONB
@@ -176,7 +171,7 @@ BEGIN
                 updated_at = NOW()
             WHERE id = v_equip_id;
 
-            -- 計算該品項費用 (對齊前端計費公式)
+            -- 計算該品項費用 (對齊前端計費公式：2天基本 + 續租加成，社團出隊免租，社員個人5折)
             v_item_base := COALESCE(v_equip.p2, 0) + (v_extra_days * COALESCE(v_equip.p_extra, 0));
             IF v_purpose = '社團出隊' THEN
                 v_unit_price := 0; -- 社團出隊免租
@@ -195,7 +190,7 @@ BEGIN
         RETURN jsonb_build_object('status', 'error', 'message', '購物車內無有效數量之品項');
     END IF;
 
-    -- 決定付款狀態 (對齊 payment_status_enum 值)
+    -- 決定付款狀態 (對齊 payment_status_enum 值：已繳費 Paid / 未繳費 Unpaid)
     IF v_total_rent = 0 THEN
         v_loan_payment_status := '已繳費 Paid';
     ELSE
@@ -280,14 +275,13 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 8. 回傳成功狀態 (對齊前端期望回傳結構)
+    -- 8. 成功回傳租借單號與總租金
     RETURN jsonb_build_object(
         'status', 'success',
         'loanId', v_loan_id,
         'totalRent', v_total_rent,
         'days', v_days,
-        'isOfficial', v_is_official,
-        'message', '裝備租借申請已成功送達 Supabase！'
+        'message', '裝備租借申請已成功送出！'
     );
 
 EXCEPTION WHEN OTHERS THEN
@@ -297,3 +291,141 @@ EXCEPTION WHEN OTHERS THEN
     );
 END;
 $$;
+
+-- 4. 同步更新查詢未繳費款項 RPC (get_unpaid_payments)
+-- 修復子字串碰撞問題 (NOT LIKE '%Paid%' 誤排除 '未繳費 Unpaid')
+-- 放寬社費選項：只要非有效正式社員且非待審核，一律提供繳社交費選項；過濾 0 元免租出隊單
+CREATE OR REPLACE FUNCTION get_unpaid_payments(p_line_user_id TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_membership JSONB := '[]'::jsonb;
+    v_activities JSONB := '[]'::jsonb;
+    v_equipments JSONB := '[]'::jsonb;
+    v_member members%ROWTYPE;
+    v_is_official BOOLEAN := FALSE;
+    v_is_expired BOOLEAN := FALSE;
+BEGIN
+    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
+        RETURN jsonb_build_object(
+            'membership', '[]'::jsonb,
+            'activities', '[]'::jsonb,
+            'equipments', '[]'::jsonb
+        );
+    END IF;
+
+    -- 1. 查詢社員基本資料與社籍狀態
+    SELECT * INTO v_member FROM members WHERE line_user_id = p_line_user_id;
+    IF FOUND THEN
+        IF v_member.membership_expires_at IS NOT NULL AND v_member.membership_expires_at < CURRENT_DATE THEN
+            v_is_expired := TRUE;
+        END IF;
+
+        v_is_official := COALESCE(v_member.is_official_member, FALSE) AND NOT v_is_expired;
+
+        -- 只要不是有效正式社員（尚未入社或社籍已過期），且目前無待審核社費，即提供繳社交費選項
+        IF NOT v_is_official THEN
+            IF (v_member.payment_status IS NULL OR (
+                v_member.payment_status::text NOT LIKE '%待確認%' 
+                AND v_member.payment_status::text NOT LIKE '%Checking%'
+            )) THEN
+                v_membership := jsonb_build_array(
+                    jsonb_build_object(
+                        'id', 'fee_membership',
+                        'name', '社籍與社費 (Membership Fee)',
+                        'amount', 200
+                    )
+                );
+            END IF;
+        END IF;
+    ELSE
+        -- members 表中尚無該使用者，肯定非社員，提供繳社交費選項
+        v_membership := jsonb_build_array(
+            jsonb_build_object(
+                'id', 'fee_membership',
+                'name', '社籍與社費 (Membership Fee)',
+                'amount', 200
+            )
+        );
+    END IF;
+
+    -- 2. 查詢正取活動欠款 (從 event_signups 與 events 關聯)
+    SELECT COALESCE(jsonb_agg(act), '[]'::jsonb)
+    INTO v_activities
+    FROM (
+        SELECT jsonb_build_object(
+            'id', 'act_' || e.id,
+            'name', '活動：' || e.title,
+            'amount', COALESCE(e.fee, 0)
+        ) AS act
+        FROM event_signups s
+        JOIN events e ON s.event_id = e.id
+        WHERE s.line_user_id = p_line_user_id
+          AND (s.status::text LIKE '%正取%' OR s.status::text LIKE '%Confirmed%')
+          AND s.status::text NOT LIKE '%取消%'
+          AND COALESCE(e.fee, 0) > 0
+          AND (
+              s.payment_status IS NULL 
+              OR s.payment_status::text LIKE '%未繳費%'
+              OR s.payment_status::text LIKE '%Unpaid%'
+              OR (
+                  s.payment_status::text NOT LIKE '%已繳費%' 
+                  AND s.payment_status::text NOT LIKE '%待確認%' 
+                  AND s.payment_status::text NOT LIKE '%Checking%'
+                  AND s.payment_status::text != '已繳費 Paid'
+                  AND s.payment_status::text != 'Paid'
+              )
+          )
+        ORDER BY e.start_date ASC
+    ) t;
+
+    -- 3. 查詢裝備租借欠款 (從 loans 與 loan_items、equipments 關聯)
+    SELECT COALESCE(jsonb_agg(eq), '[]'::jsonb)
+    INTO v_equipments
+    FROM (
+        SELECT jsonb_build_object(
+            'id', 'eq_' || l.id,
+            'name', COALESCE(eq_sub.name, '裝備租借'),
+            'amount', CASE 
+                WHEN li.subtotal IS NOT NULL AND li.subtotal > 0 THEN li.subtotal
+                ELSE COALESCE(l.total_rent, 0)
+            END,
+            'orderId', l.id,
+            'qty', COALESCE(li.quantity, 1),
+            'pickupDate', to_char(l.start_date, 'YYYY-MM-DD'),
+            'returnDate', to_char(l.end_date, 'YYYY-MM-DD'),
+            'purpose', COALESCE(l.purpose, '個人使用'),
+            'isOfficial', CASE WHEN v_is_official THEN '是' ELSE '否' END
+        ) AS eq
+        FROM loans l
+        LEFT JOIN loan_items li ON l.id = li.loan_id
+        LEFT JOIN equipments eq_sub ON li.equipment_id = eq_sub.id
+        WHERE l.line_user_id = p_line_user_id
+          AND l.status::text NOT LIKE '%取消%'
+          AND l.status::text NOT LIKE '%歸還%'
+          AND COALESCE(l.total_rent, 0) > 0
+          AND (
+              l.payment_status IS NULL 
+              OR l.payment_status::text LIKE '%未繳費%'
+              OR l.payment_status::text LIKE '%Unpaid%'
+              OR (
+                  l.payment_status::text NOT LIKE '%已繳費%' 
+                  AND l.payment_status::text NOT LIKE '%待確認%' 
+                  AND l.payment_status::text NOT LIKE '%Checking%'
+                  AND l.payment_status::text != '已繳費 Paid'
+                  AND l.payment_status::text != 'Paid'
+              )
+          )
+        ORDER BY l.start_date ASC
+    ) t;
+
+    RETURN jsonb_build_object(
+        'membership', v_membership,
+        'activities', v_activities,
+        'equipments', v_equipments
+    );
+END;
+$$;
+

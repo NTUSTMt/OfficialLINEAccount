@@ -48,8 +48,8 @@ BEGIN
 
     -- 更新訂單狀態
     UPDATE loans
-    SET status = CASE WHEN v_loan.payment_status = '已繳費 Paid' THEN '已取消 (待退款)' ELSE '已取消 Cancelled' END,
-        refund_needed = (v_loan.payment_status = '已繳費 Paid'),
+    SET status = CASE WHEN v_loan.payment_status::text = '已繳費 Paid' THEN '已取消 (待退款)' ELSE '已取消 Cancelled' END,
+        refund_needed = (v_loan.payment_status::text = '已繳費 Paid'),
         cancelled_at = NOW(),
         updated_at = NOW()
     WHERE id = p_loan_id;

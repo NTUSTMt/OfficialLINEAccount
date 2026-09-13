@@ -1,18 +1,39 @@
 {
   "nav": {
-    "borrow": { "title": "Equipment Rental", "subtitle": "Equipments Rental" },
-    "register": { "title": "Registration", "subtitle": "Register" },
-    "payment": { "title": "Payment System", "subtitle": "Payment System" },
-    "dashboard": { "title": "My Dashboard", "subtitle": "My Dashboard" },
-    "history": { "title": "Payment History", "subtitle": "Payment History" },
-    "achievements": { "title": "Footprints", "subtitle": "Mountaineering Footprint" },
+    "borrow": {
+      "title": "Equipment Loan",
+      "subtitle": "Equipments Rental"
+    },
+    "register": {
+      "title": "Registration",
+      "subtitle": "Register"
+    },
+    "payment": {
+      "title": "Payment System",
+      "subtitle": "Payment System"
+    },
+    "dashboard": {
+      "title": "My Dashboard",
+      "subtitle": "My Dashboard"
+    },
+    "history": {
+      "title": "Payment History",
+      "subtitle": "Payment History"
+    },
+    "achievements": {
+      "title": "Footprints",
+      "subtitle": "Mountaineering Footprint"
+    },
     "menuDashboard": "Dashboard",
     "menuRegister": "Register",
     "menuBorrow": "Rental",
     "menuPayment": "Payment",
     "menuHistory": "History",
     "menuAchievements": "Footprint",
-    "adminEvents": { "title": "Events Admin", "subtitle": "Events Management" },
+    "adminEvents": {
+      "title": "Events Admin",
+      "subtitle": "Events Management"
+    },
     "menuAdminEvents": "Officer"
   },
   "register": {
