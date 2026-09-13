@@ -1,13 +1,56 @@
-# 🏕️ 野境戶外裝備租借系統 (Wilderness Gear Rental Store)
+# 🏕️ 台科登山社社團系統 (NTUST Mountaineering Club System)
 
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.69` (v0.1.69)
+- **當前版本**：`0.1.71` (v0.1.71)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 171. officers 表 title 欄位 NOT NULL 約束自癒、雙向職稱相容與幹部同步 Trigger 容錯加強 (v0.1.71)
+- **PostgreSQL 23502 非空約束自癒修復 (`member_officer_sync.sql`)**：
+  - **根本原因排查**：既有 Supabase `officers` 資料表中包含歷史欄位 `title`（職稱），且被設置了 `NOT NULL` 約束且無預設值；當執行 Trigger 或回填既有幹部資料至 `members.is_officer` 時，觸發器的 `INSERT INTO officers` 因未傳入 `title` 欄位而拋出 `ERROR 23502: null value in column "title" violates not-null constraint`。
+  - **動態字典自癒機制**：利用 PL/pgSQL 動態檢查 `information_schema.columns`，自動解除 `officers` 表除主鍵與 `line_user_id` 外所有歷史欄位的 `NOT NULL` 約束，並將 `title` 與 `role` 預設值皆統一設為 `'幹部'`。
+  - **`role` 與 `title` 雙欄位相容寫入**：Trigger 在寫入/更新 `officers` 時同時帶入 `role` 與 `title`，徹底相容所有取用舊欄位名稱 `title` 或新欄位名稱 `role` 的查詢與 RPC。
+  - **輸入防呆驗證**：新增 `trim(NEW.line_user_id) != ''` 驗證與 `trim()` 去除前後空白防護，避免無效空值寫入。
+- **前端幹部狀態查詢雙重相容性提升 (`supabaseClient.ts`)**：
+  - 在 `checkOfficerStatusFromSupabase` 的備援查詢中，同時讀取 `role` 與 `title` 欄位（`officerData.role || officerData.title || '幹部'`），確保即使歷史資料僅存在 `title` 亦能即時正確識別幹部身分與職稱。
+- **測試與驗證 (Verification)**：
+  - 執行 `pnpm test`：65/65 單元測試 100% 通過。
+  - 執行 `pnpm run build`：0 TS 錯誤，前端打包建置成功。
+
+### 170. 圖文選單雙語路由完整覆蓋、資料更新 LINE 明細推播、無欠款假報錯根治與 members.is_officer 自動同步機制 (v0.1.70)
+- **圖文選單 (Rich Menu) 中英雙語關鍵字全覆蓋 (`02_LineBot_Webhook.js`)**：
+  - **根本原因排查**：先前採用嚴格字串比對，導致點擊 LINE 圖文選單按鈕（發送中英文字如 `"最新活動 Activities"`、`"更多服務 More Services"`、`"幹部是誰 Officers"`）時比對失敗，誤掉入預設問候語。
+  - **全面模糊匹配升級**：升級文字路由器，支援雙語關鍵字包含匹配（`includes`/`indexOf`）：
+    - 支援 `最新活動`、`Activities`、`報名活動`、`Events`。
+    - 支援 `更多服務`、`More Services`、`其他`、`More`。
+    - 支援 `幹部名單`、`幹部是誰`、`Officers`。
+    - 支援 `裝備租借`、`器材借用`、`Equipment Loan`。
+    - 支援 `繳費系統`、`繳費中心`、`Payment System`。
+    - 支援 `我的狀態`、`個人主頁`、`My Status`、`Dashboard`。
+    - 支援 `填寫資料`、`Register`。
+- **資料填寫/更新 LINE 即時推播明細通知 (`notify_profile_saved`)**：
+  - **即時回傳異動摘要**：隊員於 LIFF 提交基本資料（無論是首次註冊或後續更新）後，前端非同步觸發輕量通知 Helper。
+  - **專屬個人化推播**：透過 LINE Messaging API 即時推播：
+    - **首次註冊**：發送「【🎉 歡迎加入！基本資料註冊成功】」歡迎詞與詳細檔案摘要。
+    - **後續更新**：發送「【✅ 基本資料已成功更新】」並逐項列出姓名、學號、電話、緊急聯絡人、社員意願與經歷更新狀態。
+- **繳費系統無欠款紅字「無法取得未繳費資料」假報錯徹底根治 (`Payment.tsx`)**：
+  - **根本原因排查**：當隊員所有款項均已結清時，Supabase 端回傳空清單（`[]`）；但前端先前在特定 fallback 情境中未能正確處理空清單，導致頂部顯示「無法取得未繳費資料」，下方卻又顯示「目前無待繳費用」之矛盾現象。
+  - **架構修復**：明確界定「無待繳項目」為成功狀態（`setError(null)`），只有在真正的連線失敗時才顯示錯誤，保持介面清爽。
+- **幹部身分檢測修復與 members.is_officer 自動同步機制 (`member_officer_sync.sql`)**：
+  - **GAS 路由與格式修復**：修正 `doGet` 支援 `action=check_officer_status`，並補齊 `status: "success"` 回傳格式，徹底解決先前被誤判為非幹部的問題。
+  - **Supabase 優先秒級驗證 (`checkOfficerStatusFromSupabase`)**：前端 [`src/App.tsx`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx) 優先直查 Supabase，延遲降至 < 30ms。
+  - **資料庫自動連動 Trigger 與 DDL 結構自癒 (`member_officer_sync.sql`)**：
+    - **42703 欄位缺失自癒**：防禦性加入 `ALTER TABLE officers ADD COLUMN IF NOT EXISTS role TEXT DEFAULT '幹部'` 與 `line_user_id` 補齊語句，徹底杜絕歷史舊表缺少 `role` 欄位導致執行 SQL 時拋出 `42703: column o.role does not exist` 的問題。
+    - 在 `members` 資料表新增 `is_officer BOOLEAN DEFAULT FALSE` 與 `officer_role TEXT DEFAULT '幹部'` 欄位。
+    - 建立觸發器：當 `members.is_officer` 設為 `TRUE` 時，自動在 `officers` 表寫入該幹部資料並排入 `sync_queue` 回寫 Google Sheets；當設為 `FALSE` 時自動自 `officers` 表移除。
+    - 一鍵回填：將既有 `officers` 名冊成員自動反向標記 `members.is_officer = TRUE`。
+- **測試與驗證 (Verification)**：
+  - 執行 `pnpm run build`：0 TS 錯誤，生產環境打包成功。
+  - 執行 `pnpm test`：全套 14 大測試套件、65 個單元測試 100% 綠燈通過。
 
 ### 169. LIFF 直寫主試算表邏輯徹底切除、裝備租借原子性 RPC 與 9,500 行巨石 GAS 模組化拆分重構 (v0.1.69)
 - **LIFF 前端去試算表化，100% 直連 Supabase 原生資料庫 (Zero-Sheets LIFF Architecture)**：

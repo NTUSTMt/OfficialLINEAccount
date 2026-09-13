@@ -419,6 +419,20 @@ function Register({ userId }: { userId: string }) {
       }
 
       if (sbSaved) {
+        // ⚡ 3. 非同步發送 LINE 基本資料更新/註冊完成推播通知 (純訊息，不碰試算表)
+        if (userId && userId !== 'TEST_USER_ID') {
+          fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(withAuthPayload({
+              action: 'notify_profile_saved',
+              userId: userId,
+              formData: finalFormData,
+              isNewUser: isNewUser
+            }))
+          }).catch(notifyErr => console.warn('[Register] 非同步推播通知略過:', notifyErr));
+        }
+
         const draftKey = 'register_draft_' + (userId || 'guest');
         localStorage.removeItem(draftKey);
         setHasDraftRestored(false);

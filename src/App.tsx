@@ -7,7 +7,7 @@ import { appendAuthToken } from './utils/api';
 import { getCache, setCache } from './utils/cacheUtils';
 import { GAS_API_URL } from './constants/api';
 import { LIFF_URLS } from './constants/liff';
-import { fetchMemberProfileFromSupabase } from './utils/supabaseClient';
+import { fetchMemberProfileFromSupabase, checkOfficerStatusFromSupabase } from './utils/supabaseClient';
 import './App.css';
 
 const Borrow = lazy(() => import('./pages/Borrow'));
@@ -431,16 +431,27 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
     }
     const cacheKey = `officer_status_${liffInit.userId}`;
 
-    fetch(appendAuthToken(`${GAS_API_URL}?action=check_officer_status&userId=${liffInit.userId}`))
-      .then((res) => res.json())
-      .then((data) => {
-        if (!ignore) {
-          const officerResult = !!(data.status === 'success' && data.isOfficer);
-          setIsOfficer(officerResult);
-          setCache(cacheKey, officerResult, 300); // 快取 5 分鐘，後續切換頁面 0ms
-        }
-      })
-      .catch((err) => console.error('幹部權限初檢出錯:', err));
+    // ⚡ 1. 優先從 Supabase 秒開檢查幹部身分 (< 30ms，免冷啟動)
+    checkOfficerStatusFromSupabase(liffInit.userId).then((sbOfficer) => {
+      if (ignore) return;
+      if (sbOfficer !== null) {
+        setIsOfficer(sbOfficer.isOfficer);
+        setCache(cacheKey, sbOfficer.isOfficer, 300);
+        return;
+      }
+
+      // 2. 若 Supabase 異常，無縫使用 GAS 備援檢查 (相容 status: success 與 isOfficer)
+      fetch(appendAuthToken(`${GAS_API_URL}?action=check_officer_status&userId=${liffInit.userId}`))
+        .then((res) => res.json())
+        .then((data) => {
+          if (!ignore) {
+            const officerResult = !!(data.isOfficer || (data.status === 'success' && data.isOfficer));
+            setIsOfficer(officerResult);
+            setCache(cacheKey, officerResult, 300);
+          }
+        })
+        .catch((err) => console.error('幹部權限初檢出錯:', err));
+    }).catch((err) => console.warn('[App] Supabase 幹部檢查例外:', err));
 
     return () => {
       ignore = true;

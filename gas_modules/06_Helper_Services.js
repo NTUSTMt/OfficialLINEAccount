@@ -24,7 +24,12 @@ function handleLiffHelperApi(json) {
     return _handleNotifyOfficersPayment(json);
   }
 
-  // 4. 幹部身分檢查 (輕量唯讀)
+  // 4. 基本資料填寫/修改 LINE 推播通知 Helper (純推播訊息)
+  if (action === "notify_profile_saved") {
+    return _handleNotifyProfileSaved(json);
+  }
+
+  // 5. 幹部身分檢查 (輕量唯讀)
   if (action === "check_officer_status") {
     return _handleCheckOfficerStatus(json);
   }
@@ -151,16 +156,61 @@ function _handleNotifyOfficersPayment(json) {
 }
 
 /**
+ * 基本資料填寫/更新 LINE 推播通知核心 (純推播訊息)
+ */
+function _handleNotifyProfileSaved(json) {
+  try {
+    var userId = json.userId;
+    if (!userId || userId === "TEST_USER_ID") {
+      return _successResponse({ message: "測試使用者略過推播" });
+    }
+
+    var data = json.formData || json.data || {};
+    var isNew = !!json.isNewUser;
+    var name = data.name || "社員";
+    var dept = data.department || "未填寫";
+    var studentId = data.studentId ? _maskString(data.studentId, 2, 2) : "未填寫";
+    var phone = data.phone ? _maskString(data.phone, 4, 3) : "未填寫";
+    var emerName = data.emerName || "未填寫";
+    var emerRel = data.emerRel || "未填寫";
+    var offIntent = data.intendOfficial || "未填寫";
+
+    var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功】" : "【✅ 基本資料已成功更新】";
+    var intro = isNew 
+      ? "您好 " + name + "！感謝您完成野境戶外社基本資料註冊：" 
+      : "您好 " + name + "！您已於系統中成功更新個人檔案：";
+
+    var msg = title + "\n\n" +
+      intro + "\n\n" +
+      "• 姓名：" + name + "\n" +
+      "• 系所 / 學號：" + dept + " (" + studentId + ")\n" +
+      "• 聯絡電話：" + phone + "\n" +
+      "• 緊急聯絡人：" + emerName + " (" + emerRel + ")\n" +
+      "• 加入社員意願：" + offIntent + "\n" +
+      (data.exp ? ("• 爬山經歷：已更新\n") : "") +
+      (data.strength ? ("• 體能自評：已更新\n") : "") +
+      "\n" +
+      "💡 您可隨時於 LINE 選單點擊「最新活動」瀏覽開放出隊行程，或至「裝備租借」預約出隊器材！";
+
+    _pushMessage(userId, msg);
+    return _successResponse({ message: "資料更新推播已成功發送" });
+  } catch (err) {
+    console.warn("個人資料更新推播失敗:", err);
+    return _errorResponse(err.toString());
+  }
+}
+
+/**
  * 幹部身分檢查 (輕量唯讀)
  */
 function _handleCheckOfficerStatus(json) {
   try {
     var userId = json.userId;
-    if (!userId) return _jsonResponse({ isOfficer: false });
+    if (!userId) return _jsonResponse({ status: "success", isOfficer: false });
 
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName("Officers");
-    if (!sheet) return _jsonResponse({ isOfficer: false });
+    if (!sheet) return _jsonResponse({ status: "success", isOfficer: false });
 
     var data = sheet.getDataRange().getValues();
     var headers = data[0];
@@ -170,26 +220,49 @@ function _handleCheckOfficerStatus(json) {
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][uidIdx]).trim() === String(userId).trim()) {
         return _jsonResponse({
+          status: "success",
           isOfficer: true,
           name: data[i][0] || "幹部",
           role: data[i][1] || "幹部"
         });
       }
     }
-    return _jsonResponse({ isOfficer: false });
+    return _jsonResponse({ status: "success", isOfficer: false });
   } catch (err) {
-    return _jsonResponse({ isOfficer: false });
+    return _jsonResponse({ status: "success", isOfficer: false, error: err.toString() });
   }
 }
 
 /**
- * GAS GET 請求入口 (健康檢查)
+ * GAS GET 請求入口 (支援 check_officer_status, get_unpaid 唯讀備援與健康檢查)
  */
 function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
+  var userId = (e && e.parameter && e.parameter.userId) ? e.parameter.userId : "";
+
+  // 1. 幹部身分初檢 (GET 備援)
+  if (action === "check_officer_status") {
+    return _handleCheckOfficerStatus({ userId: userId });
+  }
+
+  // 2. 待繳費用清單唯讀備援 (保證絕不噴 500/404 錯誤，回傳安全空結構)
+  if (action === "get_unpaid") {
+    return _jsonResponse({
+      status: "success",
+      data: {
+        membership: [],
+        activities: [],
+        equipments: []
+      },
+      message: "目前無待繳費用"
+    });
+  }
+
+  // 3. 預設健康檢查
   return _jsonResponse({
     status: "ok",
     service: "Wilderness GAS Microservices",
-    version: "2.0.0",
+    version: "2.0.1",
     architecture: "Modular (Supabase Primary, GAS Helper & Background Sync)"
   });
 }

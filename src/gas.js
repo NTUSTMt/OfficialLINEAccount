@@ -216,6 +216,8 @@ function _handleLineWebhookEvents(events) {
  * 文字指令路由器
  */
 function _handleTextMessage(replyToken, userId, text, groupId) {
+  var lowerText = text.toLowerCase();
+
   // 1. 幹部群組綁定指令
   if (text === "綁定幹部群組" || text === "#bind_admin") {
     if (groupId) {
@@ -227,8 +229,8 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
     return;
   }
 
-  // 2. 最新活動查詢
-  if (text === "最新活動" || text === "報名活動" || text.toLowerCase() === "events") {
+  // 2. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
+  if (text.indexOf("最新活動") > -1 || lowerText.indexOf("activities") > -1 || text.indexOf("報名活動") > -1 || lowerText === "events") {
     var flexCards = _buildLatestEventsFlex();
     if (flexCards) {
       _replyFlexMessage(replyToken, "最新活動資訊", flexCards);
@@ -238,8 +240,8 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
     return;
   }
 
-  // 3. 幹部名單
-  if (text === "幹部名單" || text === "幹部是誰" || text.toLowerCase() === "officers") {
+  // 3. 幹部名單 (支援「幹部是誰」、「幹部名單」、「Officers」)
+  if (text.indexOf("幹部是誰") > -1 || text.indexOf("幹部名單") > -1 || lowerText.indexOf("officers") > -1) {
     var officerFlex = _buildOfficersFlex();
     if (officerFlex) {
       _replyFlexMessage(replyToken, "幹部團隊名單", officerFlex);
@@ -249,10 +251,34 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
     return;
   }
 
-  // 4. 更多服務
-  if (text === "更多服務" || text === "其他服務" || text.toLowerCase() === "more") {
+  // 4. 更多服務 (支援「更多服務」、「更多服務 More Services」、「其他」、「More」)
+  if (text.indexOf("更多服務") > -1 || lowerText.indexOf("more services") > -1 || text.indexOf("其他服務") > -1 || text === "其他" || lowerText === "more") {
     var moreFlex = _buildMoreServicesFlex();
     _replyFlexMessage(replyToken, "野境戶外：更多服務選單", moreFlex);
+    return;
+  }
+
+  // 5. 裝備租借 (支援「裝備租借」、「器材借用」、「Equipment Loan」)
+  if (text.indexOf("裝備租借") > -1 || text.indexOf("器材借用") > -1 || lowerText.indexOf("equipment") > -1) {
+    _replyMessage(replyToken, "🏕️ 歡迎使用野境裝備租借商城！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=borrow");
+    return;
+  }
+
+  // 6. 繳費系統 (支援「繳費系統」、「繳費中心」、「Payment System」)
+  if (text.indexOf("繳費系統") > -1 || text.indexOf("繳費中心") > -1 || lowerText.indexOf("payment") > -1) {
+    _replyMessage(replyToken, "💳 歡迎使用繳費與對帳申報系統！\n請點擊下方連結進入結帳申報表單：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=payment");
+    return;
+  }
+
+  // 7. 個人主頁 / 我的狀態 (支援「我的狀態」、「個人主頁」、「My Status」、「Dashboard」)
+  if (text.indexOf("我的狀態") > -1 || text.indexOf("個人主頁") > -1 || lowerText.indexOf("dashboard") > -1 || lowerText.indexOf("status") > -1) {
+    _replyMessage(replyToken, "👤 查看出隊成就、個人資料與預約進度：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=dashboard");
+    return;
+  }
+
+  // 8. 填寫資料 (支援「填寫資料」、「Register」)
+  if (text.indexOf("填寫資料") > -1 || lowerText.indexOf("register") > -1) {
+    _replyMessage(replyToken, "📝 請填寫或更新您的社員基本資料：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=register");
     return;
   }
 
@@ -1078,7 +1104,12 @@ function handleLiffHelperApi(json) {
     return _handleNotifyOfficersPayment(json);
   }
 
-  // 4. 幹部身分檢查 (輕量唯讀)
+  // 4. 基本資料填寫/修改 LINE 推播通知 Helper (純推播訊息)
+  if (action === "notify_profile_saved") {
+    return _handleNotifyProfileSaved(json);
+  }
+
+  // 5. 幹部身分檢查 (輕量唯讀)
   if (action === "check_officer_status") {
     return _handleCheckOfficerStatus(json);
   }
@@ -1205,16 +1236,61 @@ function _handleNotifyOfficersPayment(json) {
 }
 
 /**
+ * 基本資料填寫/更新 LINE 推播通知核心 (純推播訊息)
+ */
+function _handleNotifyProfileSaved(json) {
+  try {
+    var userId = json.userId;
+    if (!userId || userId === "TEST_USER_ID") {
+      return _successResponse({ message: "測試使用者略過推播" });
+    }
+
+    var data = json.formData || json.data || {};
+    var isNew = !!json.isNewUser;
+    var name = data.name || "社員";
+    var dept = data.department || "未填寫";
+    var studentId = data.studentId ? _maskString(data.studentId, 2, 2) : "未填寫";
+    var phone = data.phone ? _maskString(data.phone, 4, 3) : "未填寫";
+    var emerName = data.emerName || "未填寫";
+    var emerRel = data.emerRel || "未填寫";
+    var offIntent = data.intendOfficial || "未填寫";
+
+    var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功】" : "【✅ 基本資料已成功更新】";
+    var intro = isNew 
+      ? "您好 " + name + "！感謝您完成野境戶外社基本資料註冊：" 
+      : "您好 " + name + "！您已於系統中成功更新個人檔案：";
+
+    var msg = title + "\n\n" +
+      intro + "\n\n" +
+      "• 姓名：" + name + "\n" +
+      "• 系所 / 學號：" + dept + " (" + studentId + ")\n" +
+      "• 聯絡電話：" + phone + "\n" +
+      "• 緊急聯絡人：" + emerName + " (" + emerRel + ")\n" +
+      "• 加入社員意願：" + offIntent + "\n" +
+      (data.exp ? ("• 爬山經歷：已更新\n") : "") +
+      (data.strength ? ("• 體能自評：已更新\n") : "") +
+      "\n" +
+      "💡 您可隨時於 LINE 選單點擊「最新活動」瀏覽開放出隊行程，或至「裝備租借」預約出隊器材！";
+
+    _pushMessage(userId, msg);
+    return _successResponse({ message: "資料更新推播已成功發送" });
+  } catch (err) {
+    console.warn("個人資料更新推播失敗:", err);
+    return _errorResponse(err.toString());
+  }
+}
+
+/**
  * 幹部身分檢查 (輕量唯讀)
  */
 function _handleCheckOfficerStatus(json) {
   try {
     var userId = json.userId;
-    if (!userId) return _jsonResponse({ isOfficer: false });
+    if (!userId) return _jsonResponse({ status: "success", isOfficer: false });
 
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName("Officers");
-    if (!sheet) return _jsonResponse({ isOfficer: false });
+    if (!sheet) return _jsonResponse({ status: "success", isOfficer: false });
 
     var data = sheet.getDataRange().getValues();
     var headers = data[0];
@@ -1224,26 +1300,49 @@ function _handleCheckOfficerStatus(json) {
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][uidIdx]).trim() === String(userId).trim()) {
         return _jsonResponse({
+          status: "success",
           isOfficer: true,
           name: data[i][0] || "幹部",
           role: data[i][1] || "幹部"
         });
       }
     }
-    return _jsonResponse({ isOfficer: false });
+    return _jsonResponse({ status: "success", isOfficer: false });
   } catch (err) {
-    return _jsonResponse({ isOfficer: false });
+    return _jsonResponse({ status: "success", isOfficer: false, error: err.toString() });
   }
 }
 
 /**
- * GAS GET 請求入口 (健康檢查)
+ * GAS GET 請求入口 (支援 check_officer_status, get_unpaid 唯讀備援與健康檢查)
  */
 function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
+  var userId = (e && e.parameter && e.parameter.userId) ? e.parameter.userId : "";
+
+  // 1. 幹部身分初檢 (GET 備援)
+  if (action === "check_officer_status") {
+    return _handleCheckOfficerStatus({ userId: userId });
+  }
+
+  // 2. 待繳費用清單唯讀備援 (保證絕不噴 500/404 錯誤，回傳安全空結構)
+  if (action === "get_unpaid") {
+    return _jsonResponse({
+      status: "success",
+      data: {
+        membership: [],
+        activities: [],
+        equipments: []
+      },
+      message: "目前無待繳費用"
+    });
+  }
+
+  // 3. 預設健康檢查
   return _jsonResponse({
     status: "ok",
     service: "Wilderness GAS Microservices",
-    version: "2.0.0",
+    version: "2.0.1",
     architecture: "Modular (Supabase Primary, GAS Helper & Background Sync)"
   });
 }

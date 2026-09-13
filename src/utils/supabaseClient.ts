@@ -562,6 +562,53 @@ export const registerOfficerToSupabase = async (
 };
 
 /**
+ * ⚡ 直接自 Supabase 驗證使用者是否具備幹部身分 (延遲 < 30ms)
+ * 同時檢驗 members.is_officer 與 officers 表
+ */
+export const checkOfficerStatusFromSupabase = async (
+  userId: string
+): Promise<{ isOfficer: boolean; role?: string; name?: string } | null> => {
+  if (!supabase || !userId || userId === 'TEST_USER_ID') return null;
+
+  try {
+    // 1. 優先查 members 表的 is_officer 欄位
+    const { data: memberData } = await supabase
+      .from('members')
+      .select('is_officer, officer_role, name')
+      .eq('line_user_id', userId)
+      .maybeSingle();
+
+    if (memberData && memberData.is_officer) {
+      return {
+        isOfficer: true,
+        role: memberData.officer_role || '幹部',
+        name: memberData.name || '幹部'
+      };
+    }
+
+    // 2. 備援查驗 officers 表 (容納歷史資料或試算表同步資料)
+    const { data: officerData } = await supabase
+      .from('officers')
+      .select('role, title, name')
+      .eq('line_user_id', userId)
+      .maybeSingle();
+
+    if (officerData) {
+      return {
+        isOfficer: true,
+        role: officerData.role || (officerData as any).title || '幹部',
+        name: officerData.name || '幹部'
+      };
+    }
+
+    return { isOfficer: false };
+  } catch (err) {
+    console.warn('[Supabase] 檢查幹部身分例外:', err);
+    return null;
+  }
+};
+
+/**
  * ⚡ 獲取幹部活動管理清單與報名人數統計 (透過 get_admin_events_rpc，延遲 < 50ms)
  */
 export const fetchAdminEventsFromSupabase = async (

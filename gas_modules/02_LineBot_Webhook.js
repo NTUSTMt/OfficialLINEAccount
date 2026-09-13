@@ -59,6 +59,8 @@ function _handleLineWebhookEvents(events) {
  * 文字指令路由器
  */
 function _handleTextMessage(replyToken, userId, text, groupId) {
+  var lowerText = text.toLowerCase();
+
   // 1. 幹部群組綁定指令
   if (text === "綁定幹部群組" || text === "#bind_admin") {
     if (groupId) {
@@ -70,8 +72,8 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
     return;
   }
 
-  // 2. 最新活動查詢
-  if (text === "最新活動" || text === "報名活動" || text.toLowerCase() === "events") {
+  // 2. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
+  if (text.indexOf("最新活動") > -1 || lowerText.indexOf("activities") > -1 || text.indexOf("報名活動") > -1 || lowerText === "events") {
     var flexCards = _buildLatestEventsFlex();
     if (flexCards) {
       _replyFlexMessage(replyToken, "最新活動資訊", flexCards);
@@ -81,8 +83,8 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
     return;
   }
 
-  // 3. 幹部名單
-  if (text === "幹部名單" || text === "幹部是誰" || text.toLowerCase() === "officers") {
+  // 3. 幹部名單 (支援「幹部是誰」、「幹部名單」、「Officers」)
+  if (text.indexOf("幹部是誰") > -1 || text.indexOf("幹部名單") > -1 || lowerText.indexOf("officers") > -1) {
     var officerFlex = _buildOfficersFlex();
     if (officerFlex) {
       _replyFlexMessage(replyToken, "幹部團隊名單", officerFlex);
@@ -92,10 +94,34 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
     return;
   }
 
-  // 4. 更多服務
-  if (text === "更多服務" || text === "其他服務" || text.toLowerCase() === "more") {
+  // 4. 更多服務 (支援「更多服務」、「更多服務 More Services」、「其他」、「More」)
+  if (text.indexOf("更多服務") > -1 || lowerText.indexOf("more services") > -1 || text.indexOf("其他服務") > -1 || text === "其他" || lowerText === "more") {
     var moreFlex = _buildMoreServicesFlex();
     _replyFlexMessage(replyToken, "野境戶外：更多服務選單", moreFlex);
+    return;
+  }
+
+  // 5. 裝備租借 (支援「裝備租借」、「器材借用」、「Equipment Loan」)
+  if (text.indexOf("裝備租借") > -1 || text.indexOf("器材借用") > -1 || lowerText.indexOf("equipment") > -1) {
+    _replyMessage(replyToken, "🏕️ 歡迎使用野境裝備租借商城！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=borrow");
+    return;
+  }
+
+  // 6. 繳費系統 (支援「繳費系統」、「繳費中心」、「Payment System」)
+  if (text.indexOf("繳費系統") > -1 || text.indexOf("繳費中心") > -1 || lowerText.indexOf("payment") > -1) {
+    _replyMessage(replyToken, "💳 歡迎使用繳費與對帳申報系統！\n請點擊下方連結進入結帳申報表單：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=payment");
+    return;
+  }
+
+  // 7. 個人主頁 / 我的狀態 (支援「我的狀態」、「個人主頁」、「My Status」、「Dashboard」)
+  if (text.indexOf("我的狀態") > -1 || text.indexOf("個人主頁") > -1 || lowerText.indexOf("dashboard") > -1 || lowerText.indexOf("status") > -1) {
+    _replyMessage(replyToken, "👤 查看出隊成就、個人資料與預約進度：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=dashboard");
+    return;
+  }
+
+  // 8. 填寫資料 (支援「填寫資料」、「Register」)
+  if (text.indexOf("填寫資料") > -1 || lowerText.indexOf("register") > -1) {
+    _replyMessage(replyToken, "📝 請填寫或更新您的社員基本資料：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=register");
     return;
   }
 

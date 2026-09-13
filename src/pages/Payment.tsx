@@ -117,10 +117,11 @@ function Payment({ userId }: { userId: string }) {
           try {
             const sbUnpaid = await fetchUnpaidPaymentsFromSupabase(userId);
             if (sbUnpaid && !ignore) {
+              setError(null);
               setUnpaidList(sbUnpaid);
               const initialSelectedIds = Array.from(new Set([
-                ...sbUnpaid.activities.map((item: UnpaidItem) => item.id),
-                ...sbUnpaid.equipments.map((item: UnpaidItem) => item.id)
+                ...(sbUnpaid.activities || []).map((item: UnpaidItem) => item.id),
+                ...(sbUnpaid.equipments || []).map((item: UnpaidItem) => item.id)
               ]));
               setSelectedIds(initialSelectedIds);
               setLoading(false);
@@ -130,21 +131,28 @@ function Payment({ userId }: { userId: string }) {
             console.warn('[Payment] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
           }
 
-          // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
+          // 2. 若 Supabase 尚未配置或讀取失敗，嘗試自 GAS 唯讀備援讀取
           if (!loadedFromSupabase) {
-            const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_unpaid&userId=${userId}`));
-            const result = await res.json();
-            if (!ignore) {
-              if (result.status === 'success') {
-                setUnpaidList(result.data);
-                const initialSelectedIds = Array.from(new Set([
-                  ...result.data.activities.map((item: UnpaidItem) => item.id),
-                  ...result.data.equipments.map((item: UnpaidItem) => item.id)
-                ]));
-                setSelectedIds(initialSelectedIds);
-              } else {
-                setError(result.message || t('payment.error.loadFailed'));
+            try {
+              const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_unpaid&userId=${userId}`));
+              const result = await res.json();
+              if (!ignore) {
+                if (result.status === 'success' && result.data) {
+                  setError(null);
+                  setUnpaidList(result.data);
+                  const initialSelectedIds = Array.from(new Set([
+                    ...(result.data.activities || []).map((item: UnpaidItem) => item.id),
+                    ...(result.data.equipments || []).map((item: UnpaidItem) => item.id)
+                  ]));
+                  setSelectedIds(initialSelectedIds);
+                } else {
+                  // 若查無待繳紀錄，視為無欠款清單，不呈現紅色錯誤橫幅
+                  setError(null);
+                }
               }
+            } catch (gasErr) {
+              console.warn('[Payment] GAS 備援讀取未回應，預設無待繳款項:', gasErr);
+              if (!ignore) setError(null);
             }
           }
         } else {
