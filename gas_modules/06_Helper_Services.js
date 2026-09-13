@@ -55,37 +55,24 @@ function _handleDriveUploadHelper(json) {
       return _errorResponse("缺少上傳檔案內容");
     }
 
-    // 取得或建立對應的 Google Drive 資料夾
-    var rootFolder;
-    var folderId = PropertiesService.getScriptProperties().getProperty("DRIVE_FOLDER_ID");
-    if (folderId) {
-      rootFolder = DriveApp.getFolderById(folderId);
-    } else {
-      rootFolder = DriveApp.getRootFolder();
-    }
-
-    var subFolderName = "Wilderness_" + folderType;
-    var subFolders = rootFolder.getFoldersByName(subFolderName);
-    var targetFolder = subFolders.hasNext() ? subFolders.next() : rootFolder.createFolder(subFolderName);
-
+    var folderPath = "Wilderness_" + folderType;
     var uploadedUrls = [];
     for (var i = 0; i < files.length; i++) {
       var f = files[i];
       var base64Data = f.data || f.base64 || "";
-      var mimeType = f.mimeType || f.type || "image/jpeg";
       var fileName = (f.name || ("upload_" + Date.now() + "_" + i)).replace(/[^a-zA-Z0-9._-]/g, "_");
 
-      if (base64Data.indexOf(",") > -1) {
-        base64Data = base64Data.split(",")[1];
+      if (base64Data) {
+        var fileUrl = uploadFileToDrive(base64Data, fileName, folderPath);
+        if (fileUrl && !fileUrl.startsWith("上傳失敗")) {
+          var driveMatch = fileUrl.match(/(?:file\/d\/|id=)([^/&?]+)/);
+          if (driveMatch && driveMatch[1]) {
+            uploadedUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000");
+          } else {
+            uploadedUrls.push(fileUrl);
+          }
+        }
       }
-
-      var decoded = Utilities.base64Decode(base64Data);
-      var blob = Utilities.newBlob(decoded, mimeType, fileName);
-      var driveFile = targetFolder.createFile(blob);
-      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-      var fileUrl = driveFile.getUrl();
-      uploadedUrls.push(fileUrl);
     }
 
     return _successResponse({
@@ -308,112 +295,229 @@ function doGet(e) {
 }
 
 /**
- * 幹部更新裝備照片處理函式
+ * 將上傳檔案存入雲端硬碟指定資料夾 (預設為 系統圖庫，可指定多層子資料夾路徑) 並設為公開連結
+ * 完全對齊 gas.backup.js 原始強健實作：不依賴任何外部 DRIVE_FOLDER_ID，自動建立與查找
  */
-function _handleUpdateEquipmentImages(json) {
+function uploadFileToDrive(base64Str, fileName, folderPath) {
+  if (!base64Str) return "";
   try {
-    var equipId = json.equipId;
-    var equipName = json.equipName || "裝備";
-    var keptUrls = json.keptUrls || [];
-    var newPhotoFiles = json.newPhotoFiles || [];
+    var splitData = base64Str.split(",");
+    var contentType = "";
+    var rawData = "";
+    if (splitData.length > 1) {
+      contentType = splitData[0].split(";")[0].split(":")[1];
+      rawData = splitData[1];
+    } else {
+      rawData = splitData[0];
+    }
+
+    var decoded = Utilities.base64Decode(rawData);
+    var blob = Utilities.newBlob(decoded, contentType || "image/jpeg", fileName);
+
+    // 1. 取得或建立主資料夾 系統圖庫 (具備 LINE_Uploads 自動平滑過渡遷移)
+    var currentFolder;
+    var rootFolders = DriveApp.getFoldersByName("系統圖庫");
+    if (rootFolders.hasNext()) {
+      currentFolder = rootFolders.next();
+    } else {
+      var legacyFolders = DriveApp.getFoldersByName("LINE_Uploads");
+      if (legacyFolders.hasNext()) {
+        currentFolder = legacyFolders.next();
+        try { currentFolder.setName("系統圖庫"); } catch (e) {}
+      } else {
+        currentFolder = DriveApp.createFolder("系統圖庫");
+      }
+    }
+
+    // 2. 支援深層子資料夾路徑 (字串如 "裝備照片/帳篷" 或 "Wilderness_payment")
+    if (folderPath) {
+      var parts = Array.isArray(folderPath) ? folderPath : String(folderPath).split("/");
+      for (var i = 0; i < parts.length; i++) {
+        var partName = parts[i].trim();
+        if (!partName) continue;
+        var subFolders = currentFolder.getFoldersByName(partName);
+        if (subFolders.hasNext()) {
+          currentFolder = subFolders.next();
+        } else {
+          currentFolder = currentFolder.createFolder(partName);
+        }
+      }
+    }
+
+    var file = currentFolder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl();
+  } catch (err) {
+    console.error("檔案上傳 Google Drive 失敗: " + err.toString());
+    return "上傳失敗: " + err.toString();
+  }
+}
+
+/**
+ * 取得或建立欄位索引 (若欄位不存在則在最後新增並寫入標題，對齊 gas.backup.js)
+ */
+function getOrCreateColIdx(sheet, headers, columnName) {
+  var idx = _fi(headers, columnName);
+  if (idx === -1) {
+    var lastCol = sheet.getLastColumn();
+    sheet.getRange(1, lastCol + 1).setValue(columnName);
+    headers.push(columnName);
+    idx = headers.length - 1;
+  }
+  return idx;
+}
+
+/**
+ * 幹部更新裝備照片處理函式 (完全對齊 gas.backup.js 實作與 Supabase 雙軌更新)
+ */
+function _handleUpdateEquipmentImages(payload) {
+  try {
+    var equipId = String(payload.equipId || "").trim();
+    var equipName = String(payload.equipName || "").trim();
+    var keptUrls = payload.keptUrls || [];
+    var newPhotoFiles = payload.newPhotoFiles || [];
 
     if (!equipId) {
-      return _errorResponse("缺少裝備編號 (equipId)");
+      return _errorResponse("缺少裝備代號 (equipId)");
     }
 
+    // 1. 保留幹部未刪除的既有照片 URL
     var finalUrls = [];
-    for (var k = 0; k < keptUrls.length; k++) {
-      var ku = String(keptUrls[k]).trim();
-      if (ku && ku.startsWith("http") && finalUrls.indexOf(ku) === -1) {
-        finalUrls.push(ku);
-      }
-    }
-
-    // 若有新上傳照片，上傳至 Google Drive 裝備專屬目錄
-    if (Array.isArray(newPhotoFiles) && newPhotoFiles.length > 0) {
-      var rootFolder;
-      var folderId = PropertiesService.getScriptProperties().getProperty("DRIVE_FOLDER_ID");
-      if (folderId) {
-        rootFolder = DriveApp.getFolderById(folderId);
-      } else {
-        rootFolder = DriveApp.getRootFolder();
-      }
-
-      var subFolderName = "裝備照片";
-      var subFolders = rootFolder.getFoldersByName(subFolderName);
-      var equipBaseFolder = subFolders.hasNext() ? subFolders.next() : rootFolder.createFolder(subFolderName);
-
-      var cleanEquipName = equipName.replace(/[/\\?%*:|"<>]/g, "_");
-      var itemFolders = equipBaseFolder.getFoldersByName(cleanEquipName);
-      var targetFolder = itemFolders.hasNext() ? itemFolders.next() : equipBaseFolder.createFolder(cleanEquipName);
-
-      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
-      for (var f = 0; f < newPhotoFiles.length; f++) {
-        if (finalUrls.length >= 5) break;
-        var fileObj = newPhotoFiles[f];
-        var base64Data = fileObj.base64 || fileObj.data || "";
-        if (base64Data.indexOf(",") > -1) {
-          base64Data = base64Data.split(",")[1];
+    if (Array.isArray(keptUrls)) {
+      for (var k = 0; k < keptUrls.length; k++) {
+        var u = String(keptUrls[k] || "").trim();
+        if (u.startsWith("http") && finalUrls.indexOf(u) === -1) {
+          finalUrls.push(u);
         }
-        if (!base64Data) continue;
-
-        var ext = (fileObj.name && fileObj.name.split('.').pop()) || "jpg";
-        var fileName = cleanEquipName + "_" + todayStr + "_" + (finalUrls.length + 1) + "." + ext;
-        var decoded = Utilities.base64Decode(base64Data);
-        var blob = Utilities.newBlob(decoded, fileObj.mimeType || "image/jpeg", fileName);
-        var driveFile = targetFolder.createFile(blob);
-        driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-        var directUrl = "https://lh3.googleusercontent.com/d/" + driveFile.getId() + "=w1000";
-        finalUrls.push(directUrl);
       }
     }
 
-    var imgUrlCombined = finalUrls.join("\n");
+    // 2. 上傳新照片至 Google Drive: 系統圖庫/裝備照片/裝備名稱/
+    // 檔案命名格式：裝備名稱_YYYYMMDD_序號.jpg
+    if (Array.isArray(newPhotoFiles) && newPhotoFiles.length > 0) {
+      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
+      var folderPath = "裝備照片/" + (equipName || "未命名裝備");
 
-    // 1. 同步更新 Supabase equipments 表
-    var props = PropertiesService.getScriptProperties();
-    var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
-    var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
-    if (sbUrl && sbKey) {
-      var patchUrl = sbUrl + "/rest/v1/equipments?id=eq." + encodeURIComponent(equipId);
-      UrlFetchApp.fetch(patchUrl, {
-        method: "patch",
-        contentType: "application/json",
-        headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
-        payload: JSON.stringify({ images: finalUrls, updated_at: new Date().toISOString() }),
-        muteHttpExceptions: true
-      });
-    }
-
-    // 2. 同步更新主試算表 Equipments 表
-    var ss = _getSpreadsheet();
-    if (ss) {
-      var equipSheet = ss.getSheetByName("Equipments");
-      if (equipSheet) {
-        var eData = equipSheet.getDataRange().getValues();
-        var eHeaders = eData[0];
-        var idIdx = _fi(eHeaders, "裝備代號");
-        var imgIdx = _fi(eHeaders, "圖片網址");
-        if (idIdx > -1 && imgIdx > -1) {
-          for (var r = 1; r < eData.length; r++) {
-            if (String(eData[r][idIdx]).trim() === String(equipId).trim()) {
-              equipSheet.getRange(r + 1, imgIdx + 1).setValue(imgUrlCombined);
-              break;
+      for (var f = 0; f < newPhotoFiles.length; f++) {
+        if (finalUrls.length >= 5) break; // 最多 5 張
+        var fileObj = newPhotoFiles[f];
+        var base64Str = (fileObj && (fileObj.base64 || fileObj.data)) ? (fileObj.base64 || fileObj.data) : "";
+        if (base64Str) {
+          var ext = (fileObj.name && fileObj.name.split('.').pop()) || "jpg";
+          var fileName = (equipName || "裝備") + "_" + todayStr + "_" + (finalUrls.length + 1) + "." + ext;
+          var uploadedUrl = uploadFileToDrive(base64Str, fileName, folderPath);
+          if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
+            var driveMatch = uploadedUrl.match(/(?:file\/d\/|id=)([^/&?]+)/);
+            if (driveMatch && driveMatch[1]) {
+              finalUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000");
+            } else {
+              finalUrls.push(uploadedUrl);
             }
+          } else {
+            console.warn("照片上傳 Drive 警告: " + uploadedUrl);
           }
         }
       }
     }
 
+    // 3. 截斷至最多 5 張
+    if (finalUrls.length > 5) {
+      finalUrls = finalUrls.slice(0, 5);
+    }
+
+    var finalUrlStr = finalUrls.join(",");
+
+    // 4. 同步更新 Supabase equipments 表 (保護性執行，不阻塞回傳)
+    try {
+      var props = PropertiesService.getScriptProperties();
+      var sbUrl = props.getProperty('SUPABASE_URL') || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+      var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || (typeof SUPABASE_SERVICE_ROLE_KEY !== 'undefined' ? SUPABASE_SERVICE_ROLE_KEY : '');
+      if (sbUrl && sbKey) {
+        var patchUrl = sbUrl + "/rest/v1/equipments?id=eq." + encodeURIComponent(equipId);
+        UrlFetchApp.fetch(patchUrl, {
+          method: "patch",
+          contentType: "application/json",
+          headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
+          payload: JSON.stringify({ images: finalUrls, updated_at: new Date().toISOString() }),
+          muteHttpExceptions: true
+        });
+      }
+    } catch (sbErr) {
+      console.warn("Supabase equipments images 同步略過: " + sbErr.toString());
+    }
+
+    // 5. 同步更新主試算表 Equipments 表 (對齊 gas.backup.js 多欄獨立儲存與名稱容錯)
+    try {
+      var ss = _getSpreadsheet();
+      if (ss) {
+        var equipSheet = ss.getSheetByName("Equipments") || ss.getSheetByName("裝備清單") || ss.getSheetByName("裝備");
+        if (equipSheet) {
+          var data = equipSheet.getDataRange().getValues();
+          var headers = data[0];
+          var idIdx = _fi(headers, "裝備代號");
+          var targetRow = -1;
+
+          if (idIdx > -1) {
+            for (var i = 1; i < data.length; i++) {
+              if (String(data[i][idIdx]).trim() === equipId) {
+                targetRow = i + 1;
+                break;
+              }
+            }
+          }
+
+          if (targetRow > -1) {
+            // 取得或建立 5 欄照片欄位 (圖片網址1 ~ 圖片網址5)
+            var imgColIndices = [];
+            var currentHeaders = equipSheet.getRange(1, 1, 1, equipSheet.getLastColumn()).getValues()[0];
+
+            for (var k = 1; k <= 5; k++) {
+              var targetColName = "圖片網址" + k;
+              var foundIdx = currentHeaders.findIndex(function (h) {
+                var s = String(h).trim();
+                return s === targetColName || s === ("圖片網址 " + k);
+              });
+
+              if (foundIdx === -1 && k === 1) {
+                var legacyIdx = _fi(currentHeaders, "圖片網址");
+                if (legacyIdx > -1) {
+                  equipSheet.getRange(1, legacyIdx + 1).setValue(targetColName);
+                  currentHeaders[legacyIdx] = targetColName;
+                  foundIdx = legacyIdx;
+                }
+              }
+
+              if (foundIdx === -1) {
+                foundIdx = getOrCreateColIdx(equipSheet, currentHeaders, targetColName);
+                currentHeaders = equipSheet.getRange(1, 1, 1, equipSheet.getLastColumn()).getValues()[0];
+              }
+              imgColIndices.push(foundIdx);
+            }
+
+            // 將 5 張照片分別寫入對應獨立欄位 (一欄一個網址，未使用的欄位清空)
+            for (var c = 0; c < 5; c++) {
+              var cIdx = imgColIndices[c];
+              if (cIdx > -1) {
+                var cellVal = (c < finalUrls.length) ? finalUrls[c] : "";
+                equipSheet.getRange(targetRow, cIdx + 1).setValue(cellVal);
+              }
+            }
+          }
+        }
+      }
+    } catch (sheetErr) {
+      console.warn("試算表裝備照片欄位更新略過: " + sheetErr.toString());
+    }
+
     return _successResponse({
       status: "success",
-      imageUrl: imgUrlCombined,
-      message: "裝備照片已成功更新！"
+      message: "裝備照片更新成功",
+      imageUrl: finalUrlStr,
+      equipId: equipId
     });
-  } catch (err) {
-    console.error("更新裝備照片失敗:", err);
-    return _errorResponse("更新裝備照片失敗: " + err.toString());
+  } catch (error) {
+    console.error("更新裝備照片失敗:", error);
+    return _errorResponse("更新裝備照片時發生後端錯誤: " + error.toString());
   }
 }
 

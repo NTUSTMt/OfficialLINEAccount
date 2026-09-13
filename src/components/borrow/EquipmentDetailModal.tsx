@@ -249,9 +249,9 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
       }
 
       // 🚀 分流優化 2：若有新上傳照片檔案，送往 GAS 上傳 Google Drive 並寫回 Supabase
-      const res = await fetch(GAS_API_URL, {
+      const res = await fetch(appendAuthToken(GAS_API_URL), {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(withAuthPayload({
           action: 'update_equipment_images',
           equipId: equipment.id,

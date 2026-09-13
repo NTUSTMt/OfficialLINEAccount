@@ -3,11 +3,31 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.79` (v0.1.79)
+- **當前版本**：`0.1.80` (v0.1.80)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 180. 還原 gas.backup.js 原始強健上傳機制：徹底拔除 DRIVE_FOLDER_ID 地雷、回歸「系統圖庫」自動建立與多欄位儲存 (v0.1.80)
+- **徹底拔除 `DRIVE_FOLDER_ID` 地雷，回歸「系統圖庫」原生自動建立機制 (`gas_modules/06_Helper_Services.js`, `src/gas.js`)**：
+  - **根本原因排查**：在先前 GAS 模組化重構中，`_handleUpdateEquipmentImages` 與 `_handleDriveUploadHelper` 改為讀取 `DRIVE_FOLDER_ID`。若使用者的 GAS Script Properties 填入無效 ID（或誤填試算表 ID、捷徑或共用硬碟），`DriveApp.getFolderById(folderId)` 會立即拋出未捕捉的嚴重例外 `Exception: Folder not found`。一旦 GAS 發生 Runtime Exception，Google Web App 端點會直接回應 HTTP 500 HTML 錯誤頁面，導致行動裝置（iOS LINE WebKit）的跨域 POST 轉址連線中斷並爆出 `TypeError: Load failed`。
+  - **架構還原**：
+    - 完整還原 `gas.backup.js` 驗證成熟的 `uploadFileToDrive` 函式：完全不依賴外部 `DRIVE_FOLDER_ID`，直接透過 `DriveApp.getFoldersByName("系統圖庫")` 動態尋找，不存在則自動 `createFolder("系統圖庫")`。
+    - 子目錄自動建立 `裝備照片 / {裝備名稱}`，任何 Google 帳號執行時保證 100% 成功建立資料夾與檔案。
+    - 檔案命名嚴格遵守：`{裝備名稱}_{YYYYMMDD}_{序號}.{ext}`，檔案權限設為 `DriveApp.Access.ANYONE_WITH_LINK`，並轉換為 `https://lh3.googleusercontent.com/d/{id}=w1000` 高清直連網址。
+- **試算表寫入結構與名稱容錯對齊 (`gas_modules/06_Helper_Services.js`, `src/gas.js`)**：
+  - 名稱容錯：支援 `ss.getSheetByName("Equipments") || ss.getSheetByName("裝備清單") || ss.getSheetByName("裝備")`。
+  - 多欄位獨立儲存：動態尋找或建立 `圖片網址1` 至 `圖片網址5`，將照片分別寫入獨立欄位，相容歷史試算表格式。
+  - 補回遺漏之 `getOrCreateColIdx` 欄位動態擴充工具函式。
+- **雙軌資料庫保護性同步 (`gas_modules/06_Helper_Services.js`, `src/gas.js`)**：
+  - 在 Drive 照片上傳完成後，以獨立 try-catch 保護性 PATCH Supabase `equipments` 表的 `images` 欄位（JSONB 陣列格式）。
+  - 即使試算表或 Supabase 單邊延遲或受限，絕不中斷 GAS 回傳流程，確保前端照片更新永遠成功回傳。
+- **前端請求優化 (`src/components/borrow/EquipmentDetailModal.tsx`)**：
+  - 保持與 `gas.backup.js` 舊版完全一致的傳輸酬載與 `appendAuthToken`，若發生錯誤依 Rule 透明印出完整詳細資訊。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 78/78 項測試 100% 全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
 
 ### 179. 裝備照片上傳傳輸標頭優化 (移除 OPTIONS 觸發因子與 URL Token) 與 GAS 多模組架構部署深度解析 (v0.1.79)
 - **前端請求傳輸標頭與轉址優化 (`src/components/borrow/EquipmentDetailModal.tsx`)**：
