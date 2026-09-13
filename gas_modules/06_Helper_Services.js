@@ -199,7 +199,7 @@ function _handleNotifyProfileSaved(json) {
 
     _pushMessage(userId, msg);
 
-    // 2. 若隊員勾選「有意願成為幹部」，即時推播幹部管理群組
+    // 2. 若隊員勾選「有意願成為幹部」，且為新意願（由無變有或首次填寫），即時推播幹部管理群組
     var officerIntent = data.intendOfficer || data.officer_intent || "";
     var wantsToBeOfficer = false;
     if (officerIntent) {
@@ -209,7 +209,17 @@ function _handleNotifyProfileSaved(json) {
       }
     }
 
-    if (wantsToBeOfficer) {
+    // 狀態變更才推播：判斷是否為新勾選意願 (若前端有傳入 isOfficerIntentNew 依其判定，否則檢查 previousOfficerIntent)
+    var isOfficerIntentNew = true;
+    if (typeof json.isOfficerIntentNew === "boolean") {
+      isOfficerIntentNew = json.isOfficerIntentNew;
+    } else if (json.previousOfficerIntent !== undefined) {
+      var prevLower = String(json.previousOfficerIntent).trim().toLowerCase();
+      var wasWilling = Boolean(prevLower && prevLower !== "無" && prevLower !== "無意願" && prevLower !== "否" && prevLower !== "none" && prevLower !== "no");
+      isOfficerIntentNew = !wasWilling && wantsToBeOfficer;
+    }
+
+    if (wantsToBeOfficer && isOfficerIntentNew) {
       var adminNotice = "🌟 【新幹部招募意願通知】\n" +
         "─────────────\n" +
         "社員填寫個人資料時，勾選表達了加入幹部團隊的熱情意願！\n\n" +

@@ -488,7 +488,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
             }}
           >
             <ShoppingCart size={16} />
-            <span>{t('borrow.floating.viewDetail', '查看預訂單')}</span>
+            <span>{t('borrow.floating.viewDetail', '下一步')}</span>
           </button>
         </div>
       )}

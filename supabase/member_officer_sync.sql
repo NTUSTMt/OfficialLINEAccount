@@ -108,6 +108,38 @@ FOR EACH ROW EXECUTE FUNCTION trg_fn_sync_officer_from_member();
 -- 4. 歷史既有幹部資料回填 members.is_officer = TRUE
 UPDATE members m
 SET is_officer = TRUE,
-    officer_role = COALESCE(NULLIF(o.role, ''), NULLIF(o.title, ''), NULLIF(m.officer_role, ''), '幹部')
+    officer_role = COALESCE(NULLIF(o.title, ''), NULLIF(o.role, ''), NULLIF(m.officer_role, ''), '幹部')
 FROM officers o
 WHERE trim(m.line_user_id) = trim(o.line_user_id);
+
+-- 5. 雙向同步觸發器：當 officers 表更新 title, role, name 時，自動同步回 members 表
+CREATE OR REPLACE FUNCTION trg_fn_sync_member_from_officer()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
+        IF NEW.line_user_id IS NOT NULL AND trim(NEW.line_user_id) != '' THEN
+            UPDATE members
+            SET is_officer = TRUE,
+                officer_role = COALESCE(NULLIF(NEW.title, ''), NULLIF(NEW.role, ''), '幹部'),
+                name = COALESCE(NULLIF(NEW.name, ''), name),
+                updated_at = NOW()
+            WHERE trim(line_user_id) = trim(NEW.line_user_id);
+        END IF;
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        IF OLD.line_user_id IS NOT NULL AND trim(OLD.line_user_id) != '' THEN
+            UPDATE members
+            SET is_officer = FALSE,
+                updated_at = NOW()
+            WHERE trim(line_user_id) = trim(OLD.line_user_id);
+        END IF;
+        RETURN OLD;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_officer_to_member_sync ON officers;
+CREATE TRIGGER trg_officer_to_member_sync
+AFTER INSERT OR UPDATE OF title, role, name, line_user_id OR DELETE ON officers
+FOR EACH ROW EXECUTE FUNCTION trg_fn_sync_member_from_officer();

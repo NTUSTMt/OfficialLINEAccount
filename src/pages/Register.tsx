@@ -77,6 +77,9 @@ function Register({ userId }: { userId: string }) {
   const [hasDraftRestored, setHasDraftRestored] = useState(false);
   const isInitialLoadDone = useRef(false);
 
+  // 記錄初始幹部意願，精確判定是否由「無」轉「有」才推播
+  const [initialOfficerIntent, setInitialOfficerIntent] = useState<string>('');
+
   // 載入 LINE Profile 與 Supabase/GAS 社員資料
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -153,6 +156,8 @@ function Register({ userId }: { userId: string }) {
                 intendOfficial: p.intendOfficial ? String(p.intendOfficial) : '',
                 intendOfficer: p.intendOfficer ? String(p.intendOfficer) : '',
               });
+              const loadedIntent = p.intendOfficer ? String(p.intendOfficer) : '';
+              setInitialOfficerIntent(loadedIntent);
               setPrivacyAgreed(true);
             }
           }
@@ -421,6 +426,15 @@ function Register({ userId }: { userId: string }) {
       if (sbSaved) {
         // ⚡ 3. 非同步發送 LINE 基本資料更新/註冊完成推播通知 (純訊息，不碰試算表)
         if (userId && userId !== 'TEST_USER_ID') {
+          const isWilling = (val?: string) => {
+            if (!val) return false;
+            const lower = String(val).trim().toLowerCase();
+            return lower !== '' && lower !== '無' && lower !== '無意願' && lower !== '否' && lower !== 'none' && lower !== 'no';
+          };
+          const wasWilling = isWilling(initialOfficerIntent);
+          const isNowWilling = isWilling(finalFormData.intendOfficer);
+          const isOfficerIntentNew = isNewUser ? isNowWilling : (!wasWilling && isNowWilling);
+
           fetch(GAS_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -428,7 +442,9 @@ function Register({ userId }: { userId: string }) {
               action: 'notify_profile_saved',
               userId: userId,
               formData: finalFormData,
-              isNewUser: isNewUser
+              isNewUser: isNewUser,
+              isOfficerIntentNew: isOfficerIntentNew,
+              previousOfficerIntent: initialOfficerIntent
             }))
           }).catch(notifyErr => console.warn('[Register] 非同步推播通知略過:', notifyErr));
         }

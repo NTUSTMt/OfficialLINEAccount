@@ -575,33 +575,36 @@ export const checkOfficerStatusFromSupabase = async (
   if (!supabase || !userId || userId === 'TEST_USER_ID') return null;
 
   try {
-    // 1. 優先查 members 表的 is_officer 欄位
+    // 1. 查驗 members 表的 is_officer 欄位
     const { data: memberData } = await supabase
       .from('members')
       .select('is_officer, officer_role, name')
       .eq('line_user_id', userId)
       .maybeSingle();
 
-    if (memberData && memberData.is_officer) {
-      return {
-        isOfficer: true,
-        role: memberData.officer_role || '幹部',
-        name: memberData.name || '幹部'
-      };
-    }
-
-    // 2. 備援查驗 officers 表 (容納歷史資料或試算表同步資料)
+    // 2. 查驗 officers 表，優先取得最新的 title (職稱) 與 role，達成雙向同步
     const { data: officerData } = await supabase
       .from('officers')
       .select('role, title, name')
       .eq('line_user_id', userId)
       .maybeSingle();
 
+    const officerTitle = (officerData as any)?.title || officerData?.role || memberData?.officer_role || '幹部';
+    const officerName = officerData?.name || memberData?.name || '幹部';
+
+    if (memberData && memberData.is_officer) {
+      return {
+        isOfficer: true,
+        role: officerTitle,
+        name: officerName
+      };
+    }
+
     if (officerData) {
       return {
         isOfficer: true,
-        role: officerData.role || (officerData as any).title || '幹部',
-        name: officerData.name || '幹部'
+        role: officerTitle,
+        name: officerName
       };
     }
 

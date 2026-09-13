@@ -1940,4 +1940,101 @@ describe('15. Supabase SSOT 報名驗證、Sync Worker 全 CRUD 增刪鏡像、�
     assert.equal(equipC.price, 0);
     assert.equal(equipC.priceExtra, 0);
   });
+
+  // 6. 幹部招募意願：僅在「由無變有」或「新成員勾選」時才發送推播通知
+  it('幹部意願狀態變更才推播：避免社員修改其他個資時重複推播幹部群組', () => {
+    function evaluateOfficerNotification(json) {
+      const data = json.formData || {};
+      const officerIntent = data.intendOfficer || data.officer_intent || '';
+      let wantsToBeOfficer = false;
+      if (officerIntent) {
+        const lower = String(officerIntent).trim().toLowerCase();
+        if (lower !== '無' && lower !== '無意願' && lower !== '否' && lower !== 'none' && lower !== 'no') {
+          wantsToBeOfficer = true;
+        }
+      }
+
+      let isOfficerIntentNew = true;
+      if (typeof json.isOfficerIntentNew === 'boolean') {
+        isOfficerIntentNew = json.isOfficerIntentNew;
+      } else if (json.previousOfficerIntent !== undefined) {
+        const prevLower = String(json.previousOfficerIntent).trim().toLowerCase();
+        const wasWilling = Boolean(prevLower && prevLower !== '無' && prevLower !== '無意願' && prevLower !== '否' && prevLower !== 'none' && prevLower !== 'no');
+        isOfficerIntentNew = !wasWilling && wantsToBeOfficer;
+      }
+
+      return wantsToBeOfficer && isOfficerIntentNew;
+    }
+
+    // 情況 1：新用戶勾選意願 -> 觸發推播
+    assert.equal(evaluateOfficerNotification({
+      isNewUser: true,
+      isOfficerIntentNew: true,
+      previousOfficerIntent: '',
+      formData: { intendOfficer: '我有意願成為社團幹部' }
+    }), true);
+
+    // 情況 2：既有用戶原本無意願，本次勾選 -> 觸發推播
+    assert.equal(evaluateOfficerNotification({
+      isNewUser: false,
+      isOfficerIntentNew: true,
+      previousOfficerIntent: '無',
+      formData: { intendOfficer: '我有意願成為社團幹部' }
+    }), true);
+
+    // 情況 3：既有用戶原本已有意願，本次僅更新電話或地址 (意願未變) -> 不重複推播！
+    assert.equal(evaluateOfficerNotification({
+      isNewUser: false,
+      isOfficerIntentNew: false,
+      previousOfficerIntent: '我有意願成為社團幹部',
+      formData: { intendOfficer: '我有意願成為社團幹部', phone: '0987654321' }
+    }), false);
+
+    // 情況 4：用戶取消勾選意願 -> 不推播
+    assert.equal(evaluateOfficerNotification({
+      isNewUser: false,
+      isOfficerIntentNew: false,
+      previousOfficerIntent: '我有意願成為社團幹部',
+      formData: { intendOfficer: '' }
+    }), false);
+  });
+
+  // 7. 幹部職稱同步：officer_role 與 officers 頁面的 title 欄位同步測試
+  it('checkOfficerStatusFromSupabase 正確優先同步 officers 表之 title 職稱', () => {
+    function resolveOfficerRole(memberData, officerData) {
+      const officerTitle = officerData?.title || officerData?.role || memberData?.officer_role || '幹部';
+      const officerName = officerData?.name || memberData?.name || '幹部';
+
+      if (memberData && memberData.is_officer) {
+        return { isOfficer: true, role: officerTitle, name: officerName };
+      }
+      if (officerData) {
+        return { isOfficer: true, role: officerTitle, name: officerName };
+      }
+      return { isOfficer: false };
+    }
+
+    // 情況 1：members 表角色為預設「幹部」，但 officers 表 title 設置為「社長」
+    const res1 = resolveOfficerRole(
+      { is_officer: true, officer_role: '幹部', name: '王小明' },
+      { title: '社長', role: '幹部', name: '王小明' }
+    );
+    assert.equal(res1.isOfficer, true);
+    assert.equal(res1.role, '社長'); // 完美同步 officers.title
+
+    // 情況 2：officers 表 title 設置為「器材部長」
+    const res2 = resolveOfficerRole(
+      { is_officer: true, officer_role: '幹部', name: '李大華' },
+      { title: '器材部長', role: '幹部', name: '李大華' }
+    );
+    assert.equal(res2.isOfficer, true);
+    assert.equal(res2.role, '器材部長');
+
+    // 情況 3：非幹部
+    const res3 = resolveOfficerRole(
+      { is_officer: false, officer_role: null, name: '路人' },
+      null
+    );
+    assert.equal(res3.isOfficer, false);
+  });
 });

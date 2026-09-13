@@ -3,11 +3,31 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.75` (v0.1.75)
+- **當前版本**：`0.1.76` (v0.1.76)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 176. 幹部意願狀態轉變推播機制（防修改個資重複通知）與 officer_role 全面同步 officers.title 職稱 (v0.1.76)
+- **幹部招募意願精確推播（由無變有才通知）(`src/pages/Register.tsx`, `gas_modules/06_Helper_Services.js`, `src/gas.js`)**：
+  - **根本原因排查**：先前 `notify_profile_saved` 只要檢測到表單有勾選意願，不論使用者是首次填寫還是單純修改電話或地址，每次儲存皆無條件推播幹部群組，造成幹部群組重複洗版。
+  - **機制實作**：
+    - 前端載入個資時紀錄原始意願 `initialOfficerIntent`。
+    - 表單送出時動態計算 `isOfficerIntentNew`：
+      - 新註冊成員：有勾選即判定為新意願。
+      - 既有成員：先前為無意願且本次變更為有意願（由無變有）時才判定為新意願；若先前本已勾選且本次僅修改其他個資，則判定為非新意願。
+    - 後端 `_handleNotifyProfileSaved` 僅在 `wantsToBeOfficer && isOfficerIntentNew` 為真時才發送 `pushAdminMessage`，徹底根治重複洗版問題。
+- **幹部身分 officer_role 全面同步 officers 頁面之 title 職稱 (`src/utils/supabaseClient.ts`, `supabase/member_officer_sync.sql`)**：
+  - **根本原因排查**：先前的 `checkOfficerStatusFromSupabase` 在 `memberData.is_officer` 為真時，優先回傳 `members.officer_role`（多為預設值「幹部」），而未優先讀取 `officers` 表中最新設定的 `title`（如「社長」、「器材部長」等）；且當管理者在 `officers` 表修改職稱時，缺乏反向更新 `members.officer_role` 的觸發器。
+  - **架構升級**：
+    - 在 `src/utils/supabaseClient.ts` 中調整職稱解析順序，優先採用 `officers.title` 與 `officers.role`，確保前端徽章與身分識別即時呈現最新職稱。
+    - 在 `supabase/member_officer_sync.sql` 新增雙向觸發器 `trg_officer_to_member_sync`，當 `officers` 表的新增、修改 `title` 或 `role` 時，自動同步回寫 `members.officer_role`。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 76/76 項測試 100% 全數通過（新增 Suite 15 測試 6 與測試 7）。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+  - GAS 整合：`src/gas.js` 重新同步，0 語法錯誤。
+
 
 ### 175. 裝備租借費用欄位修復（price_2day 與 price_extra_day）、森林綠毛玻璃底條與磨砂白購物車按鈕 UI 重塑 (v0.1.75)
 - **裝備租借費用全面對齊 Supabase 真實欄位 (`src/utils/supabaseClient.ts`, `supabase/schema.sql`)**：
