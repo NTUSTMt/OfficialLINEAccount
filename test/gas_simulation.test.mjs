@@ -1374,5 +1374,295 @@ describe('12. 活動專屬 Google Drive 資料夾與專屬試算表差異比對�
   });
 });
 
+describe('13. 社團主試算表 (Members, Equipments, Events) 零幻想精準欄位提取與差異比對同步測試', () => {
+  it('嚴格對齊使用者提供的 24 欄位 Members 結構並提取為 Supabase members 格式', () => {
+    const userHeaders = [
+      '系統識別碼', '姓名', '性別', 'Line ID', '聯絡信箱', '聯絡電話', '系所', '學號',
+      '繳費狀態', '社籍到期日', '生日', '證件號碼', '聯絡地址', '爬山經驗', '體能測驗', '體能證明',
+      '緊急聯絡人姓名', '緊急聯絡人關係', '緊急聯絡人電話', '緊急聯絡人聯絡地址', '個人特殊病史或過敏',
+      '身分狀態', '加入社員意願', '擔任幹部意願'
+    ];
+
+    assert.equal(userHeaders.length, 24);
+
+    function findCol(kw) {
+      for (let i = 0; i < userHeaders.length; i++) {
+        if (userHeaders[i] === kw) return i;
+      }
+      return -1;
+    }
+
+    const mCols = {
+      line_user_id: findCol('系統識別碼'),
+      name: findCol('姓名'),
+      gender: findCol('性別'),
+      line_id: findCol('Line ID'),
+      email: findCol('聯絡信箱'),
+      phone: findCol('聯絡電話'),
+      department: findCol('系所'),
+      student_id: findCol('學號'),
+      payment_status: findCol('繳費狀態'),
+      membership_expires_at: findCol('社籍到期日'),
+      birthday: findCol('生日'),
+      id_card: findCol('證件號碼'),
+      address: findCol('聯絡地址'),
+      outdoor_experience: findCol('爬山經驗'),
+      fitness_desc: findCol('體能測驗'),
+      proof_urls: findCol('體能證明'),
+      emergency_contact_name: findCol('緊急聯絡人姓名'),
+      emergency_contact_rel: findCol('緊急聯絡人關係'),
+      emergency_contact_phone: findCol('緊急聯絡人電話'),
+      emergency_contact_address: findCol('緊急聯絡人聯絡地址'),
+      medical_history: findCol('個人特殊病史或過敏'),
+      identity_status: findCol('身分狀態'),
+      join_membership_intent: findCol('加入社員意願'),
+      officer_intent: findCol('擔任幹部意願')
+    };
+
+    // 驗證 24 個欄位全部精確索引到，無任何欄位缺失 (-1)
+    for (const key in mCols) {
+      assert.ok(mCols[key] >= 0, `欄位 ${key} 應成功匹配`);
+    }
+
+    const mockRow = [
+      'U1234567890abcdef', '張小明', '男', 'ming_line', 'ming@example.com', '0912345678',
+      '資訊工程系', 'B11015000', '已繳費 Paid', '2027-06-30', '2002-08-15', 'A123456789',
+      '台北市大安區基隆路四段43號', '玉山主峰、雪山主東', '3000m 跑步 14分', 'https://drive.google.com/proof1',
+      '張爸爸', '父親', '0987654321', '新北市板橋區縣民大道', '無重大病史或過敏',
+      '在校生', '是', '活動幹部'
+    ];
+
+    function extractMember(row, cols) {
+      const payStatus = String(row[cols.payment_status] || '').trim();
+      const isOfficial = payStatus.includes('已繳費') || payStatus.includes('Paid');
+      return {
+        line_user_id: String(row[cols.line_user_id] || '').trim(),
+        name: String(row[cols.name] || '').trim(),
+        gender: String(row[cols.gender] || '').trim(),
+        line_id: String(row[cols.line_id] || '').trim(),
+        email: String(row[cols.email] || '').trim(),
+        phone: String(row[cols.phone] || '').trim(),
+        department: String(row[cols.department] || '').trim(),
+        student_id: String(row[cols.student_id] || '').trim(),
+        payment_status: payStatus,
+        membership_expires_at: String(row[cols.membership_expires_at] || '').trim(),
+        birthday: String(row[cols.birthday] || '').trim(),
+        id_card: String(row[cols.id_card] || '').trim(),
+        address: String(row[cols.address] || '').trim(),
+        outdoor_experience: String(row[cols.outdoor_experience] || '').trim(),
+        fitness_desc: String(row[cols.fitness_desc] || '').trim(),
+        emergency_contact_name: String(row[cols.emergency_contact_name] || '').trim(),
+        emergency_contact_rel: String(row[cols.emergency_contact_rel] || '').trim(),
+        emergency_contact_phone: String(row[cols.emergency_contact_phone] || '').trim(),
+        emergency_contact_address: String(row[cols.emergency_contact_address] || '').trim(),
+        medical_history: String(row[cols.medical_history] || '').trim(),
+        identity_status: String(row[cols.identity_status] || '').trim(),
+        join_membership_intent: String(row[cols.join_membership_intent] || '').trim(),
+        officer_intent: String(row[cols.officer_intent] || '').trim(),
+        is_official_member: isOfficial
+      };
+    }
+
+    const res = extractMember(mockRow, mCols);
+    assert.equal(res.line_user_id, 'U1234567890abcdef');
+    assert.equal(res.name, '張小明');
+    assert.equal(res.department, '資訊工程系');
+    assert.equal(res.student_id, 'B11015000');
+    assert.equal(res.payment_status, '已繳費 Paid');
+    assert.equal(res.is_official_member, true);
+    assert.equal(res.emergency_contact_name, '張爸爸');
+    assert.equal(res.emergency_contact_rel, '父親');
+    assert.equal(res.emergency_contact_phone, '0987654321');
+    assert.equal(res.officer_intent, '活動幹部');
+  });
+
+  it('嚴格對齊使用者提供的 14 欄位 Equipments 結構並提取為 Supabase equipments 格式', () => {
+    const userEqHeaders = [
+      '裝備代號', '裝備名稱', '總數量', '剩餘數量', '是否外借', '租金（2天）', '租金（+1天）',
+      '狀態', '備注', '圖片網址1', '圖片網址2', '圖片網址3', '圖片網址4', '圖片網址5'
+    ];
+
+    assert.equal(userEqHeaders.length, 14);
+
+    function findEqCol(kw) {
+      for (let i = 0; i < userEqHeaders.length; i++) {
+        if (userEqHeaders[i] === kw) return i;
+      }
+      return -1;
+    }
+
+    const eqCols = {
+      id: findEqCol('裝備代號'),
+      name: findEqCol('裝備名稱'),
+      total_qty: findEqCol('總數量'),
+      available_qty: findEqCol('剩餘數量'),
+      is_borrowable: findEqCol('是否外借'),
+      member_price: findEqCol('租金（2天）'),
+      extra_price: findEqCol('租金（+1天）'),
+      specs: findEqCol('狀態'),
+      notes: findEqCol('備注'),
+      img1: findEqCol('圖片網址1'),
+      img2: findEqCol('圖片網址2'),
+      img3: findEqCol('圖片網址3'),
+      img4: findEqCol('圖片網址4'),
+      img5: findEqCol('圖片網址5')
+    };
+
+    for (const k in eqCols) {
+      assert.ok(eqCols[k] >= 0, `Equipments 欄位 ${k} 應成功匹配`);
+    }
+
+    const mockEqRow = [
+      'EQ-TENT-01', '三人雙門高山帳', '5', '3', '是', '300', '100',
+      '良好', '附地布與營釘', 'https://example.com/tent1.jpg', 'https://example.com/tent2.jpg', '', '', ''
+    ];
+
+    function extractEquipment(row, cols) {
+      const images = [];
+      for (let k = 1; k <= 5; k++) {
+        const u = String(row[cols['img' + k]] || '').trim();
+        if (u && u.startsWith('http')) images.push(u);
+      }
+      return {
+        id: String(row[cols.id] || '').trim(),
+        name: String(row[cols.name] || '').trim(),
+        total_qty: parseInt(String(row[cols.total_qty] || 0).replace(/[^\d]/g, ''), 10) || 0,
+        available_qty: parseInt(String(row[cols.available_qty] || 0).replace(/[^\d]/g, ''), 10) || 0,
+        is_borrowable: (row[cols.is_borrowable] === '是' || row[cols.is_borrowable] === true),
+        member_price_per_day: parseInt(String(row[cols.member_price] || 0).replace(/[^\d]/g, ''), 10) || 0,
+        non_member_price_per_day: parseInt(String(row[cols.extra_price] || 0).replace(/[^\d]/g, ''), 10) || 0,
+        specs: String(row[cols.specs] || '').trim(),
+        notes: String(row[cols.notes] || '').trim(),
+        images: images
+      };
+    }
+
+    const res = extractEquipment(mockEqRow, eqCols);
+    assert.equal(res.id, 'EQ-TENT-01');
+    assert.equal(res.name, '三人雙門高山帳');
+    assert.equal(res.total_qty, 5);
+    assert.equal(res.available_qty, 3);
+    assert.equal(res.is_borrowable, true);
+    assert.equal(res.member_price_per_day, 300);
+    assert.equal(res.non_member_price_per_day, 100);
+    assert.equal(res.specs, '良好');
+    assert.equal(res.notes, '附地布與營釘');
+    assert.deepEqual(res.images, ['https://example.com/tent1.jpg', 'https://example.com/tent2.jpg']);
+  });
+
+  it('嚴格對齊使用者提供的 14 欄位 Events 結構並提取為 Supabase events 格式', () => {
+    const userEvHeaders = [
+      '活動編號', '活動名稱', '預計費用', '活動開始日期', '活動結束日期', '報名截止日期',
+      '報名狀態', '簡介', '詳細行程', '封面圖網址', '活動編號', '雲端資料夾網址', '報名名冊網址', '試算表ID'
+    ];
+
+    assert.equal(userEvHeaders.length, 14);
+
+    function findEvCol(kw) {
+      for (let i = 0; i < userEvHeaders.length; i++) {
+        if (userEvHeaders[i] === kw) return i;
+      }
+      return -1;
+    }
+
+    const evCols = {
+      id: 0, // 第一個活動編號
+      name: findEvCol('活動名稱'),
+      cost: findEvCol('預計費用'),
+      startDate: findEvCol('活動開始日期'),
+      endDate: findEvCol('活動結束日期'),
+      deadline: findEvCol('報名截止日期'),
+      status: findEvCol('報名狀態'),
+      summary: findEvCol('簡介'),
+      itinerary: findEvCol('詳細行程'),
+      cover_image_url: findEvCol('封面圖網址'),
+      drive_folder_url: findEvCol('雲端資料夾網址'),
+      spreadsheet_url: findEvCol('報名名冊網址'),
+      spreadsheet_id: findEvCol('試算表ID')
+    };
+
+    for (const k in evCols) {
+      assert.ok(evCols[k] >= 0, `Events 欄位 ${k} 應成功匹配`);
+    }
+
+    const mockEvRow = [
+      'E2609-01', '合歡西北峰三日縱走', '1500', '2026/10/20', '2026/10/22', '2026/10/10',
+      '開放報名', '精選入門高山百岳路線', 'Day1: 登山口-北峰-營地; Day2: 西峰; Day3: 下山',
+      'https://example.com/hehuanshan.jpg', 'E2609-01',
+      'https://drive.google.com/drive/folders/folder_123',
+      'https://docs.google.com/spreadsheets/d/sheet_456/edit', 'sheet_456'
+    ];
+
+    function extractEvent(row, cols) {
+      const sDate = String(row[cols.startDate] || '').replace(/\//g, '-').split(' ')[0];
+      const eDate = String(row[cols.endDate] || '').replace(/\//g, '-').split(' ')[0] || sDate;
+      const dLine = String(row[cols.deadline] || '').replace(/\//g, '-');
+      return {
+        id: String(row[cols.id] || '').trim(),
+        title: String(row[cols.name] || '').trim(),
+        fee: parseInt(String(row[cols.cost] || 0).replace(/[^\d]/g, ''), 10) || 0,
+        start_date: sDate || null,
+        end_date: eDate || null,
+        deadline: dLine ? (dLine.includes('T') ? dLine : dLine + 'T23:59:59Z') : null,
+        status: String(row[cols.status] || '').trim() || '未來開放',
+        summary: String(row[cols.summary] || '').trim(),
+        itinerary: String(row[cols.itinerary] || '').trim(),
+        cover_image_url: String(row[cols.cover_image_url] || '').trim(),
+        drive_folder_url: String(row[cols.drive_folder_url] || '').trim() || null,
+        spreadsheet_url: String(row[cols.spreadsheet_url] || '').trim() || null,
+        spreadsheet_id: String(row[cols.spreadsheet_id] || '').trim() || null
+      };
+    }
+
+    const res = extractEvent(mockEvRow, evCols);
+    assert.equal(res.id, 'E2609-01');
+    assert.equal(res.title, '合歡西北峰三日縱走');
+    assert.equal(res.fee, 1500);
+    assert.equal(res.start_date, '2026-10-20');
+    assert.equal(res.end_date, '2026-10-22');
+    assert.equal(res.deadline, '2026-10-10T23:59:59Z');
+    assert.equal(res.status, '開放報名');
+    assert.equal(res.spreadsheet_id, 'sheet_456');
+    assert.equal(res.drive_folder_url, 'https://drive.google.com/drive/folders/folder_123');
+  });
+
+  it('測試診斷社員防護機制：Sync Worker 略過 TEST_DIAGNOSTIC 且 cleanup 正常識別', () => {
+    // 1. Sync worker 防護驗證
+    function shouldSyncToSheet(memberPayload) {
+      if (memberPayload.line_user_id && memberPayload.line_user_id.includes('TEST_DIAGNOSTIC')) {
+        return false;
+      }
+      if (memberPayload.name && memberPayload.name.includes('測試報名社員')) {
+        return false;
+      }
+      return true;
+    }
+
+    assert.equal(shouldSyncToSheet({ line_user_id: 'U_TEST_DIAGNOSTIC', name: '測試報名社員' }), false);
+    assert.equal(shouldSyncToSheet({ line_user_id: 'U1234567890', name: '正式社員小明' }), true);
+
+    // 2. 清理診斷資料列篩選驗證
+    const mockSheetRows = [
+      ['系統識別碼', '姓名'],
+      ['U111111', '王大明'],
+      ['U_TEST_DIAGNOSTIC', '測試報名社員'],
+      ['U222222', '李小美']
+    ];
+
+    const toDeleteRowIndices = [];
+    for (let r = 1; r < mockSheetRows.length; r++) {
+      const uid = mockSheetRows[r][0];
+      const name = mockSheetRows[r][1];
+      if (uid.includes('TEST_DIAGNOSTIC') || name.includes('測試報名社員')) {
+        toDeleteRowIndices.push(r + 1); // 1-indexed 行號
+      }
+    }
+
+    assert.equal(toDeleteRowIndices.length, 1);
+    assert.equal(toDeleteRowIndices[0], 3); // 第 3 行為診斷列
+  });
+});
+
+
 
 

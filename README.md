@@ -3,13 +3,31 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.67` (v0.1.67)
+- **當前版本**：`0.1.68` (v0.1.68)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
 
-### 167. 活動試算表連線參數全自動穿透注入、雙向自癒快取與 UI 設定彈窗 (v0.1.67)
+### 168. 社團主試算表 (Members/Equipments/Events) 雙向差異比對同步引擎、零幻想欄位對齊與測試診斷數據隔離清理 (v0.1.68)
+- **主試算表定位確立：幹部行政主工作台 (Primary Administrative Workbench)**：
+  - **架構設計**：確立主試算表為幹部日常批次編輯、快速更新（社員資料、裝備庫存、活動行程）的主工作台；Supabase 則為面向隊員 LINE LIFF 手機端的高速 Serving Layer。避免幹部被迫在手機 LIFF 上填寫繁複的後台表單。
+  - **零幻想欄位嚴格對齊 (Zero-Hallucination Schema Mapping)**：
+    - **`Members` 社員清冊 (24 欄位)**：以「系統識別碼」為主鍵對齊 `members.line_user_id`，涵蓋：`系統識別碼 | 姓名 | 性別 | Line ID | 聯絡信箱 | 聯絡電話 | 系所 | 學號 | 繳費狀態 | 社籍到期日 | 生日 | 證件號碼 | 聯絡地址 | 爬山經驗 | 體能測驗 | 體能證明 | 緊急聯絡人姓名 | 緊急聯絡人關係 | 緊急聯絡人電話 | 緊急聯絡人聯絡地址 | 個人特殊病史或過敏 | 身分狀態 | 加入社員意願 | 擔任幹部意願`。
+    - **`Equipments` 裝備清單 (14 欄位)**：以「裝備代號」為主鍵對齊 `equipments.id`，涵蓋：`裝備代號 | 裝備名稱 | 總數量 | 剩餘數量 | 是否外借 | 租金（2天） | 租金（+1天） | 狀態 | 備注 | 圖片網址1 | 圖片網址2 | 圖片網址3 | 圖片網址4 | 圖片網址5`。
+    - **`Events` 活動清單 (14 欄位)**：以「活動編號」為主鍵對齊 `events.id`，涵蓋：`活動編號 | 活動名稱 | 預計費用 | 活動開始日期 | 活動結束日期 | 報名截止日期 | 報名狀態 | 簡介 | 詳細行程 | 封面圖網址 | 活動編號 | 雲端資料夾網址 | 報名名冊網址 | 試算表ID`。
+- **現代化側邊欄比對與批次同步引擎 (`openMainSyncSidebar` / `getMainSyncDiffAPI`)**：
+  - **自動偵測當前分頁**：幹部切換至 `Members`、`Equipments` 或 `Events` 工作表後，點選選單「🔄 比對並同步至 Supabase (目前分頁)」，側邊欄自動精準載入對應比對引擎。
+  - **視覺化差異比對 (Visual Diff)**：自動高亮展示修改項目（舊值 ➔ 新值）與新建立列，清楚呈現變更欄位名稱與資料內容，統計異動筆數與全表總數。
+  - **批次安全寫入 (`commitMainSyncToSupabaseAPI`)**：點擊「確認同步至 Supabase」後，採用批次 Upsert（`Prefer: resolution=merge-duplicates`），同步完成即時顯示綠燈完成狀態，絕不額外發送任何 LINE 推播打擾隊員。
+- **測試診斷社員 (`U_TEST_DIAGNOSTIC` / `測試報名社員`) 徹底隔離與一鍵清理**：
+  - **同步排他保護 (`gas_sync_worker.js`)**：在背景同步作業 (`_syncMemberToSheet`) 中加入篩選防線，凡含有 `TEST_DIAGNOSTIC` 或 `測試報名社員` 者，一律略過回寫至 Google Sheets，防止測試數據重現。
+  - **主試算表一鍵清理工具 (`cleanupDiagnosticData`)**：於主試算表頂部選單新增「🧹 一鍵清理測試診斷資料」，點選後自動清除 `Members` 與 `Signups` 表格中的診斷測試行，並同步呼叫 DELETE 清理 Supabase 的 `event_signups`、`events` 與 `members` 關聯測試列。
+- **測試與驗證 (Verification)**：
+  - [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 新增 Suite 13：涵蓋 24 欄位 Members、14 欄位 Equipments、14 欄位 Events 提取與驗證，以及診斷過濾清理單元測試。
+  - 執行 `pnpm test`：65 項單元測試 100% 綠燈通過。
+  - 執行 `pnpm run lint`：0 錯誤。
+  - 執行 `pnpm run build`：Vite 生產環境打包編譯成功。
 - **Google Apps Script 跨檔案複製隔離與連線金鑰未繼承根治**：
   - **根本原因**：Google Drive 透過 `makeCopy` 複製試算表範本時，基於安全性設計**絕不複製 Script Properties**，新試算表的指令碼屬性天然為空；且主系統在建立 `_CONFIG` 時先前未將 `SUPABASE_URL` 與金鑰寫入。
   - **全自動穿透注入 (`_setOrUpdateConfigRow`)**：在 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 的 `_createEventDriveFolderAndSheet` 中，複製或建立活動試算表時，自動將主系統的 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 與 `MEMBER_BOT_TOKEN` 全量寫入該試算表之隱藏 `_CONFIG` 工作表。

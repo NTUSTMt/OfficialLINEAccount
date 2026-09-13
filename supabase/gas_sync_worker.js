@@ -122,6 +122,10 @@ function _processSingleSyncItem(ss, item) {
 }
 
 function _syncMemberToSheet(ss, p) {
+  if (!p || !p.line_user_id) return;
+  if (String(p.line_user_id).includes("TEST_DIAGNOSTIC") || String(p.name).includes("測試報名社員")) {
+    return;
+  }
   var sheet = ss.getSheetByName("Members");
   if (!sheet) return;
   var data = sheet.getDataRange().getValues();

@@ -3196,7 +3196,13 @@ function sendEventDetail(replyToken, eventId, ss) {
 // 這樣一來，不懂程式的幹部也能透過簡單的點擊，一鍵觸發強大的後端自動化推播功能！
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
-  ui.createMenu('🏕️ 登山社管理工具').addItem('發送審核結果通知 Send Review Notifications', 'sendReviewNotifications').addToUi();
+  ui.createMenu('🏕️ 登山社管理工具')
+    .addItem('🔄 比對並同步至 Supabase (目前分頁)', 'openMainSyncSidebar')
+    .addSeparator()
+    .addItem('發送審核結果通知 Send Review Notifications', 'sendReviewNotifications')
+    .addSeparator()
+    .addItem('🧹 一鍵清理測試診斷資料', 'cleanupDiagnosticData')
+    .addToUi();
 }
 
 // ⭐️ 幹部發送通知引擎 (防呆除錯升級版 / 雙語升級)
@@ -8804,4 +8810,744 @@ function repairEventSheetConfig(spreadsheetIdOrUrl) {
     console.error("❌ 修復失敗:", err);
     return false;
   }
+}
+
+// ==============================================================================
+// 🧹 測試診斷資料清理引擎 (Cleanup Diagnostic Data)
+// ==============================================================================
+
+/**
+ * 徹底清理主試算表與 Supabase 中遺留的測試診斷資料 (U_TEST_DIAGNOSTIC)
+ */
+function cleanupDiagnosticData() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet() || (SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : null);
+  var deletedRows = 0;
+
+  // 1. 清理主試算表 Members 分頁
+  if (ss) {
+    var mSheet = ss.getSheetByName("Members");
+    if (mSheet) {
+      var mData = mSheet.getDataRange().getValues();
+      for (var i = mData.length - 1; i >= 1; i--) {
+        var uid = String(mData[i][0] || "").trim();
+        var uname = String(mData[i][1] || "").trim();
+        if (uid.includes("TEST_DIAGNOSTIC") || uname.includes("測試報名社員")) {
+          mSheet.deleteRow(i + 1);
+          deletedRows++;
+        }
+      }
+    }
+
+    // 2. 清理主試算表 Signups 分頁
+    var sSheet = ss.getSheetByName("Signups");
+    if (sSheet) {
+      var sData = sSheet.getDataRange().getValues();
+      for (var j = sData.length - 1; j >= 1; j--) {
+        var sCode = String(sData[j][1] || "").trim();
+        var sUid = String(sData[j][0] || "").trim();
+        if (sCode.includes("TEST_") || sUid.includes("TEST_DIAGNOSTIC")) {
+          sSheet.deleteRow(j + 1);
+          deletedRows++;
+        }
+      }
+    }
+  }
+
+  // 3. 自 Supabase 刪除測試假資料
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/event_signups?line_user_id=eq.U_TEST_DIAGNOSTIC", {
+        method: "delete",
+        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
+        muteHttpExceptions: true
+      });
+      UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/events?id=eq.EVT_TEST_DIAGNOSTIC", {
+        method: "delete",
+        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
+        muteHttpExceptions: true
+      });
+      UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/members?line_user_id=eq.U_TEST_DIAGNOSTIC", {
+        method: "delete",
+        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
+        muteHttpExceptions: true
+      });
+    } catch (sbErr) {
+      console.warn("自 Supabase 刪除測試資料例外:", sbErr);
+    }
+  }
+
+  try {
+    SpreadsheetApp.getUi().alert("✅ 清理完成！\n已自 Members/Signups 表與 Supabase 刪除測試診斷假資料 (共刪除 " + deletedRows + " 列)。");
+  } catch (uiErr) {
+    console.log("✅ 清理測試資料完成 (刪除試算表 " + deletedRows + " 列)");
+  }
+}
+
+// ==============================================================================
+// 🔄 社團主試算表 ⇄ Supabase 雙向比對與同步核心引擎
+// 支援 Members (24欄)、Equipments (14欄)、Events (14欄) 實體欄位完全對齊
+// ==============================================================================
+
+/**
+ * 開啟主試算表雙向同步側邊欄
+ */
+function openMainSyncSidebar() {
+  var html = HtmlService.createHtmlOutput(_getMainSyncSidebarHtml())
+    .setTitle("社團主表與 Supabase 雙向同步")
+    .setWidth(400);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+/**
+ * 取得當前工作表與 Supabase 的差異比對清單 (由側邊欄前端呼叫)
+ */
+function getMainSyncDiffAPI() {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return { status: "error", message: "未設定 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY！" };
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet() || (SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : null);
+    if (!ss) {
+      return { status: "error", message: "找不到試算表" };
+    }
+
+    var sheet = ss.getActiveSheet();
+    var sName = sheet.getName();
+    var sheetType = "";
+
+    if (sName === "Members" || sName.includes("社員")) {
+      sheetType = "Members";
+    } else if (sName === "Equipments" || sName.includes("裝備")) {
+      sheetType = "Equipments";
+    } else if (sName === "Events" || sName.includes("活動")) {
+      sheetType = "Events";
+    } else {
+      return {
+        status: "error",
+        message: "目前分頁「" + sName + "」非 Members、Equipments 或 Events。\n請切換至該工作表後再重新整理比對！"
+      };
+    }
+
+    var values = sheet.getDataRange().getValues();
+    if (!values || values.length < 2) {
+      return { status: "success", sheetType: sheetType, sheetName: sName, diffs: [], totalCount: 0 };
+    }
+
+    var headers = values[0];
+
+    // ============================================================================
+    // 1. Members 社員資料表比對 (24 欄位，以 系統識別碼 為主鍵)
+    // ============================================================================
+    if (sheetType === "Members") {
+      var mCols = {
+        line_user_id: _fi(headers, "系統識別碼"),
+        name: _fi(headers, "姓名"),
+        gender: _fi(headers, "性別"),
+        line_id: _fi(headers, "Line ID") > -1 ? _fi(headers, "Line ID") : _fi(headers, "LINE ID"),
+        email: _fi(headers, "聯絡信箱") > -1 ? _fi(headers, "聯絡信箱") : _fi(headers, "信箱"),
+        phone: _fi(headers, "聯絡電話") > -1 ? _fi(headers, "聯絡電話") : _fi(headers, "電話"),
+        department: _fi(headers, "系所"),
+        student_id: _fi(headers, "學號"),
+        payment_status: _fi(headers, "繳費狀態"),
+        membership_expires_at: _fi(headers, "社籍到期日"),
+        birthday: _fi(headers, "生日"),
+        id_card: _fi(headers, "證件號碼"),
+        address: _fi(headers, "聯絡地址") > -1 ? _fi(headers, "聯絡地址") : _fi(headers, "地址"),
+        outdoor_experience: _fi(headers, "爬山經驗"),
+        fitness_desc: _fi(headers, "體能測驗"),
+        proof_urls: _fi(headers, "體能證明"),
+        emergency_contact_name: _fi(headers, "緊急聯絡人姓名"),
+        emergency_contact_rel: _fi(headers, "緊急聯絡人關係"),
+        emergency_contact_phone: _fi(headers, "緊急聯絡人電話"),
+        emergency_contact_address: _fi(headers, "緊急聯絡人聯絡地址"),
+        medical_history: _fi(headers, "個人特殊病史或過敏"),
+        identity_status: _fi(headers, "身分狀態"),
+        join_membership_intent: _fi(headers, "加入社員意願"),
+        officer_intent: _fi(headers, "擔任幹部意願")
+      };
+
+      if (mCols.line_user_id === -1) {
+        return { status: "error", message: "Members 表中缺少「系統識別碼」主鍵欄位！" };
+      }
+
+      var mRes = UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/members?select=*&limit=2000", {
+        method: "get",
+        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
+        muteHttpExceptions: true
+      });
+      if (mRes.getResponseCode() !== 200) {
+        return { status: "error", message: "Supabase 讀取 members 失敗: " + mRes.getContentText() };
+      }
+
+      var sbMembers = JSON.parse(mRes.getContentText()) || [];
+      var sbMap = {};
+      for (var sm = 0; sm < sbMembers.length; sm++) {
+        sbMap[String(sbMembers[sm].line_user_id).trim()] = sbMembers[sm];
+      }
+
+      var mDiffs = [];
+      for (var r = 1; r < values.length; r++) {
+        var row = values[r];
+        var uid = String(row[mCols.line_user_id] || "").trim();
+        if (!uid || uid.includes("TEST_DIAGNOSTIC")) continue;
+
+        var sbItem = sbMap[uid];
+        var changes = [];
+
+        function checkField(colIdx, sbField, label) {
+          if (colIdx === -1) return;
+          var cellVal = row[colIdx];
+          var cellStr = (cellVal instanceof Date) ? Utilities.formatDate(cellVal, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd") : String(cellVal !== undefined && cellVal !== null ? cellVal : "").trim();
+          var sbVal = (sbItem && sbItem[sbField] !== undefined && sbItem[sbField] !== null) ? String(sbItem[sbField]).trim() : "";
+          if (cellStr !== sbVal) {
+            changes.push({ field: sbField, label: label, sheetVal: cellStr, dbVal: sbVal });
+          }
+        }
+
+        checkField(mCols.name, "name", "姓名");
+        checkField(mCols.payment_status, "payment_status", "繳費狀態");
+        checkField(mCols.membership_expires_at, "membership_expires_at", "社籍到期日");
+        checkField(mCols.phone, "phone", "電話");
+        checkField(mCols.email, "email", "信箱");
+        checkField(mCols.department, "department", "系所");
+        checkField(mCols.student_id, "student_id", "學號");
+        checkField(mCols.birthday, "birthday", "生日");
+        checkField(mCols.id_card, "id_card", "證件號碼");
+        checkField(mCols.address, "address", "地址");
+        checkField(mCols.gender, "gender", "性別");
+        checkField(mCols.line_id, "line_id", "Line ID");
+        checkField(mCols.outdoor_experience, "outdoor_experience", "爬山經驗");
+        checkField(mCols.fitness_desc, "fitness_desc", "體能測驗");
+        checkField(mCols.emergency_contact_name, "emergency_contact_name", "緊急聯絡人姓名");
+        checkField(mCols.emergency_contact_rel, "emergency_contact_rel", "緊急聯絡人關係");
+        checkField(mCols.emergency_contact_phone, "emergency_contact_phone", "緊急聯絡人電話");
+        checkField(mCols.emergency_contact_address, "emergency_contact_address", "緊急聯絡人地址");
+        checkField(mCols.medical_history, "medical_history", "特殊病史");
+        checkField(mCols.identity_status, "identity_status", "身分狀態");
+        checkField(mCols.join_membership_intent, "join_membership_intent", "入社意願");
+        checkField(mCols.officer_intent, "officer_intent", "幹部意願");
+
+        if (!sbItem) {
+          mDiffs.push({
+            id: uid,
+            name: String(row[mCols.name] || uid),
+            type: "new",
+            changes: changes,
+            fullData: _extractMemberRowData(row, mCols)
+          });
+        } else if (changes.length > 0) {
+          mDiffs.push({
+            id: uid,
+            name: String(row[mCols.name] || sbItem.name || uid),
+            type: "modified",
+            changes: changes,
+            fullData: _extractMemberRowData(row, mCols)
+          });
+        }
+      }
+
+      return {
+        status: "success",
+        sheetType: "Members",
+        sheetName: sName,
+        diffs: mDiffs,
+        totalCount: values.length - 1
+      };
+    }
+
+    // ============================================================================
+    // 2. Equipments 裝備品項表比對 (14 欄位，以 裝備代號 為主鍵)
+    // ============================================================================
+    if (sheetType === "Equipments") {
+      var eqCols = {
+        id: _fi(headers, "裝備代號"),
+        name: _fi(headers, "裝備名稱"),
+        total_qty: _fi(headers, "總數量"),
+        available_qty: _fi(headers, "剩餘數量"),
+        is_borrowable: _fi(headers, "是否外借"),
+        member_price: _fi(headers, "租金（2天）") > -1 ? _fi(headers, "租金（2天）") : _fi(headers, "租金(2天)"),
+        extra_price: _fi(headers, "租金（+1天）") > -1 ? _fi(headers, "租金（+1天）") : _fi(headers, "租金(+1天)"),
+        specs: _fi(headers, "狀態"),
+        notes: _fi(headers, "備注") > -1 ? _fi(headers, "備注") : _fi(headers, "備註"),
+        img1: _fi(headers, "圖片網址1"),
+        img2: _fi(headers, "圖片網址2"),
+        img3: _fi(headers, "圖片網址3"),
+        img4: _fi(headers, "圖片網址4"),
+        img5: _fi(headers, "圖片網址5")
+      };
+
+      if (eqCols.id === -1) {
+        return { status: "error", message: "Equipments 表中缺少「裝備代號」主鍵欄位！" };
+      }
+
+      var eqRes = UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/equipments?select=*&limit=1000", {
+        method: "get",
+        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
+        muteHttpExceptions: true
+      });
+      if (eqRes.getResponseCode() !== 200) {
+        return { status: "error", message: "Supabase 讀取 equipments 失敗: " + eqRes.getContentText() };
+      }
+
+      var sbEquips = JSON.parse(eqRes.getContentText()) || [];
+      var eqMap = {};
+      for (var se = 0; se < sbEquips.length; se++) {
+        eqMap[String(sbEquips[se].id).trim()] = sbEquips[se];
+      }
+
+      var eqDiffs = [];
+      for (var er = 1; er < values.length; er++) {
+        var eqRow = values[er];
+        var eqId = String(eqRow[eqCols.id] || "").trim();
+        if (!eqId) continue;
+
+        var sbEq = eqMap[eqId];
+        var eqChanges = [];
+
+        function checkEqField(colIdx, sbField, label, isNum) {
+          if (colIdx === -1) return;
+          var val = eqRow[colIdx];
+          var str = isNum ? String(parseInt(String(val).replace(/[^\d]/g, ""), 10) || 0) : String(val !== undefined && val !== null ? val : "").trim();
+          var sbStr = (sbEq && sbEq[sbField] !== undefined && sbEq[sbField] !== null) ? String(sbEq[sbField]).trim() : "";
+          if (str !== sbStr) {
+            eqChanges.push({ field: sbField, label: label, sheetVal: str, dbVal: sbStr });
+          }
+        }
+
+        checkEqField(eqCols.name, "name", "裝備名稱");
+        checkEqField(eqCols.total_qty, "total_qty", "總數量", true);
+        checkEqField(eqCols.available_qty, "available_qty", "剩餘數量", true);
+        checkEqField(eqCols.member_price, "member_price_per_day", "租金(2天)", true);
+        checkEqField(eqCols.extra_price, "non_member_price_per_day", "租金(+1天)", true);
+        checkEqField(eqCols.specs, "specs", "狀態規格");
+        checkEqField(eqCols.notes, "notes", "備註");
+
+        var isBorrowableStr = (eqRow[eqCols.is_borrowable] === "是" || eqRow[eqCols.is_borrowable] === true) ? "true" : "false";
+        var sbBorrowableStr = (sbEq && sbEq.is_borrowable !== undefined) ? String(sbEq.is_borrowable) : "true";
+        if (isBorrowableStr !== sbBorrowableStr) {
+          eqChanges.push({ field: "is_borrowable", label: "是否外借", sheetVal: (isBorrowableStr === "true" ? "是" : "否"), dbVal: (sbBorrowableStr === "true" ? "是" : "否") });
+        }
+
+        if (!sbEq) {
+          eqDiffs.push({
+            id: eqId,
+            name: String(eqRow[eqCols.name] || eqId),
+            type: "new",
+            changes: eqChanges,
+            fullData: _extractEquipmentRowData(eqRow, eqCols)
+          });
+        } else if (eqChanges.length > 0) {
+          eqDiffs.push({
+            id: eqId,
+            name: String(eqRow[eqCols.name] || sbEq.name || eqId),
+            type: "modified",
+            changes: eqChanges,
+            fullData: _extractEquipmentRowData(eqRow, eqCols)
+          });
+        }
+      }
+
+      return {
+        status: "success",
+        sheetType: "Equipments",
+        sheetName: sName,
+        diffs: eqDiffs,
+        totalCount: values.length - 1
+      };
+    }
+
+    // ============================================================================
+    // 3. Events 活動資訊表比對 (14 欄位，以 活動編號 為主鍵)
+    // ============================================================================
+    if (sheetType === "Events") {
+      var evCols = {
+        id: _fi(headers, "活動編號"),
+        name: _fi(headers, "活動名稱"),
+        cost: _fi(headers, "預計費用") > -1 ? _fi(headers, "預計費用") : _fi(headers, "費用"),
+        startDate: _fi(headers, "活動開始日期") > -1 ? _fi(headers, "活動開始日期") : _fi(headers, "開始日期"),
+        endDate: _fi(headers, "活動結束日期") > -1 ? _fi(headers, "活動結束日期") : _fi(headers, "結束日期"),
+        deadline: _fi(headers, "報名截止日期") > -1 ? _fi(headers, "報名截止日期") : _fi(headers, "截止日期"),
+        status: _fi(headers, "報名狀態") > -1 ? _fi(headers, "報名狀態") : _fi(headers, "狀態"),
+        summary: _fi(headers, "簡介"),
+        itinerary: _fi(headers, "詳細行程") > -1 ? _fi(headers, "詳細行程") : _fi(headers, "行程"),
+        cover_image_url: _fi(headers, "封面圖網址") > -1 ? _fi(headers, "封面圖網址") : _fi(headers, "圖片網址"),
+        drive_folder_url: _fi(headers, "雲端資料夾網址"),
+        spreadsheet_url: _fi(headers, "報名名冊網址"),
+        spreadsheet_id: _fi(headers, "試算表ID")
+      };
+
+      if (evCols.id === -1) {
+        return { status: "error", message: "Events 表中缺少「活動編號」主鍵欄位！" };
+      }
+
+      var evRes = UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/events?select=*&limit=1000", {
+        method: "get",
+        headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY },
+        muteHttpExceptions: true
+      });
+      if (evRes.getResponseCode() !== 200) {
+        return { status: "error", message: "Supabase 讀取 events 失敗: " + evRes.getContentText() };
+      }
+
+      var sbEvents = JSON.parse(evRes.getContentText()) || [];
+      var evMap = {};
+      for (var sev = 0; sev < sbEvents.length; sev++) {
+        evMap[String(sbEvents[sev].id).trim()] = sbEvents[sev];
+      }
+
+      var evDiffs = [];
+      for (var vr = 1; vr < values.length; vr++) {
+        var evRow = values[vr];
+        var evId = String(evRow[evCols.id] || "").trim();
+        if (!evId || evId.includes("TEST_DIAGNOSTIC")) continue;
+
+        var sbEv = evMap[evId];
+        var evChanges = [];
+
+        function checkEvField(colIdx, sbField, label, isDate, isNum) {
+          if (colIdx === -1) return;
+          var val = evRow[colIdx];
+          var str = "";
+          if (isDate && val instanceof Date) {
+            str = Utilities.formatDate(val, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
+          } else if (isNum) {
+            str = String(parseInt(String(val).replace(/[^\d]/g, ""), 10) || 0);
+          } else {
+            str = String(val !== undefined && val !== null ? val : "").trim();
+          }
+
+          var sbStr = (sbEv && sbEv[sbField] !== undefined && sbEv[sbField] !== null) ? String(sbEv[sbField]).trim() : "";
+          if (isDate && sbStr.includes("T")) sbStr = sbStr.split("T")[0];
+          if (str !== sbStr) {
+            evChanges.push({ field: sbField, label: label, sheetVal: str, dbVal: sbStr });
+          }
+        }
+
+        checkEvField(evCols.name, "title", "活動名稱");
+        checkEvField(evCols.cost, "fee", "費用", false, true);
+        checkEvField(evCols.startDate, "start_date", "開始日期", true);
+        checkEvField(evCols.endDate, "end_date", "結束日期", true);
+        checkEvField(evCols.status, "status", "狀態");
+        checkEvField(evCols.summary, "summary", "簡介");
+        checkEvField(evCols.itinerary, "itinerary", "行程");
+        checkEvField(evCols.spreadsheet_id, "spreadsheet_id", "試算表ID");
+
+        if (!sbEv) {
+          evDiffs.push({
+            id: evId,
+            name: String(evRow[evCols.name] || evId),
+            type: "new",
+            changes: evChanges,
+            fullData: _extractEventRowData(evRow, evCols)
+          });
+        } else if (evChanges.length > 0) {
+          evDiffs.push({
+            id: evId,
+            name: String(evRow[evCols.name] || sbEv.title || evId),
+            type: "modified",
+            changes: evChanges,
+            fullData: _extractEventRowData(evRow, evCols)
+          });
+        }
+      }
+
+      return {
+        status: "success",
+        sheetType: "Events",
+        sheetName: sName,
+        diffs: evDiffs,
+        totalCount: values.length - 1
+      };
+    }
+
+  } catch (err) {
+    console.error("getMainSyncDiffAPI 例外:", err);
+    return { status: "error", message: "比對發生例外錯誤: " + err.toString() };
+  }
+}
+
+function _extractMemberRowData(row, cols) {
+  function getStr(idx) {
+    if (idx === -1) return "";
+    var v = row[idx];
+    if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
+    return String(v !== undefined && v !== null ? v : "").trim();
+  }
+  var payStatus = getStr(cols.payment_status);
+  var isOfficial = payStatus.includes("已繳費") || payStatus.includes("Paid");
+
+  return {
+    line_user_id: getStr(cols.line_user_id),
+    name: getStr(cols.name),
+    gender: getStr(cols.gender),
+    line_id: getStr(cols.line_id),
+    email: getStr(cols.email),
+    phone: getStr(cols.phone),
+    department: getStr(cols.department),
+    student_id: getStr(cols.student_id),
+    payment_status: payStatus,
+    membership_expires_at: getStr(cols.membership_expires_at) || null,
+    birthday: getStr(cols.birthday),
+    id_card: getStr(cols.id_card),
+    address: getStr(cols.address),
+    outdoor_experience: getStr(cols.outdoor_experience),
+    fitness_desc: getStr(cols.fitness_desc),
+    emergency_contact_name: getStr(cols.emergency_contact_name),
+    emergency_contact_rel: getStr(cols.emergency_contact_rel),
+    emergency_contact_phone: getStr(cols.emergency_contact_phone),
+    emergency_contact_address: getStr(cols.emergency_contact_address),
+    medical_history: getStr(cols.medical_history),
+    identity_status: getStr(cols.identity_status),
+    join_membership_intent: getStr(cols.join_membership_intent),
+    officer_intent: getStr(cols.officer_intent),
+    is_official_member: isOfficial,
+    updated_at: new Date().toISOString()
+  };
+}
+
+function _extractEquipmentRowData(row, cols) {
+  function getVal(idx) {
+    return idx > -1 ? row[idx] : "";
+  }
+  var images = [];
+  for (var k = 1; k <= 5; k++) {
+    var u = String(getVal(cols["img" + k]) || "").trim();
+    if (u && u.startsWith("http")) images.push(u);
+  }
+
+  var isBorrow = (getVal(cols.is_borrowable) === "是" || getVal(cols.is_borrowable) === true);
+
+  return {
+    id: String(getVal(cols.id) || "").trim(),
+    name: String(getVal(cols.name) || "").trim(),
+    total_qty: parseInt(String(getVal(cols.total_qty) || 0).replace(/[^\d]/g, ""), 10) || 0,
+    available_qty: parseInt(String(getVal(cols.available_qty) || 0).replace(/[^\d]/g, ""), 10) || 0,
+    is_borrowable: isBorrow,
+    member_price_per_day: parseInt(String(getVal(cols.member_price) || 0).replace(/[^\d]/g, ""), 10) || 0,
+    non_member_price_per_day: parseInt(String(getVal(cols.extra_price) || 0).replace(/[^\d]/g, ""), 10) || 0,
+    specs: String(getVal(cols.specs) || "").trim(),
+    notes: String(getVal(cols.notes) || "").trim(),
+    images: images,
+    updated_at: new Date().toISOString()
+  };
+}
+
+function _extractEventRowData(row, cols) {
+  function getStr(idx) {
+    if (idx === -1) return "";
+    var v = row[idx];
+    if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
+    return String(v !== undefined && v !== null ? v : "").trim();
+  }
+  var startD = getStr(cols.startDate).replace(/\//g, "-").split(" ")[0];
+  var endD = getStr(cols.endDate).replace(/\//g, "-").split(" ")[0] || startD;
+  var dLine = getStr(cols.deadline).replace(/\//g, "-");
+  var deadlineIso = dLine ? (dLine.includes("T") ? dLine : dLine + "T23:59:59Z") : null;
+
+  return {
+    id: getStr(cols.id),
+    title: getStr(cols.name),
+    fee: parseInt(getStr(cols.cost).replace(/[^\d]/g, ""), 10) || 0,
+    start_date: startD || null,
+    end_date: endD || null,
+    deadline: deadlineIso,
+    status: getStr(cols.status) || "未來開放",
+    summary: getStr(cols.summary),
+    itinerary: getStr(cols.itinerary),
+    cover_image_url: getStr(cols.cover_image_url),
+    drive_folder_url: getStr(cols.drive_folder_url) || null,
+    spreadsheet_url: getStr(cols.spreadsheet_url) || null,
+    spreadsheet_id: getStr(cols.spreadsheet_id) || null,
+    updated_at: new Date().toISOString()
+  };
+}
+
+/**
+ * 批次將主試算表異動確認同步至 Supabase (由側邊欄確認按鈕呼叫)
+ */
+function commitMainSyncToSupabaseAPI(sheetType, diffs) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { status: "error", message: "缺少 Supabase 連線設定" };
+  }
+  if (!diffs || !diffs.length) {
+    return { status: "success", message: "無任何需同步的項目", count: 0 };
+  }
+
+  try {
+    var tableName = "";
+    var pk = "";
+    if (sheetType === "Members") {
+      tableName = "members";
+      pk = "line_user_id";
+    } else if (sheetType === "Equipments") {
+      tableName = "equipments";
+      pk = "id";
+    } else if (sheetType === "Events") {
+      tableName = "events";
+      pk = "id";
+    } else {
+      return { status: "error", message: "未知的工作表類型: " + sheetType };
+    }
+
+    var url = SUPABASE_URL + "/rest/v1/" + tableName + "?on_conflict=" + pk;
+    var batchPayload = [];
+    for (var i = 0; i < diffs.length; i++) {
+      if (diffs[i].fullData) {
+        batchPayload.push(diffs[i].fullData);
+      }
+    }
+
+    if (batchPayload.length === 0) {
+      return { status: "success", message: "無有效資料", count: 0 };
+    }
+
+    var res = UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+        "Prefer": "resolution=merge-duplicates,return=representation"
+      },
+      payload: JSON.stringify(batchPayload),
+      muteHttpExceptions: true
+    });
+
+    var code = res.getResponseCode();
+    if (code >= 200 && code < 300) {
+      console.log("⚡ [MainSync] 成功同步 " + batchPayload.length + " 筆 " + tableName + " 至 Supabase！");
+      return {
+        status: "success",
+        message: "成功同步 " + batchPayload.length + " 筆資料至 Supabase！",
+        count: batchPayload.length
+      };
+    } else {
+      return {
+        status: "error",
+        message: "寫入 Supabase 失敗 (HTTP " + code + "): " + res.getContentText()
+      };
+    }
+  } catch (err) {
+    console.error("commitMainSyncToSupabaseAPI 例外:", err);
+    return { status: "error", message: "同步例外: " + err.toString() };
+  }
+}
+
+/**
+ * 產生主表同步專用的現代化響應式 HTML 側邊欄介面
+ */
+function _getMainSyncSidebarHtml() {
+  return '<!DOCTYPE html>' +
+    '<html><head><meta charset="utf-8">' +
+    '<style>' +
+    ':root{--p:#2563eb;--p-h:#1d4ed8;--bg:#f8fafc;--card:#ffffff;--txt:#0f172a;--mut:#64748b;--border:#e2e8f0;--succ:#16a34a;--warn:#ea580c;}' +
+    '*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}' +
+    'body{background:var(--bg);color:var(--txt);padding:14px;font-size:13px;line-height:1.5;}' +
+    '.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);}' +
+    '.title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:6px;}' +
+    '.badge{font-size:11px;padding:2px 8px;border-radius:12px;background:#e0e7ff;color:#3730a3;font-weight:600;}' +
+    '.btn-refresh{background:#f1f5f9;border:1px solid var(--border);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;}' +
+    '.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,0.03);}' +
+    '.card-title{font-weight:600;font-size:13px;margin-bottom:4px;display:flex;justify-content:space-between;}' +
+    '.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}' +
+    '.stat-box{background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center;}' +
+    '.stat-val{font-size:18px;font-weight:700;color:var(--p);}' +
+    '.stat-lbl{font-size:11px;color:var(--mut);}' +
+    '.diff-list{max-height:360px;overflow-y:auto;margin-bottom:12px;}' +
+    '.diff-item{background:#ffffff;border-left:3px solid var(--p);border-radius:4px;padding:8px;margin-bottom:8px;border:1px solid var(--border);border-left-width:3px;}' +
+    '.diff-item.new{border-left-color:var(--succ);}' +
+    '.diff-header{font-weight:600;font-size:12px;display:flex;justify-content:space-between;margin-bottom:4px;}' +
+    '.diff-tag{font-size:10px;padding:1px 5px;border-radius:4px;font-weight:bold;}' +
+    '.diff-tag.mod{background:#fef3c7;color:#92400e;}' +
+    '.diff-tag.new{background:#dcfce7;color:#166534;}' +
+    '.change-row{font-size:11px;color:var(--mut);margin-top:2px;}' +
+    '.val-old{text-decoration:line-through;color:#94a3b8;margin-right:4px;}' +
+    '.val-new{color:#0f172a;font-weight:600;}' +
+    '.btn-commit{width:100%;padding:10px;background:var(--p);color:#fff;border:none;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;display:flex;justify-content:center;align-items:center;gap:6px;}' +
+    '.btn-commit:disabled{background:#94a3b8;cursor:not-allowed;}' +
+    '.loading{text-align:center;padding:24px 0;color:var(--mut);font-size:12px;}' +
+    '.alert-err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:8px 10px;border-radius:6px;margin-bottom:10px;font-size:12px;}' +
+    '</style></head>' +
+    '<body>' +
+    '<div class="hdr">' +
+    '  <div class="title">🔄 主表同步 <span id="sheetBadge" class="badge">偵測中...</span></div>' +
+    '  <button class="btn-refresh" onclick="loadDiff()">重新整理</button>' +
+    '</div>' +
+    '<div id="alertBox"></div>' +
+    '<div class="stat-grid">' +
+    '  <div class="stat-box"><div id="statTotal" class="stat-val">-</div><div class="stat-lbl">試算表總筆數</div></div>' +
+    '  <div class="stat-box"><div id="statDiff" class="stat-val">-</div><div class="stat-lbl">待同步異動筆數</div></div>' +
+    '</div>' +
+    '<div id="contentArea"><div class="loading">正在比對試算表與 Supabase 資料庫...</div></div>' +
+    '<div id="actionArea" style="display:none;">' +
+    '  <button id="btnSync" class="btn-commit" onclick="commitSync()">確認同步至 Supabase</button>' +
+    '</div>' +
+    '<script>' +
+    'var currentDiffs = []; var currentSheetType = "";' +
+    'function loadDiff(){' +
+    '  document.getElementById("alertBox").innerHTML = "";' +
+    '  document.getElementById("actionArea").style.display = "none";' +
+    '  document.getElementById("contentArea").innerHTML = \'<div class="loading">正在比對試算表與 Supabase...</div>\';' +
+    '  google.script.run.withSuccessHandler(onDiffLoaded).withFailureHandler(onError).getMainSyncDiffAPI();' +
+    '}' +
+    'function onDiffLoaded(res){' +
+    '  if(res.status === "error"){' +
+    '    document.getElementById("sheetBadge").innerText = "無法比對";' +
+    '    document.getElementById("contentArea").innerHTML = "";' +
+    '    document.getElementById("alertBox").innerHTML = \'<div class="alert-err">\' + res.message.replace(/\\n/g, "<br>") + \'</div>\';' +
+    '    return;' +
+    '  }' +
+    '  currentDiffs = res.diffs || [];' +
+    '  currentSheetType = res.sheetType;' +
+    '  document.getElementById("sheetBadge").innerText = res.sheetName;' +
+    '  document.getElementById("statTotal").innerText = res.totalCount || 0;' +
+    '  document.getElementById("statDiff").innerText = currentDiffs.length;' +
+    '  if(currentDiffs.length === 0){' +
+    '    document.getElementById("contentArea").innerHTML = \'<div class="card" style="text-align:center;color:#16a34a;padding:24px 10px;">✅ 試算表內容與 Supabase 資料庫完全一致！無待同步異動。</div>\';' +
+    '    return;' +
+    '  }' +
+    '  var html = \'<div class="diff-list">\';' +
+    '  for(var i=0; i<currentDiffs.length; i++){' +
+    '    var d = currentDiffs[i];' +
+    '    var isNew = (d.type === "new");' +
+    '    html += \'<div class="diff-item \' + (isNew ? "new" : "") + \'">\';' +
+    '    html += \'  <div class="diff-header"><span>\' + d.name + \' <span style="font-weight:normal;color:#64748b;">(\' + d.id + \')</span></span><span class="diff-tag \' + (isNew ? "new" : "mod") + \'">\' + (isNew ? "新增列" : "有異動") + \'</span></div>\';' +
+    '    if(isNew){' +
+    '      html += \'  <div class="change-row">試算表新加入之列，將直接 Upsert 寫入資料庫。</div>\';' +
+    '    } else {' +
+    '      for(var c=0; c<d.changes.length; c++){' +
+    '        var ch = d.changes[c];' +
+    '        html += \'  <div class="change-row">\' + ch.label + \': <span class="val-old">\' + (ch.dbVal || "(空)") + \'</span> ➔ <span class="val-new">\' + (ch.sheetVal || "(空)") + \'</span></div>\';' +
+    '      }' +
+    '    }' +
+    '    html += \'</div>\';' +
+    '  }' +
+    '  html += \'</div>\';' +
+    '  document.getElementById("contentArea").innerHTML = html;' +
+    '  document.getElementById("actionArea").style.display = "block";' +
+    '}' +
+    'function commitSync(){' +
+    '  var btn = document.getElementById("btnSync");' +
+    '  btn.disabled = true;' +
+    '  btn.innerText = "正在同步寫入 Supabase...";' +
+    '  google.script.run.withSuccessHandler(onSyncCommitted).withFailureHandler(onError).commitMainSyncToSupabaseAPI(currentSheetType, currentDiffs);' +
+    '}' +
+    'function onSyncCommitted(res){' +
+    '  if(res.status === "success"){' +
+    '    alert("🎉 " + res.message);' +
+    '    loadDiff();' +
+    '  } else {' +
+    '    alert("❌ 同步失敗: " + res.message);' +
+    '    document.getElementById("btnSync").disabled = false;' +
+    '    document.getElementById("btnSync").innerText = "確認同步至 Supabase";' +
+    '  }' +
+    '}' +
+    'function onError(err){' +
+    '  alert("系統錯誤: " + err.toString());' +
+    '  document.getElementById("contentArea").innerHTML = "";' +
+    '}' +
+    'window.onload = loadDiff;' +
+    '</script>' +
+    '</body></html>';
 }
