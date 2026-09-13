@@ -279,8 +279,10 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
 export const saveMemberProfileToSupabase = async (
   userId: string,
   formData: ProfileData
-): Promise<boolean> => {
-  if (!supabase || !userId) return false;
+): Promise<{ success: boolean; message?: string }> => {
+  if (!supabase || !userId) {
+    return { success: false, message: 'Supabase 未連線或缺少使用者識別碼' };
+  }
 
   try {
     const proofsList = formData.strengthProof
@@ -290,6 +292,8 @@ export const saveMemberProfileToSupabase = async (
           .filter((s) => s.startsWith('http'))
       : [];
 
+    const cleanBirthday = formData.birthday ? formData.birthday.replace(/\//g, '-').trim() : '';
+
     const payload = {
       name: formData.name.trim(),
       gender: formData.gender,
@@ -298,7 +302,7 @@ export const saveMemberProfileToSupabase = async (
       phone: formData.phone.trim(),
       department: formData.department.trim(),
       student_id: formData.studentId.trim(),
-      birthday: formData.birthday ? formData.birthday.replace(/\//g, '-') : '',
+      birthday: cleanBirthday || null,
       id_card: formData.idNumber.trim(),
       address: formData.studentAddr.trim(),
       outdoor_experience: formData.exp.trim(),
@@ -321,14 +325,18 @@ export const saveMemberProfileToSupabase = async (
 
     if (error) {
       console.warn('[Supabase] 儲存個人資料失敗:', error.message);
-      return false;
+      return { success: false, message: error.message };
+    }
+
+    if (data?.success === false) {
+      return { success: false, message: data?.message || '儲存未成功' };
     }
 
     console.log('%c⚡ [DataSource: Supabase] 社員個人資料已極速儲存！', 'color: #10b981; font-weight: bold;', data);
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.warn('[Supabase] 儲存個人資料例外:', err);
-    return false;
+    return { success: false, message: err?.message || String(err) };
   }
 };
 

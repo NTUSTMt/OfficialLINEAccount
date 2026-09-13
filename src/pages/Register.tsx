@@ -417,10 +417,13 @@ function Register({ userId }: { userId: string }) {
       }
 
       // 2. ⚡ 100% 直寫 Supabase (< 50ms，以安全 RPC 限制本人存取，DB Triggers 自動排入 sync_queue)
+      let saveRes: { success: boolean; message?: string } = { success: false };
       if (userId && userId !== 'TEST_USER_ID') {
-        sbSaved = await saveMemberProfileToSupabase(userId, finalFormData);
+        saveRes = await saveMemberProfileToSupabase(userId, finalFormData);
+        sbSaved = saveRes.success;
       } else {
         sbSaved = true;
+        saveRes = { success: true };
       }
 
       if (sbSaved) {
@@ -457,7 +460,7 @@ function Register({ userId }: { userId: string }) {
           liff.closeWindow();
         }
       } else {
-        alert(t('register.alert.saveFailed', { message: t('register.alert.contactAdmin') }));
+        alert(t('register.alert.saveFailed', { message: saveRes.message || t('register.alert.contactAdmin') }));
       }
     } catch (err) {
       console.error('提交表單失敗:', err);

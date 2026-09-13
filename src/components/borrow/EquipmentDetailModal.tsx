@@ -225,7 +225,17 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
           userId
         }))
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        if (text.includes('找不到以下指令碼函式：doPost')) {
+          throw new Error('Google Apps Script 尚未部署最新版程式碼（找不到 doPost 函式），請於 GAS 管理部署中建立新版本！');
+        }
+        throw new Error(text.slice(0, 120) || '伺服器回應非預期格式');
+      }
+
       if (data.status === 'success') {
         const newImgUrl = data.imageUrl || '';
         onEquipmentUpdated?.({ id: equipment.id, imageUrl: newImgUrl });
@@ -237,9 +247,9 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
       } else {
         alert(data.message || t('borrow.modal.photoSaveFailed'));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('儲存裝備照片失敗:', err);
-      alert(t('borrow.modal.photoSaveFailed'));
+      alert(err?.message ? `照片更新失敗：${err.message}` : t('borrow.modal.photoSaveFailed'));
     } finally {
       setIsSavingPhotos(false);
     }

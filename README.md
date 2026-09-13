@@ -3,11 +3,31 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.76` (v0.1.76)
+- **當前版本**：`0.1.77` (v0.1.77)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 177. 個資儲存異常透明揭露與空生日 null 防呆、裝備照片儲存防崩潰診斷機制 (v0.1.77)
+- **個人資料儲存錯誤透明化與 DATE 型別相容 (`src/utils/supabaseClient.ts`, `src/pages/Register.tsx`)**：
+  - **根本原因排查**：幹部成員儲存個資時若遭遇資料庫 Trigger 限制（如 `officers.title` NOT NULL）或 DATE 欄位不接受空字串 `''` 時，先前 `saveMemberProfileToSupabase` 僅回傳 `boolean: false`，導致前端只顯示「儲存失敗：請聯絡社團管理員」之泛用提示，無法得知底層原因。
+  - **架構升級**：
+    - `saveMemberProfileToSupabase` 回傳結構升級為 `{ success: boolean; message?: string }`。
+    - 生日欄位為空時轉為 `null`（而非空字串 `''`），確保 PostgreSQL DATE 解析相容。
+    - 前端 Alert 直接顯示資料庫回傳之詳細錯誤訊息，使問題能精準定位與排除。
+- **裝備照片儲存防崩潰診斷與 Supabase JSONB 陣列對齊 (`src/components/borrow/EquipmentDetailModal.tsx`, `gas_modules/06_Helper_Services.js`)**：
+  - **根本原因排查**：
+    - 經診斷線上 Google Apps Script Web App 端點，發現遠端回應 `找不到以下指令碼函式：doPost`（代表線上 GAS 部署尚未發布包含 `doPost` 之新版本），前端以 `res.json()` 解析 HTML 報錯頁面時拋出 JSON SyntaxError，直接被 catch 區塊捕捉並顯示預設的「照片更新失敗，請稍後再試。」。
+    - 後端在更新 Supabase `equipments` 時，欄位應為 `images`（JSONB 陣列）而非純文字 `image_url`。
+  - **機制實作**：
+    - 在 `EquipmentDetailModal.tsx` 中改採 `res.text()` 安全剖析，若收到 GAS 尚未部署 `doPost` 的 HTML 回應，彈出明確提示引導管理員至 GAS 發布新版部署。
+    - 在 `gas_modules/06_Helper_Services.js` 中將更新 Supabase `equipments` 欄位修正為 `images: finalUrls`。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 76/76 項測試 100% 全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+  - GAS 整合：`src/gas.js` 重新同步，0 語法錯誤。
+
 
 ### 176. 幹部意願狀態轉變推播機制（防修改個資重複通知）與 officer_role 全面同步 officers.title 職稱 (v0.1.76)
 - **幹部招募意願精確推播（由無變有才通知）(`src/pages/Register.tsx`, `gas_modules/06_Helper_Services.js`, `src/gas.js`)**：

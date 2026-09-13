@@ -2554,7 +2554,7 @@ function _handleUpdateEquipmentImages(json) {
         method: "patch",
         contentType: "application/json",
         headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
-        payload: JSON.stringify({ image_url: imgUrlCombined, updated_at: new Date().toISOString() }),
+        payload: JSON.stringify({ images: finalUrls, updated_at: new Date().toISOString() }),
         muteHttpExceptions: true
       });
     }
