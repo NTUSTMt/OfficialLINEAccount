@@ -253,9 +253,34 @@ function _pushMessage(userId, text) {
 
 function pushAdminMessage(text) {
   var adminGroupId = PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID') || ADMIN_GROUP_ID;
-  if (!adminGroupId || !text) return;
-  _lineAPI('push', ADMIN_BOT_TOKEN || MEMBER_BOT_TOKEN, {
-    to: adminGroupId,
-    messages: [{ type: 'text', text: text }]
-  });
+  if (!adminGroupId || !text) {
+    console.warn("pushAdminMessage 略過: ADMIN_GROUP_ID 未設定或內容為空 (adminGroupId: " + adminGroupId + ")");
+    return;
+  }
+  var token = ADMIN_BOT_TOKEN || MEMBER_BOT_TOKEN;
+  if (!token) {
+    console.warn("pushAdminMessage 略過: ADMIN_BOT_TOKEN 與 MEMBER_BOT_TOKEN 皆未設定");
+    return;
+  }
+  try {
+    var res = _lineAPI('push', token, {
+      to: adminGroupId,
+      messages: [{ type: 'text', text: text }]
+    });
+    var code = res ? res.getResponseCode() : 0;
+    var content = res ? res.getContentText() : "";
+    console.log("pushAdminMessage 送出結果 (HTTP " + code + "): " + content);
+
+    // 若使用 ADMIN_BOT_TOKEN 失敗 (如 400, 404 群組未邀請該機器人)，嘗試使用 MEMBER_BOT_TOKEN 備援
+    if (code !== 200 && ADMIN_BOT_TOKEN && MEMBER_BOT_TOKEN && token !== MEMBER_BOT_TOKEN) {
+      console.warn("主要 Token 推播失敗，切換 MEMBER_BOT_TOKEN 備援重試...");
+      var fbRes = _lineAPI('push', MEMBER_BOT_TOKEN, {
+        to: adminGroupId,
+        messages: [{ type: 'text', text: text }]
+      });
+      console.log("MEMBER_BOT_TOKEN 備援推播結果: (HTTP " + (fbRes ? fbRes.getResponseCode() : 0) + "): " + (fbRes ? fbRes.getContentText() : ""));
+    }
+  } catch (err) {
+    console.error("pushAdminMessage 例外拋出: " + err.toString());
+  }
 }

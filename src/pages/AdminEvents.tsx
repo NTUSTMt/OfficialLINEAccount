@@ -11,7 +11,8 @@ import {
   updateSignupStatusInSupabase,
   updateEventStatusInSupabase,
   saveEventToSupabase,
-  registerOfficerToSupabase
+  registerOfficerToSupabase,
+  getLastSupabaseError
 } from '../utils/supabaseClient';
 import type { AdminEvent, SignupApplicant } from '../types/event';
 import { AdminEventCard } from '../components/admin/AdminEventCard';
@@ -59,6 +60,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     return getCache<AdminEvent[]>(CACHE_KEY_ADMIN_EVENTS) || [];
   });
   const [loadingEvents, setLoadingEvents] = useState(false);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [eventSortBy, setEventSortBy] = useState<'startDate' | 'deadline' | 'status'>('deadline');
@@ -108,6 +110,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     try {
       let loadedFromSb = false;
+      let sbErrorDetail: string | null = null;
       if (!forceRefresh) {
         try {
           // ⚡ 1. 優先從 Supabase 秒級讀取活動清單與報名人數統計 (< 50ms)
@@ -119,31 +122,50 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
             setLoadingEvents(false);
             setAuthLoading(false);
+            setErrorNotice(null);
+          } else {
+            sbErrorDetail = getLastSupabaseError();
           }
-        } catch (sbErr) {
+        } catch (sbErr: any) {
           console.warn('[AdminEvents] Supabase 活動讀取例外:', sbErr);
+          sbErrorDetail = sbErr?.message || String(sbErr);
         }
       }
 
       // 2. 若 Supabase 未配置、未命中幹部或強制重新整理，無縫由 GAS 備援
       if (!loadedFromSb || forceRefresh) {
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
-        const data = await res.json();
-        if (data.status === 'success' && Array.isArray(data.events)) {
-          setIsOfficer(true);
-          setEvents(data.events);
-          setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
+        try {
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
+          const data = await res.json();
+          if (data.status === 'success' && Array.isArray(data.events)) {
+            setIsOfficer(true);
+            setEvents(data.events);
+            setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
+            if (sbErrorDetail) {
+              setErrorNotice(`[Supabase 載入異常已改走 GAS 備援]: ${sbErrorDetail}`);
+            } else {
+              setErrorNotice(null);
+            }
 
-          // ⚡ 若經由 GAS 認證為幹部，自動同步至 Supabase officers 表，下次即可享受 < 50ms 秒開
-          if (userId && userId !== 'TEST_USER_ID') {
-            registerOfficerToSupabase(userId, data.officerName, data.officerRole).catch(() => {});
+            // ⚡ 若經由 GAS 認證為幹部，自動同步至 Supabase officers 表，下次即可享受 < 50ms 秒開
+            if (userId && userId !== 'TEST_USER_ID') {
+              registerOfficerToSupabase(userId, data.officerName, data.officerRole).catch(() => {});
+            }
+          } else if (!loadedFromSb) {
+            setIsOfficer(false);
+            if (sbErrorDetail) {
+              setErrorNotice(`[Supabase RPC 錯誤]: ${sbErrorDetail}`);
+            }
           }
-        } else if (!loadedFromSb) {
-          setIsOfficer(false);
+        } catch (gasErr: any) {
+          if (sbErrorDetail) {
+            setErrorNotice(`[Supabase 錯誤]: ${sbErrorDetail}\n[GAS 連線錯誤]: ${gasErr?.message || String(gasErr)}`);
+          }
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('獲取管理端活動失敗:', err);
+      setErrorNotice(err?.message || String(err));
     } finally {
       setAuthLoading(false);
       setLoadingEvents(false);
@@ -772,6 +794,26 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           {isEditing ? t('adminEvents.tabEdit', '編輯活動') : `+ ${t('adminEvents.tabCreate', '發布新活動')}`}
         </button>
       </div>
+
+      {/* 錯誤/警告提示 Banner */}
+      {errorNotice && (
+        <div style={{
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          marginBottom: '16px',
+          fontSize: '12px',
+          color: '#991b1b',
+          fontFamily: 'monospace',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
+          lineHeight: '1.5'
+        }}>
+          <strong>系統提示 (Diagnostics):</strong><br />
+          {errorNotice}
+        </div>
+      )}
 
       {/* 區塊一：活動列表與審核總覽 (Tab: list) */}
       {activeTab === 'list' && (

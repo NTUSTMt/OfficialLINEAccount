@@ -49,8 +49,8 @@ BEGIN
         COALESCE(jsonb_agg(h), '[]'::jsonb),
         COALESCE(SUM(
             CASE 
-                WHEN (status LIKE '%已確認%' OR status LIKE '%已核對%' OR status LIKE '%已繳%' OR status = 'Paid')
-                     AND status NOT LIKE '%待確認%' AND status NOT LIKE '%待核對%' AND status NOT LIKE '%Checking%'
+                WHEN (status::text LIKE '%已確認%' OR status::text LIKE '%已核對%' OR status::text LIKE '%已繳%' OR status::text = 'Paid')
+                     AND status::text NOT LIKE '%待確認%' AND status::text NOT LIKE '%待核對%' AND status::text NOT LIKE '%Checking%'
                 THEN display_amount 
                 ELSE 0 
             END
@@ -153,8 +153,8 @@ BEGIN
         JOIN events e ON s.event_id = e.id
         LEFT JOIN reflections r ON r.event_id = e.id AND r.line_user_id = p_line_user_id
         WHERE s.line_user_id = p_line_user_id
-          AND (s.status LIKE '%正取%' OR s.status LIKE '%Confirmed%' OR s.status LIKE '%錄取%')
-          AND s.status NOT LIKE '%取消%'
+          AND (s.status::text LIKE '%正取%' OR s.status::text LIKE '%Confirmed%' OR s.status::text LIKE '%錄取%')
+          AND s.status::text NOT LIKE '%取消%'
           AND e.end_date < CURRENT_DATE
         ORDER BY e.end_date DESC
     ) t;

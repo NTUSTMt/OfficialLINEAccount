@@ -4,7 +4,7 @@ import { AlertCircle, Award, Star } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
-import { fetchAchievementsFromSupabase, saveReflectionToSupabase } from '../utils/supabaseClient';
+import { fetchAchievementsFromSupabase, saveReflectionToSupabase, getLastSupabaseError } from '../utils/supabaseClient';
 import '../App.css';
 
 interface Reflection {
@@ -54,26 +54,44 @@ function Achievements({ userId }: { userId: string }) {
         if (userId && userId !== 'TEST_USER_ID') {
           // ⚡ 1. 優先嘗試從 Supabase 秒開活動成就 (< 50ms)
           let loadedFromSupabase = false;
+          let sbErrorDetail: string | null = null;
           try {
             const sbData = await fetchAchievementsFromSupabase(userId);
             if (sbData && !ignore) {
               setData(sbData);
               setLoading(false);
               loadedFromSupabase = true;
+            } else {
+              sbErrorDetail = getLastSupabaseError();
             }
-          } catch (sbErr) {
+          } catch (sbErr: any) {
             console.warn('[Achievements] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
+            sbErrorDetail = sbErr?.message || String(sbErr);
           }
 
           // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
           if (!loadedFromSupabase) {
-            const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_past_activities&userId=${userId}`));
-            const result = await res.json();
-            if (!ignore) {
-              if (result.status === 'success') {
-                setData(result.data);
-              } else {
-                setError(result.message || t('achievements.error.loadFailed'));
+            try {
+              const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_past_activities&userId=${userId}`));
+              const result = await res.json();
+              if (!ignore) {
+                if (result.status === 'success') {
+                  setData(result.data);
+                } else {
+                  const gasMsg = result.message || '無法取得歷史活動與成就';
+                  const fullMsg = sbErrorDetail
+                    ? `[Supabase RPC 錯誤]: ${sbErrorDetail} | [GAS]: ${gasMsg}`
+                    : gasMsg;
+                  setError(fullMsg);
+                }
+              }
+            } catch (gasErr: any) {
+              if (!ignore) {
+                const gasErrMsg = gasErr?.message || String(gasErr);
+                const fullMsg = sbErrorDetail
+                  ? `[Supabase RPC 錯誤]: ${sbErrorDetail} | [GAS 連線錯誤]: ${gasErrMsg}`
+                  : `載入歷史活動失敗: ${gasErrMsg}`;
+                setError(fullMsg);
               }
             }
           }
@@ -351,8 +369,23 @@ function Achievements({ userId }: { userId: string }) {
     <div className="app-container animate-fade-in" style={{ padding: '16px', maxWidth: '600px', margin: '0 auto' }}>
 
       {error && (
-        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+        <div style={{
+          backgroundColor: '#fee2e2',
+          border: '1px solid #fca5a5',
+          color: '#991b1b',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          marginBottom: '16px',
+          fontSize: '12px',
+          fontFamily: 'monospace',
+          lineHeight: '1.5',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '8px'
+        }}>
+          <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
           <span>{error}</span>
         </div>
       )}

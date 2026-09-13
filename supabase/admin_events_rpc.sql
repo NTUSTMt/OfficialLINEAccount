@@ -135,10 +135,10 @@ BEGIN
             'spreadsheetUrl', COALESCE(e.spreadsheet_url, ''),
             'spreadsheetId', COALESCE(e.spreadsheet_id, ''),
             'stats', jsonb_build_object(
-                'total', COUNT(s.id) FILTER (WHERE s.status NOT LIKE '%取消%' AND s.status NOT LIKE '%Cancelled%'),
-                'accepted', COUNT(s.id) FILTER (WHERE s.status LIKE '%正取%'),
-                'waitlisted', COUNT(s.id) FILTER (WHERE s.status LIKE '%備取%'),
-                'pending', COUNT(s.id) FILTER (WHERE s.status NOT LIKE '%正取%' AND s.status NOT LIKE '%備取%' AND s.status NOT LIKE '%取消%' AND s.status NOT LIKE '%Cancelled%')
+                'total', COUNT(s.id) FILTER (WHERE s.status::text NOT LIKE '%取消%' AND s.status::text NOT LIKE '%Cancelled%'),
+                'accepted', COUNT(s.id) FILTER (WHERE s.status::text LIKE '%正取%'),
+                'waitlisted', COUNT(s.id) FILTER (WHERE s.status::text LIKE '%備取%'),
+                'pending', COUNT(s.id) FILTER (WHERE s.status::text NOT LIKE '%正取%' AND s.status::text NOT LIKE '%備取%' AND s.status::text NOT LIKE '%取消%' AND s.status::text NOT LIKE '%Cancelled%')
             ),
             'rowNumber', ROW_NUMBER() OVER (ORDER BY e.start_date DESC) + 1
         ) AS evt
@@ -212,8 +212,8 @@ BEGIN
             'reviewResult', s.status,
             'notifyStatus', '',
             'payStatus', CASE 
-                WHEN s.status LIKE '%已繳費%' OR s.status LIKE '%Paid%' THEN '已繳費 Paid'
-                WHEN s.status LIKE '%待確認%' OR s.status LIKE '%Checking%' THEN '待確認 Checking'
+                WHEN s.status::text LIKE '%已繳費%' OR s.status::text LIKE '%Paid%' THEN '已繳費 Paid'
+                WHEN s.status::text LIKE '%待確認%' OR s.status::text LIKE '%Checking%' THEN '待確認 Checking'
                 ELSE '未繳費'
             END,
             'remark', COALESCE(s.notes, '')

@@ -446,7 +446,9 @@ function Register({ userId }: { userId: string }) {
           };
           const wasWilling = isWilling(initialOfficerIntent);
           const isNowWilling = isWilling(finalFormData.intendOfficer);
-          const isOfficerIntentNew = isNewUser ? isNowWilling : (!wasWilling && isNowWilling);
+          const isOfficerIntentNew = isNewUser
+            ? isNowWilling
+            : ((!wasWilling && isNowWilling) || (isNowWilling && (finalFormData.intendOfficer || '').trim() !== (originalFormData?.intendOfficer || '').trim()));
 
           // 比對實際異動欄位 (僅針對更新既有個人檔案之使用者，新註冊則顯示完整歡迎)
           const changedFields: string[] = [];

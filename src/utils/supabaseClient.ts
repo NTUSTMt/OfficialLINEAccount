@@ -14,6 +14,12 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured()
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+let lastSupabaseError: string | null = null;
+export const getLastSupabaseError = (): string | null => lastSupabaseError;
+export const setLastSupabaseError = (err: string | null): void => {
+  lastSupabaseError = err;
+};
+
 interface SupabaseEquipmentRow {
   id: string;
   name: string;
@@ -249,15 +255,19 @@ export const fetchDashboardFromSupabase = async (userId: string): Promise<Supaba
 
     if (error) {
       console.warn('[Supabase] 讀取個人主頁失敗，啟用 GAS fallback:', error.message);
+      lastSupabaseError = error.message;
       return null;
     }
 
     if (!data) return null;
 
+    lastSupabaseError = null;
     console.log('%c⚡ [DataSource: Supabase] 個人主頁資料讀取成功！(連線延遲 < 100ms)', 'color: #10b981; font-weight: bold;', data);
     return data as SupabaseDashboardData;
-  } catch (err) {
-    console.warn('[Supabase] 個人主頁讀取例外，啟用 GAS fallback:', err);
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.warn('[Supabase] 個人主頁讀取例外，啟用 GAS fallback:', errMsg);
+    lastSupabaseError = errMsg;
     return null;
   }
 };
@@ -550,15 +560,19 @@ export const fetchAchievementsFromSupabase = async (userId: string): Promise<Sup
 
     if (error) {
       console.warn('[Supabase] 讀取活動成就失敗，啟用 GAS fallback:', error.message);
+      lastSupabaseError = error.message;
       return null;
     }
 
     if (!data) return null;
 
+    lastSupabaseError = null;
     console.log('%c⚡ [DataSource: Supabase] 活動成就紀錄秒開成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
     return data as SupabaseAchievementData;
-  } catch (err) {
-    console.warn('[Supabase] 讀取活動成就例外，啟用 GAS fallback:', err);
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.warn('[Supabase] 讀取活動成就例外，啟用 GAS fallback:', errMsg);
+    lastSupabaseError = errMsg;
     return null;
   }
 };
@@ -684,11 +698,13 @@ export const fetchAdminEventsFromSupabase = async (
 
     if (error) {
       console.warn('[Supabase] 讀取後台活動失敗，啟用 GAS fallback:', error.message);
+      lastSupabaseError = error.message;
       return null;
     }
 
     if (!data) return null;
 
+    lastSupabaseError = null;
     if (data.isOfficer) {
       console.log('%c⚡ [DataSource: Supabase] 後台活動與報名統計讀取成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
       return {
@@ -703,8 +719,10 @@ export const fetchAdminEventsFromSupabase = async (
       isOfficer: false,
       events: []
     };
-  } catch (err) {
-    console.warn('[Supabase] 讀取後台活動例外，啟用 GAS fallback:', err);
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.warn('[Supabase] 讀取後台活動例外，啟用 GAS fallback:', errMsg);
+    lastSupabaseError = errMsg;
     return null;
   }
 };

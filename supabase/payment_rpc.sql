@@ -52,7 +52,7 @@ BEGIN
         END IF;
 
         IF v_member.payment_status IS NULL 
-           OR (v_member.payment_status NOT LIKE '%已繳費%' AND v_member.payment_status NOT LIKE '%Paid%') THEN
+           OR (v_member.payment_status::text NOT LIKE '%已繳費%' AND v_member.payment_status::text NOT LIKE '%Paid%') THEN
             v_is_unpaid := TRUE;
         END IF;
 
@@ -64,7 +64,7 @@ BEGIN
         END IF;
 
         -- 只要不是「待確認 Checking」且（未繳費或過期）且有加入意願
-        IF (v_member.payment_status IS NULL OR (v_member.payment_status NOT LIKE '%待確認%' AND v_member.payment_status NOT LIKE '%Checking%')) THEN
+        IF (v_member.payment_status IS NULL OR (v_member.payment_status::text NOT LIKE '%待確認%' AND v_member.payment_status::text NOT LIKE '%Checking%')) THEN
             IF (v_is_unpaid OR v_is_expired) AND v_has_intent THEN
                 v_membership := jsonb_build_array(
                     jsonb_build_object(
@@ -91,13 +91,13 @@ BEGIN
         FROM event_signups s
         JOIN events e ON s.event_id = e.id
         WHERE s.line_user_id = p_line_user_id
-          AND (s.status LIKE '%正取%' OR s.status LIKE '%Confirmed%')
-          AND s.status NOT LIKE '%取消%'
+          AND (s.status::text LIKE '%正取%' OR s.status::text LIKE '%Confirmed%')
+          AND s.status::text NOT LIKE '%取消%'
           AND (s.payment_status IS NULL OR (
-              s.payment_status NOT LIKE '%已繳費%' 
-              AND s.payment_status NOT LIKE '%Paid%'
-              AND s.payment_status NOT LIKE '%待確認%'
-              AND s.payment_status NOT LIKE '%Checking%'
+              s.payment_status::text NOT LIKE '%已繳費%' 
+              AND s.payment_status::text NOT LIKE '%Paid%'
+              AND s.payment_status::text NOT LIKE '%待確認%'
+              AND s.payment_status::text NOT LIKE '%Checking%'
           ))
         ORDER BY e.start_date ASC
     ) t;
@@ -124,13 +124,13 @@ BEGIN
         LEFT JOIN loan_items li ON l.id = li.loan_id
         LEFT JOIN equipments eq_sub ON li.equipment_id = eq_sub.id
         WHERE l.line_user_id = p_line_user_id
-          AND l.status NOT LIKE '%取消%'
-          AND l.status NOT LIKE '%歸還%'
+          AND l.status::text NOT LIKE '%取消%'
+          AND l.status::text NOT LIKE '%歸還%'
           AND (l.payment_status IS NULL OR (
-              l.payment_status NOT LIKE '%已繳費%' 
-              AND l.payment_status NOT LIKE '%Paid%'
-              AND l.payment_status NOT LIKE '%待確認%'
-              AND l.payment_status NOT LIKE '%Checking%'
+              l.payment_status::text NOT LIKE '%已繳費%' 
+              AND l.payment_status::text NOT LIKE '%Paid%'
+              AND l.payment_status::text NOT LIKE '%待確認%'
+              AND l.payment_status::text NOT LIKE '%Checking%'
           ))
         ORDER BY l.start_date ASC
     ) t;

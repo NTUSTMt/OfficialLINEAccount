@@ -4,7 +4,7 @@ import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { appendAuthToken } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
-import { fetchDashboardFromSupabase, cancelEquipmentLoanInSupabase, cancelEventSignupInSupabase } from '../utils/supabaseClient';
+import { fetchDashboardFromSupabase, cancelEquipmentLoanInSupabase, cancelEventSignupInSupabase, getLastSupabaseError } from '../utils/supabaseClient';
 import {
   ShieldCheck,
   ChevronRight,
@@ -122,6 +122,7 @@ function Dashboard({ userId }: { userId: string }) {
         }
 
         const requestUserId = userId || 'TEST_USER_ID';
+        let sbErrorDetail: string | null = null;
 
         // ⚡ 1. 優先嘗試由 Supabase 極速讀取個人儀表板 (< 100ms 秒開)
         try {
@@ -130,26 +131,43 @@ function Dashboard({ userId }: { userId: string }) {
             setData(sbData);
             setLoading(false);
             loadedFromSupabase = true;
+          } else {
+            sbErrorDetail = getLastSupabaseError();
           }
-        } catch (sbErr) {
+        } catch (sbErr: any) {
           console.warn('[Dashboard] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
+          sbErrorDetail = sbErr?.message || String(sbErr);
         }
 
         // 🐢 2. 背景或備援向 GAS 請求最新即時狀態
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${requestUserId}`));
-        const result = await res.json();
+        try {
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${requestUserId}`));
+          const result = await res.json();
 
-        if (!ignore) {
-          if (result.status === 'success' && result.data) {
-            setData(result.data);
-          } else if (!loadedFromSupabase) {
-            setError(result.message || t('dashboard.error.loadProfileFailed'));
+          if (!ignore) {
+            if (result.status === 'success' && result.data) {
+              setData(result.data);
+            } else if (!loadedFromSupabase) {
+              const gasMsg = result.message || 'GAS 未回傳資料';
+              const fullMsg = sbErrorDetail
+                ? `[Supabase RPC 錯誤]: ${sbErrorDetail}\n[GAS 備援回應]: ${gasMsg}`
+                : gasMsg;
+              setError(fullMsg);
+            }
+          }
+        } catch (gasFetchErr: any) {
+          if (!ignore && !loadedFromSupabase) {
+            const gasErrMsg = gasFetchErr?.message || String(gasFetchErr);
+            const fullMsg = sbErrorDetail
+              ? `[Supabase RPC 錯誤]: ${sbErrorDetail}\n[GAS 連線錯誤]: ${gasErrMsg}`
+              : `網路或伺服器連線異常: ${gasErrMsg}`;
+            setError(fullMsg);
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('載入儀表板失敗:', err);
         if (!ignore && !loadedFromSupabase) {
-          setError(t('dashboard.error.networkError'));
+          setError(err?.message || String(err));
         }
       } finally {
         if (!ignore) {
@@ -290,7 +308,24 @@ function Dashboard({ userId }: { userId: string }) {
       <div className="error-state-container" style={{ padding: '40px 20px', textAlign: 'center' }}>
         <AlertCircle size={48} color="#ef4444" style={{ margin: '0 auto 16px', display: 'block' }} />
         <h3>{t('dashboard.error.title')}</h3>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{error}</p>
+        <div style={{
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          margin: '16px auto 24px auto',
+          maxWidth: '560px',
+          textAlign: 'left',
+          fontSize: '12px',
+          color: '#991b1b',
+          fontFamily: 'monospace',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
+          lineHeight: '1.5'
+        }}>
+          <strong>原始錯誤細節 (Original Error Details):</strong><br />
+          {error}
+        </div>
         <button className="btn btn-primary" onClick={() => setRefreshKey(k => k + 1)} style={{ padding: '10px 24px' }}>
           {t('dashboard.error.retry')}
         </button>

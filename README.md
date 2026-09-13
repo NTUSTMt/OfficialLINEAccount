@@ -3,11 +3,35 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.90` (v0.1.90)
+- **當前版本**：`0.1.91` (v0.1.91)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 191. 修復 PostgreSQL 列舉型別比對錯誤 (ENUM Typecast)、落實全端錯誤透明顯示與增強幹部意願推播 (v0.1.91)
+- **問題回報與根本原因 (Root Cause Analysis)**：
+  - **個人主頁、出隊成就、活動管理無法載入 (圖一、圖二、圖三)**：
+    - 在 Supabase 中，`event_signups.status`、`loans.status` 與 `payment_status` 為自定義 ENUM 列舉型別。
+    - 在 PostgreSQL 中，列舉型別**未定義 `LIKE` / `NOT LIKE` 運算子**。RPC 函式直接比對（如 `s.status LIKE '%正取%'`）時會拋出致命錯誤：`ERROR 42883: operator does not exist: event_signup_status_enum ~~ unknown`。
+    - 連鎖反應導致 `get_my_dashboard`、`get_my_achievements`、`get_admin_events_rpc` 呼叫失敗，前端 fallback 至無實作或空白的 GAS 備援，造成個人主頁報錯「無法讀取個人資料」、出隊成就報錯「無法取得歷史活動與成就」、活動管理因試算表無活動而呈現「目前尚未建立任何活動」。
+  - **幹部意願推播未送達群組**：
+    - 前端原先去重邏輯在使用者已勾選幹部意願且再次儲存時，會因 `wasWilling` 為真而判定非新意願略過推播。
+    - GAS `pushAdminMessage` 在未綁定 `ADMIN_GROUP_ID` 或機器人 Token 與群組成員身分不相符時靜默結束，缺少回應檢查與日誌。
+- **架構設計與修復實作 (Architecture & Fix Implementation)**：
+  - **PostgreSQL 顯式轉型修復 (`::text`)**：
+    - 修復 [supabase/get_my_dashboard.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/get_my_dashboard.sql)、[supabase/history_achievements_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/history_achievements_rpc.sql)、[supabase/admin_events_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql)、[supabase/payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/payment_rpc.sql) 中所有對列舉欄位之 `LIKE` 與 `NOT LIKE` 查詢，全面加入 `::text`（例如 `s.status::text LIKE '%正取%'`、`s.payment_status::text NOT LIKE '%已繳費%'`）。
+    - 建立整合修復檔 [supabase/fix_enum_typecast_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_enum_typecast_rpc.sql)，提供幹部一鍵在 Supabase SQL Editor 執行以立刻修復線上資料庫。
+  - **全端錯誤透明顯示 (遵守 AGENTS.md 錯誤處理規範)**：
+    - 於 [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts) 實作 `getLastSupabaseError` 與錯誤全域保留機制，不再將 Supabase 錯誤靜默吞噬為 `null`。
+    - 於 [src/pages/Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx) 錯誤畫面實作「原始錯誤細節 (Original Error Details)」代碼展示框，完整透明列印出 Supabase RPC 與 GAS 備援之原始報錯訊息。
+    - 於 [src/pages/Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx) 與 [src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 補全原始診斷訊息呈現，確保測試異常時能一眼辨識斷點。
+  - **幹部意願推播健全化與 Token 備援**：
+    - 更新 [src/pages/Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx)：無論新舊使用者，只要在送出時確認勾選「我有意願成為社團幹部」或明確更動該欄位，均能精準觸發 `isOfficerIntentNew`。
+    - 更新 [gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js) 與 [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之 `pushAdminMessage`：加入 `ADMIN_GROUP_ID` 缺失告警、LINE API HTTP 狀態碼與內容日誌；若 `ADMIN_BOT_TOKEN` 推播非 200，自動無縫啟用 `MEMBER_BOT_TOKEN` 進行備援推播。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
 
 ### 190. 主試算表全量覆蓋排除內部 sync_queue 佇列表，專注 9 大核心業務資料表 (v0.1.90)
 - **需求與架構設計 (Requirements & Architecture)**：
