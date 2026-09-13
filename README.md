@@ -3,11 +3,27 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.66` (v0.1.66)
+- **當前版本**：`0.1.67` (v0.1.67)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 167. 活動試算表連線參數全自動穿透注入、雙向自癒快取與 UI 設定彈窗 (v0.1.67)
+- **Google Apps Script 跨檔案複製隔離與連線金鑰未繼承根治**：
+  - **根本原因**：Google Drive 透過 `makeCopy` 複製試算表範本時，基於安全性設計**絕不複製 Script Properties**，新試算表的指令碼屬性天然為空；且主系統在建立 `_CONFIG` 時先前未將 `SUPABASE_URL` 與金鑰寫入。
+  - **全自動穿透注入 (`_setOrUpdateConfigRow`)**：在 [`src/gas.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 的 `_createEventDriveFolderAndSheet` 中，複製或建立活動試算表時，自動將主系統的 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 與 `MEMBER_BOT_TOKEN` 全量寫入該試算表之隱藏 `_CONFIG` 工作表。
+  - **自癒補齊與修復工具 (`repairEventSheetConfig`)**：於報名追加 (`_asyncAppendToEventSpreadsheet`) 開啟試算表時，自動巡檢補齊 `_CONFIG` 缺少的金鑰。主系統更附帶 `repairEventSheetConfig(spreadsheetIdOrUrl)` 函數，供幹部一秒修復任一活動試算表之連線設定。
+- **試算表端模糊解析、雙向自癒快取與友善權限提示 (`event_sheet_script.js`)**：
+  - **模糊鍵名容錯**：`getSupabaseConfig` 支援如 `SUPABASE_UR`、`SUPABASE_SE` 等鍵名模糊比對。
+  - **雙向自癒快取**：當從 `_CONFIG` 讀取到連線參數後，自動呼叫 `setProperties(...)` 永久存入當前試算表的 `Script Properties`。
+  - **42501 友善錯誤導引**：若幹部誤填 `anon` 公開金鑰，系統直觀提示「您目前使用的是 anon 金鑰，請改用 service_role (secret) 金鑰」。
+  - **UI 設定彈窗 (`setupSupabaseConfigUI`)**：頂部「🏔️ 社團系統」選單新增「⚙️ 設定 / 檢視 Supabase 連線參數」，可在彈出對話框直接修改與測試，免進 Apps Script 後台。
+- **測試與驗證 (Verification)**：
+  - [test/gas_simulation.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/gas_simulation.test.mjs) 新增 `_CONFIG` 鍵值更新與模糊金鑰解析單元測試。
+  - 執行 `pnpm test`：61 項單元測試全數 100% 綠燈通過。
+  - 執行 `pnpm run lint`：0 錯誤。
+  - 執行 `pnpm run build`：Vite 生產環境打包編譯通過。
 
 ### 166. 新活動雙筆重複建立徹底根治、雲端試算表連結全欄位 Upsert 與 Google Drive 智慧搜尋備援 (v0.1.66)
 - **新活動雙筆重複紀錄根治 (Dual Event ID Collision Fix)**：

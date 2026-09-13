@@ -7446,6 +7446,21 @@ function getEventSignupsAPI(ss, eventId, userId) {
 // ==============================================================================
 
 /**
+ * 安全設置或更新 _CONFIG 工作表中的鍵值對
+ */
+function _setOrUpdateConfigRow(configSheet, key, value) {
+  if (!configSheet || !key) return;
+  var cData = configSheet.getDataRange().getValues();
+  for (var i = 0; i < cData.length; i++) {
+    if (String(cData[i][0]).trim().toUpperCase() === String(key).trim().toUpperCase()) {
+      configSheet.getRange(i + 1, 2).setValue(value !== undefined && value !== null ? value : "");
+      return;
+    }
+  }
+  configSheet.appendRow([key, value !== undefined && value !== null ? value : ""]);
+}
+
+/**
  * 建立活動專屬雲端硬碟資料夾 (YYYY/MM/DD_活動名稱) 與報名名冊試算表
  */
 function _createEventDriveFolderAndSheet(payload, eventId) {
@@ -7516,38 +7531,25 @@ function _createEventDriveFolderAndSheet(payload, eventId) {
       signupSheet.setFrozenRows(1);
     }
 
-    // 3. 建立或動態更新隱藏之 _CONFIG 工作表，記錄活動編號供綁定腳本比對
+    // 3. 建立或動態更新隱藏之 _CONFIG 工作表，記錄活動編號並全自動注入 Supabase 與 LINE Bot 連線金鑰
     var configSheet = newSS.getSheetByName("_CONFIG");
     if (!configSheet) {
       configSheet = newSS.insertSheet("_CONFIG");
       configSheet.appendRow(["KEY", "VALUE"]);
-      configSheet.appendRow(["EVENT_ID", eventId]);
-      configSheet.appendRow(["EVENT_NAME", eventName]);
-      configSheet.appendRow(["FOLDER_ID", folderId]);
-      configSheet.appendRow(["CREATED_AT", new Date().toISOString()]);
-      configSheet.hideSheet();
-    } else {
-      var cData = configSheet.getDataRange().getValues();
-      var foundEventId = false;
-      var foundEventName = false;
-      var foundFolderId = false;
-      for (var c = 0; c < cData.length; c++) {
-        if (cData[c][0] === "EVENT_ID") {
-          configSheet.getRange(c + 1, 2).setValue(eventId);
-          foundEventId = true;
-        } else if (cData[c][0] === "EVENT_NAME") {
-          configSheet.getRange(c + 1, 2).setValue(eventName);
-          foundEventName = true;
-        } else if (cData[c][0] === "FOLDER_ID") {
-          configSheet.getRange(c + 1, 2).setValue(folderId);
-          foundFolderId = true;
-        }
-      }
-      if (!foundEventId) configSheet.appendRow(["EVENT_ID", eventId]);
-      if (!foundEventName) configSheet.appendRow(["EVENT_NAME", eventName]);
-      if (!foundFolderId) configSheet.appendRow(["FOLDER_ID", folderId]);
-      configSheet.hideSheet();
     }
+
+    var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL") || "";
+    var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY") || "";
+    var botToken = PropertiesService.getScriptProperties().getProperty("MEMBER_BOT_TOKEN") || PropertiesService.getScriptProperties().getProperty("LINE_BOT_TOKEN") || "";
+
+    _setOrUpdateConfigRow(configSheet, "EVENT_ID", eventId);
+    _setOrUpdateConfigRow(configSheet, "EVENT_NAME", eventName);
+    _setOrUpdateConfigRow(configSheet, "FOLDER_ID", folderId);
+    _setOrUpdateConfigRow(configSheet, "CREATED_AT", new Date().toISOString());
+    if (sbUrl) _setOrUpdateConfigRow(configSheet, "SUPABASE_URL", sbUrl);
+    if (sbKey) _setOrUpdateConfigRow(configSheet, "SUPABASE_SERVICE_ROLE_KEY", sbKey);
+    if (botToken) _setOrUpdateConfigRow(configSheet, "MEMBER_BOT_TOKEN", botToken);
+    configSheet.hideSheet();
 
     return {
       folderUrl: folderUrl,
@@ -8009,6 +8011,25 @@ function _asyncAppendToEventSpreadsheet(eventId, signupData, eventName) {
 
     // 3. 開啟活動專屬試算表並動態對齊欄位寫入 (相容 16 欄、17 欄與 22 欄結構)
     var eventSS = SpreadsheetApp.openById(ssId);
+
+    // ⚡ 自動巡檢並補齊該活動試算表 _CONFIG 中的 Supabase 與 Bot 連線設定 (自癒機制)
+    try {
+      var cfgSheet = eventSS.getSheetByName("_CONFIG");
+      if (cfgSheet) {
+        var curSbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL") || "";
+        var curSbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY") || "";
+        var curBotToken = PropertiesService.getScriptProperties().getProperty("MEMBER_BOT_TOKEN") || PropertiesService.getScriptProperties().getProperty("LINE_BOT_TOKEN") || "";
+        _setOrUpdateConfigRow(cfgSheet, "EVENT_ID", eventId);
+        if (evtName) _setOrUpdateConfigRow(cfgSheet, "EVENT_NAME", evtName);
+        if (curSbUrl) _setOrUpdateConfigRow(cfgSheet, "SUPABASE_URL", curSbUrl);
+        if (curSbKey) _setOrUpdateConfigRow(cfgSheet, "SUPABASE_SERVICE_ROLE_KEY", curSbKey);
+        if (curBotToken) _setOrUpdateConfigRow(cfgSheet, "MEMBER_BOT_TOKEN", curBotToken);
+        cfgSheet.hideSheet();
+      }
+    } catch (cfgErr) {
+      console.warn("自癒更新專屬試算表 _CONFIG 警告:", cfgErr);
+    }
+
     var sheet = eventSS.getSheetByName("報名名冊") || eventSS.getSheets()[0];
     var phoneStr = signupData.phone ? ("'" + String(signupData.phone)) : "";
     var emerPhoneStr = signupData.emerPhone ? ("'" + String(signupData.emerPhone)) : "";
@@ -8750,5 +8771,37 @@ function processUpdateEquipmentImages(payload) {
       status: "error",
       message: "更新裝備照片時發生後端錯誤: " + error.toString()
     })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * 一鍵修復特定活動試算表的 _CONFIG 連線參數
+ * 幹部可直接在 Apps Script 執行此函數並帶入活動試算表 ID 或網址
+ */
+function repairEventSheetConfig(spreadsheetIdOrUrl) {
+  var ssId = _extractSpreadsheetId(spreadsheetIdOrUrl);
+  if (!ssId) {
+    console.error("❌ 請提供有效的試算表 ID 或網址！");
+    return false;
+  }
+  try {
+    var ss = SpreadsheetApp.openById(ssId);
+    var cfg = ss.getSheetByName("_CONFIG");
+    if (!cfg) {
+      cfg = ss.insertSheet("_CONFIG");
+      cfg.appendRow(["KEY", "VALUE"]);
+    }
+    var curSbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL") || "";
+    var curSbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY") || "";
+    var curBotToken = PropertiesService.getScriptProperties().getProperty("MEMBER_BOT_TOKEN") || PropertiesService.getScriptProperties().getProperty("LINE_BOT_TOKEN") || "";
+    if (curSbUrl) _setOrUpdateConfigRow(cfg, "SUPABASE_URL", curSbUrl);
+    if (curSbKey) _setOrUpdateConfigRow(cfg, "SUPABASE_SERVICE_ROLE_KEY", curSbKey);
+    if (curBotToken) _setOrUpdateConfigRow(cfg, "MEMBER_BOT_TOKEN", curBotToken);
+    cfg.hideSheet();
+    console.log("✅ 成功修復試算表 (" + ssId + ") 的 _CONFIG 連線設定！");
+    return true;
+  } catch (err) {
+    console.error("❌ 修復失敗:", err);
+    return false;
   }
 }

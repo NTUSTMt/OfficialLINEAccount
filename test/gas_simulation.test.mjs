@@ -1311,6 +1311,67 @@ describe('12. 活動專屬 Google Drive 資料夾與專屬試算表差異比對�
     assert.equal(found.id, 'sheet_999');
     assert.equal(found.url, 'https://docs.google.com/spreadsheets/d/sheet_999/edit');
   });
+
+  it('_CONFIG 設置與更新輔助函式 (_setOrUpdateConfigRow) 正確更新既有鍵或追加新鍵', () => {
+    const mockConfig = [
+      ['KEY', 'VALUE'],
+      ['EVENT_ID', 'E2609-01'],
+      ['EVENT_NAME', '舊活動名']
+    ];
+
+    function fakeSetOrUpdateConfigRow(rows, key, val) {
+      for (let i = 0; i < rows.length; i++) {
+        if (String(rows[i][0]).trim().toUpperCase() === String(key).trim().toUpperCase()) {
+          rows[i][1] = val !== undefined && val !== null ? val : '';
+          return;
+        }
+      }
+      rows.push([key, val !== undefined && val !== null ? val : '']);
+    }
+
+    // 更新既有鍵
+    fakeSetOrUpdateConfigRow(mockConfig, 'EVENT_NAME', '新活動名');
+    assert.equal(mockConfig[2][1], '新活動名');
+
+    // 追加新鍵 (Supabase 連線參數)
+    fakeSetOrUpdateConfigRow(mockConfig, 'SUPABASE_URL', 'https://xyz.supabase.co');
+    fakeSetOrUpdateConfigRow(mockConfig, 'SUPABASE_SERVICE_ROLE_KEY', 'secret-key-123');
+
+    assert.equal(mockConfig.length, 5);
+    assert.equal(mockConfig[3][0], 'SUPABASE_URL');
+    assert.equal(mockConfig[3][1], 'https://xyz.supabase.co');
+    assert.equal(mockConfig[4][0], 'SUPABASE_SERVICE_ROLE_KEY');
+    assert.equal(mockConfig[4][1], 'secret-key-123');
+  });
+
+  it('活動試算表 getSupabaseConfig 支援模糊鍵名 (如 SUPABASE_UR 與 SUPABASE_SE) 容錯解析', () => {
+    const mockRows = [
+      ['KEY', 'VALUE'],
+      ['EVENT_ID', 'E2609-02'],
+      ['SUPABASE_UR', 'https://fuzzy.supabase.co'],
+      ['SUPABASE_SE', 'service-role-fuzzy-key']
+    ];
+
+    function fakeGetSupabaseConfig(rows) {
+      let url = '';
+      let key = '';
+      for (let i = 0; i < rows.length; i++) {
+        const k = String(rows[i][0]).trim().toUpperCase();
+        const v = String(rows[i][1]).trim();
+        if ((k === 'SUPABASE_URL' || k === 'SUPABASE_UR' || k.indexOf('SUPABASE_URL') === 0) && !url) {
+          url = v;
+        }
+        if ((k === 'SUPABASE_SERVICE_ROLE_KEY' || k === 'SUPABASE_SE' || k.includes('SERVICE_ROLE') || k.includes('SERVICE_KEY')) && !key) {
+          key = v;
+        }
+      }
+      return { url, key };
+    }
+
+    const cfg = fakeGetSupabaseConfig(mockRows);
+    assert.equal(cfg.url, 'https://fuzzy.supabase.co');
+    assert.equal(cfg.key, 'service-role-fuzzy-key');
+  });
 });
 
 

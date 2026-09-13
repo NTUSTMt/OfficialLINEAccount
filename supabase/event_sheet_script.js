@@ -7,6 +7,9 @@
 /**
  * 安全取得 Supabase 連線參數 (優先由 Script Properties 讀取，次由 _CONFIG 工作表讀取)
  */
+/**
+ * 安全取得 Supabase 連線參數 (優先由 Script Properties 讀取，次由 _CONFIG 工作表讀取並自動雙向快取)
+ */
 function getSupabaseConfig() {
   var props = PropertiesService.getScriptProperties();
   var url = props.getProperty("SUPABASE_URL") || "";
@@ -18,12 +21,32 @@ function getSupabaseConfig() {
     if (cfgSheet) {
       var data = cfgSheet.getDataRange().getValues();
       for (var i = 0; i < data.length; i++) {
-        var k = String(data[i][0]).trim();
+        var k = String(data[i][0]).trim().toUpperCase();
         var v = String(data[i][1]).trim();
-        if (k === "SUPABASE_URL" && !url) url = v;
-        if ((k === "SUPABASE_SERVICE_ROLE_KEY" || k === "SUPABASE_ANON_KEY") && !key) key = v;
+        // 彈性相容 SUPABASE_URL 與 SUPABASE_UR
+        if ((k === "SUPABASE_URL" || k === "SUPABASE_UR" || k.indexOf("SUPABASE_URL") === 0) && !url) {
+          url = v;
+        }
+        // 彈性相容 SUPABASE_SERVICE_ROLE_KEY, SUPABASE_SE, SERVICE_ROLE_KEY 等
+        if ((k === "SUPABASE_SERVICE_ROLE_KEY" || k === "SUPABASE_SE" || k.includes("SERVICE_ROLE") || k.includes("SERVICE_KEY") || k === "SUPABASE_ANON_KEY") && !key) {
+          key = v;
+        }
       }
     }
+  }
+
+  // 自動自癒快取至當前專案之 Script Properties 中，避免重複查詢工作表
+  if (url && key) {
+    try {
+      var curUrl = props.getProperty("SUPABASE_URL");
+      var curKey = props.getProperty("SUPABASE_SERVICE_ROLE_KEY");
+      if (!curUrl || !curKey) {
+        props.setProperties({
+          "SUPABASE_URL": url,
+          "SUPABASE_SERVICE_ROLE_KEY": key
+        });
+      }
+    } catch (cacheErr) {}
   }
 
   return { url: url, key: key };
@@ -39,9 +62,45 @@ function onOpen() {
       .addItem("🔄 比對差異並同步至 Supabase", "openDiffSidebar")
       .addSeparator()
       .addItem("📢 一鍵推播正備取錄取通知", "sendAdmissionNotifications")
+      .addSeparator()
+      .addItem("⚙️ 設定 / 檢視 Supabase 連線參數", "setupSupabaseConfigUI")
       .addToUi();
   } catch (e) {
     console.warn("無法取得 UI (可能在無 UI 環境中執行):", e);
+  }
+}
+
+/**
+ * 提供彈窗讓幹部可直接在試算表設定/檢視 Supabase 連線參數
+ */
+function setupSupabaseConfigUI() {
+  var ui = SpreadsheetApp.getUi();
+  var cfg = getSupabaseConfig();
+  var promptUrl = ui.prompt("⚙️ 設定 Supabase 連線", "目前 SUPABASE_URL: " + (cfg.url ? cfg.url : "未設定") + "\n\n請輸入 SUPABASE_URL (若不修改請按確定)：", ui.ButtonSet.OK_CANCEL);
+  if (promptUrl.getSelectedButton() !== ui.Button.OK) return;
+  var newUrl = promptUrl.getResponseText().trim() || cfg.url;
+
+  var promptKey = ui.prompt("⚙️ 設定 Supabase 連線", "請輸入 SUPABASE_SERVICE_ROLE_KEY (secret 管理員金鑰)：", ui.ButtonSet.OK_CANCEL);
+  if (promptKey.getSelectedButton() !== ui.Button.OK) return;
+  var newKey = promptKey.getResponseText().trim() || cfg.key;
+
+  if (newUrl && newKey) {
+    PropertiesService.getScriptProperties().setProperties({
+      "SUPABASE_URL": newUrl,
+      "SUPABASE_SERVICE_ROLE_KEY": newKey
+    });
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var cfgSheet = ss.getSheetByName("_CONFIG");
+    if (!cfgSheet) {
+      cfgSheet = ss.insertSheet("_CONFIG");
+      cfgSheet.appendRow(["KEY", "VALUE"]);
+    }
+    _setOrUpdateConfigRow(cfgSheet, "SUPABASE_URL", newUrl);
+    _setOrUpdateConfigRow(cfgSheet, "SUPABASE_SERVICE_ROLE_KEY", newKey);
+    cfgSheet.hideSheet();
+    ui.alert("✅ 成功！Supabase 連線已儲存並快取至 Script Properties 與 _CONFIG。");
+  } else {
+    ui.alert("⚠️ 設定未儲存：URL 或金鑰不得為空。");
   }
 }
 
@@ -196,7 +255,14 @@ function getSignupsDiff() {
   });
 
   if (res.getResponseCode() !== 200) {
-    return { status: "error", message: "Supabase 連線失敗：" + res.getContentText() };
+    var errText = res.getContentText();
+    if (errText.includes("42501") || errText.includes("permission denied")) {
+      return {
+        status: "error",
+        message: "❌ Supabase 連線失敗 (權限不足 42501)：您目前使用的是 anon (公開訪客) 金鑰，無法讀取報名個資！\n請至 Supabase 後台 Project Settings ➔ API 複製「service_role (secret)」超級管理員金鑰，並透過頂部選單「⚙️ 設定 / 檢視 Supabase 連線參數」更新。"
+      };
+    }
+    return { status: "error", message: "Supabase 連線失敗：" + errText };
   }
 
   var sbSignups = JSON.parse(res.getContentText());
