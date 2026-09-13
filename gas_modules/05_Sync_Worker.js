@@ -578,4 +578,3 @@ function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus, eve
     return false;
   }
 }
-

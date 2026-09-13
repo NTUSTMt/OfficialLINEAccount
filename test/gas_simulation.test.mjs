@@ -2115,3 +2115,160 @@ describe('15. Supabase SSOT 報名驗證、Sync Worker 全 CRUD 增刪鏡像、�
     assert.equal(res2.requiresDriveUpload, true);
   });
 });
+
+describe('16. 個人檔案動態推播訊息與出隊資格引導測試', () => {
+  // 模擬 GAS 端的 _handleNotifyProfileSaved 組裝邏輯
+  function generateProfileSavedMessage(json) {
+    var data = json.formData || json.data || {};
+    var isNew = !!json.isNewUser;
+    var name = data.name || "社員";
+    var dept = data.department || "未填寫";
+    var studentId = data.studentId ? `${data.studentId.substring(0, 2)}*****${data.studentId.substring(data.studentId.length - 2)}` : "未填寫";
+    var phone = data.phone ? `${data.phone.substring(0, 4)}***${data.phone.substring(data.phone.length - 3)}` : "未填寫";
+    var emerName = data.emerName || "未填寫";
+    var emerRel = data.emerRel || "未填寫";
+    var offIntent = data.intendOfficial || "未填寫";
+
+    var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功】" : "【✅ 基本資料已成功更新】";
+    var intro = "";
+    var details = [];
+
+    var activityMissing = [];
+    if (!String(data.name || "").trim()) activityMissing.push("姓名");
+    if (!String(data.gender || "").trim()) activityMissing.push("性別");
+    if (!String(data.phone || "").trim()) activityMissing.push("聯絡電話");
+    if (!String(data.birthday || "").trim()) activityMissing.push("生日");
+    if (!String(data.idNumber || data.id_card || "").trim()) activityMissing.push("身分證/護照");
+    if (!String(data.studentAddr || data.address || "").trim()) activityMissing.push("通訊地址");
+    if (!String(data.emerName || data.emergency_contact_name || "").trim()) activityMissing.push("緊急聯絡人姓名");
+    if (!String(data.emerRel || data.emergency_contact_rel || "").trim()) activityMissing.push("與緊急聯絡人關係");
+    if (!String(data.emerAddr || data.emergency_contact_address || "").trim()) activityMissing.push("緊急聯絡人地址");
+    if (!String(data.emerPhone || data.emergency_contact_phone || "").trim()) activityMissing.push("緊急聯絡人電話");
+    if (!String(data.strength || data.fitness_desc || "").trim()) activityMissing.push("體能自評");
+    if (!String(data.strengthProof || data.proof_urls || "").trim()) activityMissing.push("體能證明");
+    if (!String(data.exp || data.outdoor_experience || "").trim()) activityMissing.push("爬山經驗");
+    var isActivityReady = (activityMissing.length === 0);
+
+    var footer = "";
+    if (isActivityReady) {
+      footer = "💡 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！";
+    } else {
+      var missingText = activityMissing.slice(0, 4).join("、") + (activityMissing.length > 4 ? " 等 " + activityMissing.length + " 項" : "");
+      footer = "💡 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n⚠️ 提醒：出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！🏕️";
+    }
+
+    if (isNew) {
+      intro = "您好 " + name + "！感謝您完成台科登山社社團系統個人資料註冊：";
+      if (data.name) details.push("• 姓名：" + name);
+      if (data.department || data.studentId) details.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
+      if (data.phone) details.push("• 聯絡電話：" + phone);
+      if (data.emerName || data.emerRel) details.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
+      if (data.intendOfficial) details.push("• 加入社員意願：" + offIntent);
+      if (data.exp) details.push("• 爬山經歷：已更新");
+      if (data.strength || data.strengthProof) details.push("• 體能自評：已更新");
+    } else if (Array.isArray(json.changedFields)) {
+      var cFields = json.changedFields;
+      if (cFields.length === 0) {
+        intro = "您好 " + name + "！您的個人檔案未有變更，資料已為最新狀態。";
+      } else {
+        intro = "您好 " + name + "！您已於系統中成功更新個人檔案：";
+        if (cFields.indexOf("name") > -1) details.push("• 姓名：" + name);
+        if (cFields.indexOf("gender") > -1) details.push("• 性別：" + (data.gender || "已更新"));
+        if (cFields.indexOf("birthday") > -1) details.push("• 生日：" + (data.birthday || "已更新"));
+        if (cFields.indexOf("idNumber") > -1) details.push("• 身分證/護照：已更新");
+        if (cFields.indexOf("department_studentId") > -1) details.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
+        if (cFields.indexOf("identityStatus") > -1) details.push("• 身分別：" + (data.identityStatus || "已更新"));
+        if (cFields.indexOf("phone") > -1) details.push("• 聯絡電話：" + phone);
+        if (cFields.indexOf("email") > -1) details.push("• 電子信箱：" + (data.email || "已更新"));
+        if (cFields.indexOf("realLineId") > -1) details.push("• LINE ID：" + (data.realLineId || "已更新"));
+        if (cFields.indexOf("studentAddr") > -1) details.push("• 現居地址：" + (data.studentAddr || "已更新"));
+        if (cFields.indexOf("emergency_contact") > -1) details.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
+        if (cFields.indexOf("exp") > -1) details.push("• 爬山經歷：已更新");
+        if (cFields.indexOf("strength") > -1) details.push("• 體能自評：已更新");
+      }
+    }
+
+    var msg = title + "\n\n" + intro;
+    if (details.length > 0) {
+      msg += "\n\n" + details.join("\n");
+    }
+    msg += "\n\n" + footer;
+    return { msg, isActivityReady, detailsCount: details.length };
+  }
+
+  it('既有社員僅更新電話時，推播僅顯示聯絡電話，不出現未變更的學號與緊急聯絡人', () => {
+    const res = generateProfileSavedMessage({
+      isNewUser: false,
+      changedFields: ['phone'],
+      formData: {
+        name: '洪楷量',
+        department: '電機',
+        studentId: 'B11100015',
+        phone: '0975123401',
+        emerName: '黃雅梅',
+        emerRel: '母子'
+      }
+    });
+
+    assert.ok(res.msg.includes('• 聯絡電話：0975***401'));
+    assert.ok(!res.msg.includes('• 系所 / 學號'));
+    assert.ok(!res.msg.includes('• 緊急聯絡人'));
+    assert.ok(!res.msg.includes('• 爬山經歷'));
+    assert.equal(res.detailsCount, 1);
+  });
+
+  it('既有社員資料完全無變動儲存時，正確提示未有變更', () => {
+    const res = generateProfileSavedMessage({
+      isNewUser: false,
+      changedFields: [],
+      formData: {
+        name: '洪楷量',
+        phone: '0975123401'
+      }
+    });
+
+    assert.ok(res.msg.includes('您的個人檔案未有變更，資料已為最新狀態。'));
+    assert.equal(res.detailsCount, 0);
+  });
+
+  it('當個人資料缺少保險或體能時，底部提示引導裝備租借並溫馨提醒補齊出隊資料，避免報名誤會', () => {
+    const res = generateProfileSavedMessage({
+      isNewUser: false,
+      changedFields: ['phone'],
+      formData: {
+        name: '洪楷量',
+        phone: '0975123401'
+        // 缺少 birthday, idNumber, emerAddr, strength, exp 等出隊必要欄位
+      }
+    });
+
+    assert.equal(res.isActivityReady, false);
+    assert.ok(res.msg.includes('出隊活動需辦理平安保險與安全審核'));
+    assert.ok(res.msg.includes('裝備租借'));
+  });
+
+  it('當 13 項出隊必要欄位全數填齊時，底部明確提示出隊保險與資料完整，可報名最新活動', () => {
+    const res = generateProfileSavedMessage({
+      isNewUser: false,
+      changedFields: ['phone'],
+      formData: {
+        name: '洪楷量',
+        gender: '男',
+        phone: '0975123401',
+        birthday: '2002-05-20',
+        idNumber: 'A123456789',
+        studentAddr: '台北市大安區基隆路四段43號',
+        emerName: '黃雅梅',
+        emerRel: '母子',
+        emerAddr: '台北市大安區基隆路四段43號',
+        emerPhone: '0912345678',
+        strength: '良好',
+        strengthProof: 'https://drive.google.com/test.jpg',
+        exp: '玉山、雪山'
+      }
+    });
+
+    assert.equal(res.isActivityReady, true);
+    assert.ok(res.msg.includes('您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程'));
+  });
+});

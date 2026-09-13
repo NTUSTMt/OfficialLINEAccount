@@ -79,6 +79,8 @@ function Register({ userId }: { userId: string }) {
 
   // 記錄初始幹部意願，精確判定是否由「無」轉「有」才推播
   const [initialOfficerIntent, setInitialOfficerIntent] = useState<string>('');
+  // 記錄初始表單資料，用於精確比對本次更新異動欄位 (避免推播顯示未修改項目)
+  const [originalFormData, setOriginalFormData] = useState<ProfileData | null>(null);
 
   // 載入 LINE Profile 與 Supabase/GAS 社員資料
   useEffect(() => {
@@ -105,11 +107,16 @@ function Register({ userId }: { userId: string }) {
           if (sbProfile && (sbProfile.name || sbProfile.studentId || sbProfile.phone)) {
             memberFound = true;
             setIsNewUser(false);
+            const loadedData: ProfileData = {
+              ...sbProfile,
+              realLineId: sbProfile.realLineId || lineDisplayName,
+            };
             setFormData((prev) => ({
               ...prev,
-              ...sbProfile,
-              realLineId: sbProfile.realLineId || prev.realLineId || lineDisplayName,
+              ...loadedData,
             }));
+            setOriginalFormData(loadedData);
+            setInitialOfficerIntent(sbProfile.intendOfficer ? String(sbProfile.intendOfficer) : '');
             setPrivacyAgreed(true);
           } else {
             // Supabase 尚未有紀錄或連線失敗，向 GAS 查詢現有社員資料 fallback
@@ -132,7 +139,7 @@ function Register({ userId }: { userId: string }) {
                 }
               }
 
-              setFormData({
+              const loadedData: ProfileData = {
                 name: p.name ? String(p.name) : '',
                 gender: p.gender ? String(p.gender) : '',
                 birthday: birthdayStr,
@@ -155,7 +162,10 @@ function Register({ userId }: { userId: string }) {
                 strengthProof: p.strengthProof ? String(p.strengthProof) : '',
                 intendOfficial: p.intendOfficial ? String(p.intendOfficial) : '',
                 intendOfficer: p.intendOfficer ? String(p.intendOfficer) : '',
-              });
+              };
+
+              setFormData(loadedData);
+              setOriginalFormData(loadedData);
               const loadedIntent = p.intendOfficer ? String(p.intendOfficer) : '';
               setInitialOfficerIntent(loadedIntent);
               setPrivacyAgreed(true);
@@ -438,6 +448,46 @@ function Register({ userId }: { userId: string }) {
           const isNowWilling = isWilling(finalFormData.intendOfficer);
           const isOfficerIntentNew = isNewUser ? isNowWilling : (!wasWilling && isNowWilling);
 
+          // 比對實際異動欄位 (僅針對更新既有個人檔案之使用者，新註冊則顯示完整歡迎)
+          const changedFields: string[] = [];
+          if (!isNewUser && originalFormData) {
+            const norm = (v?: string) => (v || '').trim();
+            if (norm(finalFormData.name) !== norm(originalFormData.name)) changedFields.push('name');
+            if (norm(finalFormData.gender) !== norm(originalFormData.gender)) changedFields.push('gender');
+            if (norm(finalFormData.birthday) !== norm(originalFormData.birthday)) changedFields.push('birthday');
+            if (norm(finalFormData.idNumber) !== norm(originalFormData.idNumber)) changedFields.push('idNumber');
+            if (
+              norm(finalFormData.department) !== norm(originalFormData.department) ||
+              norm(finalFormData.studentId) !== norm(originalFormData.studentId)
+            ) {
+              changedFields.push('department_studentId');
+            }
+            if (norm(finalFormData.identityStatus) !== norm(originalFormData.identityStatus)) changedFields.push('identityStatus');
+            if (norm(finalFormData.phone) !== norm(originalFormData.phone)) changedFields.push('phone');
+            if (norm(finalFormData.email) !== norm(originalFormData.email)) changedFields.push('email');
+            if (norm(finalFormData.realLineId) !== norm(originalFormData.realLineId)) changedFields.push('realLineId');
+            if (norm(finalFormData.studentAddr) !== norm(originalFormData.studentAddr)) changedFields.push('studentAddr');
+            if (
+              norm(finalFormData.emerName) !== norm(originalFormData.emerName) ||
+              norm(finalFormData.emerRel) !== norm(originalFormData.emerRel)
+            ) {
+              changedFields.push('emergency_contact');
+            }
+            if (norm(finalFormData.emerPhone) !== norm(originalFormData.emerPhone)) changedFields.push('emerPhone');
+            if (norm(finalFormData.emerAddr) !== norm(originalFormData.emerAddr)) changedFields.push('emerAddr');
+            if (norm(finalFormData.medicalHistory) !== norm(originalFormData.medicalHistory)) changedFields.push('medicalHistory');
+            if (norm(finalFormData.exp) !== norm(originalFormData.exp)) changedFields.push('exp');
+            if (
+              norm(finalFormData.strength) !== norm(originalFormData.strength) ||
+              norm(finalFormData.strengthProof) !== norm(originalFormData.strengthProof) ||
+              strengthProofFiles.length > 0
+            ) {
+              changedFields.push('strength');
+            }
+            if (norm(finalFormData.intendOfficial) !== norm(originalFormData.intendOfficial)) changedFields.push('intendOfficial');
+            if (norm(finalFormData.intendOfficer) !== norm(originalFormData.intendOfficer)) changedFields.push('intendOfficer');
+          }
+
           fetch(GAS_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -447,7 +497,8 @@ function Register({ userId }: { userId: string }) {
               formData: finalFormData,
               isNewUser: isNewUser,
               isOfficerIntentNew: isOfficerIntentNew,
-              previousOfficerIntent: initialOfficerIntent
+              previousOfficerIntent: initialOfficerIntent,
+              changedFields: !isNewUser ? changedFields : undefined
             }))
           }).catch(notifyErr => console.warn('[Register] 非同步推播通知略過:', notifyErr));
         }

@@ -2341,21 +2341,94 @@ function _handleNotifyProfileSaved(json) {
     var offIntent = data.intendOfficial || "未填寫";
 
     var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功】" : "【✅ 基本資料已成功更新】";
-    var intro = isNew
-      ? "您好 " + name + "！感謝您完成台科登山社社團系統社基本資料註冊："
-      : "您好 " + name + "！您已於系統中成功更新個人檔案：";
+    var intro = "";
+    var details = [];
 
-    var msg = title + "\n\n" +
-      intro + "\n\n" +
-      "• 姓名：" + name + "\n" +
-      "• 系所 / 學號：" + dept + " (" + studentId + ")\n" +
-      "• 聯絡電話：" + phone + "\n" +
-      "• 緊急聯絡人：" + emerName + " (" + emerRel + ")\n" +
-      "• 加入社員意願：" + offIntent + "\n" +
-      (data.exp ? ("• 爬山經歷：已更新\n") : "") +
-      (data.strength ? ("• 體能自評：已更新\n") : "") +
-      "\n" +
-      "💡 您可隨時於 LINE 選單點擊「最新活動」瀏覽開放出隊行程，或至「裝備租借」預約出隊器材！";
+    // 檢查活動出隊保險與審核必備之 13 項資料完整度 (與 handleSignup 保持完全一致)
+    var activityMissing = [];
+    if (!String(data.name || "").trim()) activityMissing.push("姓名");
+    if (!String(data.gender || "").trim()) activityMissing.push("性別");
+    if (!String(data.phone || "").trim()) activityMissing.push("聯絡電話");
+    if (!String(data.birthday || "").trim()) activityMissing.push("生日");
+    if (!String(data.idNumber || data.id_card || "").trim()) activityMissing.push("身分證/護照");
+    if (!String(data.studentAddr || data.address || "").trim()) activityMissing.push("通訊地址");
+    if (!String(data.emerName || data.emergency_contact_name || "").trim()) activityMissing.push("緊急聯絡人姓名");
+    if (!String(data.emerRel || data.emergency_contact_rel || "").trim()) activityMissing.push("與緊急聯絡人關係");
+    if (!String(data.emerAddr || data.emergency_contact_address || "").trim()) activityMissing.push("緊急聯絡人地址");
+    if (!String(data.emerPhone || data.emergency_contact_phone || "").trim()) activityMissing.push("緊急聯絡人電話");
+    if (!String(data.strength || data.fitness_desc || "").trim()) activityMissing.push("體能自評");
+    if (!String(data.strengthProof || data.proof_urls || "").trim()) activityMissing.push("體能證明");
+    if (!String(data.exp || data.outdoor_experience || "").trim()) activityMissing.push("爬山經驗");
+    var isActivityReady = (activityMissing.length === 0);
+
+    // 依據資料完整度動態生成結尾引導話
+    var footer = "";
+    if (isActivityReady) {
+      footer = "💡 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！";
+    } else {
+      var missingText = activityMissing.slice(0, 4).join("、") + (activityMissing.length > 4 ? " 等 " + activityMissing.length + " 項" : "");
+      footer = "💡 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n⚠️ 提醒：出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！🏕️";
+    }
+
+    if (isNew) {
+      // 1. 新註冊使用者：顯示完整註冊資料
+      intro = "您好 " + name + "！感謝您完成台科登山社社團系統個人資料註冊：";
+      if (data.name) details.push("• 姓名：" + name);
+      if (data.department || data.studentId) details.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
+      if (data.phone) details.push("• 聯絡電話：" + phone);
+      if (data.emerName || data.emerRel) details.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
+      if (data.intendOfficial) details.push("• 加入社員意願：" + offIntent);
+      if (data.exp) details.push("• 爬山經歷：已更新");
+      if (data.strength || data.strengthProof) details.push("• 體能自評：已更新");
+    } else if (Array.isArray(json.changedFields)) {
+      // 2. 既有使用者更新個人檔案：依據實際變更欄位動態顯示
+      var cFields = json.changedFields;
+      if (cFields.length === 0) {
+        intro = "您好 " + name + "！您的個人檔案未有變更，資料已為最新狀態。";
+      } else {
+        intro = "您好 " + name + "！您已於系統中成功更新個人檔案：";
+        if (cFields.indexOf("name") > -1) details.push("• 姓名：" + name);
+        if (cFields.indexOf("gender") > -1) details.push("• 性別：" + (data.gender || "已更新"));
+        if (cFields.indexOf("birthday") > -1) details.push("• 生日：" + (data.birthday || "已更新"));
+        if (cFields.indexOf("idNumber") > -1) {
+          var maskedId = data.idNumber ? _maskString(data.idNumber, 2, 2) : "已更新";
+          details.push("• 身分證/護照：" + maskedId);
+        }
+        if (cFields.indexOf("department_studentId") > -1) details.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
+        if (cFields.indexOf("identityStatus") > -1) details.push("• 身分別：" + (data.identityStatus || "已更新"));
+        if (cFields.indexOf("phone") > -1) details.push("• 聯絡電話：" + phone);
+        if (cFields.indexOf("email") > -1) details.push("• 電子信箱：" + (data.email || "已更新"));
+        if (cFields.indexOf("realLineId") > -1) details.push("• LINE ID：" + (data.realLineId || "已更新"));
+        if (cFields.indexOf("studentAddr") > -1) details.push("• 現居地址：" + (data.studentAddr || "已更新"));
+        if (cFields.indexOf("emergency_contact") > -1) details.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
+        if (cFields.indexOf("emerPhone") > -1) {
+          var maskedEmerPhone = data.emerPhone ? _maskString(data.emerPhone, 4, 3) : "已更新";
+          details.push("• 緊急聯絡人電話：" + maskedEmerPhone);
+        }
+        if (cFields.indexOf("emerAddr") > -1) details.push("• 緊急聯絡人地址：" + (data.emerAddr || "已更新"));
+        if (cFields.indexOf("medicalHistory") > -1) details.push("• 特殊病史：已更新");
+        if (cFields.indexOf("exp") > -1) details.push("• 爬山經歷：已更新");
+        if (cFields.indexOf("strength") > -1) details.push("• 體能自評：已更新");
+        if (cFields.indexOf("intendOfficial") > -1) details.push("• 加入社員意願：" + offIntent);
+        if (cFields.indexOf("intendOfficer") > -1) details.push("• 擔任幹部意願：" + (data.intendOfficer || "已更新"));
+      }
+    } else {
+      // 3. 既有使用者且未傳入 changedFields 之向下相容 fallback
+      intro = "您好 " + name + "！您已於系統中成功更新個人檔案：";
+      details.push("• 姓名：" + name);
+      details.push("• 系所 / 學號：" + dept + " (" + studentId + ")");
+      details.push("• 聯絡電話：" + phone);
+      details.push("• 緊急聯絡人：" + emerName + " (" + emerRel + ")");
+      details.push("• 加入社員意願：" + offIntent);
+      if (data.exp) details.push("• 爬山經歷：已更新");
+      if (data.strength) details.push("• 體能自評：已更新");
+    }
+
+    var msg = title + "\n\n" + intro;
+    if (details.length > 0) {
+      msg += "\n\n" + details.join("\n");
+    }
+    msg += "\n\n" + footer;
 
     _pushMessage(userId, msg);
 
