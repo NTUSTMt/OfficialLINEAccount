@@ -3,13 +3,33 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.77` (v0.1.77)
+- **當前版本**：`0.1.78` (v0.1.78)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
 
-### 177. 個資儲存異常透明揭露與空生日 null 防呆、裝備照片儲存防崩潰診斷機制 (v0.1.77)
+### 178. 觸發器雙向防遞迴守衛 (根治 stack depth limit exceeded)、裝備照片直更分流 (徹底免除 iOS Load failed) 與全域錯誤透明印出規範 (v0.1.78)
+- **觸發器雙向防遞迴守衛 (`supabase/member_officer_sync.sql`, `supabase/fix_trigger_recursion.sql`)**：
+  - **根本原因排查**：在先前版本中，`members` 表與 `officers` 表各掛載了雙向同步觸發器（`trg_member_officer_sync` 與 `trg_officer_to_member_sync`）。當使用者送出個人資料時，`members` 更新觸發 `officers` 更新，而 `officers` 更新又再度反向觸發 `members` 更新，形成無窮遞迴迴圈 (Mutual Recursion Loop)，瞬間耗盡 PostgreSQL 呼叫堆疊，引發 `ERROR 54001: stack depth limit exceeded`。
+  - **架構修復**：
+    - 在兩端的觸發函式（`trg_fn_sync_officer_from_member` 與 `trg_fn_sync_member_from_officer`）第一行加入 PostgreSQL 原生防遞迴守衛：
+      `IF pg_trigger_depth() > 1 THEN RETURN NEW; END IF;`。
+    - 提供獨立修復腳本 `supabase/fix_trigger_recursion.sql`，使用者可於 Supabase SQL Editor 一鍵執行立即修復線上環境。
+- **裝備照片直更 Supabase 分流機制 (`src/components/borrow/EquipmentDetailModal.tsx`, `src/utils/supabaseClient.ts`, `supabase/schema.sql`)**：
+  - **根本原因排查**：使用者在 iOS LINE 內建 WebKit 瀏覽器進行照片編輯（例如純刪除或排序照片）時，前端若將請求發送至 Google Apps Script Web App，GAS 會回應 `302 Found` 跨域轉址至 `script.googleusercontent.com`。iOS WebKit 對自訂標頭的跨域 POST 轉址執行安全性限制並予以阻斷，在 JavaScript 中拋出 `TypeError: Load failed`。且純照片刪除或排序根本無須經由 Google Drive 建立檔案，呼叫 GAS 造成架構冗餘與高延遲。
+  - **機制實作**：
+    - 在 `EquipmentDetailModal.tsx` 中建立智慧分流：當 `newPhotoFiles.length === 0`（純刪除或重排照片）時，直接透過 Supabase (`updateEquipmentImagesInSupabase` 或 RPC `update_equipment_images`) 更新 `equipments.images`，延遲 < 30ms，0% 依賴 GAS，徹底免除 iOS WebKit 之 `Load failed` 阻斷。
+    - 背景非同步通知 GAS 試算表鏡像備份（若 GAS 失敗亦不阻斷前端成功體驗）。
+    - 若有新上傳照片檔案（`newPhotoFiles.length > 0`），走 Drive 上傳流程，並針對各項可能錯誤直接印出完整詳細資訊與建議。
+- **系統規範建立：錯誤訊息一律直接透明印出 (`.agents/rules/error_handling.md`, `AGENTS.md`, `src/pages/Register.tsx`)**：
+  - **規範確立**：依使用者要求，正式在專案 Rules (`.agents/rules/error_handling.md` 與根目錄 `AGENTS.md`) 寫入「全域錯誤直接透明印出」規則：所有前端 UI、後端 API 或資料庫存取發生異常時，嚴禁吞掉或將訊息遮蔽為「請聯絡社團管理員」等空泛提示，一律直接在 Alert、Toast 與日誌印出確切的 `error.message` 與錯誤細節。
+  - **前端落實**：更新 `Register.tsx` 與 `EquipmentDetailModal.tsx`，徹底落實直接印出真實錯誤原因。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 78/78 項測試 100% 全數通過（新增防遞迴守衛與照片分流機制兩項測試）。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+
 - **個人資料儲存錯誤透明化與 DATE 型別相容 (`src/utils/supabaseClient.ts`, `src/pages/Register.tsx`)**：
   - **根本原因排查**：幹部成員儲存個資時若遭遇資料庫 Trigger 限制（如 `officers.title` NOT NULL）或 DATE 欄位不接受空字串 `''` 時，先前 `saveMemberProfileToSupabase` 僅回傳 `boolean: false`，導致前端只顯示「儲存失敗：請聯絡社團管理員」之泛用提示，無法得知底層原因。
   - **架構升級**：

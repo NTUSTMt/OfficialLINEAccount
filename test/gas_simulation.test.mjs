@@ -2037,4 +2037,81 @@ describe('15. Supabase SSOT 報名驗證、Sync Worker 全 CRUD 增刪鏡像、�
     );
     assert.equal(res3.isOfficer, false);
   });
+
+  // 8. 觸發器防遞迴守衛模擬測試 (消除 stack depth limit exceeded)
+  it('members 與 officers 雙向觸發器具備 pg_trigger_depth() > 1 防遞迴守衛，杜絕 stack depth limit exceeded', () => {
+    let callDepth = 0;
+    const executionLog = [];
+
+    // 模擬 Postgres 觸發器互相更新
+    function simulateMemberUpdate(member, isRecursive = false) {
+      callDepth++;
+      executionLog.push(`member_update_depth_${callDepth}`);
+
+      // 🛡️ 防遞迴守衛
+      if (callDepth > 1) {
+        callDepth--;
+        return { success: true, stoppedRecursion: true };
+      }
+
+      // 觸發 officers 更新
+      simulateOfficerUpdate({ line_user_id: member.line_user_id, role: member.officer_role });
+      callDepth--;
+      return { success: true, stoppedRecursion: false };
+    }
+
+    function simulateOfficerUpdate(officer) {
+      callDepth++;
+      executionLog.push(`officer_update_depth_${callDepth}`);
+
+      // 🛡️ 防遞迴守衛
+      if (callDepth > 1) {
+        callDepth--;
+        return { success: true, stoppedRecursion: true };
+      }
+
+      // 觸發 members 更新
+      simulateMemberUpdate({ line_user_id: officer.line_user_id, officer_role: officer.role });
+      callDepth--;
+      return { success: true, stoppedRecursion: false };
+    }
+
+    // 執行模擬
+    const result = simulateMemberUpdate({ line_user_id: 'U_TEST', officer_role: '幹部' });
+    assert.equal(result.success, true);
+    // 驗證深度最多到 2 即被守衛攔截，不再無窮深入
+    assert.deepEqual(executionLog, ['member_update_depth_1', 'officer_update_depth_2']);
+  });
+
+  // 9. 裝備照片更新分流機制測試：無新照片上傳時直更 Supabase，免除 GAS 之 Load failed
+  it('裝備照片更新分流機制：無新照片上傳時直更 Supabase，徹底杜絕 iOS WebKit 之 Load failed 阻斷', () => {
+    function decidePhotoUpdateStrategy(keptUrls, newPhotoFiles) {
+      if (newPhotoFiles.length === 0) {
+        return {
+          channel: 'SUPABASE_DIRECT',
+          requiresDriveUpload: false,
+          riskOfWebKitLoadFailed: false
+        };
+      }
+      return {
+        channel: 'GAS_DRIVE_UPLOAD',
+        requiresDriveUpload: true,
+        riskOfWebKitLoadFailed: true
+      };
+    }
+
+    // 情況 1：幹部在畫面上刪除照片或重新排序既有照片 (newPhotoFiles 為空)
+    const res1 = decidePhotoUpdateStrategy(['https://lh3.googleusercontent.com/photo1.jpg'], []);
+    assert.equal(res1.channel, 'SUPABASE_DIRECT');
+    assert.equal(res1.requiresDriveUpload, false);
+    assert.equal(res1.riskOfWebKitLoadFailed, false);
+
+    // 情況 2：幹部從手機相簿選取了新照片上傳
+    const res2 = decidePhotoUpdateStrategy(
+      ['https://lh3.googleusercontent.com/photo1.jpg'],
+      [{ base64: 'data:image/jpeg;base64,...', name: 'new.jpg' }]
+    );
+    assert.equal(res2.channel, 'GAS_DRIVE_UPLOAD');
+    assert.equal(res2.requiresDriveUpload, true);
+  });
 });

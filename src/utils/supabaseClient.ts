@@ -97,6 +97,51 @@ export const fetchEquipmentsFromSupabase = async (): Promise<Equipment[] | null>
 };
 
 /**
+ * ⚡ 直接更新 Supabase 裝備照片清單 (免除 GAS 跨域 302 重導向之 Load failed 阻斷，延遲 < 30ms)
+ */
+export const updateEquipmentImagesInSupabase = async (
+  equipId: string,
+  imageUrls: string[]
+): Promise<{ success: boolean; message?: string }> => {
+  if (!supabase || !equipId) {
+    return { success: false, message: 'Supabase 未連線或缺少裝備識別碼' };
+  }
+
+  try {
+    // 1. 優先嘗試 RPC update_equipment_images
+    const { data: rpcData, error: rpcError } = await supabase.rpc('update_equipment_images', {
+      p_equip_id: equipId,
+      p_images: imageUrls
+    });
+
+    if (!rpcError && (rpcData?.success !== false)) {
+      console.log('%c⚡ [DataSource: Supabase] 裝備照片已透過 RPC 成功更新！', 'color: #10b981; font-weight: bold;', equipId, imageUrls);
+      return { success: true };
+    }
+
+    // 2. 若無 RPC 則使用直更 equipments 資料表
+    const { error: updateError } = await supabase
+      .from('equipments')
+      .update({
+        images: imageUrls,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', equipId);
+
+    if (updateError) {
+      console.warn('[Supabase] 更新裝備照片失敗:', updateError.message);
+      return { success: false, message: updateError.message };
+    }
+
+    console.log('%c⚡ [DataSource: Supabase] 裝備照片已直接更新成功！', 'color: #10b981; font-weight: bold;', equipId, imageUrls);
+    return { success: true };
+  } catch (err: any) {
+    console.error('[Supabase] 更新裝備照片例外:', err);
+    return { success: false, message: err?.message || String(err) };
+  }
+};
+
+/**
  * 從 Supabase 取得活動清單 (方案 B：公開活動讀取秒開)
  */
 export const fetchEventsFromSupabase = async (): Promise<AdminEvent[] | null> => {

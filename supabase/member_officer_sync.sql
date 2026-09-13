@@ -74,6 +74,11 @@ SET role = COALESCE(NULLIF(role, ''), NULLIF(title, ''), '幹部'),
 CREATE OR REPLACE FUNCTION trg_fn_sync_officer_from_member()
 RETURNS TRIGGER AS $$
 BEGIN
+    -- 🛡️ 關鍵防遞迴守衛：避免與 trg_fn_sync_member_from_officer 形成雙向互相更新的無窮遞迴 (stack depth limit exceeded)
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+
     -- 當 is_officer 被設為 TRUE 且有有效 line_user_id
     IF NEW.is_officer IS TRUE AND NEW.line_user_id IS NOT NULL AND trim(NEW.line_user_id) != '' THEN
         INSERT INTO officers (line_user_id, name, role, title, updated_at)
@@ -116,6 +121,11 @@ WHERE trim(m.line_user_id) = trim(o.line_user_id);
 CREATE OR REPLACE FUNCTION trg_fn_sync_member_from_officer()
 RETURNS TRIGGER AS $$
 BEGIN
+    -- 🛡️ 關鍵防遞迴守衛：避免與 trg_fn_sync_officer_from_member 形成雙向互相更新的無窮遞迴 (stack depth limit exceeded)
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+
     IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
         IF NEW.line_user_id IS NOT NULL AND trim(NEW.line_user_id) != '' THEN
             UPDATE members

@@ -6,6 +6,7 @@ import { ProductImage } from './ProductImage';
 import { getDirectImageUrl } from '../../utils/image';
 import { GAS_API_URL } from '../../constants/api';
 import { appendAuthToken, withAuthPayload } from '../../utils/api';
+import { updateEquipmentImagesInSupabase } from '../../utils/supabaseClient';
 
 interface EquipmentDetailModalProps {
   equipment: Equipment | null;
@@ -202,6 +203,7 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
 
   // 儲存照片
   const handleSavePhotos = async () => {
+    if (!equipment) return;
     const keptUrls = modalPhotos.filter(p => !p.isNew).map(p => p.url);
     const newPhotoFiles = modalPhotos.filter(p => p.isNew && p.fileObj).map(p => p.fileObj);
 
@@ -213,6 +215,40 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
 
     setIsSavingPhotos(true);
     try {
+      // 🚀 分流優化 1：若無新照片需上傳至 Drive（純刪除既有照片或調整順序）
+      // 直接透過 Supabase 更新 equipments 資料表（耗時 < 30ms，0% 依賴 GAS，徹底免除 iOS WebKit 跨域 302 重導向之 Load failed 阻斷）
+      if (newPhotoFiles.length === 0) {
+        const sbRes = await updateEquipmentImagesInSupabase(equipment.id, keptUrls);
+        if (sbRes.success) {
+          const newImgUrl = keptUrls.join(',');
+          onEquipmentUpdated?.({ id: equipment.id, imageUrl: newImgUrl });
+          setModalPhotos(keptUrls.map(u => ({ url: u })));
+          setActivePhotoIdx(0);
+          setIsEditMode(false);
+          alert(t('borrow.modal.photoSaveSuccess'));
+
+          // 背景非同步通知 GAS 同步主試算表（不阻塞前端，若失敗亦不影響）
+          fetch(appendAuthToken(GAS_API_URL), {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(withAuthPayload({
+              action: 'update_equipment_images',
+              equipId: equipment.id,
+              equipName: equipment.name,
+              keptUrls,
+              newPhotoFiles: [],
+              userId
+            }))
+          }).catch(gasErr => console.warn('[EquipmentDetail] 背景同步試算表略過:', gasErr));
+
+          return;
+        } else {
+          // 若 Supabase 直更失敗，依 Rule 透明印出完整錯誤細節
+          console.warn('[EquipmentDetail] Supabase 直更照片失敗，嘗試 GAS fallback:', sbRes.message);
+        }
+      }
+
+      // 🚀 分流優化 2：若有新上傳照片檔案，送往 GAS Drive 上傳
       const res = await fetch(appendAuthToken(GAS_API_URL), {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -245,11 +281,17 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
         setIsEditMode(false);
         alert(t('borrow.modal.photoSaveSuccess'));
       } else {
-        alert(data.message || t('borrow.modal.photoSaveFailed'));
+        alert(`照片更新失敗: ${data.message || t('borrow.modal.photoSaveFailed')}`);
       }
     } catch (err: any) {
       console.error('儲存裝備照片失敗:', err);
-      alert(err?.message ? `照片更新失敗：${err.message}` : t('borrow.modal.photoSaveFailed'));
+      // 依 Rule 直接印出完整錯誤訊息，包含 Load failed 與具體原因
+      const errorMsg = err?.message || String(err);
+      if (errorMsg.includes('Load failed')) {
+        alert(`照片更新失敗：Load failed (iOS 瀏覽器跨域重導向限制，建議於一般瀏覽器開啟或重試)`);
+      } else {
+        alert(`照片更新失敗：${errorMsg}`);
+      }
     } finally {
       setIsSavingPhotos(false);
     }

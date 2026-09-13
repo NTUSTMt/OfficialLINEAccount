@@ -460,9 +460,9 @@ function Register({ userId }: { userId: string }) {
           liff.closeWindow();
         }
       } else {
-        alert(t('register.alert.saveFailed', { message: saveRes.message || t('register.alert.contactAdmin') }));
+        alert(t('register.alert.saveFailed', { message: saveRes.message || '資料庫未回傳具體錯誤' }));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('提交表單失敗:', err);
       if (sbSaved) {
         const draftKey = 'register_draft_' + (userId || 'guest');
@@ -473,7 +473,8 @@ function Register({ userId }: { userId: string }) {
           liff.closeWindow();
         }
       } else {
-        alert(t('register.alert.networkError'));
+        const detailMsg = err?.message || String(err);
+        alert(`提交表單失敗: ${detailMsg}`);
       }
     } finally {
       setIsSubmitting(false);
