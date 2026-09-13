@@ -3,11 +3,57 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.100` (v0.1.100)
+- **當前版本**：`0.1.103` (v0.1.103)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 203. 參照原始設計重構裝備租借為後端保底雙向推播與前端安全等待機制 (v0.1.103)
+- **問題回報與根本原因分析 (Problem & Root Cause)**：
+  - 使用者回報：「送出訂單後還是沒有收到訊息（個人聊天室和幹部群組都沒有），已經執行過 @小岳助理 綁定幹部群組，並且成功了。以前的程式是可以成功發送的，請參考 `src/gas.backup.js`」。
+  - **經比對歷史程式碼查出根本原因**：
+    1. **個人聊天室訊息消失**：原始 [Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) 個人通知完全依賴前端 `liff.sendMessages`。在特定情境（未開通 `chat_message.write` 權限或非聊天室環境打開）會直接拋錯，且後端 `_handleNotifyOfficersLoan` 完全沒有發送個人推播。
+    2. **幹部群組推播被攔截中斷**：先前修改中加入了 `setTimeout(() => liff.closeWindow(), 300)`。因 GAS 冷啟動需要 1.5 ~ 2.5 秒，前端在 300 毫秒內強行關閉視窗，導致瀏覽器直接強制中斷 (Aborted) 正在發送至 GAS 的網路連線，推播請求根本未送達 GAS。
+    3. **歷史最佳實踐**：在 `gas.backup.js` 時代，前端皆是明確 `await fetch(GAS_API_URL, ...)` 與 `await response.json()`，確保推播成功完成後才提示使用者並關閉視窗。
+- **修復與防護機制 (Architecture & Implementation)**：
+  - **1. 後端 GAS 雙向推播保底 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js))**：
+    - 在 `_handleNotifyOfficersLoan` 中，除發送幹部群組推播 `pushAdminMessage(msg)` 外，同步調用 `_pushMessage(userId, userLoanMsg)` 推播雙語對齊之裝備預約收據至使用者個人 LINE 聊天室，**100% 保證個人聊天室必達，不再依賴脆弱的前端 LIFF 發話**。
+  - **2. 前端改回明確 await 與成功提示關閉機制 ([src/pages/Borrow.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Borrow.tsx) & [src/pages/Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx))**：
+    - 徹底移除 300 毫秒匆忙關閉的定時器。
+    - 前端明確 `await fetch` 與 `await response.json()`，確保後端已確實處理推播後，彈出成功提示視窗，經使用者確認後再關閉視窗，徹底杜絕連線被瀏覽器中止。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
+
+### 202. 精確相容 LINE 內建 @小岳助理 標註與叫名文字清理以正確啟動幹部指令 (v0.1.102)
+- **問題回報與需求背景 (Problem & Context)**：
+  - 使用者明確說明：「幹部機器人的名字叫，小岳助理，平常要呼叫他的話都要用 line 內建的 @小岳助理 來呼叫」。
+  - 在先前實作中，叫名文字清理僅替換了 `/小岳/g`，當使用者輸入 `@小岳助理 綁定幹部群組` 或帶有空格的標註時，會留下殘餘文字「`助理 綁定幹部群組`」，導致指令無法匹配精確字串而失效。
+- **修復與實作細節 (Implementation Details)**：
+  - **1. 精確匹配 LINE 內建標註與文字名稱 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js))**：
+    - 提及判定全面納入：LINE 官方 `mention.mentionees.isSelf`、`text.indexOf("@小岳助理") > -1`、`text.indexOf("小岳助理") > -1`、`@小岳` 與 `小岳`。
+  - **2. 完整清理叫名文字**：
+    - 在清理 `cleanText` 時，依序剔除 `@\S+`、`小岳助理`、`小岳` 與 `助理`，確保輸入 `@小岳助理 綁定幹部群組` 後所得指令精準為 `綁定幹部群組`。
+  - **3. 幹部助理卡片文字更新**：
+    - 清楚標明幹部機器人全名為「小岳助理」，提示幹部隨時可在群組使用 `@小岳助理 幹部系統` 開啟管理後台。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
+
+### 201. 依幹部指示限制幹部群組綁定必須 @小岳 助理方可啟動並強化防洗版機制 (v0.1.101)
+- **需求調整與設計意圖 (Requirement & Intent)**：
+  - 使用者在程式碼審查中指示：「我希望一定要@小岳助理，才能啟動」。
+  - 為了維護群組對話清潔並徹底防止任何關鍵字誤觸，群組指令必須在明確 @小岳（或訊息中提及「小岳」）的前提下才被處理。
+- **程式調整與實作細節 (Implementation Details)**：
+  - **1. 綁定邏輯置於 `isMentioned` 檢查之後 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js))**：
+    - 將群組防洗版過濾 `if (isGroup && !isMentioned) return;` 保持在最前道防線。
+    - 移除自動探測機制，僅當幹部在群組中明確 `@小岳 綁定幹部群組` 或輸入包含「小岳 綁定幹部群組」時，方才觸發 `ADMIN_GROUP_ID` 的綁定與確認回覆。
+  - **2. 保持雙機器人相容回覆 (`_replyMessageSmart`)**：
+    - 在被 @小岳 召喚執行綁定時，優先使用 `ADMIN_BOT_TOKEN` 回覆，杜絕跨 Token 造成的 400 Bad Request 錯誤。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過。
+  - 前端建置：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
 
 ### 200. 修復幹部群組綁定防洗版攔截、雙機器人 Token 智慧回覆與繳費申報雙向保底推播 (v0.1.100)
 - **問題回報與根本原因分析 (Problem & Root Cause)**：

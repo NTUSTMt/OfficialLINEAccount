@@ -63,8 +63,46 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   var targetGroupId = groupId || (ev && ev.source && ev.source.groupId) || "";
   var isGroup = !!targetGroupId || (ev && ev.source && (ev.source.type === "group" || ev.source.type === "room"));
 
-  // ⭐️ 0. 幹部群組綁定指令（特例最高優先級，絕不被防洗版過濾阻擋）
-  var isBindCommand = (text === "綁定幹部群組" || text === "#bind_admin" || text.indexOf("綁定幹部群組") > -1 || text.indexOf("#bind_admin") > -1);
+  // 檢查是否提及機器人 (@小岳助理 / @小岳 或 LINE 官方 mention.mentionees.isSelf 或 包含「小岳」/「助理」)
+  var isMentioned = false;
+  if (ev && ev.message && ev.message.mention && Array.isArray(ev.message.mention.mentionees)) {
+    isMentioned = ev.message.mention.mentionees.some(function (m) {
+      return m.isSelf === true;
+    });
+  }
+  if (!isMentioned) {
+    if (
+      text.indexOf("@小岳助理") > -1 ||
+      text.indexOf("小岳助理") > -1 ||
+      text.indexOf("@小岳") > -1 ||
+      text.indexOf("小岳") > -1 ||
+      lowerText.indexOf("小岳") > -1
+    ) {
+      isMentioned = true;
+    }
+  }
+
+  // 群組防洗版過濾：在群組中若未被召喚（@小岳助理），嚴格靜默不回覆
+  if (isGroup && !isMentioned) {
+    return;
+  }
+
+  // 若在群組被召喚，清理叫名文字 (完整相容 LINE 內建 @標註、小岳助理、小岳、助理)
+  var cleanText = text;
+  if (isGroup && isMentioned) {
+    cleanText = text
+      .replace(/@\S+/g, "")
+      .replace(/小岳助理/g, "")
+      .replace(/小岳/g, "")
+      .replace(/助理/g, "")
+      .trim();
+  }
+
+  var queryText = (isGroup && isMentioned && cleanText) ? cleanText : text;
+  var lowerQueryText = queryText.toLowerCase();
+
+  // ⭐️ 幹部群組綁定指令（群組內必須 @小岳助理 召喚方可啟動綁定，避免誤觸）
+  var isBindCommand = (queryText === "綁定幹部群組" || queryText === "#bind_admin" || text.indexOf("綁定幹部群組") > -1);
   if (isBindCommand) {
     if (targetGroupId) {
       PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', targetGroupId);
@@ -76,60 +114,23 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // ⭐️ 0.1 自動探測：若目前群組尚未設定 ADMIN_GROUP_ID，且在群組中提及「幹部」，自動補齊綁定
-  if (targetGroupId && !PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID')) {
-    if (text.indexOf("幹部") > -1) {
-      PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', targetGroupId);
-      console.log("已自動探測並綁定幹部群組 ID: " + targetGroupId);
-    }
-  }
-
-  // 檢查是否提及機器人 (@小岳 或 mention.mentionees.isSelf 或 以「小岳」開頭)
-  var isMentioned = false;
-  if (ev && ev.message && ev.message.mention && Array.isArray(ev.message.mention.mentionees)) {
-    isMentioned = ev.message.mention.mentionees.some(function (m) {
-      return m.isSelf === true;
-    });
-  }
-  if (!isMentioned) {
-    if (text.indexOf("@小岳") > -1 || text.indexOf("小岳") === 0 || lowerText.indexOf("小岳") > -1) {
-      isMentioned = true;
-    }
-  }
-
-  // 群組防洗版過濾：在群組中若未被召喚（@或叫小岳），嚴格靜默不回覆
-  if (isGroup && !isMentioned) {
-    return;
-  }
-
-  // 若在群組被召喚，清理叫名文字
-  var cleanText = text;
-  if (isGroup && isMentioned) {
-    cleanText = text.replace(/@\S+/g, "").replace(/小岳/g, "").trim();
-  }
-
-  // 1. 幹部專屬助理卡片（幹部在群組單純 @小岳、或輸入「小岳 幹部系統」/「幹部系統」/ 招呼語）
+  // 1. 幹部專屬助理卡片（幹部在群組單純 @小岳助理、或輸入「@小岳助理 幹部系統」/「幹部系統」/ 招呼語）
   if (
     (isGroup && isMentioned && (cleanText === "" || cleanText === "幹部系統" || cleanText === "嗨" || cleanText === "哈囉" || cleanText.toLowerCase() === "hi" || cleanText.toLowerCase() === "hello")) ||
-    text === "小岳 幹部系統" ||
-    text === "幹部系統"
+    text.indexOf("幹部系統") > -1
   ) {
-    var adminCard = "🌲 幹部專屬助理小岳在此！\n" +
+    var adminCard = "🌲 幹部專屬助理「小岳助理」在此！\n" +
       "─────────────\n" +
       "目前在幹部群組中支援以下功能與指令：\n\n" +
       "🛠️ 【幹部系統】\n" +
-      "• 輸入「小岳 幹部系統」或點擊下方連結進入後台：\n" +
+      "• 輸入「@小岳助理 幹部系統」或點擊下方連結進入後台：\n" +
       "👉 https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents\n\n" +
       "💡 幹部小提醒：\n" +
-      "若需要查詢或審核，請直接點擊上方幹部系統連結開啟管理後台進行操作。\n" +
-      "若有其他問題，也可以直接在群組 @我 詢問登山社相關庶務！";
+      "若需要綁定此群組接收通知，請輸入「@小岳助理 綁定幹部群組」！\n" +
+      "若有其他問題，也可以隨時在群組 @小岳助理 詢問登山社相關庶務！";
     _replyMessageSmart(replyToken, adminCard, true);
     return;
   }
-
-  // 若在群組中呼叫小岳帶有其他問題，將 cleanText 作為有效問題處理
-  var queryText = (isGroup && isMentioned && cleanText) ? cleanText : text;
-  var lowerQueryText = queryText.toLowerCase();
 
   // 3. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
   if (queryText.indexOf("最新活動") > -1 || lowerQueryText.indexOf("activities") > -1 || queryText.indexOf("報名活動") > -1 || lowerQueryText === "events") {

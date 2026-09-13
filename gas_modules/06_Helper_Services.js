@@ -223,9 +223,47 @@ function _handleNotifyOfficersLoan(json) {
       "⚡ 本資料已安全寫入 Supabase，請至幹部後台確認備用！";
 
     pushAdminMessage(msg);
-    return _successResponse({ message: "幹部推播已成功送出" });
+
+    // ⭐️ 2. 同步保底推播給使用者個人 LINE 聊天室 (預約成功憑證)
+    if (userId && userId !== "TEST_USER_ID") {
+      var userLoanMsg = "【🎒 我的裝備租借預訂單】\n" +
+        "────────────────────\n" +
+        "• 訂單編號：" + loanId + "\n" +
+        "• 借用人：" + borrowerName + " (" + identityDesc + ")\n" +
+        "• 預計領取：" + (details.pickupDate || "") + "\n" +
+        "• 預計歸還：" + (details.returnDate || "") + " (共 " + days + " 天)\n" +
+        "• 租借用途：" + purpose + "\n\n" +
+        "📦 預約裝備清單：\n" +
+        (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") + "\n\n" +
+        "💰 預估總租金：$" + totalRent + " 元\n" +
+        "────────────────────\n" +
+        "📌 提醒事項：\n" +
+        "1. 幹部已收到您的預約申請，將為您備齊裝備。\n" +
+        "2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n" +
+        "3. 將有幹部主動聯繫你，確認領取時間以及地點。\n" +
+        "─────────────\n" +
+        "【🎒 Equipment Loan Reservation Confirmed】\n" +
+        "────────────────────\n" +
+        "• Order ID: " + loanId + "\n" +
+        "• Borrower: " + borrowerName + " (" + identityDesc + ")\n" +
+        "• Pickup Date: " + (details.pickupDate || "") + "\n" +
+        "• Return Date: " + (details.returnDate || "") + " (" + days + " days)\n" +
+        "• Purpose: " + purpose + "\n\n" +
+        "📦 Items:\n" +
+        (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• None") + "\n\n" +
+        "💰 Estimated Total: $" + totalRent + " TWD\n" +
+        "────────────────────\n" +
+        "📌 Notes:\n" +
+        "1. Officers have received your request and will prepare the gear.\n" +
+        "2. If fees apply, please complete payment in 'Payment Center' before pickup.\n" +
+        "3. An officer will contact you to confirm pickup time and location. Thank you!";
+
+      _pushMessage(userId, userLoanMsg);
+    }
+
+    return _successResponse({ message: "幹部推播與個人推播已成功送出" });
   } catch (err) {
-    console.warn("裝備租借幹部推播失敗:", err);
+    console.warn("裝備租借推播失敗:", err);
     return _errorResponse(err.toString());
   }
 }

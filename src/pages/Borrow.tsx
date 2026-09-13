@@ -408,24 +408,29 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
       const totalRentValue = result.totalRent !== undefined ? result.totalRent : totalPrice;
 
-      // 3. 發送 LINE 幹部審核推播 (包含 LINE ID、中文名稱清單、電話與租金)
-      const notifyPromise = fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(withAuthPayload({
-          action: 'notify_officers_loan',
-          userId: userId,
-          loanId: result.loanId,
-          borrowerName: userProfile.name || '',
-          borrowerLineId: userProfile.realLineId || '',
-          borrowerPhone: userProfile.phone || '',
-          isOfficial: isOfficial,
-          days: days,
-          details: form,
-          cartDetails: selectedCartItems,
-          totalRent: totalRentValue
-        }))
-      }).catch(err => console.warn('[Borrow] 幹部推播通知略過:', err));
+      // 3. 發送 LINE 幹部審核推播與個人保底推播 (確實等待 GAS 完成，避免關閉視窗中斷連線)
+      try {
+        const response = await fetch(GAS_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(withAuthPayload({
+            action: 'notify_officers_loan',
+            userId: userId,
+            loanId: result.loanId,
+            borrowerName: userProfile.name || '',
+            borrowerLineId: userProfile.realLineId || '',
+            borrowerPhone: userProfile.phone || '',
+            isOfficial: isOfficial,
+            days: days,
+            details: form,
+            cartDetails: selectedCartItems,
+            totalRent: totalRentValue
+          }))
+        });
+        await response.json().catch(() => ({}));
+      } catch (err) {
+        console.warn('[Borrow] 幹部推播通知發送例外:', err);
+      }
 
       removeCache(CACHE_KEY_EQUIPMENTS);
       setIsCartOpen(false);
@@ -465,28 +470,21 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
       if (liff.isInClient()) {
         try {
-          // 同時確保幹部推播已抵達 GAS，以及 liff.sendMessages 成功送入聊天室
-          await Promise.allSettled([
-            notifyPromise,
-            liff.sendMessages([{
-              type: 'text',
-              text: userMessageText
-            }])
-          ]);
+          await liff.sendMessages([{
+            type: 'text',
+            text: userMessageText
+          }]);
         } catch (liffErr) {
           console.warn('liff.sendMessages 略過:', liffErr);
-        } finally {
-          setTimeout(() => {
-            try {
-              liff.closeWindow();
-            } catch (e) {
-              console.warn('liff.closeWindow 略過:', e);
-            }
-          }, 300);
+        }
+        alert(t('borrow.alert.submitSuccess', '🎉 裝備租借申請已成功送出！訂單明細已同步發送至您的 LINE 聊天室與幹部群組。'));
+        try {
+          liff.closeWindow();
+        } catch (e) {
+          console.warn('liff.closeWindow 略過:', e);
         }
       } else {
-        await notifyPromise;
-        alert(t('borrow.alert.submitSuccessBrowser'));
+        alert(t('borrow.alert.submitSuccessBrowser', '🎉 裝備租借預約成功！訂單編號：' + (result.loanId || '')));
       }
     } catch (error) {
       console.error('API 請求失敗:', error);

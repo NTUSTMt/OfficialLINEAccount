@@ -378,16 +378,21 @@ function Payment({ userId }: { userId: string }) {
       }
 
       if (sbSubmitted) {
-        // 2. 發送 LINE 幹部審核推播與個人保底推播 (純通知 API，絕不碰 Google Sheets)
-        const notifyPromise = fetch(GAS_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(withAuthPayload({
-            action: 'notify_officers_payment',
-            userId,
-            details: detailsPayload
-          }))
-        }).catch(err => console.warn('[Payment] 幹部推播通知略過:', err));
+        // 2. 發送 LINE 幹部審核推播與個人保底推播 (確實等待 GAS 完成，避免關閉視窗中斷連線)
+        try {
+          const response = await fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(withAuthPayload({
+              action: 'notify_officers_payment',
+              userId,
+              details: detailsPayload
+            }))
+          });
+          await response.json().catch(() => ({}));
+        } catch (err) {
+          console.warn('[Payment] 幹部推播通知發送例外:', err);
+        }
 
         // 本地立即將已申報項目自待繳清單中排除，杜絕重複勾選申報
         setUnpaidList(prev => ({
@@ -399,7 +404,7 @@ function Payment({ userId }: { userId: string }) {
 
         setSubmitted(true);
 
-        // 發送 LINE 明細訊息並關閉 LIFF (非阻塞式發話，避免 iOS LIFF sendMessages 掛起卡死)
+        // 發送 LINE 明細訊息並關閉 LIFF
         if (liff.isInClient()) {
           const msgText = `【繳費申報完成 / Payment Submitted】\n\n` +
             `您好！已成功收到您的繳費申報資訊：\n` +
@@ -418,26 +423,21 @@ function Payment({ userId }: { userId: string }) {
             selectedNames.map(n => `  - ${n}`).join('\n') + `\n\n` +
             `Officers will update your status after verifying the transaction. Thank you!`;
 
-          await Promise.allSettled([
-            notifyPromise,
-            Promise.race([
-              liff.sendMessages([{
-                type: 'text',
-                text: msgText
-              }]),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
-            ]).catch(liffErr => {
-              console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
-            })
-          ]);
+          try {
+            await liff.sendMessages([{
+              type: 'text',
+              text: msgText
+            }]);
+          } catch (liffErr) {
+            console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
+          }
 
-          setTimeout(() => {
-            try {
-              liff.closeWindow();
-            } catch (e) {
-              console.warn('liff.closeWindow 略過:', e);
-            }
-          }, 300);
+          alert('🎉 繳費申報已成功送出！申報收據已同步發送至您的 LINE 聊天室與幹部群組。');
+          try {
+            liff.closeWindow();
+          } catch (e) {
+            console.warn('liff.closeWindow 略過:', e);
+          }
         }
       } else {
         alert(t('payment.alert.submitFailed', { message: t('payment.alert.contactAdmin') }));
