@@ -325,5 +325,62 @@ describe('前端工具函式與純邏輯自動化測試 (Frontend Utils Test Sui
       assert.equal(c3.isBlocked, false);
     });
   });
+
+  describe('裝備搜尋與 7 大系統分類篩選核心邏輯測試', () => {
+    const mockEquipments = [
+      { id: 'EQ_TENT_01', name: '雙人高山帳篷', category: '睡眠系統', description: '輕量雙人帳，防風防水' },
+      { id: 'EQ_MAT_01', name: '充氣睡墊', category: '睡眠系統', description: 'R值 3.5 舒適輕量' },
+      { id: 'EQ_BAG_01', name: 'Osprey 65L 登山大背包', category: '背負系統', description: '重裝舒適背負' },
+      { id: 'EQ_STOVE_01', name: '攻頂小爐頭', category: '炊事系統', description: '高效率省瓦斯' },
+      { id: 'EQ_LIGHT_01', name: 'Petzl 350流明頭燈', category: '照明通訊', description: '多段亮度紅光' },
+      { id: 'EQ_HELMET_01', name: 'Black Diamond 岩盔', category: '攀登技術', description: '攀登防護必備' },
+      { id: 'EQ_POLE_01', name: '碳纖維登山杖 (單支)', category: '行進安全', description: '輕量快扣' },
+      { id: 'EQ_FLAG_01', name: '社旗與公裝袋', category: '其他裝備', description: '出隊合照專用' },
+    ];
+
+    function filterEquipments(list, selectedCategory, searchQuery) {
+      const query = (searchQuery || '').trim().toLowerCase();
+      return list.filter(item => {
+        if (selectedCategory && selectedCategory !== 'all') {
+          const itemCat = item.category || '其他裝備';
+          if (itemCat !== selectedCategory) return false;
+        }
+        if (!query) return true;
+        const matchName = item.name.toLowerCase().includes(query);
+        const matchId = item.id.toLowerCase().includes(query);
+        const matchCat = (item.category || '').toLowerCase().includes(query);
+        const matchDesc = (item.description || '').toLowerCase().includes(query);
+        return matchName || matchId || matchCat || matchDesc;
+      });
+    }
+
+    it('分類為 all 且無搜尋關鍵字時，完整回傳全部裝備', () => {
+      const res = filterEquipments(mockEquipments, 'all', '');
+      assert.equal(res.length, 8);
+    });
+
+    it('切換至睡眠系統分類時，僅篩選出帳篷與睡墊', () => {
+      const res = filterEquipments(mockEquipments, '睡眠系統', '');
+      assert.equal(res.length, 2);
+      assert.ok(res.every(item => item.category === '睡眠系統'));
+    });
+
+    it('搜尋關鍵字「背包」時，精準篩出背負系統裝備', () => {
+      const res = filterEquipments(mockEquipments, 'all', '背包');
+      assert.equal(res.length, 1);
+      assert.equal(res[0].id, 'EQ_BAG_01');
+    });
+
+    it('複合條件：睡眠系統 + 關鍵字「睡墊」，精準縮小至 1 件', () => {
+      const res = filterEquipments(mockEquipments, '睡眠系統', '睡墊');
+      assert.equal(res.length, 1);
+      assert.equal(res[0].name, '充氣睡墊');
+    });
+
+    it('複合條件無匹配時，回傳空陣列', () => {
+      const res = filterEquipments(mockEquipments, '炊事系統', '帳篷');
+      assert.equal(res.length, 0);
+    });
+  });
 });
 

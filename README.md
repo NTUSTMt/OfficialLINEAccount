@@ -3,11 +3,52 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.81` (v0.1.81)
+- **當前版本**：`0.1.83` (v0.1.83)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 183. 裝備租借頁面即時搜尋框、7 大登山系統分類篩選與 Supabase 下拉選單 ENUM (v0.1.83)
+- **裝備租借即時搜尋與分類篩選 (`src/pages/Borrow.tsx`, `src/components/borrow/EquipmentCard.tsx`)**：
+  - **即時搜尋輸入框**：
+    - 頂部置入搜尋框，即時搜尋裝備名稱、所屬系統分類、規格備註或裝備代號。
+    - 附帶搜尋圖示、一鍵清空按鈕（`X`）與數量動態呈現（如 `4 / 12` 種裝備）。
+  - **7 大登山系統分類水平滑動標籤列 (Category Chips)**：
+    - 針對社團高山器材規劃 7 大系統分類：**睡眠系統** ⛺、**背負系統** 🎒、**炊事系統** 🍳、**照明通訊** 🔦、**攀登技術** 🧗、**行進安全** 🥾、**其他裝備** 📦。
+    - 在行動裝置與 LINE 內建瀏覽器上可單手左右順暢滑動，點選即切換。
+    - 標籤列附帶動態數量徽章（Count Badge，如 `睡眠系統 (4)`），直觀了解各分類器材現狀。
+    - 裝備卡片（`EquipmentCard.tsx`）上同步標註分類標籤，方便社員識別。
+  - **友善空狀態 (Empty State)**：
+    - 當複合篩選無匹配裝備時，顯示「找不到符合搜尋或篩選條件的裝備」並提供「清除篩選條件」一鍵重置按鈕。
+- **Supabase 資料庫分類 ENUM 與原生下拉選單 (`supabase/add_equipment_categories.sql`, `supabase/schema.sql`, `src/utils/supabaseClient.ts`)**：
+  - **原生下拉選單支援**：
+    - 提供 Migration 腳本建立 `equipment_category` ENUM 自訂型別。
+    - 在 Supabase Studio Table Editor 中，幹部新增或修改裝備時，`category` 欄位**自動呈現為原生下拉選單 (Dropdown Menu)**，徹底防呆且無須手動輸入。
+  - **資料讀取補齊**：
+    - `supabaseClient.ts` 中的 `fetchEquipmentsFromSupabase` 正式映射 `category: row.category || '其他裝備'`，確保資料庫與前端即時連動。
+- **多國語言支援 (`src/locales/zh.json`, `src/locales/en.json`)**：
+  - 新增 `borrow.search`、`borrow.category`、`borrow.empty` 相關繁體中文與英文翻譯字串。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`test/frontend_utils.test.mjs` 新增 5 項搜尋與複合篩選測試，`pnpm test` 88/88 項測試 100% 全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+### 182. 擔任幹部意願推播幹部群欄位精準化：完整姓名/性別/科系/學號/爬山經驗/體能證明文字 (v0.1.82)
+- **幹部招募意願通知格式與欄位對齊 (`gas_modules/06_Helper_Services.js`, `src/gas.js`)**：
+  - **根本原因排查**：原先幹部招募推播訊息僅附上姓名、系所、遮罩學號與爬山經歷，缺少性別、完整學號，且缺少表單中社員填寫的體能文字自評資訊，幹部群無法第一時間評估社員的體能與登山背景。
+  - **欄位精準調整**：
+    - 判定條件：社員勾選「我有意願成為社團幹部」（或意願為新勾選）時，即刻觸發 `pushAdminMessage` 推播至幹部群組。
+    - 訊息內容完整包含：
+      - **姓名**：`data.name`
+      - **性別**：`data.gender`
+      - **科系**：`data.department`
+      - **學號**：完整學號 `data.studentId`（幹部群內部查證使用，不予遮罩）
+      - **爬山經驗**：`data.exp` 或 `data.outdoor_experience`
+      - **體能證明（文字自評）**：精準提取表單「體能證明」文字自評描述欄位（`data.strength` 或 `fitness_desc`），**徹底排除圖片上傳連結**，使幹部群訊息整潔易讀
+      - **聯絡資訊**：附上電話與 LINE ID，便於幹部團隊主動聯絡
+- **測試與驗證 (Verification)**：
+  - 單元測試：Suite 16 新增第 5 項測試，驗證幹部群通知精確包含姓名、性別、科系、學號、爬山經驗與體能證明文字，`pnpm test` 83/83 項測試 100% 全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
 
 ### 181. 個人檔案更新 LINE 動態推播：依實際異動欄位動態列出、整合 13 項出隊資格檢查動態引導 (v0.1.81)
 - **個人檔案更新動態推播訊息 (`src/pages/Register.tsx`, `gas_modules/06_Helper_Services.js`, `src/gas.js`)**：

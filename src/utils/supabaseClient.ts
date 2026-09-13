@@ -80,6 +80,7 @@ export const fetchEquipmentsFromSupabase = async (): Promise<Equipment[] | null>
       return {
         id: row.id,
         name: row.name || '未知裝備',
+        category: row.category || '其他裝備',
         remainQty: row.available_qty ?? 0,
         price: row.price_2day ?? row.price ?? row.member_price_per_day ?? 0,
         priceExtra: row.price_extra_day ?? row.price_extra ?? row.non_member_price_per_day ?? 0,

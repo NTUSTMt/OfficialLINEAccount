@@ -2432,12 +2432,13 @@ function _handleNotifyProfileSaved(json) {
 
     _pushMessage(userId, msg);
 
-    // 2. 若隊員勾選「有意願成為幹部」，且為新意願（由無變有或首次填寫），即時推播幹部管理群組
+    // 2. 若隊員勾選「我有意願成為社團幹部」，且為新意願（由無變有或首次填寫），即時推播幹部管理群組
     var officerIntent = data.intendOfficer || data.officer_intent || "";
     var wantsToBeOfficer = false;
     if (officerIntent) {
-      var lowerOfficerIntent = String(officerIntent).trim().toLowerCase();
-      if (lowerOfficerIntent !== "無" && lowerOfficerIntent !== "無意願" && lowerOfficerIntent !== "否" && lowerOfficerIntent !== "none" && lowerOfficerIntent !== "no") {
+      var strOfficerIntent = String(officerIntent).trim();
+      var lowerOfficerIntent = strOfficerIntent.toLowerCase();
+      if (strOfficerIntent.indexOf("我有意願成為社團幹部") > -1 || (lowerOfficerIntent !== "無" && lowerOfficerIntent !== "無意願" && lowerOfficerIntent !== "否" && lowerOfficerIntent !== "none" && lowerOfficerIntent !== "no" && strOfficerIntent !== "")) {
         wantsToBeOfficer = true;
       }
     }
@@ -2453,16 +2454,25 @@ function _handleNotifyProfileSaved(json) {
     }
 
     if (wantsToBeOfficer && isOfficerIntentNew) {
+      var fullStudentId = data.studentId ? String(data.studentId).trim() : "未填寫";
+      var genderText = data.gender ? String(data.gender).trim() : "未填寫";
+      var climbingExp = (data.exp || data.outdoor_experience) ? String(data.exp || data.outdoor_experience).trim() : "未填寫";
+      var fitnessText = (data.strength || data.fitness_desc) ? String(data.strength || data.fitness_desc).trim() : "未填寫";
+      var contactPhone = data.phone ? String(data.phone).trim() : phone;
+      var lineContact = (data.realLineId || data.lineId) ? String(data.realLineId || data.lineId).trim() : "同本帳號";
+
       var adminNotice = "🌟 【新幹部招募意願通知】\n" +
         "─────────────\n" +
-        "社員填寫個人資料時，勾選表達了加入幹部團隊的熱情意願！\n\n" +
+        "社員填寫個人資料時，表達了加入幹部團隊的意願！\n\n" +
         "• 姓名：" + name + "\n" +
-        "• 系所 / 學號：" + dept + " (" + studentId + ")\n" +
-        "• 聯絡電話：" + phone + "\n" +
-        "• LINE ID：" + (data.realLineId || data.lineId || "同本帳號") + "\n" +
-        "• 擔任幹部意願：" + officerIntent + "\n" +
-        (data.exp ? ("• 爬山經歷：" + data.exp + "\n") : "") +
-        "\n💡 幹部團隊可主動與該社員聯繫，歡迎新夥伴加入！";
+        "• 性別：" + genderText + "\n" +
+        "• 科系：" + dept + "\n" +
+        "• 學號：" + fullStudentId + "\n" +
+        "• 爬山經驗：" + climbingExp + "\n" +
+        "• 體能證明：" + fitnessText + "\n" +
+        "• 聯絡電話：" + contactPhone + "\n" +
+        "• LINE ID：" + lineContact + "\n\n" +
+        "💡 幹部團隊可主動與該社員聯繫，歡迎新夥伴加入！";
       pushAdminMessage(adminNotice);
     }
 

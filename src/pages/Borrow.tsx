@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { ShoppingCart, RotateCw } from 'lucide-react';
+import { ShoppingCart, RotateCw, Search, X } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
@@ -13,8 +13,18 @@ import { EquipmentDetailModal } from '../components/borrow/EquipmentDetailModal'
 import '../App.css';
 
 // ==========================================
-// 1. 型別定義 (Type Definitions)
+// 1. 型別與常數定義 (Type & Constant Definitions)
 // ==========================================
+export const EQUIPMENT_CATEGORIES = [
+  '睡眠系統',
+  '背負系統',
+  '炊事系統',
+  '照明通訊',
+  '攀登技術',
+  '行進安全',
+  '其他裝備'
+] as const;
+
 interface FormState {
   pickupDate: string;
   returnDate: string;
@@ -54,6 +64,10 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
   });
   const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+
+  // 搜尋關鍵字與所選分類篩選狀態
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   // 幹部身分狀態
   const officerStatus = useMemo(() => {
@@ -276,6 +290,42 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
     return form.returnDate < form.pickupDate;
   }, [form.pickupDate, form.returnDate]);
 
+  // 各分類即時數量統計
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: equipments.length };
+    EQUIPMENT_CATEGORIES.forEach(cat => {
+      counts[cat] = 0;
+    });
+    equipments.forEach(item => {
+      const cat = item.category || '其他裝備';
+      if (counts[cat] !== undefined) {
+        counts[cat]++;
+      } else {
+        counts['其他裝備'] = (counts['其他裝備'] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [equipments]);
+
+  // 過濾後的裝備清單 (複合分類篩選 + 關鍵字搜尋)
+  const filteredEquipments = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return equipments.filter(item => {
+      // 1. 分類篩選
+      if (selectedCategory !== 'all') {
+        const itemCat = item.category || '其他裝備';
+        if (itemCat !== selectedCategory) return false;
+      }
+      // 2. 關鍵字搜尋 (支援名稱、分類、規格、描述、裝備代號)
+      if (!query) return true;
+      const matchName = item.name.toLowerCase().includes(query);
+      const matchId = item.id.toLowerCase().includes(query);
+      const matchCat = (item.category || '').toLowerCase().includes(query);
+      const matchDesc = (item.description || '').toLowerCase().includes(query);
+      return matchName || matchId || matchCat || matchDesc;
+    });
+  }, [equipments, selectedCategory, searchQuery]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm(prev => {
@@ -407,10 +457,14 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
       {/* 主要內容區 */}
       <main className="main-content">
-        <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+        <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <h2>{t('borrow.grid.title')}</h2>
-            <span className="products-count">{t('borrow.grid.count', { count: equipments.length })}</span>
+            <span className="products-count">
+              {filteredEquipments.length === equipments.length
+                ? t('borrow.grid.count', { count: equipments.length })
+                : `${filteredEquipments.length} / ${equipments.length}`}
+            </span>
           </div>
           <button
             type="button"
@@ -438,14 +492,194 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
           </button>
         </div>
 
+        {/* 裝備搜尋與系統分類篩選區塊 */}
+        <div className="equipment-filter-container" style={{ marginBottom: '16px' }}>
+          {/* 搜尋輸入框 */}
+          <div className="equipment-search-wrapper" style={{ position: 'relative', marginBottom: '10px' }}>
+            <Search 
+              size={18} 
+              style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} 
+            />
+            <input
+              type="text"
+              className="equipment-search-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('borrow.search.placeholder', '搜尋裝備名稱、規格或代號...')}
+              style={{
+                width: '100%',
+                padding: '10px 38px 10px 38px',
+                fontSize: '14px',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                background: '#ffffff',
+                color: '#1e293b',
+                outline: 'none',
+                boxSizing: 'border-box',
+                transition: 'border-color 0.2s, box-shadow 0.2s',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+              }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '22px',
+                  height: '22px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#64748b'
+                }}
+                title={t('borrow.search.clear', '清空搜尋')}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* 水平滑動分類標籤列 (Category Chips) */}
+          <div 
+            className="equipment-category-scroll-container" 
+            style={{ 
+              display: 'flex', 
+              gap: '8px', 
+              overflowX: 'auto', 
+              paddingBottom: '4px',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
+            }}
+          >
+            <button
+              type="button"
+              className={`category-chip ${selectedCategory === 'all' ? 'active' : ''}`}
+              onClick={() => setSelectedCategory('all')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                fontSize: '13px',
+                fontWeight: selectedCategory === 'all' ? 600 : 500,
+                whiteSpace: 'nowrap',
+                border: selectedCategory === 'all' ? '1px solid #059669' : '1px solid #e2e8f0',
+                background: selectedCategory === 'all' ? '#ecfdf5' : '#ffffff',
+                color: selectedCategory === 'all' ? '#059669' : '#64748b',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                flexShrink: 0
+              }}
+            >
+              <span>{t('borrow.category.all', '全部')}</span>
+              <span style={{ 
+                fontSize: '11px', 
+                background: selectedCategory === 'all' ? '#059669' : '#f1f5f9', 
+                color: selectedCategory === 'all' ? '#ffffff' : '#64748b',
+                borderRadius: '10px', 
+                padding: '1px 6px' 
+              }}>
+                {categoryCounts.all}
+              </span>
+            </button>
+
+            {EQUIPMENT_CATEGORIES.map(cat => {
+              const count = categoryCounts[cat] || 0;
+              const isSelected = selectedCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`category-chip ${isSelected ? 'active' : ''}`}
+                  onClick={() => setSelectedCategory(cat)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    fontSize: '13px',
+                    fontWeight: isSelected ? 600 : 500,
+                    whiteSpace: 'nowrap',
+                    border: isSelected ? '1px solid #059669' : '1px solid #e2e8f0',
+                    background: isSelected ? '#ecfdf5' : '#ffffff',
+                    color: isSelected ? '#059669' : '#64748b',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    flexShrink: 0
+                  }}
+                >
+                  <span>{cat}</span>
+                  <span style={{ 
+                    fontSize: '11px', 
+                    background: isSelected ? '#059669' : '#f1f5f9', 
+                    color: isSelected ? '#ffffff' : '#64748b',
+                    borderRadius: '10px', 
+                    padding: '1px 6px' 
+                  }}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {loading ? (
           <div className="loading-state">
             <div className="spinner"></div>
             <p>{t('borrow.grid.loading')}</p>
           </div>
+        ) : filteredEquipments.length === 0 ? (
+          <div className="equipment-empty-state" style={{
+            textAlign: 'center',
+            padding: '48px 16px',
+            background: '#f8fafc',
+            borderRadius: '16px',
+            border: '1px dashed #cbd5e1',
+            margin: '12px 0'
+          }}>
+            <p style={{ fontSize: '15px', color: '#64748b', marginBottom: '14px', fontWeight: 500 }}>
+              {searchQuery || selectedCategory !== 'all'
+                ? t('borrow.empty.noMatch', '找不到符合搜尋或篩選條件的裝備')
+                : t('borrow.empty.noEquipments', '目前暫無開放租借的裝備')}
+            </p>
+            {(searchQuery || selectedCategory !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('all');
+                }}
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: '20px',
+                  border: '1px solid #059669',
+                  background: '#ffffff',
+                  color: '#059669',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {t('borrow.empty.resetFilters', '清除篩選條件')}
+              </button>
+            )}
+          </div>
         ) : (
           <div className="products-grid">
-            {equipments.map(item => (
+            {filteredEquipments.map(item => (
               <EquipmentCard
                 key={item.id}
                 item={item}

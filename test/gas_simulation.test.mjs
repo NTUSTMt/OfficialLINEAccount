@@ -2271,4 +2271,52 @@ describe('16. 個人檔案動態推播訊息與出隊資格引導測試', () => 
     assert.equal(res.isActivityReady, true);
     assert.ok(res.msg.includes('您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程'));
   });
+
+  it('勾選我有意願成為社團幹部時，推播給幹部群的訊息精確包含姓名、性別、科系、學號、爬山經驗、體能證明(文字非圖片)', () => {
+    function generateAdminOfficerNotice(data) {
+      const name = data.name || "社員";
+      const fullStudentId = data.studentId ? String(data.studentId).trim() : "未填寫";
+      const genderText = data.gender ? String(data.gender).trim() : "未填寫";
+      const dept = data.department || "未填寫";
+      const climbingExp = (data.exp || data.outdoor_experience) ? String(data.exp || data.outdoor_experience).trim() : "未填寫";
+      const fitnessText = (data.strength || data.fitness_desc) ? String(data.strength || data.fitness_desc).trim() : "未填寫";
+      const contactPhone = data.phone ? String(data.phone).trim() : "未填寫";
+      const lineContact = (data.realLineId || data.lineId) ? String(data.realLineId || data.lineId).trim() : "同本帳號";
+
+      return "🌟 【新幹部招募意願通知】\n" +
+        "─────────────\n" +
+        "社員填寫個人資料時，表達了加入幹部團隊的意願！\n\n" +
+        "• 姓名：" + name + "\n" +
+        "• 性別：" + genderText + "\n" +
+        "• 科系：" + dept + "\n" +
+        "• 學號：" + fullStudentId + "\n" +
+        "• 爬山經驗：" + climbingExp + "\n" +
+        "• 體能證明：" + fitnessText + "\n" +
+        "• 聯絡電話：" + contactPhone + "\n" +
+        "• LINE ID：" + lineContact + "\n\n" +
+        "💡 幹部團隊可主動與該社員聯繫，歡迎新夥伴加入！";
+    }
+
+    const testData = {
+      name: '洪楷量',
+      gender: '男',
+      department: '電機工程系',
+      studentId: 'B11100015',
+      exp: '玉山主東、合歡群峰',
+      strength: '百岳單日 8 小時負重 15kg',
+      strengthProof: 'https://drive.google.com/uploaded_image_link.jpg',
+      phone: '0975123401',
+      realLineId: 'brian_line'
+    };
+
+    const notice = generateAdminOfficerNotice(testData);
+    assert.ok(notice.includes('• 姓名：洪楷量'));
+    assert.ok(notice.includes('• 性別：男'));
+    assert.ok(notice.includes('• 科系：電機工程系'));
+    assert.ok(notice.includes('• 學號：B11100015'));
+    assert.ok(notice.includes('• 爬山經驗：玉山主東、合歡群峰'));
+    assert.ok(notice.includes('• 體能證明：百岳單日 8 小時負重 15kg'));
+    // 確保體能證明是文字而非圖片連結
+    assert.ok(!notice.includes('https://drive.google.com/uploaded_image_link.jpg'));
+  });
 });

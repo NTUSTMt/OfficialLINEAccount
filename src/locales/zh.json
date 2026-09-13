@@ -219,6 +219,18 @@
       "refresh": "重新整理",
       "refreshing": "更新中..."
     },
+    "search": {
+      "placeholder": "搜尋裝備名稱、規格或代號...",
+      "clear": "清空搜尋"
+    },
+    "category": {
+      "all": "全部"
+    },
+    "empty": {
+      "noMatch": "找不到符合搜尋或篩選條件的裝備",
+      "noEquipments": "目前暫無開放租借的裝備",
+      "resetFilters": "清除篩選條件"
+    },
     "card": {
       "outOfStock": "已租完",
       "lowStock": "僅剩 {{count}} 件",

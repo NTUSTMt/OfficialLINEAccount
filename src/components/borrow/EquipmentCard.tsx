@@ -30,13 +30,25 @@ export const EquipmentCard: React.FC<EquipmentCardProps> = ({
       <div className="product-info">
         <h3 className="product-name">{item.name}</h3>
 
-        <div className="product-status">
+        <div className="product-status" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {isOutOfStock ? (
             <span className="status-badge out-of-stock">{t('borrow.card.outOfStock')}</span>
           ) : item.remainQty <= 2 ? (
             <span className="status-badge low-stock">{t('borrow.card.lowStock', { count: item.remainQty })}</span>
           ) : (
             <span className="status-badge in-stock">{t('borrow.card.inStock', { count: item.remainQty })}</span>
+          )}
+          {item.category && (
+            <span className="category-tag" style={{
+              fontSize: '11px',
+              padding: '1px 6px',
+              borderRadius: '4px',
+              background: '#f1f5f9',
+              color: '#475569',
+              fontWeight: 500
+            }}>
+              {item.category}
+            </span>
           )}
         </div>
 

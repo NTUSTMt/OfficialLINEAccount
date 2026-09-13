@@ -219,6 +219,18 @@
       "refresh": "Refresh",
       "refreshing": "Refreshing..."
     },
+    "search": {
+      "placeholder": "Search gear name, specs or ID...",
+      "clear": "Clear search"
+    },
+    "category": {
+      "all": "All"
+    },
+    "empty": {
+      "noMatch": "No gears found matching your criteria",
+      "noEquipments": "No gears available for rental at this moment",
+      "resetFilters": "Reset Filters"
+    },
     "card": {
       "outOfStock": "Out of Stock",
       "lowStock": "Only {{count}} left",

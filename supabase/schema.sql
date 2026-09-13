@@ -139,10 +139,24 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 -- ------------------------------------------------------------------------------
 -- 7. 裝備品項資料表 (equipments) -> Google Sheets: Equipments
 -- ------------------------------------------------------------------------------
+DO $$ BEGIN
+    CREATE TYPE equipment_category AS ENUM (
+        '睡眠系統',
+        '背負系統',
+        '炊事系統',
+        '照明通訊',
+        '攀登技術',
+        '行進安全',
+        '其他裝備'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS equipments (
     id TEXT PRIMARY KEY, -- 裝備代號，如 EQ_TENT_01
     name TEXT NOT NULL,
-    category TEXT NOT NULL,
+    category equipment_category NOT NULL DEFAULT '其他裝備',
     total_qty INTEGER NOT NULL DEFAULT 0,
     available_qty INTEGER NOT NULL DEFAULT 0,
     is_borrowable BOOLEAN NOT NULL DEFAULT TRUE,
