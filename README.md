@@ -3,11 +3,67 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.87` (v0.1.87)
+- **當前版本**：`0.1.90` (v0.1.90)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 190. 主試算表全量覆蓋排除內部 sync_queue 佇列表，專注 9 大核心業務資料表 (v0.1.90)
+- **需求與架構設計 (Requirements & Architecture)**：
+  - **排除內部 `sync_queue` 佇列分頁**：
+    - 依社團幹部指示，主試算表為幹部業務管理界面，不需要同步內部資料庫事件緩衝表 `sync_queue`。
+    - 於 [gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js) 與 [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 的 `defaultTables` 中移除 `sync_queue`，並在 OpenAPI 動態探測條件中加入 `defName !== "sync_queue"` 過濾守衛，確保主試算表不會產生該分頁。
+    - 主試算表全量覆蓋鎖定 **9 大業務核心資料表**：
+      1. `members` (社員清單)
+      2. `officers` (幹部名冊)
+      3. `events` (活動列表)
+      4. `event_signups` (活動報名名冊)
+      5. `equipments` (裝備清單)
+      6. `loans` (租借紀錄)
+      7. `loan_items` (租借細項)
+      8. `payments` (繳費申報)
+      9. `reflections` (活動心得與照片)
+  - **資料字典同步淨化 (`supabase/SCHEMA_DICTIONARY.md`)**：
+    - 移除 `sync_queue` 章節與頂部對照表，使資料字典純淨專注於 9 大業務核心資料表與中英混用表頭規則。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+### 189. 主試算表全量覆蓋升級支援 Supabase 全部資料表分頁與 OpenAPI 自動探測發現機制 (v0.1.89)
+- **需求與架構設計 (Requirements & Architecture)**：
+  - **支援 Supabase 所有資料表分頁全量覆蓋 (`overwriteMainSpreadsheetFromSupabase`)**：
+    - 全面擴充 [gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js) 與 [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js)：
+      - 預設納入社團資料庫 10 大核心資料表：`members` (社員清單)、`officers` (幹部名冊)、`events` (活動列表)、`event_signups` (活動報名名單)、`equipments` (裝備清單)、`loans` (租借紀錄)、`loan_items` (租借細項)、`payments` (繳費紀錄)、`reflections` (活動心得相片)、`sync_queue` (同步佇列)。
+      - **動態 OpenAPI 探測發現**：執行時自動向 Supabase `/rest/v1/` 請求 PostgREST OpenAPI 規格，動態辨識資料庫中可能新增的自定義資料表（例如新模組、統計表或記錄表），達成 100% 動態探索與全部頁面自動覆蓋。
+    - 嚴格維持 Supabase 原名建立/重設分頁，確保主鍵置首、預設 Schema 欄位順序對齊，並動態補齊遠端記錄中的新欄位。
+    - 自動設置第 1 列表頭為粗體灰底（`#F3F4F6`）並凍結首列。
+  - **資料字典全量補齊 (`supabase/SCHEMA_DICTIONARY.md`)**：
+    - 更新 [supabase/SCHEMA_DICTIONARY.md](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/SCHEMA_DICTIONARY.md)，將現有 10 大資料表全數收錄至獨立章節（包含 `loan_items` 與 `sync_queue`），詳細記載欄位名稱、資料型別、關聯約束與中文業務用途。
+  - **通用資料表動態同步機制 (`_syncGenericTableToSheet`, `_getSheetByTableName`)**：
+    - 支援任何資料表之增刪改動態同步，配合智慧中英混用表頭辨識與自動向右擴充新欄位，達成試算表與 Supabase 雙軌資料無縫鏡像。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過（含表頭邊界正則匹配防碰撞 7 項測試）。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+### 188. Supabase 狀態下拉選單 ENUM、主試算表全量覆蓋鏡像同步、中英混用表頭自適應辨識與資料字典建置 (v0.1.88)
+- **需求與架構設計 (Requirements & Architecture)**：
+  - **Supabase 原生狀態下拉選單 (ENUM Migration)**：
+    - 建立 [supabase/update_status_enums.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/update_status_enums.sql)：
+      - `event_signup_status_enum`：正取 Confirmed、正取（已繳費）Confirmed (Paid)、備取 Waitlisted、備取（有意願）Waitlisted (Interested)、審核中 Checking、已取消 Cancelled。
+      - `payment_status_enum`：已繳費 Paid、待確認 Checking、未繳費 Unpaid。
+    - 清洗既有髒資料並將 `event_signups.status`、`event_signups.payment_status`、`loans.payment_status`、`members.payment_status` 升級為 PostgreSQL ENUM 型別，Supabase Table Editor 原生自動呈現下拉選單。
+  - **主試算表全量覆蓋更新 (`overwriteMainSpreadsheetFromSupabase`)**：
+    - 在 GAS [gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js) 與 [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 實作全量覆蓋函式與自訂選單「🏔️ 社團系統 > 🔄 全量從 Supabase 覆蓋更新主試算表」。
+    - 依據 Supabase 資料表原名（`members`, `events`, `event_signups`, `equipments`, `loans`, `payments`, `reflections`）建立分頁，清除既有內容並寫入純英文標頭與完整資料，並自動設置凍結頂列。
+  - **中英混用表頭智慧辨識與動態增欄 (`_findColByEnglishName`, `_ensureColumnsExist`)**：
+    - 引入字詞邊界正則匹配 `(^|[^a-zA-Z0-9_])<col_name>([^a-zA-Z0-9_]|$)`，使用者未來在表頭任何位置加入中文（如 `status 審核狀態` 或 `審核狀態 (status)`），程式皆能 100% 精準對齊英文欄位，且絕不發生 `id` 與 `line_user_id`、`status` 與 `payment_status` 誤判。
+    - 定時排程同步時若偵測到 Supabase 有新欄位，自動於試算表最右側追加新標頭，達成全欄位動態鏡像同步。
+  - **建立 Supabase 欄位資料字典 (`supabase/SCHEMA_DICTIONARY.md`)**：
+    - 新增 [supabase/SCHEMA_DICTIONARY.md](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/SCHEMA_DICTIONARY.md)，詳細記錄社團現有 8 大資料表（`members`, `events`, `event_signups`, `equipments`, `loans`, `loan_items`, `payments`, `reflections`）之英文欄位名稱、資料型別、ENUM 選項、預設值與繁體中文說明，作為系統開發之 SSOT。
+- **測試與驗證 (Verification)**：
+  - 單元測試：新增 [test/header_matcher.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/header_matcher.test.mjs)，覆蓋純英文、英文在前中文在後、中文在前英文在後、大小寫不拘、避免子字串碰撞與純中文別名回退等 7 大情境。
+  - 執行 `pnpm test`：105/105 項測試全數通過（21 套測試套件 0 失敗）。
 
 ### 187. 裝備預約通知幹部群組 (含 LINE ID) 與使用者聊天室確認訊息 (零額度消耗) 及外部瀏覽器鎖定防護 (v0.1.87)
 - **使用者需求與架構設計 (Requirements & Architecture)**：

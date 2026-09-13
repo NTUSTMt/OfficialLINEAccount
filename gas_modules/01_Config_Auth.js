@@ -143,6 +143,33 @@ function _fi(headers, keyword) {
   });
 }
 
+// 以英文欄位名稱精確查找表頭索引 (自動忽略使用者添加的中文，支援如 "status 審核狀態"、"審核狀態 (status)"、"status")
+function _findColByEnglishName(headers, colName) {
+  if (!headers || !headers.length || !colName) return -1;
+  var pattern = new RegExp("(^|[^a-zA-Z0-9_])" + colName + "([^a-zA-Z0-9_]|$)", "i");
+  for (var i = 0; i < headers.length; i++) {
+    var h = String(headers[i] || "").trim();
+    if (pattern.test(h)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// 智慧表頭欄位尋找器 (優先以英文名精確比對，次以中文別名回退)
+function _findHeaderCol(headers, englishName, aliases) {
+  var idx = _findColByEnglishName(headers, englishName);
+  if (idx > -1) return idx;
+  if (aliases) {
+    if (!Array.isArray(aliases)) aliases = [aliases];
+    for (var a = 0; a < aliases.length; a++) {
+      var aIdx = _fi(headers, aliases[a]);
+      if (aIdx > -1) return aIdx;
+    }
+  }
+  return -1;
+}
+
 // 遮罩敏感字串 (個資保護)
 function _maskString(str, visibleStart, visibleEnd) {
   if (!str) return "";

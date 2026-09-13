@@ -17,6 +17,29 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ------------------------------------------------------------------------------
+-- 2.5 狀態與繳費 ENUM 定義
+-- ------------------------------------------------------------------------------
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'event_signup_status_enum') THEN
+        CREATE TYPE event_signup_status_enum AS ENUM (
+            '正取 Confirmed',
+            '正取（已繳費）Confirmed (Paid)',
+            '備取 Waitlisted',
+            '備取（有意願）Waitlisted (Interested)',
+            '審核中 Checking',
+            '已取消 Cancelled'
+        );
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status_enum') THEN
+        CREATE TYPE payment_status_enum AS ENUM (
+            '已繳費 Paid',
+            '待確認 Checking',
+            '未繳費 Unpaid'
+        );
+    END IF;
+END $$;
+
+-- ------------------------------------------------------------------------------
 -- 3. 會員資料表 (members) -> Google Sheets: Members
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS members (
@@ -28,7 +51,7 @@ CREATE TABLE IF NOT EXISTS members (
     phone TEXT,                          -- 聯絡電話
     department TEXT,                     -- 系所
     student_id TEXT,                     -- 學號
-    payment_status TEXT,                 -- 繳費狀態 (已繳費 Paid / 未繳費)
+    payment_status payment_status_enum NOT NULL DEFAULT '未繳費 Unpaid', -- 繳費狀態 (已繳費 Paid / 待確認 Checking / 未繳費 Unpaid)
     membership_expires_at DATE,          -- 社籍到期日
     birthday TEXT,                       -- 生日 (格式：YYYY-MM-DD)
     id_card TEXT,                        -- 證件號碼 (身分證字號 / 居留證號)
@@ -92,8 +115,8 @@ CREATE TABLE IF NOT EXISTS event_signups (
     event_id TEXT NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
     line_user_id TEXT NOT NULL REFERENCES members(line_user_id) ON DELETE RESTRICT,
     name TEXT,                           -- 社員姓名 (方便後台直觀辨識)
-    status TEXT NOT NULL DEFAULT '審核中 Checking', 
-    -- 正取 Confirmed / 正取（已繳費）Confirmed(Paid) / 備取 Waitlisted / 備取（有意願）Waitlisted (Interested) / 審核中 Checking / 已取消 Cancelled
+    status event_signup_status_enum NOT NULL DEFAULT '審核中 Checking', 
+    payment_status payment_status_enum NOT NULL DEFAULT '未繳費 Unpaid',
     is_official_member_snapshot BOOLEAN NOT NULL DEFAULT FALSE,
     cancel_reason TEXT,
     notes TEXT, -- 如 【已繳費待退款】
@@ -194,8 +217,7 @@ CREATE TABLE IF NOT EXISTS loans (
     purpose_other TEXT,
     status TEXT NOT NULL DEFAULT '待領取 To Be Collected', 
     -- 待領取 To Be Collected / 租借中 Borrowed / 已歸還 Returned / 已取消 Cancelled / 已取消 (待退款)
-    payment_status TEXT NOT NULL DEFAULT '未繳費', 
-    -- 未繳費 / 待確認 Checking / 已繳費 Paid
+    payment_status payment_status_enum NOT NULL DEFAULT '未繳費 Unpaid', 
     total_deposit INTEGER NOT NULL DEFAULT 0,
     total_rent INTEGER NOT NULL DEFAULT 0,
     notes TEXT,
