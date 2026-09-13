@@ -1,5 +1,5 @@
 // ==============================================================================
-// ⚡ 野境戶外系統 GAS 模組 6：LIFF 輕量 Helper API (06_Helper_Services.js)
+// ⚡ 台科登山社社團系統 GAS 模組 6：LIFF 輕量 Helper API (06_Helper_Services.js)
 // 目的：僅處理 Google Drive 檔案上傳與 LINE 推播通知，徹底移除所有試算表寫入依賴
 // ==============================================================================
 
@@ -176,8 +176,8 @@ function _handleNotifyProfileSaved(json) {
     var offIntent = data.intendOfficial || "未填寫";
 
     var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功】" : "【✅ 基本資料已成功更新】";
-    var intro = isNew 
-      ? "您好 " + name + "！感謝您完成野境戶外社基本資料註冊：" 
+    var intro = isNew
+      ? "您好 " + name + "！感謝您完成台科登山社社團系統社基本資料註冊："
       : "您好 " + name + "！您已於系統中成功更新個人檔案：";
 
     var msg = title + "\n\n" +

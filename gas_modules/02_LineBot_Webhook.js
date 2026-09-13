@@ -1,5 +1,5 @@
 // ==============================================================================
-// 🤖 野境戶外系統 GAS 模組 2：LINE Bot Webhook 接收與指令路由 (02_LineBot_Webhook.js)
+// 🤖 台科登山社社團系統 GAS 模組 2：LINE Bot Webhook 接收與指令路由 (02_LineBot_Webhook.js)
 // ==============================================================================
 
 /**
@@ -74,58 +74,53 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
 
   // 2. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
   if (text.indexOf("最新活動") > -1 || lowerText.indexOf("activities") > -1 || text.indexOf("報名活動") > -1 || lowerText === "events") {
-    var flexCards = _buildLatestEventsFlex();
-    if (flexCards) {
-      _replyFlexMessage(replyToken, "最新活動資訊", flexCards);
-    } else {
-      _replyMessage(replyToken, "目前暫無開放報名的活動，請密切注意公告！");
-    }
+    sendEventList(replyToken, _getSpreadsheet());
     return;
   }
 
   // 3. 幹部名單 (支援「幹部是誰」、「幹部名單」、「Officers」)
   if (text.indexOf("幹部是誰") > -1 || text.indexOf("幹部名單") > -1 || lowerText.indexOf("officers") > -1) {
-    var officerFlex = _buildOfficersFlex();
-    if (officerFlex) {
-      _replyFlexMessage(replyToken, "幹部團隊名單", officerFlex);
-    } else {
-      _replyMessage(replyToken, "目前幹部名冊維護中。");
-    }
+    sendOfficerMenu(replyToken, _getSpreadsheet());
     return;
   }
 
   // 4. 更多服務 (支援「更多服務」、「更多服務 More Services」、「其他」、「More」)
   if (text.indexOf("更多服務") > -1 || lowerText.indexOf("more services") > -1 || text.indexOf("其他服務") > -1 || text === "其他" || lowerText === "more") {
-    var moreFlex = _buildMoreServicesFlex();
-    _replyFlexMessage(replyToken, "野境戶外：更多服務選單", moreFlex);
+    sendMoreOptionsMenu(replyToken);
+    return;
+  }
+
+  // 4.1 意見與回饋 (支援「意見與回饋」、「Feedback」)
+  if (text.indexOf("意見與回饋") > -1 || lowerText.indexOf("feedback") > -1) {
+    sendFeedbackLink(replyToken);
     return;
   }
 
   // 5. 裝備租借 (支援「裝備租借」、「器材借用」、「Equipment Loan」)
   if (text.indexOf("裝備租借") > -1 || text.indexOf("器材借用") > -1 || lowerText.indexOf("equipment") > -1) {
-    _replyMessage(replyToken, "🏕️ 歡迎使用野境裝備租借商城！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=borrow");
+    _replyMessage(replyToken, "🏕️ 歡迎使用裝備租借商城！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI");
     return;
   }
 
   // 6. 繳費系統 (支援「繳費系統」、「繳費中心」、「Payment System」)
   if (text.indexOf("繳費系統") > -1 || text.indexOf("繳費中心") > -1 || lowerText.indexOf("payment") > -1) {
-    _replyMessage(replyToken, "💳 歡迎使用繳費與對帳申報系統！\n請點擊下方連結進入結帳申報表單：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=payment");
+    _replyMessage(replyToken, "💰 歡迎使用繳費與對帳申報系統！\n請點擊下方連結進入結帳申報表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
     return;
   }
 
   // 7. 個人主頁 / 我的狀態 (支援「我的狀態」、「個人主頁」、「My Status」、「Dashboard」)
   if (text.indexOf("我的狀態") > -1 || text.indexOf("個人主頁") > -1 || lowerText.indexOf("dashboard") > -1 || lowerText.indexOf("status") > -1) {
-    _replyMessage(replyToken, "👤 查看出隊成就、個人資料與預約進度：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=dashboard");
+    _replyMessage(replyToken, "👤 查看出隊成就、個人資料與預約進度：\n\nhttps://liff.line.me/2009217429-jvj3ydDT");
     return;
   }
 
   // 8. 填寫資料 (支援「填寫資料」、「Register」)
   if (text.indexOf("填寫資料") > -1 || lowerText.indexOf("register") > -1) {
-    _replyMessage(replyToken, "📝 請填寫或更新您的社員基本資料：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=register");
+    _replyMessage(replyToken, "📝 請填寫或更新您的社員基本資料：\n\nhttps://liff.line.me/2009217429-AhPRqAHg");
     return;
   }
 
-  // 5. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
+  // 9. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
   if (GEMINI_API_KEY) {
     var aiReply = _handleGeminiChat(userId, text);
     if (aiReply) {
@@ -135,13 +130,14 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
   }
 
   // 若無特定處理，回傳友善提示
-  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備借用」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！");
+  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！");
 }
 
 /**
  * 按鈕隱藏回傳值處理 (Postback Router)
  */
 function _handlePostback(replyToken, userId, postbackData) {
+  var ss = _getSpreadsheet();
   var params = {};
   var parts = postbackData.split("&");
   for (var i = 0; i < parts.length; i++) {
@@ -152,14 +148,27 @@ function _handlePostback(replyToken, userId, postbackData) {
   }
 
   var action = params.action;
-  if (action === "view_event_detail") {
-    var eventId = params.eventId;
-    var detailFlex = _buildSingleEventDetailFlex(eventId);
-    if (detailFlex) {
-      _replyFlexMessage(replyToken, "活動詳情", detailFlex);
-    } else {
-      _replyMessage(replyToken, "找不到該活動詳細資料。");
+  var eventId = params.eventId || (parts.length > 1 && parts[1].indexOf("=") > -1 ? parts[1].split("=")[1] : "");
+
+  if (action === "view" || action === "view_event_detail") {
+    sendEventDetail(replyToken, eventId, ss);
+    return;
+  }
+  if (action === "signup") {
+    handleSignup(replyToken, userId, eventId, ss);
+    return;
+  }
+  if (action === "confirm_waitlist") {
+    handleConfirmWaitlist(replyToken, userId, params, ss);
+    return;
+  }
+  if (action === "confirm_bind_admin_group") {
+    var newGroupId = params.targetId || eventId;
+    if (newGroupId) {
+      PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', newGroupId);
+      _replyMessage(replyToken, "✅ 已成功將此群組設定為【幹部管理推播群組】！");
     }
+    return;
   }
 }
 

@@ -1,5 +1,5 @@
 // ==============================================================================
-// 🌲 野境戶外系統 GAS 模組 1：環境設定、認證與共通工具 (01_Config_Auth.js)
+// 🌲 台科登山社社團系統 GAS 模組 1：環境設定、認證與共通工具 (01_Config_Auth.js)
 // ==============================================================================
 
 // ⭐️ 1. 全域變數與環境設定
@@ -155,3 +155,21 @@ function _maskString(str, visibleStart, visibleEnd) {
   for (var i = 0; i < maskLen; i++) mask += "*";
   return start + mask + end;
 }
+
+// 安全取得試算表實例 (容錯 openById 與 getActiveSpreadsheet)
+function _getSpreadsheet() {
+  try {
+    if (SPREADSHEET_ID) {
+      return SpreadsheetApp.openById(SPREADSHEET_ID);
+    }
+  } catch (e) {
+    console.warn("openById failed: " + e);
+  }
+  try {
+    return SpreadsheetApp.getActiveSpreadsheet();
+  } catch (e) {
+    console.warn("getActiveSpreadsheet failed: " + e);
+  }
+  return null;
+}
+

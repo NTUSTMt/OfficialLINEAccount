@@ -1,5 +1,5 @@
 // ==============================================================================
-// 🧠 野境戶外系統 GAS 模組 4：Gemini AI 智慧客服與知識庫 (04_Ai_Gemini.js)
+// 🧠 台科登山社社團系統 GAS 模組 4：Gemini AI 智慧客服與知識庫 (04_Ai_Gemini.js)
 // ==============================================================================
 
 /**
@@ -13,7 +13,7 @@ function _handleGeminiChat(userId, userQuery) {
     var knowledgeBase = _fetchDocsKnowledgeBase();
     var eventsContext = _fetchOpenEventsContext();
 
-    var systemInstruction = "你是一位熱情、專業的「野境戶外社」AI 智慧客服嚮導。\n" +
+    var systemInstruction = "你是一位熱情、專業的「台科登山社社團系統社」AI 智慧客服嚮導。\n" +
       "請根據以下社團規章、活動與知識庫回答使用者的問題。若資訊不足，請禮貌引導向幹部洽詢。\n\n" +
       "【當前開放活動資訊】：\n" + eventsContext + "\n\n" +
       "【社團知識庫規章】：\n" + knowledgeBase + "\n";

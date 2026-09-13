@@ -1,5 +1,5 @@
 // ==============================================================================
-// 🚀 野境戶外系統：Google Sheets ➔ Supabase 智慧型 ETL 歷史資料匯入器 (V2 增強版)
+// 🚀 台科登山社社團系統：Google Sheets ➔ Supabase 智慧型 ETL 歷史資料匯入器 (V2 增強版)
 // 亮點：搭載多同義詞模糊匹配、排除干擾詞、多圖片欄位自動聚合、社籍繳費狀態智慧映射
 // ==============================================================================
 
@@ -125,7 +125,7 @@ function _etlMembersV2(ss, url, key) {
 
     var proofs = [];
     if (proofIdx > -1 && data[i][proofIdx]) {
-      proofs = String(data[i][proofIdx]).split(/[\n,，;\s]+/).map(function(s){ return s.trim(); }).filter(function(s){ return s.startsWith("http"); });
+      proofs = String(data[i][proofIdx]).split(/[\n,，;\s]+/).map(function (s) { return s.trim(); }).filter(function (s) { return s.startsWith("http"); });
     }
 
     // 正式社員身分智慧判定：優先以「是否為正式社員」欄位判定，其次以「繳費狀態」包含已繳費/Paid 判定
@@ -291,11 +291,11 @@ function _etlEquipmentsV2(ss, url, key) {
     if (!id || !name) continue;
 
     var imgs = [];
-    imgColIndices.forEach(function(ci) {
+    imgColIndices.forEach(function (ci) {
       var val = String(data[i][ci] || "").trim();
       if (val) {
-        var parts = val.split(/[\n,，;\s]+/).map(function(s){ return s.trim(); }).filter(function(s){ return s.startsWith("http"); });
-        parts.forEach(function(u) {
+        var parts = val.split(/[\n,，;\s]+/).map(function (s) { return s.trim(); }).filter(function (s) { return s.startsWith("http"); });
+        parts.forEach(function (u) {
           if (imgs.indexOf(u) === -1) imgs.push(u);
         });
       }
@@ -385,7 +385,7 @@ function _etlLoansV2(ss, url, key) {
     }
   }
 
-  var loanList = Object.keys(loansMap).map(function(k){ return loansMap[k]; });
+  var loanList = Object.keys(loansMap).map(function (k) { return loansMap[k]; });
   _postToSupabaseV2("loans", loanList, url, key, "id");
   _postToSupabaseV2("loan_items", loanItems, url, key, "");
 }
@@ -456,7 +456,7 @@ function _etlReflectionsV2(ss, url, key) {
 
     var photos = [];
     if (imgIdx > -1 && data[i][imgIdx]) {
-      photos = String(data[i][imgIdx]).split(/[\n,，;\s]+/).map(function(s){ return s.trim(); }).filter(function(s){ return s.startsWith("http"); });
+      photos = String(data[i][imgIdx]).split(/[\n,，;\s]+/).map(function (s) { return s.trim(); }).filter(function (s) { return s.startsWith("http"); });
     }
 
     records.push({

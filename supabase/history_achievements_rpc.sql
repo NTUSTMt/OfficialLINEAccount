@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 野境戶外系統：歷史紀錄 (History.tsx) 與 活動成就牆 (Achievements.tsx) 安全 RPC 函式
+-- 台科登山社社團系統：歷史紀錄 (History.tsx) 與 活動成就牆 (Achievements.tsx) 安全 RPC 函式
 -- 目的：
 -- 1. get_my_payment_history: 50ms 內聚合本人繳費紀錄、自動分類與累計已核銷總金額
 -- 2. get_my_achievements: 50ms 內聚合本人已結束之出隊歷史與心得評價

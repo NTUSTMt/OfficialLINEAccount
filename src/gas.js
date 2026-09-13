@@ -1,5 +1,5 @@
 // ==============================================================================
-// 🌲 野境戶外系統 GAS 模組 1：環境設定、認證與共通工具 (01_Config_Auth.js)
+// 🌲 台科登山社社團系統 GAS 模組 1：環境設定、認證與共通工具 (01_Config_Auth.js)
 // ==============================================================================
 
 // ⭐️ 1. 全域變數與環境設定
@@ -155,8 +155,26 @@ function _maskString(str, visibleStart, visibleEnd) {
   for (var i = 0; i < maskLen; i++) mask += "*";
   return start + mask + end;
 }
+
+// 安全取得試算表實例 (容錯 openById 與 getActiveSpreadsheet)
+function _getSpreadsheet() {
+  try {
+    if (SPREADSHEET_ID) {
+      return SpreadsheetApp.openById(SPREADSHEET_ID);
+    }
+  } catch (e) {
+    console.warn("openById failed: " + e);
+  }
+  try {
+    return SpreadsheetApp.getActiveSpreadsheet();
+  } catch (e) {
+    console.warn("getActiveSpreadsheet failed: " + e);
+  }
+  return null;
+}
+
 // ==============================================================================
-// 🤖 野境戶外系統 GAS 模組 2：LINE Bot Webhook 接收與指令路由 (02_LineBot_Webhook.js)
+// 🤖 台科登山社社團系統 GAS 模組 2：LINE Bot Webhook 接收與指令路由 (02_LineBot_Webhook.js)
 // ==============================================================================
 
 /**
@@ -231,58 +249,53 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
 
   // 2. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
   if (text.indexOf("最新活動") > -1 || lowerText.indexOf("activities") > -1 || text.indexOf("報名活動") > -1 || lowerText === "events") {
-    var flexCards = _buildLatestEventsFlex();
-    if (flexCards) {
-      _replyFlexMessage(replyToken, "最新活動資訊", flexCards);
-    } else {
-      _replyMessage(replyToken, "目前暫無開放報名的活動，請密切注意公告！");
-    }
+    sendEventList(replyToken, _getSpreadsheet());
     return;
   }
 
   // 3. 幹部名單 (支援「幹部是誰」、「幹部名單」、「Officers」)
   if (text.indexOf("幹部是誰") > -1 || text.indexOf("幹部名單") > -1 || lowerText.indexOf("officers") > -1) {
-    var officerFlex = _buildOfficersFlex();
-    if (officerFlex) {
-      _replyFlexMessage(replyToken, "幹部團隊名單", officerFlex);
-    } else {
-      _replyMessage(replyToken, "目前幹部名冊維護中。");
-    }
+    sendOfficerMenu(replyToken, _getSpreadsheet());
     return;
   }
 
   // 4. 更多服務 (支援「更多服務」、「更多服務 More Services」、「其他」、「More」)
   if (text.indexOf("更多服務") > -1 || lowerText.indexOf("more services") > -1 || text.indexOf("其他服務") > -1 || text === "其他" || lowerText === "more") {
-    var moreFlex = _buildMoreServicesFlex();
-    _replyFlexMessage(replyToken, "野境戶外：更多服務選單", moreFlex);
+    sendMoreOptionsMenu(replyToken);
+    return;
+  }
+
+  // 4.1 意見與回饋 (支援「意見與回饋」、「Feedback」)
+  if (text.indexOf("意見與回饋") > -1 || lowerText.indexOf("feedback") > -1) {
+    sendFeedbackLink(replyToken);
     return;
   }
 
   // 5. 裝備租借 (支援「裝備租借」、「器材借用」、「Equipment Loan」)
   if (text.indexOf("裝備租借") > -1 || text.indexOf("器材借用") > -1 || lowerText.indexOf("equipment") > -1) {
-    _replyMessage(replyToken, "🏕️ 歡迎使用野境裝備租借商城！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=borrow");
+    _replyMessage(replyToken, "🏕️ 歡迎使用裝備租借商城！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI");
     return;
   }
 
   // 6. 繳費系統 (支援「繳費系統」、「繳費中心」、「Payment System」)
   if (text.indexOf("繳費系統") > -1 || text.indexOf("繳費中心") > -1 || lowerText.indexOf("payment") > -1) {
-    _replyMessage(replyToken, "💳 歡迎使用繳費與對帳申報系統！\n請點擊下方連結進入結帳申報表單：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=payment");
+    _replyMessage(replyToken, "💰 歡迎使用繳費與對帳申報系統！\n請點擊下方連結進入結帳申報表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
     return;
   }
 
   // 7. 個人主頁 / 我的狀態 (支援「我的狀態」、「個人主頁」、「My Status」、「Dashboard」)
   if (text.indexOf("我的狀態") > -1 || text.indexOf("個人主頁") > -1 || lowerText.indexOf("dashboard") > -1 || lowerText.indexOf("status") > -1) {
-    _replyMessage(replyToken, "👤 查看出隊成就、個人資料與預約進度：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=dashboard");
+    _replyMessage(replyToken, "👤 查看出隊成就、個人資料與預約進度：\n\nhttps://liff.line.me/2009217429-jvj3ydDT");
     return;
   }
 
   // 8. 填寫資料 (支援「填寫資料」、「Register」)
   if (text.indexOf("填寫資料") > -1 || lowerText.indexOf("register") > -1) {
-    _replyMessage(replyToken, "📝 請填寫或更新您的社員基本資料：\n\nhttps://liff.line.me/" + LIFF_CHANNEL_ID + "?action=register");
+    _replyMessage(replyToken, "📝 請填寫或更新您的社員基本資料：\n\nhttps://liff.line.me/2009217429-AhPRqAHg");
     return;
   }
 
-  // 5. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
+  // 9. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
   if (GEMINI_API_KEY) {
     var aiReply = _handleGeminiChat(userId, text);
     if (aiReply) {
@@ -292,13 +305,14 @@ function _handleTextMessage(replyToken, userId, text, groupId) {
   }
 
   // 若無特定處理，回傳友善提示
-  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備借用」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！");
+  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！");
 }
 
 /**
  * 按鈕隱藏回傳值處理 (Postback Router)
  */
 function _handlePostback(replyToken, userId, postbackData) {
+  var ss = _getSpreadsheet();
   var params = {};
   var parts = postbackData.split("&");
   for (var i = 0; i < parts.length; i++) {
@@ -309,14 +323,27 @@ function _handlePostback(replyToken, userId, postbackData) {
   }
 
   var action = params.action;
-  if (action === "view_event_detail") {
-    var eventId = params.eventId;
-    var detailFlex = _buildSingleEventDetailFlex(eventId);
-    if (detailFlex) {
-      _replyFlexMessage(replyToken, "活動詳情", detailFlex);
-    } else {
-      _replyMessage(replyToken, "找不到該活動詳細資料。");
+  var eventId = params.eventId || (parts.length > 1 && parts[1].indexOf("=") > -1 ? parts[1].split("=")[1] : "");
+
+  if (action === "view" || action === "view_event_detail") {
+    sendEventDetail(replyToken, eventId, ss);
+    return;
+  }
+  if (action === "signup") {
+    handleSignup(replyToken, userId, eventId, ss);
+    return;
+  }
+  if (action === "confirm_waitlist") {
+    handleConfirmWaitlist(replyToken, userId, params, ss);
+    return;
+  }
+  if (action === "confirm_bind_admin_group") {
+    var newGroupId = params.targetId || eventId;
+    if (newGroupId) {
+      PropertiesService.getScriptProperties().setProperty('ADMIN_GROUP_ID', newGroupId);
+      _replyMessage(replyToken, "✅ 已成功將此群組設定為【幹部管理推播群組】！");
     }
+    return;
   }
 }
 
@@ -360,278 +387,694 @@ function pushAdminMessage(text) {
   });
 }
 // ==============================================================================
-// 🎨 野境戶外系統 GAS 模組 3：LINE Flex Message 樣板產生器 (03_Flex_Templates.js)
+// 🎨 台科登山社社團系統 GAS 模組 3：LINE Flex Message 樣板與展示 (03_Flex_Templates.js)
 // ==============================================================================
 
 /**
- * 產生最新開放活動輪播卡片
+ * 輔助函式：判定活動報名截止日是否已過 (當天 23:59:59 截止)
  */
-function _buildLatestEventsFlex() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName("Events");
-  if (!sheet) return null;
-
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return null;
-
-  var headers = data[0];
-  var idIdx = _fi(headers, "活動編號") > -1 ? _fi(headers, "活動編號") : 0;
-  var nameIdx = _fi(headers, "活動名稱") > -1 ? _fi(headers, "活動名稱") : 1;
-  var feeIdx = _fi(headers, "費用") > -1 ? _fi(headers, "費用") : 2;
-  var startIdx = _fi(headers, "開始日期") > -1 ? _fi(headers, "開始日期") : 3;
-  var endIdx = _fi(headers, "結束日期") > -1 ? _fi(headers, "結束日期") : 4;
-  var dlIdx = _fi(headers, "報名截止") > -1 ? _fi(headers, "報名截止") : 5;
-  var stIdx = _fi(headers, "報名狀態") > -1 ? _fi(headers, "報名狀態") : 6;
-  var descIdx = _fi(headers, "簡介") > -1 ? _fi(headers, "簡介") : 7;
-  var imgIdx = _fi(headers, "封面圖") > -1 ? _fi(headers, "封面圖") : 9;
-
-  var bubbles = [];
-  var count = 0;
-
-  for (var i = 1; i < data.length && count < 10; i++) {
-    var row = data[i];
-    var status = String(row[stIdx] || "").trim();
-    if (status !== "開放" && status !== "Open") continue;
-
-    var eventId = String(row[idIdx] || "");
-    var title = String(row[nameIdx] || "未命名活動");
-    var fee = row[feeIdx] ? "$" + row[feeIdx] : "免費";
-    var start = row[startIdx] ? String(row[startIdx]).split("T")[0] : "";
-    var deadline = row[dlIdx] ? String(row[dlIdx]).split("T")[0] : "";
-    var desc = String(row[descIdx] || "歡迎報名參加！");
-    if (desc.length > 50) desc = desc.substring(0, 48) + "...";
-    var coverImg = String(row[imgIdx] || "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80");
-
-    var bubble = {
-      type: "bubble",
-      hero: {
-        type: "image",
-        url: coverImg,
-        size: "full",
-        aspectRatio: "20:13",
-        aspectMode: "cover"
-      },
-      body: {
-        type: "box",
-        layout: "vertical",
-        contents: [
-          { type: "text", text: title, weight: "bold", size: "lg", wrap: true },
-          {
-            type: "box",
-            layout: "vertical",
-            margin: "md",
-            spacing: "sm",
-            contents: [
-              {
-                type: "box",
-                layout: "baseline",
-                spacing: "sm",
-                contents: [
-                  { type: "text", text: "日期", color: "#aaaaaa", size: "sm", flex: 2 },
-                  { type: "text", text: start, wrap: true, color: "#666666", size: "sm", flex: 5 }
-                ]
-              },
-              {
-                type: "box",
-                layout: "baseline",
-                spacing: "sm",
-                contents: [
-                  { type: "text", text: "費用", color: "#aaaaaa", size: "sm", flex: 2 },
-                  { type: "text", text: fee, wrap: true, color: "#10b981", weight: "bold", size: "sm", flex: 5 }
-                ]
-              },
-              {
-                type: "box",
-                layout: "baseline",
-                spacing: "sm",
-                contents: [
-                  { type: "text", text: "截止", color: "#aaaaaa", size: "sm", flex: 2 },
-                  { type: "text", text: deadline, wrap: true, color: "#ef4444", size: "sm", flex: 5 }
-                ]
-              }
-            ]
-          },
-          { type: "text", text: desc, margin: "md", size: "xs", color: "#888888", wrap: true }
-        ]
-      },
-      footer: {
-        type: "box",
-        layout: "vertical",
-        spacing: "sm",
-        contents: [
-          {
-            type: "button",
-            style: "primary",
-            color: "#10b981",
-            height: "sm",
-            action: {
-              type: "uri",
-              label: "線上報名 (LIFF)",
-              uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=events"
-            }
-          },
-          {
-            type: "button",
-            style: "secondary",
-            height: "sm",
-            action: {
-              type: "postback",
-              label: "詳細資訊",
-              data: "action=view_event_detail&eventId=" + encodeURIComponent(eventId)
-            }
-          }
-        ]
+function _isEventExpired(deadlineVal) {
+  if (!deadlineVal) return false;
+  try {
+    var now = new Date();
+    if (deadlineVal instanceof Date) {
+      var d = new Date(deadlineVal.getTime());
+      if (d.getHours() === 0 && d.getMinutes() === 0) {
+        d.setHours(23, 59, 59, 999);
       }
-    };
-    bubbles.push(bubble);
-    count++;
+      return now.getTime() > d.getTime();
+    }
+    var str = String(deadlineVal).trim();
+    if (!str) return false;
+    var cleanStr = str.replace(/[\/\.]/g, "-");
+    var parts = cleanStr.split(" ")[0].split("-");
+    if (parts.length >= 3) {
+      var year = parseInt(parts[0], 10);
+      var month = parseInt(parts[1], 10) - 1;
+      var day = parseInt(parts[2], 10);
+      var deadlineDate = new Date(year, month, day, 23, 59, 59, 999);
+      return now.getTime() > deadlineDate.getTime();
+    }
+  } catch (e) {
+    console.error("解析活動截止日期失敗:", deadlineVal, e);
   }
-
-  if (bubbles.length === 0) return null;
-  return { type: "carousel", contents: bubbles };
+  return false;
 }
 
 /**
- * 產生單一活動詳細內容卡片
+ * 產生最新活動卡片輪播 (100% 全動態對應最新欄位版 / 雙語升級)
  */
-function _buildSingleEventDetailFlex(eventId) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName("Events");
-  if (!sheet) return null;
+function sendEventList(replyToken, ss) {
+  if (!ss) ss = _getSpreadsheet();
+  if (!ss) {
+    _replyMessage(replyToken, "目前無法連線活動資料表，請稍後再試！");
+    return;
+  }
+  var eventSheet = ss.getSheetByName("Events");
+  if (!eventSheet) {
+    _replyMessage(replyToken, "找不到活動資料表！\n─────────────\nEvent sheet not found!");
+    return;
+  }
+  var data = eventSheet.getDataRange().getDisplayValues();
+  if (data.length <= 1) {
+    _replyMessage(replyToken, "目前這學期還沒有排定的活動喔！\n─────────────\nThere are no scheduled activities for this semester yet!");
+    return;
+  }
+  var bubbles = [];
 
-  var data = sheet.getDataRange().getValues();
   var headers = data[0];
-  var idIdx = _fi(headers, "活動編號") > -1 ? _fi(headers, "活動編號") : 0;
+  var hIdx = {
+    id: _fi(headers, "活動編號"),
+    name: _fi(headers, "活動名稱"),
+    startDate: _fi(headers, "活動開始日期"),
+    endDate: _fi(headers, "活動結束日期"),
+    deadline: _fi(headers, "報名截止日期"),
+    cost: headers.findIndex(function (h) {
+      return String(h).includes("預計費用") || String(h).includes("費用");
+    }),
+    status: headers.findIndex(function (h) {
+      return String(h).includes("報名狀態") || String(h).includes("狀態");
+    }),
+    shortDesc: _fi(headers, "簡介"),
+    img: headers.findIndex(function (h) {
+      return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片");
+    })
+  };
 
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][idIdx]).trim() === String(eventId).trim()) {
-      var row = data[i];
-      var title = row[_fi(headers, "活動名稱")] || "未命名活動";
-      var summary = row[_fi(headers, "簡介")] || "無簡介";
-      var itinerary = row[_fi(headers, "詳細行程")] || "無詳細行程";
-      var fee = row[_fi(headers, "費用")] ? "$" + row[_fi(headers, "費用")] : "免費";
+    var status = hIdx.status > -1 ? String(data[i][hIdx.status] || "").trim() : "";
+    var deadline = hIdx.deadline > -1 ? data[i][hIdx.deadline] : "";
+    var isExpired = _isEventExpired(deadline);
 
-      return {
-        type: "bubble",
-        body: {
-          type: "box",
-          layout: "vertical",
-          contents: [
-            { type: "text", text: title, weight: "bold", size: "xl", wrap: true },
-            { type: "text", text: "費用預估：" + fee, color: "#10b981", weight: "bold", margin: "md" },
-            { type: "separator", margin: "md" },
-            { type: "text", text: "【活動特色與簡介】", weight: "bold", size: "sm", margin: "md" },
-            { type: "text", text: summary, wrap: true, size: "sm", color: "#555555", margin: "xs" },
-            { type: "separator", margin: "md" },
-            { type: "text", text: "【預定詳細行程】", weight: "bold", size: "sm", margin: "md" },
-            { type: "text", text: itinerary, wrap: true, size: "xs", color: "#666666", margin: "xs" }
-          ]
+    // 若活動標記為開放但已超過截止日，自動即時關閉並回寫試算表
+    if (status === "開放" && isExpired) {
+      status = "關閉";
+      try {
+        if (hIdx.status > -1) {
+          eventSheet.getRange(i + 1, hIdx.status + 1).setValue("關閉");
+        }
+      } catch (err) { }
+    }
+
+    if (status === "開放" || status === "未來開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1) {
+      var eventId = hIdx.id > -1 ? data[i][hIdx.id] : "";
+      var eventName = hIdx.name > -1 ? data[i][hIdx.name] : "未命名活動";
+      var isOpen = (status === "開放" || status.indexOf("開放") > -1) && !isExpired;
+      var tagColor = isOpen ? "#1DB446" : "#FF9800";
+      var displayStatus = isOpen ? "開放 Open" : "未來開放 Coming Soon";
+
+      var bubble = {
+        "type": "bubble",
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [{
+            "type": "text",
+            "text": displayStatus,
+            "weight": "bold",
+            "color": tagColor,
+            "size": "sm"
+          }, {
+            "type": "text",
+            "text": eventName,
+            "weight": "bold",
+            "size": "xl",
+            "margin": "sm",
+            "wrap": true
+          }, {
+            "type": "box",
+            "layout": "vertical",
+            "margin": "md",
+            "spacing": "xs",
+            "contents": [{
+              "type": "text",
+              "text": "費用 Cost: " + (hIdx.cost > -1 ? data[i][hIdx.cost] : ""),
+              "size": "sm",
+              "color": "#666666",
+              "weight": "bold"
+            }, {
+              "type": "text",
+              "text": "活動時間 Event Date:",
+              "size": "sm",
+              "color": "#666666",
+              "margin": "sm"
+            }, {
+              "type": "text",
+              "text": (hIdx.startDate > -1 ? data[i][hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? data[i][hIdx.endDate] : ""),
+              "size": "sm",
+              "color": "#1DB446",
+              "weight": "bold"
+            }, {
+              "type": "text",
+              "text": "報名截止 Sign Up Deadline:",
+              "size": "sm",
+              "color": "#666666",
+              "margin": "sm"
+            }, {
+              "type": "text",
+              "text": (hIdx.deadline > -1 ? data[i][hIdx.deadline] : ""),
+              "size": "sm",
+              "color": "#E53935",
+              "weight": "bold"
+            }]
+          }, {
+            "type": "separator",
+            "margin": "md"
+          }, {
+            "type": "text",
+            "text": hIdx.shortDesc > -1 ? data[i][hIdx.shortDesc] : "",
+            "size": "sm",
+            "color": "#999999",
+            "margin": "md",
+            "wrap": true,
+            "maxLines": 3
+          }]
         },
-        footer: {
-          type: "box",
-          layout: "vertical",
-          contents: [
-            {
-              type: "button",
-              style: "primary",
-              color: "#10b981",
-              action: {
-                type: "uri",
-                label: "前往報名",
-                uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=events"
-              }
+        "footer": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [{
+            "type": "button",
+            "style": "secondary",
+            "action": {
+              "type": "postback",
+              "label": "查看詳情 View",
+              "data": "action=view&eventId=" + eventId,
+              "displayText": "我想查看 " + eventName + " 的資訊 / I want to view details"
             }
-          ]
+          }]
         }
       };
+
+      var imageUrl = hIdx.img > -1 ? String(data[i][hIdx.img] || "").trim() : "";
+      if (imageUrl && imageUrl.startsWith("http") && !imageUrl.includes("drive.google.com")) {
+        bubble.hero = {
+          "type": "image",
+          "url": imageUrl,
+          "size": "full",
+          "aspectRatio": "20:13",
+          "aspectMode": "cover"
+        };
+      }
+      bubbles.push(bubble);
     }
   }
-  return null;
-}
 
-/**
- * 產生幹部團隊名冊卡片
- */
-function _buildOfficersFlex() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName("Officers");
-  if (!sheet) return null;
-
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return null;
-
-  var bubbles = [];
-  for (var i = 1; i < data.length && i <= 8; i++) {
-    var name = data[i][0] || "幹部";
-    var role = data[i][1] || "幹部";
-    var contact = data[i][2] || "無特殊聯絡資訊";
-
-    bubbles.push({
-      type: "bubble",
-      size: "kilo",
-      body: {
-        type: "box",
-        layout: "vertical",
-        contents: [
-          { type: "text", text: role, weight: "bold", size: "sm", color: "#10b981" },
-          { type: "text", text: name, weight: "bold", size: "lg", margin: "xs" },
-          { type: "text", text: contact, size: "xs", color: "#888888", margin: "sm", wrap: true }
-        ]
-      }
+  if (bubbles.length === 0) {
+    _replyMessage(replyToken, "目前這學期還沒有排定的活動喔！\n─────────────\nThere are no scheduled activities for this semester yet!");
+  } else {
+    _replyFlexMessage(replyToken, "請查看本學期活動列表 / Event List", {
+      "type": "carousel",
+      "contents": bubbles
     });
   }
-
-  return bubbles.length > 0 ? { type: "carousel", contents: bubbles } : null;
 }
 
 /**
- * 產生更多服務選單卡片
+ * 產生單一活動詳細內容大卡片
+ */
+function sendEventDetail(replyToken, eventId, ss) {
+  if (!ss) ss = _getSpreadsheet();
+  if (!ss) return;
+  var eventSheet = ss.getSheetByName("Events");
+  if (!eventSheet) {
+    _replyMessage(replyToken, "找不到活動資料表！\n─────────────\nEvent sheet not found!");
+    return;
+  }
+  var data = eventSheet.getDataRange().getDisplayValues();
+  if (data.length <= 1) {
+    _replyMessage(replyToken, "目前沒有任何活動資料！\n─────────────\nNo event data available yet!");
+    return;
+  }
+
+  var headers = data[0];
+  var hIdx = {
+    id: _fi(headers, "活動編號"),
+    name: _fi(headers, "活動名稱"),
+    startDate: _fi(headers, "活動開始日期"),
+    endDate: _fi(headers, "活動結束日期"),
+    deadline: _fi(headers, "報名截止日期"),
+    cost: headers.findIndex(function (h) {
+      return String(h).includes("預計費用") || String(h).includes("費用");
+    }),
+    status: headers.findIndex(function (h) {
+      return String(h).includes("報名狀態") || String(h).includes("狀態");
+    }),
+    shortDesc: _fi(headers, "簡介"),
+    fullDesc: headers.findIndex(function (h) {
+      return String(h).includes("詳細行程") || String(h).includes("行程");
+    }),
+    img: headers.findIndex(function (h) {
+      return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片");
+    })
+  };
+
+  var idCol = hIdx.id > -1 ? hIdx.id : 0;
+  var eventData = null;
+  var eventRowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][idCol] === eventId) {
+      eventData = data[i];
+      eventRowIndex = i + 1;
+      break;
+    }
+  }
+  if (!eventData) {
+    _replyMessage(replyToken, "找不到該活動的詳細資訊！\n─────────────\nEvent details not found!");
+    return;
+  }
+
+  var eventName = hIdx.name > -1 ? eventData[hIdx.name] : "未命名活動 (Untitled Event)";
+  var status = hIdx.status > -1 ? eventData[hIdx.status] : "";
+  var deadline = hIdx.deadline > -1 ? eventData[hIdx.deadline] : "";
+  var isExpired = _isEventExpired(deadline);
+
+  if (status === "開放" && isExpired) {
+    status = "關閉";
+    try {
+      if (hIdx.status > -1 && eventRowIndex > 0) {
+        eventSheet.getRange(eventRowIndex, hIdx.status + 1).setValue("關閉");
+      }
+    } catch (err) { }
+  }
+
+  var buttonBox;
+  if (status === "開放" && !isExpired) {
+    buttonBox = {
+      "type": "button",
+      "style": "primary",
+      "color": "#1DB446",
+      "action": {
+        "type": "postback",
+        "label": "一鍵報名 Sign Up",
+        "data": "action=signup&eventId=" + eventId,
+        "displayText": "我要報名 Sign up for: " + eventName
+      }
+    };
+  } else {
+    var closedLabel = isExpired ? "報名已截止 Closed" : "尚未開放 Not Open";
+    buttonBox = {
+      "type": "button",
+      "style": "secondary",
+      "color": "#CCCCCC",
+      "action": {
+        "type": "message",
+        "label": closedLabel,
+        "text": eventName + " " + closedLabel
+      }
+    };
+  }
+
+  var bubble = {
+    "type": "bubble",
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [{
+        "type": "text",
+        "text": eventName,
+        "weight": "bold",
+        "size": "xl",
+        "wrap": true
+      }, {
+        "type": "box",
+        "layout": "vertical",
+        "margin": "md",
+        "spacing": "xs",
+        "contents": [{
+          "type": "text",
+          "text": "費用 Cost: " + (hIdx.cost > -1 ? eventData[hIdx.cost] : ""),
+          "size": "sm",
+          "color": "#666666",
+          "weight": "bold"
+        }, {
+          "type": "text",
+          "text": "活動時間 Event Date:",
+          "size": "sm",
+          "color": "#666666",
+          "margin": "sm"
+        }, {
+          "type": "text",
+          "text": (hIdx.startDate > -1 ? eventData[hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? eventData[hIdx.endDate] : ""),
+          "size": "sm",
+          "color": "#1DB446",
+          "weight": "bold"
+        }, {
+          "type": "text",
+          "text": "報名截止 Sign Up Deadline:",
+          "size": "sm",
+          "color": "#666666",
+          "margin": "sm"
+        }, {
+          "type": "text",
+          "text": (hIdx.deadline > -1 ? eventData[hIdx.deadline] : ""),
+          "size": "sm",
+          "color": "#E53935",
+          "weight": "bold"
+        }]
+      }, {
+        "type": "separator",
+        "margin": "lg"
+      }, {
+        "type": "text",
+        "text": "【詳細行程 Itinerary】",
+        "weight": "bold",
+        "size": "sm",
+        "margin": "md"
+      }, {
+        "type": "text",
+        "text": hIdx.fullDesc > -1 ? eventData[hIdx.fullDesc] : (hIdx.shortDesc > -1 ? eventData[hIdx.shortDesc] : "尚無行程資訊"),
+        "size": "sm",
+        "color": "#666666",
+        "margin": "sm",
+        "wrap": true
+      }]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [buttonBox]
+    }
+  };
+
+  var imageUrl = hIdx.img > -1 ? String(eventData[hIdx.img] || "").trim() : "";
+  if (imageUrl && imageUrl.startsWith("http") && !imageUrl.includes("drive.google.com")) {
+    bubble.hero = {
+      "type": "image",
+      "url": imageUrl,
+      "size": "full",
+      "aspectRatio": "20:13",
+      "aspectMode": "cover"
+    };
+  }
+
+  _replyFlexMessage(replyToken, "活動詳情: " + eventName, bubble);
+}
+
+/**
+ * 產生幹部團隊名冊卡片 (支援職稱、頭像與負責業務)
+ */
+function sendOfficerMenu(replyToken, ss) {
+  if (!ss) ss = _getSpreadsheet();
+  if (!ss) return;
+  try {
+    var sheet = ss.getSheetByName("Officers");
+    if (!sheet) {
+      _replyMessage(replyToken, "目前幹部名冊維護中。");
+      return;
+    }
+    var data = sheet.getDataRange().getDisplayValues();
+    if (data.length <= 1) {
+      _replyMessage(replyToken, "目前還沒有建立幹部資料喔！敬請期待。\n─────────────\nOfficer data not set up yet. Stay tuned!");
+      return;
+    }
+
+    var headers = data[0];
+    var roleIdx = headers.findIndex(function (h) {
+      return String(h).includes("職稱") || String(h).includes("職位") || String(h).includes("role") || String(h).includes("title");
+    });
+    var nameIdx = headers.findIndex(function (h) {
+      return String(h).includes("姓名") || String(h).includes("名字") || String(h).includes("name");
+    });
+    var photoIdx = headers.findIndex(function (h) {
+      return String(h).includes("照片") || String(h).includes("圖片") || String(h).includes("頭像");
+    });
+    var dutyIdx = headers.findIndex(function (h) {
+      return String(h).includes("負責業務") || String(h).includes("負責") || String(h).includes("業務");
+    });
+    var quoteIdx = headers.findIndex(function (h) {
+      return String(h).includes("給社員的話") || String(h).includes("介紹") || String(h).includes("備註");
+    });
+
+    var bubbles = [];
+
+    if (nameIdx === -1) {
+      _replyMessage(replyToken, "⚠️ 幹部名單的「姓名」欄位遺失了，請通知管理員檢查試算表！\n─────────────\n⚠️ 'Name' column is missing in the Officer sheet!");
+      return;
+    }
+
+    for (var i = 1; i < data.length; i++) {
+      var name = String(data[i][nameIdx]).trim();
+      if (name !== "") {
+        var role = (roleIdx > -1 && data[i][roleIdx]) ? String(data[i][roleIdx]).trim() : "幹部 Officer";
+        var photoUrl = (photoIdx > -1 && data[i][photoIdx]) ? String(data[i][photoIdx]).trim() : "";
+        var duty = (dutyIdx > -1 && data[i][dutyIdx]) ? String(data[i][dutyIdx]).trim() : "協助社團事務 Assist with club affairs";
+        var quote = (quoteIdx > -1 && data[i][quoteIdx]) ? String(data[i][quoteIdx]).trim() : "歡迎加入登山社！ Welcome to the club!";
+        var themeColor = (role.indexOf("社長") > -1) ? "#FF9800" : "#0367D3";
+
+        var bubble = {
+          "type": "bubble",
+          "size": "micro",
+          "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [{
+              "type": "text",
+              "text": role,
+              "weight": "bold",
+              "color": themeColor,
+              "size": "sm"
+            }, {
+              "type": "text",
+              "text": name,
+              "weight": "bold",
+              "size": "xl",
+              "margin": "sm"
+            }, {
+              "type": "separator",
+              "margin": "md"
+            }, {
+              "type": "text",
+              "text": "📌 負責業務 Duties",
+              "size": "xxs",
+              "color": "#999999",
+              "margin": "md"
+            }, {
+              "type": "text",
+              "text": duty,
+              "size": "xs",
+              "color": "#333333",
+              "wrap": true,
+              "margin": "xs"
+            }, {
+              "type": "separator",
+              "margin": "md"
+            }, {
+              "type": "text",
+              "text": "💬 " + quote,
+              "size": "xs",
+              "color": "#666666",
+              "wrap": true,
+              "margin": "md",
+              "style": "italic"
+            }]
+          }
+        };
+
+        if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) && !photoUrl.includes("drive.google.com")) {
+          bubble.hero = {
+            "type": "image",
+            "url": photoUrl,
+            "size": "full",
+            "aspectRatio": "1:1",
+            "aspectMode": "cover"
+          };
+        }
+
+        bubbles.push(bubble);
+        if (bubbles.length === 10) break;
+      }
+    }
+
+    if (bubbles.length === 0) {
+      _replyMessage(replyToken, "目前還沒有建立幹部資料喔！敬請期待。\n─────────────\nOfficer data not set up yet. Stay tuned!");
+    } else {
+      _replyFlexMessage(replyToken, "來認識一下登山社幹部吧！ / Meet the club officers!", {
+        "type": "carousel",
+        "contents": bubbles
+      });
+    }
+
+  } catch (err) {
+    console.error("幹部名單載入失敗:", err);
+    _replyMessage(replyToken, "⚠️ 讀取幹部名單時發生錯誤，請稍後再試。\n─────────────\n⚠️ Error loading officer list, please try again later.");
+  }
+}
+
+/**
+ * 產生「更多服務 More Services」卡片 (100% 還原圖二「🛠️ 聯絡與支援 / 幫助中心」)
  */
 function _buildMoreServicesFlex() {
   return {
-    type: "bubble",
-    body: {
-      type: "box",
-      layout: "vertical",
-      contents: [
-        { type: "text", text: "野境戶外：服務大廳", weight: "bold", size: "xl", color: "#1e293b" },
-        { type: "text", text: "請選擇您需要使用的社團系統服務：", size: "sm", color: "#64748b", margin: "sm" },
-        { type: "separator", margin: "lg" },
-        {
-          type: "box",
-          layout: "vertical",
-          margin: "md",
-          spacing: "sm",
-          contents: [
-            {
-              type: "button",
-              style: "primary",
-              color: "#3b82f6",
-              height: "sm",
-              action: { type: "uri", label: "🎒 裝備租借商城", uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=borrow" }
-            },
-            {
-              type: "button",
-              style: "primary",
-              color: "#10b981",
-              height: "sm",
-              action: { type: "uri", label: "💳 待繳費用與對帳申報", uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=payment" }
-            },
-            {
-              type: "button",
-              style: "primary",
-              color: "#8b5cf6",
-              height: "sm",
-              action: { type: "uri", label: "👤 個人主頁與出隊成就", uri: "https://liff.line.me/" + LIFF_CHANNEL_ID + "?action=dashboard" }
-            }
-          ]
+    "type": "bubble",
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [{
+        "type": "text",
+        "text": "🛠️ 聯絡與支援 Support",
+        "weight": "bold",
+        "color": "#0367D3",
+        "size": "sm"
+      }, {
+        "type": "text",
+        "text": "幫助中心 Help Center",
+        "weight": "bold",
+        "size": "xl",
+        "margin": "md"
+      }, {
+        "type": "text",
+        "text": "聯絡社團幹部 Contact Officers",
+        "size": "xs",
+        "color": "#999999",
+        "margin": "sm"
+      }]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "sm",
+      "contents": [{
+        "type": "button",
+        "style": "secondary",
+        "action": {
+          "type": "message",
+          "label": "👤 幹部是誰 Officers",
+          "text": "幹部是誰 Officers"
         }
-      ]
+      }, {
+        "type": "button",
+        "style": "secondary",
+        "action": {
+          "type": "message",
+          "label": "📢 意見與回饋 Feedback",
+          "text": "意見與回饋 Feedback"
+        }
+      }]
     }
   };
 }
+
+/**
+ * 發送「更多服務」選單
+ */
+function sendMoreOptionsMenu(replyToken) {
+  var bubble = _buildMoreServicesFlex();
+  _replyFlexMessage(replyToken, "更多服務 More Services", bubble);
+}
+
+/**
+ * 發送「意見與回饋」連結表單
+ */
+function sendFeedbackLink(replyToken) {
+  var googleFormUrl = "https://forms.gle/bCT7fjVP3bSrReF96";
+  var msg = "【意見與回饋 / Feedback & Suggestions】\n\n" +
+    "無論是想對社團說的話、活動建議、問題詢問，還是回報系統錯誤 (可附截圖)，都歡迎透過下方表單告訴我們！\n\n" +
+    "Whether you have suggestions, questions, or want to report a bug (screenshots supported), please let us know!\n\n" +
+    "點此填寫回饋表單 Click here to fill out the feedback form：\n" + googleFormUrl + "\n\n" +
+    "收到您的回饋後，幹部會盡快查看並處理喔！After receiving your feedback, the club officers will review and handle it as soon as possible!🏔️";
+
+  _replyMessage(replyToken, msg);
+}
+
+/**
+ * 處理活動一鍵報名 (含防衝突鎖定與資料驗證)
+ */
+function handleSignup(replyToken, userId, eventId, ss) {
+  if (!ss) ss = _getSpreadsheet();
+  if (!ss) return;
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+
+    var eventSheet = ss.getSheetByName("Events");
+    var evName = eventId;
+    if (eventSheet) {
+      var eData = eventSheet.getDataRange().getDisplayValues();
+      if (eData.length > 1) {
+        var eHeaders = eData[0];
+        var eIdCol = _fi(eHeaders, "活動編號");
+        var eNameCol = _fi(eHeaders, "活動名稱");
+        var eStatusCol = eHeaders.findIndex(function (h) {
+          return String(h).includes("報名狀態") || String(h).includes("狀態");
+        });
+        var eDeadCol = _fi(eHeaders, "報名截止日期");
+
+        for (var ev = 1; ev < eData.length; ev++) {
+          if (eData[ev][eIdCol > -1 ? eIdCol : 0] === eventId) {
+            var evStatus = eStatusCol > -1 ? eData[ev][eStatusCol] : "";
+            var evDead = eDeadCol > -1 ? eData[ev][eDeadCol] : "";
+            evName = eNameCol > -1 ? eData[ev][eNameCol] : eventId;
+            var isEvExpired = _isEventExpired(evDead);
+
+            if (isEvExpired || evStatus === "關閉" || evStatus === "已截止") {
+              if (evStatus === "開放" && isEvExpired) {
+                try {
+                  eventSheet.getRange(ev + 1, eStatusCol + 1).setValue("關閉");
+                } catch (err) { }
+              }
+              _replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (evDead || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration closed on " + (evDead || "deadline") + ".");
+              return;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    // 提示前往 LIFF 完成報名或確認報名資格
+    var signupLiffUrl = "https://liff.line.me/2009217429-AhPRqAHg";
+    _replyMessage(replyToken, "🎉 準備報名【" + evName + "】！\n\n請點擊下方專屬連結確認您的報名資料並送出：\n" + signupLiffUrl + "\n\n若您先前已填寫過基本資料，系統將自動為您帶入！");
+  } catch (err) {
+    console.error("handleSignup 異常:", err);
+    _replyMessage(replyToken, "⚠️ 系統處理報名時發生錯誤，請稍後再試。");
+  } finally {
+    _safeReleaseLock(lock);
+  }
+}
+
+/**
+ * 處理備取意願確認 (Postback)
+ */
+function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
+  if (!ss) ss = _getSpreadsheet();
+  if (!ss) return;
+  var eventId = paramsMap["eventId"] || "";
+  var targetUid = paramsMap["userId"] || userId;
+  var sSheet = ss.getSheetByName("Signups");
+  if (!sSheet) {
+    _replyMessage(replyToken, "系統錯誤：找不到報名資料表。\n─────────────\nSystem Error: Signups sheet not found.");
+    return;
+  }
+  var sData = sSheet.getDataRange().getValues();
+  var sH = sData[0];
+  var sSysIdx = _fi(sH, "系統識別碼");
+  var sEventIdIdx = _fi(sH, "活動編號");
+  var sStatusIdx = _fi(sH, "審核結果");
+
+  for (var i = 1; i < sData.length; i++) {
+    var rowUser = sSysIdx > -1 ? String(sData[i][sSysIdx]).trim() : "";
+    var rowEvtId = sEventIdIdx > -1 ? String(sData[i][sEventIdIdx]).trim() : "";
+
+    if (rowUser === targetUid && (!eventId || rowEvtId === eventId)) {
+      var currentStatus = sStatusIdx > -1 ? String(sData[i][sStatusIdx]) : "";
+      if (currentStatus.indexOf("備取（有意願）") > -1 || currentStatus.indexOf("有意願") > -1) {
+        _replyMessage(replyToken, "您先前已確認過備取意願！若有名額釋出，幹部將主動與您聯絡！");
+        return;
+      }
+      if (sStatusIdx > -1) {
+        sSheet.getRange(i + 1, sStatusIdx + 1).setValue("備取（有意願）Waitlisted (Interested)");
+        SpreadsheetApp.flush();
+        _replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！");
+        return;
+      }
+    }
+  }
+  _replyMessage(replyToken, "找不到該筆報名資料，請洽詢社團幹部！");
+}
 // ==============================================================================
-// 🧠 野境戶外系統 GAS 模組 4：Gemini AI 智慧客服與知識庫 (04_Ai_Gemini.js)
+// 🧠 台科登山社社團系統 GAS 模組 4：Gemini AI 智慧客服與知識庫 (04_Ai_Gemini.js)
 // ==============================================================================
 
 /**
@@ -645,7 +1088,7 @@ function _handleGeminiChat(userId, userQuery) {
     var knowledgeBase = _fetchDocsKnowledgeBase();
     var eventsContext = _fetchOpenEventsContext();
 
-    var systemInstruction = "你是一位熱情、專業的「野境戶外社」AI 智慧客服嚮導。\n" +
+    var systemInstruction = "你是一位熱情、專業的「台科登山社社團系統社」AI 智慧客服嚮導。\n" +
       "請根據以下社團規章、活動與知識庫回答使用者的問題。若資訊不足，請禮貌引導向幹部洽詢。\n\n" +
       "【當前開放活動資訊】：\n" + eventsContext + "\n\n" +
       "【社團知識庫規章】：\n" + knowledgeBase + "\n";
@@ -743,7 +1186,7 @@ function _fetchDocsKnowledgeBase() {
   }
 }
 // ==============================================================================
-// 🔄 野境戶外系統 GAS 模組 5：Supabase sync_queue 背景單向同步排程 (05_Sync_Worker.js)
+// 🔄 台科登山社社團系統 GAS 模組 5：Supabase sync_queue 背景單向同步排程 (05_Sync_Worker.js)
 // 目的：定時排程執行，消費 Supabase 的 sync_queue 並單向批次寫回 Google Sheets
 // ==============================================================================
 
@@ -1053,7 +1496,7 @@ function _syncReflectionToSheet(ss, p) {
   var targetRow = -1;
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][eIdx]).trim() === String(p.event_id).trim() &&
-        String(data[i][uIdx]).trim() === String(p.line_user_id).trim()) {
+      String(data[i][uIdx]).trim() === String(p.line_user_id).trim()) {
       targetRow = i + 1;
       break;
     }
@@ -1079,7 +1522,7 @@ function _setCellVal(sheet, row, headers, colName, value) {
   }
 }
 // ==============================================================================
-// ⚡ 野境戶外系統 GAS 模組 6：LIFF 輕量 Helper API (06_Helper_Services.js)
+// ⚡ 台科登山社社團系統 GAS 模組 6：LIFF 輕量 Helper API (06_Helper_Services.js)
 // 目的：僅處理 Google Drive 檔案上傳與 LINE 推播通知，徹底移除所有試算表寫入依賴
 // ==============================================================================
 
@@ -1256,8 +1699,8 @@ function _handleNotifyProfileSaved(json) {
     var offIntent = data.intendOfficial || "未填寫";
 
     var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功】" : "【✅ 基本資料已成功更新】";
-    var intro = isNew 
-      ? "您好 " + name + "！感謝您完成野境戶外社基本資料註冊：" 
+    var intro = isNew
+      ? "您好 " + name + "！感謝您完成台科登山社社團系統社基本資料註冊："
       : "您好 " + name + "！您已於系統中成功更新個人檔案：";
 
     var msg = title + "\n\n" +

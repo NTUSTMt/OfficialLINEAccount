@@ -1,5 +1,5 @@
 // ==============================================================================
-// 🔄 野境戶外系統 GAS 模組 5：Supabase sync_queue 背景單向同步排程 (05_Sync_Worker.js)
+// 🔄 台科登山社社團系統 GAS 模組 5：Supabase sync_queue 背景單向同步排程 (05_Sync_Worker.js)
 // 目的：定時排程執行，消費 Supabase 的 sync_queue 並單向批次寫回 Google Sheets
 // ==============================================================================
 
@@ -309,7 +309,7 @@ function _syncReflectionToSheet(ss, p) {
   var targetRow = -1;
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][eIdx]).trim() === String(p.event_id).trim() &&
-        String(data[i][uIdx]).trim() === String(p.line_user_id).trim()) {
+      String(data[i][uIdx]).trim() === String(p.line_user_id).trim()) {
       targetRow = i + 1;
       break;
     }

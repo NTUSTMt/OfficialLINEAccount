@@ -1,5 +1,5 @@
 // ==============================================================================
-// 🏔️ 野境戶外系統：活動專屬報名試算表 綁定腳本 (Event Sheet Bound Script)
+// 🏔️ 台科登山社社團系統：活動專屬報名試算表 綁定腳本 (Event Sheet Bound Script)
 // 說明：貼入活動專屬試算表的 Apps Script 中，即可自動獲得頂部自訂選單、側邊欄差異比對與一鍵推播錄取通知功能
 // 支援 22 個標準欄位完整對齊，Supabase 參數由 Script Properties 安全讀取
 // ==============================================================================
@@ -46,7 +46,7 @@ function getSupabaseConfig() {
           "SUPABASE_SERVICE_ROLE_KEY": key
         });
       }
-    } catch (cacheErr) {}
+    } catch (cacheErr) { }
   }
 
   return { url: url, key: key };

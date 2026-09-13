@@ -3,11 +3,36 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.71` (v0.1.71)
+- **當前版本**：`0.1.72` (v0.1.72)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 172. 更多服務選單 100% 還原圖二「幫助中心」、最新活動輪播 sendEventList 恢復與 LINE 400 靜默失敗根除 (v0.1.72)
+- **100% 還原圖二「🛠️ 聯絡與支援 / 幫助中心」選單 (`03_Flex_Templates.js`, `02_LineBot_Webhook.js`)**：
+  - **根本原因排查**：先前產生的選單誤植為包含「裝備租借、待繳費用、個人主頁」之「服務大廳」（圖一），並非隊員習慣的幫助中心介面。
+  - **完整像素級還原**：還原為原版圖二設計，包含：
+    - 主視覺標題：`🛠️ 聯絡與支援 Support`、`幫助中心 Help Center`、`聯絡社團幹部 Contact Officers`。
+    - 按鈕 1：`👤 幹部是誰 Officers`（點擊發送指令，即時回傳幹部職稱、頭像與業務卡片輪播）。
+    - 按鈕 2：`📢 意見與回饋 Feedback`（點擊發送 Google 表單回饋連結 `https://forms.gle/bCT7fjVP3bSrReF96`）。
+- **最新活動「點擊無反應」靜默失敗根除與原版 sendEventList 完整恢復 (`03_Flex_Templates.js`, `02_LineBot_Webhook.js`)**：
+  - **根本原因排查**：
+    1. **LINE 400 協定被拒**：先前樣板對每張卡片強制放入 `hero` 封面圖；當試算表中封面為 Google Drive 共享連結或非直連圖片時，LINE Messaging API 判定格式錯誤回傳 `400 Bad Request`，因 `muteHttpExceptions: true` 導致靜默失敗、使用者畫面全無反應。
+    2. **表頭比對脫鉤**：先前嚴格比對 `"開始日期"`、`"費用"`，但主試算表實際表頭為 `"活動開始日期"`、`"預計費用"`。
+    3. **試算表開啟防呆缺失**：若未設 `SPREADSHEET_ID`，直接呼叫 `openById(null)` 拋出例外中斷 Webhook。
+  - **架構修復與升級**：
+    1. **引入安全雙軌存取 (`_getSpreadsheet`)**：優先使用屬性 `SPREADSHEET_ID`，備援支援容器綁定之 `SpreadsheetApp.getActiveSpreadsheet()`，確保 100% 成功連線。
+    2. **完整恢復原版 `sendEventList`**：支援全動態模糊表頭匹配、報名截止日逾期自動檢查與標記（`_isEventExpired`）。
+    3. **圖片 URL 嚴格驗證**：僅在確定為合法 HTTP(S) 直連圖片且排除非圖片網址時附加 `hero`，徹底杜絕 LINE 400 拒發問題。
+    4. **Postback 完整閉環**：卡片底部的「查看詳情 View」支援 Postback 回傳，點擊後即可查看詳細行程（`sendEventDetail`）並進行線上報名或候補意願確認（`confirm_waitlist`）。
+- **模組化與單檔版完全同步 (`src/gas.js`)**：
+  - 同步更新單檔整合版 `src/gas.js`，方便一鍵貼上至 Google Apps Script。
+- **測試與驗證 (Verification)**：
+  - 語法校驗：`node -c src/gas.js` 0 語法錯誤。
+  - 測試套件：`pnpm test` 65/65 單元測試 100% 通過。
+  - 前端打包：`pnpm run build` 成功建置。
+
 
 ### 171. officers 表 title 欄位 NOT NULL 約束自癒、雙向職稱相容與幹部同步 Trigger 容錯加強 (v0.1.71)
 - **PostgreSQL 23502 非空約束自癒修復 (`member_officer_sync.sql`)**：
@@ -1681,7 +1706,7 @@
 
 ### 36. 會員卡樣式修正與表單欄位間距優化 (v0.0.36)
 - **社員證卡片優化**：
-  - 移除了數位社員證卡片右下角冗餘的「野境戶外 NTUST OAC」文字標誌（[Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx)）。
+  - 移除了數位社員證卡片右下角冗餘的「台科登山社社團系統 NTUST OAC」文字標誌（[Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx)）。
   - 將數位社員證左上角的使用者 LINE 暱稱與連線說明文字塊設定為靠左對齊（`textAlign: 'left'`），避免非預期的置中對齊影響美觀。
 - **表單輸入間距優化**：
   - 修改了 [App.css](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.css) 中的 `.form-group` 樣式。將其垂直 `gap` 從 `6px` 縮小至 `4px`，並移除 `.form-group label` 原本帶有的 `margin-bottom: 6px`。此調整能顯著拉近表單輸入框標題與輸入框之間的間隙，使表單佈局更加緊湊自然。

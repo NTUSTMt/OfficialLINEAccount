@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🛡️ 野境戶外系統：members 與 officers 幹部身分自動雙向同步 (相容自癒加強版)
+-- 🛡️ 台科登山社社團系統：members 與 officers 幹部身分自動雙向同步 (相容自癒加強版)
 -- 目的：
 -- 1. members 表擴充 is_officer (BOOLEAN) 與 officer_role (TEXT) 欄位
 -- 2. officers 表自動解鎖 NOT NULL 約束 (支援既有 title, role 等歷史欄位)
