@@ -3,11 +3,69 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.91` (v0.1.91)
+- **當前版本**：`0.1.94` (v0.1.94)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 194. 精準重構個人檔案儲存推播之出隊資格與裝備租借引導英文翻譯 (v0.1.94)
+- **問題回報與分析 (Problem & Rationale)**：
+  - 先前個人檔案儲存推播結尾之英文翻譯過於籠統（`Some required info is missing. Please complete your profile`），容易讓使用者與外籍社員產生誤解，以為進入社團系統就必須強制填齊所有保險與出隊資料才能使用任何功能。
+  - 事實上：
+    1. **裝備租借商城（Equipment Rental）隨時皆可直接使用**，無須出隊保險與體能審核資料即可送單借裝備。
+    2. **僅有報名登山出隊活動（Club Trips/Events）**時，因涉及高山戶外安全、主管機關平安保險投保與資格審核，才需要補齊必填項目。
+- **架構設計與修復實作 (Architecture & Implementation)**：
+  - **精確中英雙語重構 (`06_Helper_Services.js` & `src/gas.js`)**：
+    - 當出隊資料齊全時：明確提示已具備出隊活動報名資格，並可隨時租借裝備。
+      `💡 Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via "Activities", or reserve gear via "Equipment Rental" anytime!`
+    - 當出隊資料尚有缺漏時：
+      1. 第一段開宗明義告知外籍生**隨時可以預約戶外器材，不需要完整出隊資料**：  
+         `💡 You can reserve outdoor gear anytime via "Equipment Rental" without full trip details!`
+      2. 第二段清晰點出**只有要參加登山出隊行程時，才需要保險與資格審核**：  
+         `⚠️ Trip Notice: Participating in hiking events requires safety insurance and qualification review.`
+      3. 精確列出具體缺漏的欄位英文（如 `Emergency Contact Name`, `ID/ARC/Passport`, `Fitness Proof` 等），清楚引導欲出隊者至選單「填寫資料」補齊即可啟用一鍵報名。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過（既有出隊資格引導斷言 100% 保持相容）。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+### 193. 刪除 Webhook 冗餘導流指令、全面補齊使用者聊天室訊息中英雙語版本 (v0.1.93)
+- **需求與架構優化 (Requirements & Architecture)**：
+  - **精簡 Webhook 文字關鍵字導流 (`02_LineBot_Webhook.js` & `src/gas.js`)**：
+    - 依使用者指示，刪除第 6 ~ 9 項文字攔截（裝備租借、繳費系統、個人主頁、填寫資料）。由於 LINE 官方帳號圖文選單（Rich Menu）已直接綁定 LIFF URL，手動輸入相關文字時回歸 Gemini AI 客服進行智慧應答與貼心引導，不再發送生硬死板的文字連結。
+  - **全面補齊使用者聊天室各項訊息之中英雙語對照 (Bilingual Support)**：
+    1. **Webhook 預設未命中提示**：加入英文說明 `Hello! Please use the rich menu below to explore Events, Equipment Rental, or Dashboard. If you have any questions, feel free to leave a message for the officers!`。
+    2. **活動報名個人資料缺漏提示 (`03_Flex_Templates.js` & `src/gas.js`)**：
+       - 建立 18 項社員欄位中英對照字典（如 `姓名 (Name)`、`身分別 (Identity Status)`、`緊急聯絡人 (Emergency Contact)` 等），在隊員資料未填齊時直接列出中英對照缺漏欄位並提示英文補齊引導。
+    3. **活動報名收據重要審核提醒**：補全後半段審核機制與名額限制之英文版說明。
+    4. **備取意願確認提示**：確認備取與重複點擊提示全面升級為雙語對照（`Waitlisted (Interested)`）。
+    5. **幹部名冊維護提示**：加入 `Officer directory is currently undergoing maintenance.`。
+    6. **個人檔案儲存推播 (`06_Helper_Services.js` & `src/gas.js`)**：標題與出隊資格引導結尾文字加入英文雙語版。
+    7. **前端裝備租借確認訊息 (`src/pages/Borrow.tsx`)**：使用者送出租借表單後傳入聊天室之訂單明細（`liff.sendMessages`）全面升級為中英雙語對照（訂單編號 Order ID、預計領取 Pickup Date、預約裝備清單 Items、預估總租金 Estimated Total 與提醒事項 Important Notes）。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過（含裝備租借通知與出隊資格引導測試）。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+### 192. LINE 官方帳號最新活動 (Activities) 輪播與詳情 100% 直連 Supabase 解決無活動問題 (v0.1.92)
+- **問題回報與分析 (Problem & Root Cause)**：
+  - 在使用者成功於 Supabase 執行列舉型別修復腳本後，LIFF 前端之個人主頁、出隊足跡、幹部系統已成功載入。
+  - 然而在 LINE 聊天室中發送「最新活動」或點擊圖文選單之「最新活動 Activities」按鈕時，聊天室依然回傳「目前這學期還沒有排定的活動喔！」。
+  - 根本原因：LIFF 前端已是直連 Supabase，但 LINE 機器人後端 GAS (`03_Flex_Templates.js` 與 `src/gas.js`) 過去舊程式碼是向主試算表的 `Events` 分頁進行查詢，因未讀取 Supabase 中的 `events` 表而判定查無活動。
+- **架構設計與修復實作 (Architecture & Implementation)**：
+  - **100% 直讀 Supabase `events` 表（徹底杜絕主試算表讀取與備援依賴）**：
+    - 依據使用者「直接讀取 Supabase，不要讀取主試算表（就算是備用也不要）」之明確指示，全面改寫 [gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js) 與 [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 中的 `sendEventList(replyToken)` 與 `sendEventDetail(replyToken, eventId)`。
+    - 查詢端點直接呼叫 `_supabaseGet("events", { select: "...", order: "start_date.desc" })`，完全移除對 Google Sheets 的 `getSheetByName`、`getDataRange` 及備用讀取。
+  - **支援 ISO 8601 與台灣時區 (UTC+8) 時間解析**：
+    - 新增 `_formatEventDate` 工具函式，自動將 Supabase 儲存之 `YYYY-MM-DD` 與 TIMESTAMPTZ (帶有 `T` 的 ISO 格式，如 `2026-09-18T23:59:59+08:00`) 正確轉換為台灣時區之 `YYYY/MM/DD` 顯示格式。
+    - 健全化 `_isEventExpired`：精準比對活動報名截止時間戳，確保截止判定零時差。
+  - **卡片展示與圖片網址適配**：
+    - 精確提取 `ev.cover_image_url` 或 `ev.image_url` 作為 Flex 卡片 Hero 封面圖，並過濾非 Google Drive 直連圖片。
+    - 清理 [gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js) 與 [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js) 之參數呼叫，不再傳入無用之試算表物件。
+  - **環境對齊資訊**：
+    - 確認主試算表的分頁名稱已完全對齊 Supabase 英文表名（如 `events`、`members`、`officers` 等），便於未來雙向同步與資料庫結構一致性。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 105/105 項測試全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 錯誤。
 
 ### 191. 修復 PostgreSQL 列舉型別比對錯誤 (ENUM Typecast)、落實全端錯誤透明顯示與增強幹部意願推播 (v0.1.91)
 - **問題回報與根本原因 (Root Cause Analysis)**：

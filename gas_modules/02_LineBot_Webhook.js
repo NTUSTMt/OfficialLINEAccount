@@ -122,7 +122,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
 
   // 3. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
   if (queryText.indexOf("最新活動") > -1 || lowerQueryText.indexOf("activities") > -1 || queryText.indexOf("報名活動") > -1 || lowerQueryText === "events") {
-    sendEventList(replyToken, _getSpreadsheet());
+    sendEventList(replyToken);
     return;
   }
 
@@ -144,31 +144,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // 6. 裝備租借 (支援「裝備租借」、「器材借用」、「Equipment Loan」)
-  if (queryText.indexOf("裝備租借") > -1 || queryText.indexOf("器材借用") > -1 || lowerQueryText.indexOf("equipment") > -1) {
-    _replyMessage(replyToken, "🏕️ 歡迎使用裝備租借商城！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI");
-    return;
-  }
-
-  // 7. 繳費系統 (支援「繳費系統」、「繳費中心」、「Payment System」)
-  if (queryText.indexOf("繳費系統") > -1 || queryText.indexOf("繳費中心") > -1 || lowerQueryText.indexOf("payment") > -1) {
-    _replyMessage(replyToken, "💰 歡迎使用繳費與對帳申報系統！\n請點擊下方連結進入結帳申報表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
-    return;
-  }
-
-  // 8. 個人主頁 / 我的狀態 (支援「我的狀態」、「個人主頁」、「My Status」、「Dashboard」)
-  if (queryText.indexOf("我的狀態") > -1 || queryText.indexOf("個人主頁") > -1 || lowerQueryText.indexOf("dashboard") > -1 || lowerQueryText.indexOf("status") > -1) {
-    _replyMessage(replyToken, "👤 查看出隊成就、個人資料與預約進度：\n\nhttps://liff.line.me/2009217429-jvj3ydDT");
-    return;
-  }
-
-  // 9. 填寫資料 (支援「填寫資料」、「Register」)
-  if (queryText.indexOf("填寫資料") > -1 || lowerQueryText.indexOf("register") > -1) {
-    _replyMessage(replyToken, "📝 請填寫或更新您的社員基本資料：\n\nhttps://liff.line.me/2009217429-AhPRqAHg");
-    return;
-  }
-
-  // 10. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
+  // 6. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
   if (GEMINI_API_KEY) {
     var aiReply = _handleGeminiChat(userId, queryText);
     if (aiReply) {
@@ -178,7 +154,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   }
 
   // 若無特定處理，回傳友善提示（群組中若有召喚但未辨識且 AI 未回時才提示）
-  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！");
+  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！\n─────────────\nHello! Please use the rich menu below to explore Events, Equipment Rental, or Dashboard. If you have any questions, feel free to leave a message for the officers!");
 }
 
 /**
@@ -199,7 +175,7 @@ function _handlePostback(replyToken, userId, postbackData) {
   var eventId = params.eventId || (parts.length > 1 && parts[1].indexOf("=") > -1 ? parts[1].split("=")[1] : "");
 
   if (action === "view" || action === "view_event_detail") {
-    sendEventDetail(replyToken, eventId, ss);
+    sendEventDetail(replyToken, eventId);
     return;
   }
   if (action === "signup") {

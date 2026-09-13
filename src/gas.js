@@ -434,7 +434,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
 
   // 3. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
   if (queryText.indexOf("最新活動") > -1 || lowerQueryText.indexOf("activities") > -1 || queryText.indexOf("報名活動") > -1 || lowerQueryText === "events") {
-    sendEventList(replyToken, _getSpreadsheet());
+    sendEventList(replyToken);
     return;
   }
 
@@ -456,31 +456,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // 6. 裝備租借 (支援「裝備租借」、「器材借用」、「Equipment Loan」)
-  if (queryText.indexOf("裝備租借") > -1 || queryText.indexOf("器材借用") > -1 || lowerQueryText.indexOf("equipment") > -1) {
-    _replyMessage(replyToken, "🏕️ 歡迎使用裝備租借商城！\n請點擊下方連結進入多選借用表單：\n\nhttps://liff.line.me/2009217429-zXvGeSrI");
-    return;
-  }
-
-  // 7. 繳費系統 (支援「繳費系統」、「繳費中心」、「Payment System」)
-  if (queryText.indexOf("繳費系統") > -1 || queryText.indexOf("繳費中心") > -1 || lowerQueryText.indexOf("payment") > -1) {
-    _replyMessage(replyToken, "💰 歡迎使用繳費與對帳申報系統！\n請點擊下方連結進入結帳申報表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
-    return;
-  }
-
-  // 8. 個人主頁 / 我的狀態 (支援「我的狀態」、「個人主頁」、「My Status」、「Dashboard」)
-  if (queryText.indexOf("我的狀態") > -1 || queryText.indexOf("個人主頁") > -1 || lowerQueryText.indexOf("dashboard") > -1 || lowerQueryText.indexOf("status") > -1) {
-    _replyMessage(replyToken, "👤 查看出隊成就、個人資料與預約進度：\n\nhttps://liff.line.me/2009217429-jvj3ydDT");
-    return;
-  }
-
-  // 9. 填寫資料 (支援「填寫資料」、「Register」)
-  if (queryText.indexOf("填寫資料") > -1 || lowerQueryText.indexOf("register") > -1) {
-    _replyMessage(replyToken, "📝 請填寫或更新您的社員基本資料：\n\nhttps://liff.line.me/2009217429-AhPRqAHg");
-    return;
-  }
-
-  // 10. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
+  // 6. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
   if (GEMINI_API_KEY) {
     var aiReply = _handleGeminiChat(userId, queryText);
     if (aiReply) {
@@ -490,7 +466,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   }
 
   // 若無特定處理，回傳友善提示（群組中若有召喚但未辨識且 AI 未回時才提示）
-  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！");
+  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！\n─────────────\nHello! Please use the rich menu below to explore Events, Equipment Rental, or Dashboard. If you have any questions, feel free to leave a message for the officers!");
 }
 
 /**
@@ -511,7 +487,7 @@ function _handlePostback(replyToken, userId, postbackData) {
   var eventId = params.eventId || (parts.length > 1 && parts[1].indexOf("=") > -1 ? parts[1].split("=")[1] : "");
 
   if (action === "view" || action === "view_event_detail") {
-    sendEventDetail(replyToken, eventId, ss);
+    sendEventDetail(replyToken, eventId);
     return;
   }
   if (action === "signup") {
@@ -616,8 +592,15 @@ function _isEventExpired(deadlineVal) {
     }
     var str = String(deadlineVal).trim();
     if (!str) return false;
+    if (str.includes("T")) {
+      var isoDate = new Date(str);
+      if (!isNaN(isoDate.getTime())) {
+        return now.getTime() > isoDate.getTime();
+      }
+    }
     var cleanStr = str.replace(/[\/\.]/g, "-");
-    var parts = cleanStr.split(" ")[0].split("-");
+    var datePart = cleanStr.split("T")[0].split(" ")[0];
+    var parts = datePart.split("-");
     if (parts.length >= 3) {
       var year = parseInt(parts[0], 10);
       var month = parseInt(parts[1], 10) - 1;
@@ -632,66 +615,67 @@ function _isEventExpired(deadlineVal) {
 }
 
 /**
- * 產生最新活動卡片輪播 (100% 全動態對應最新欄位版 / 雙語升級)
+ * 輔助函式：日期字串格式化 (依台灣時區轉換為 YYYY/MM/DD)
  */
-function sendEventList(replyToken, ss) {
-  if (!ss) ss = _getSpreadsheet();
-  if (!ss) {
-    _replyMessage(replyToken, "目前無法連線活動資料表，請稍後再試！");
-    return;
+function _formatEventDate(dateVal) {
+  if (!dateVal) return "";
+  var str = String(dateVal).trim();
+  if (str.includes("T")) {
+    var d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      var tzDate = new Date(d.getTime() + (8 * 60 * 60 * 1000));
+      var pad = function(n) { return n < 10 ? '0' + n : n; };
+      var yr = tzDate.getUTCFullYear();
+      var mo = pad(tzDate.getUTCMonth() + 1);
+      var dy = tzDate.getUTCDate();
+      return yr + '/' + mo + '/' + dy;
+    }
   }
-  var eventSheet = ss.getSheetByName("Events");
-  if (!eventSheet) {
-    _replyMessage(replyToken, "找不到活動資料表！\n─────────────\nEvent sheet not found!");
-    return;
-  }
-  var data = eventSheet.getDataRange().getDisplayValues();
-  if (data.length <= 1) {
+  return str.replace(/-/g, "/").substring(0, 10);
+}
+
+/**
+ * 產生最新活動卡片輪播 (100% 直連 Supabase events 表，絕不讀取主試算表)
+ */
+function sendEventList(replyToken) {
+  var sbEvents = _supabaseGet("events", {
+    select: "id,title,fee,start_date,end_date,deadline,status,summary,cover_image_url",
+    order: "start_date.desc"
+  });
+
+  if (!sbEvents || !Array.isArray(sbEvents) || sbEvents.length === 0) {
     _replyMessage(replyToken, "目前這學期還沒有排定的活動喔！\n─────────────\nThere are no scheduled activities for this semester yet!");
     return;
   }
+
   var bubbles = [];
 
-  var headers = data[0];
-  var hIdx = {
-    id: _fi(headers, "活動編號"),
-    name: _fi(headers, "活動名稱"),
-    startDate: _fi(headers, "活動開始日期"),
-    endDate: _fi(headers, "活動結束日期"),
-    deadline: _fi(headers, "報名截止日期"),
-    cost: headers.findIndex(function (h) {
-      return String(h).includes("預計費用") || String(h).includes("費用");
-    }),
-    status: headers.findIndex(function (h) {
-      return String(h).includes("報名狀態") || String(h).includes("狀態");
-    }),
-    shortDesc: _fi(headers, "簡介"),
-    img: headers.findIndex(function (h) {
-      return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片");
-    })
-  };
+  for (var i = 0; i < sbEvents.length; i++) {
+    var ev = sbEvents[i];
+    var status = String(ev.status || "").trim();
+    var deadlineStr = ev.deadline || "";
+    var isExpired = _isEventExpired(deadlineStr);
 
-  for (var i = 1; i < data.length; i++) {
-    var status = hIdx.status > -1 ? String(data[i][hIdx.status] || "").trim() : "";
-    var deadline = hIdx.deadline > -1 ? data[i][hIdx.deadline] : "";
-    var isExpired = _isEventExpired(deadline);
-
-    // 若活動標記為開放但已超過截止日，自動即時關閉並回寫試算表
     if (status === "開放" && isExpired) {
       status = "關閉";
-      try {
-        if (hIdx.status > -1) {
-          eventSheet.getRange(i + 1, hIdx.status + 1).setValue("關閉");
-        }
-      } catch (err) { }
     }
 
+    // 僅顯示「開放」或「未來開放」之活動
     if (status === "開放" || status === "未來開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1) {
-      var eventId = hIdx.id > -1 ? data[i][hIdx.id] : "";
-      var eventName = hIdx.name > -1 ? data[i][hIdx.name] : "未命名活動";
+      var eventId = ev.id || "";
+      var eventName = ev.title || "未命名活動";
       var isOpen = (status === "開放" || status.indexOf("開放") > -1) && !isExpired;
       var tagColor = isOpen ? "#1DB446" : "#FF9800";
       var displayStatus = isOpen ? "開放 Open" : "未來開放 Coming Soon";
+      var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
+      var startFormatted = _formatEventDate(ev.start_date);
+      var endFormatted = _formatEventDate(ev.end_date);
+      var deadlineFormatted = _formatEventDate(ev.deadline);
+
+      var dateDisplay = startFormatted;
+      if (endFormatted && endFormatted !== startFormatted) {
+        dateDisplay += " ~ " + endFormatted;
+      }
 
       var bubble = {
         "type": "bubble",
@@ -718,7 +702,7 @@ function sendEventList(replyToken, ss) {
             "spacing": "xs",
             "contents": [{
               "type": "text",
-              "text": "費用 Cost: " + (hIdx.cost > -1 ? data[i][hIdx.cost] : ""),
+              "text": "費用 Cost: " + costStr,
               "size": "sm",
               "color": "#666666",
               "weight": "bold"
@@ -730,7 +714,7 @@ function sendEventList(replyToken, ss) {
               "margin": "sm"
             }, {
               "type": "text",
-              "text": (hIdx.startDate > -1 ? data[i][hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? data[i][hIdx.endDate] : ""),
+              "text": dateDisplay,
               "size": "sm",
               "color": "#1DB446",
               "weight": "bold"
@@ -742,7 +726,7 @@ function sendEventList(replyToken, ss) {
               "margin": "sm"
             }, {
               "type": "text",
-              "text": (hIdx.deadline > -1 ? data[i][hIdx.deadline] : ""),
+              "text": deadlineFormatted,
               "size": "sm",
               "color": "#E53935",
               "weight": "bold"
@@ -752,7 +736,7 @@ function sendEventList(replyToken, ss) {
             "margin": "md"
           }, {
             "type": "text",
-            "text": hIdx.shortDesc > -1 ? data[i][hIdx.shortDesc] : "",
+            "text": ev.summary || "",
             "size": "sm",
             "color": "#999999",
             "margin": "md",
@@ -776,7 +760,7 @@ function sendEventList(replyToken, ss) {
         }
       };
 
-      var imageUrl = hIdx.img > -1 ? String(data[i][hIdx.img] || "").trim() : "";
+      var imageUrl = String(ev.cover_image_url || "").trim();
       if (imageUrl && imageUrl.startsWith("http") && !imageUrl.includes("drive.google.com")) {
         bubble.hero = {
           "type": "image",
@@ -801,71 +785,38 @@ function sendEventList(replyToken, ss) {
 }
 
 /**
- * 產生單一活動詳細內容大卡片
+ * 產生單一活動詳細資訊卡片 (100% 直連 Supabase events 表，絕不讀取主試算表)
  */
-function sendEventDetail(replyToken, eventId, ss) {
-  if (!ss) ss = _getSpreadsheet();
-  if (!ss) return;
-  var eventSheet = ss.getSheetByName("Events");
-  if (!eventSheet) {
-    _replyMessage(replyToken, "找不到活動資料表！\n─────────────\nEvent sheet not found!");
-    return;
-  }
-  var data = eventSheet.getDataRange().getDisplayValues();
-  if (data.length <= 1) {
-    _replyMessage(replyToken, "目前沒有任何活動資料！\n─────────────\nNo event data available yet!");
-    return;
-  }
-
-  var headers = data[0];
-  var hIdx = {
-    id: _fi(headers, "活動編號"),
-    name: _fi(headers, "活動名稱"),
-    startDate: _fi(headers, "活動開始日期"),
-    endDate: _fi(headers, "活動結束日期"),
-    deadline: _fi(headers, "報名截止日期"),
-    cost: headers.findIndex(function (h) {
-      return String(h).includes("預計費用") || String(h).includes("費用");
-    }),
-    status: headers.findIndex(function (h) {
-      return String(h).includes("報名狀態") || String(h).includes("狀態");
-    }),
-    shortDesc: _fi(headers, "簡介"),
-    fullDesc: headers.findIndex(function (h) {
-      return String(h).includes("詳細行程") || String(h).includes("行程");
-    }),
-    img: headers.findIndex(function (h) {
-      return String(h).includes("封面圖網址") || String(h).includes("照片") || String(h).includes("圖片");
-    })
-  };
-
-  var idCol = hIdx.id > -1 ? hIdx.id : 0;
-  var eventData = null;
-  var eventRowIndex = -1;
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][idCol] === eventId) {
-      eventData = data[i];
-      eventRowIndex = i + 1;
-      break;
-    }
-  }
-  if (!eventData) {
+function sendEventDetail(replyToken, eventId) {
+  if (!eventId) {
     _replyMessage(replyToken, "找不到該活動的詳細資訊！\n─────────────\nEvent details not found!");
     return;
   }
 
-  var eventName = hIdx.name > -1 ? eventData[hIdx.name] : "未命名活動 (Untitled Event)";
-  var status = hIdx.status > -1 ? eventData[hIdx.status] : "";
-  var deadline = hIdx.deadline > -1 ? eventData[hIdx.deadline] : "";
-  var isExpired = _isEventExpired(deadline);
+  var sbList = _supabaseGet("events", { id: "eq." + String(eventId).trim() });
+  if (!sbList || !Array.isArray(sbList) || sbList.length === 0) {
+    _replyMessage(replyToken, "找不到該活動的詳細資訊！\n─────────────\nEvent details not found!");
+    return;
+  }
+
+  var ev = sbList[0];
+  var eventName = ev.title || "未命名活動 (Untitled Event)";
+  var status = String(ev.status || "").trim();
+  var deadlineStr = ev.deadline || "";
+  var isExpired = _isEventExpired(deadlineStr);
 
   if (status === "開放" && isExpired) {
     status = "關閉";
-    try {
-      if (hIdx.status > -1 && eventRowIndex > 0) {
-        eventSheet.getRange(eventRowIndex, hIdx.status + 1).setValue("關閉");
-      }
-    } catch (err) { }
+  }
+
+  var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
+  var startFormatted = _formatEventDate(ev.start_date);
+  var endFormatted = _formatEventDate(ev.end_date);
+  var deadlineFormatted = _formatEventDate(ev.deadline);
+
+  var dateDisplay = startFormatted;
+  if (endFormatted && endFormatted !== startFormatted) {
+    dateDisplay += " ~ " + endFormatted;
   }
 
   var buttonBox;
@@ -913,7 +864,7 @@ function sendEventDetail(replyToken, eventId, ss) {
         "spacing": "xs",
         "contents": [{
           "type": "text",
-          "text": "費用 Cost: " + (hIdx.cost > -1 ? eventData[hIdx.cost] : ""),
+          "text": "費用 Cost: " + costStr,
           "size": "sm",
           "color": "#666666",
           "weight": "bold"
@@ -925,7 +876,7 @@ function sendEventDetail(replyToken, eventId, ss) {
           "margin": "sm"
         }, {
           "type": "text",
-          "text": (hIdx.startDate > -1 ? eventData[hIdx.startDate] : "") + " ~ " + (hIdx.endDate > -1 ? eventData[hIdx.endDate] : ""),
+          "text": dateDisplay,
           "size": "sm",
           "color": "#1DB446",
           "weight": "bold"
@@ -937,7 +888,7 @@ function sendEventDetail(replyToken, eventId, ss) {
           "margin": "sm"
         }, {
           "type": "text",
-          "text": (hIdx.deadline > -1 ? eventData[hIdx.deadline] : ""),
+          "text": deadlineFormatted,
           "size": "sm",
           "color": "#E53935",
           "weight": "bold"
@@ -953,11 +904,11 @@ function sendEventDetail(replyToken, eventId, ss) {
         "margin": "md"
       }, {
         "type": "text",
-        "text": hIdx.fullDesc > -1 ? eventData[hIdx.fullDesc] : (hIdx.shortDesc > -1 ? eventData[hIdx.shortDesc] : "尚無行程資訊"),
+        "text": ev.itinerary || (ev.summary || "尚無行程資訊"),
         "size": "sm",
         "color": "#666666",
-        "margin": "sm",
-        "wrap": true
+        "wrap": true,
+        "margin": "sm"
       }]
     },
     "footer": {
@@ -967,7 +918,7 @@ function sendEventDetail(replyToken, eventId, ss) {
     }
   };
 
-  var imageUrl = hIdx.img > -1 ? String(eventData[hIdx.img] || "").trim() : "";
+  var imageUrl = String(ev.cover_image_url || ev.image_url || "").trim();
   if (imageUrl && imageUrl.startsWith("http") && !imageUrl.includes("drive.google.com")) {
     bubble.hero = {
       "type": "image",
@@ -990,7 +941,7 @@ function sendOfficerMenu(replyToken, ss) {
   try {
     var sheet = ss.getSheetByName("Officers");
     if (!sheet) {
-      _replyMessage(replyToken, "目前幹部名冊維護中。");
+      _replyMessage(replyToken, "目前幹部名冊維護中。\n─────────────\nOfficer directory is currently undergoing maintenance.");
       return;
     }
     var data = sheet.getDataRange().getDisplayValues();
@@ -1364,7 +1315,20 @@ function handleSignup(replyToken, userId, eventId, ss) {
     }
 
     if (profileCheck.missingFields.length > 0) {
-      _replyMessage(replyToken, "⚠️ 報名失敗：您的個人資料尚不完整！\n\n為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n👉 " + profileCheck.missingFields.join("\n👉 ") + "\n\n完成資料更新後，再回來點擊一鍵報名喔！🏕️\n─────────────\n👉 https://liff.line.me/2009217429-AhPRqAHg");
+      var fieldEnMap = {
+        "姓名": "Name", "性別": "Gender", "身分證字號/居留證號": "ID / ARC Number",
+        "生日": "Birthday", "聯絡電話": "Phone Number", "系所": "Department",
+        "學號": "Student ID", "身分別": "Identity Status", "現居地址": "Current Address",
+        "電子郵件": "Email", "真實 LINE ID": "LINE ID", "緊急聯絡人姓名": "Emergency Contact Name",
+        "與緊急聯絡人關係": "Relationship", "緊急聯絡人電話": "Emergency Contact Phone",
+        "緊急聯絡人現居地址": "Emergency Contact Address", "爬山經歷": "Hiking Experience",
+        "體能自評": "Fitness Description", "體能證明": "Fitness Proof"
+      };
+      var missingFormatted = profileCheck.missingFields.map(function (f) {
+        return "👉 " + f + (fieldEnMap[f] ? " (" + fieldEnMap[f] + ")" : "");
+      }).join("\n");
+
+      _replyMessage(replyToken, "⚠️ 報名失敗：您的個人資料尚不完整！\n\n為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n" + missingFormatted + "\n\n完成資料更新後，再回來點擊一鍵報名喔！🏕️\n─────────────\n⚠️ Registration Failed: Incomplete member profile!\nFor insurance and safety requirements, please click 'Register' in the menu to update the required information above, then try registering again:\n👉 https://liff.line.me/2009217429-AhPRqAHg");
       return;
     }
 
@@ -1481,11 +1445,11 @@ function handleSignup(replyToken, userId, eventId, ss) {
     }
 
     // 6. 回傳確認收據
-    _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n活動 (Event)：\n" + evName + "\n活動代號 (Event ID)：" + eventId + "\n報名專屬碼 (Signup Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的報名資料。\n\n⚠️ 【重要提醒 / Important】\n由於部分戶外行程有人數安全限制，此階段為「報名登記」。幹部將進行體能評估與審核，最終錄取名單（正取/備取）將透過本帳號推播通知您！");
+    _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n活動 (Event)：\n" + evName + "\n活動代號 (Event ID)：" + eventId + "\n報名專屬碼 (Signup Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的報名資料。\n\n⚠️ 【重要提醒 / Important Reminder】\n由於部分戶外行程有人數安全限制，此階段為「報名登記」。幹部將進行體能評估與審核，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n─────────────\nDue to safety and team size limits, this stage is registration review. Officers will assess fitness qualifications, and confirmed/waitlisted rosters will be announced via this LINE account!");
 
   } catch (err) {
     console.error("活動報名失敗:", err);
-    _replyMessage(replyToken, "⚠️ 系統目前忙碌中，請稍後再試！");
+    _replyMessage(replyToken, "⚠️ 系統目前忙碌中，請稍後再試！\n─────────────\n⚠️ System is currently busy, please try again later!");
   } finally {
     _safeReleaseLock(lock);
   }
@@ -1517,18 +1481,18 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
     if (rowUser === targetUid && (!eventId || rowEvtId === eventId)) {
       var currentStatus = sStatusIdx > -1 ? String(sData[i][sStatusIdx]) : "";
       if (currentStatus.indexOf("備取（有意願）") > -1 || currentStatus.indexOf("有意願") > -1) {
-        _replyMessage(replyToken, "您先前已確認過備取意願！若有名額釋出，幹部將主動與您聯絡！");
+        _replyMessage(replyToken, "您先前已確認過備取意願！若有名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist preference! Officers will contact you if a spot opens up!");
         return;
       }
       if (sStatusIdx > -1) {
         sSheet.getRange(i + 1, sStatusIdx + 1).setValue("備取（有意願）Waitlisted (Interested)");
         SpreadsheetApp.flush();
-        _replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！");
+        _replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nSuccessfully confirmed waitlist preference! Status updated to: [Waitlisted (Interested)]. We will contact you if a spot opens up!");
         return;
       }
     }
   }
-  _replyMessage(replyToken, "找不到該筆報名資料，請洽詢社團幹部！");
+  _replyMessage(replyToken, "找不到該筆報名資料，請洽詢社團幹部！\n─────────────\nRegistration record not found, please contact club officers!");
 }
 // ==============================================================================
 // 🧠 台科登山社社團系統 GAS 模組 4：Gemini AI 智慧客服與知識庫 (04_Ai_Gemini.js)
@@ -2897,7 +2861,7 @@ function _handleNotifyProfileSaved(json) {
     var emerRel = data.emerRel || "未填寫";
     var offIntent = data.intendOfficial || "未填寫";
 
-    var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功】" : "【✅ 基本資料已成功更新】";
+    var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功 / Welcome! Registration Success】" : "【✅ 基本資料已成功更新 / Profile Updated Successfully】";
     var intro = "";
     var details = [];
 
@@ -2921,10 +2885,18 @@ function _handleNotifyProfileSaved(json) {
     // 依據資料完整度動態生成結尾引導話
     var footer = "";
     if (isActivityReady) {
-      footer = "💡 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！";
+      footer = "💡 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！\n─────────────\n💡 Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via \"Activities\", or reserve gear via \"Equipment Rental\" anytime!";
     } else {
+      var fieldEnMap = {
+        "姓名": "Name", "性別": "Gender", "聯絡電話": "Phone", "生日": "Birthday",
+        "身分證/護照": "ID/ARC/Passport", "通訊地址": "Current Address", "緊急聯絡人姓名": "Emergency Contact Name",
+        "與緊急聯絡人關係": "Relationship", "緊急聯絡人地址": "Emergency Contact Address", "緊急聯絡人電話": "Emergency Contact Phone",
+        "體能自評": "Fitness Self-Assessment", "體能證明": "Fitness Proof", "爬山經驗": "Hiking Experience"
+      };
       var missingText = activityMissing.slice(0, 4).join("、") + (activityMissing.length > 4 ? " 等 " + activityMissing.length + " 項" : "");
-      footer = "💡 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n⚠️ 提醒：出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！🏕️";
+      var missingEnText = activityMissing.slice(0, 4).map(function(f) { return fieldEnMap[f] || f; }).join(", ") + (activityMissing.length > 4 ? " and " + (activityMissing.length - 4) + " more" : "");
+
+      footer = "💡 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n⚠️ 提醒：出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！🏕️\n─────────────\n💡 You can reserve outdoor gear anytime via \"Equipment Rental\" without full trip details!\n\n⚠️ Trip Notice: Participating in hiking events requires safety insurance and qualification review. You currently have missing trip information (" + missingEnText + "). If you plan to join upcoming events, please update your profile via \"Register\" in the menu to enable one-click signup! 🏕️";
     }
 
     if (isNew) {

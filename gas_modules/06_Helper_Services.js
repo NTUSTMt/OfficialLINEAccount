@@ -276,7 +276,7 @@ function _handleNotifyProfileSaved(json) {
     var emerRel = data.emerRel || "未填寫";
     var offIntent = data.intendOfficial || "未填寫";
 
-    var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功】" : "【✅ 基本資料已成功更新】";
+    var title = isNew ? "【🎉 歡迎加入！基本資料註冊成功 / Welcome! Registration Success】" : "【✅ 基本資料已成功更新 / Profile Updated Successfully】";
     var intro = "";
     var details = [];
 
@@ -300,10 +300,18 @@ function _handleNotifyProfileSaved(json) {
     // 依據資料完整度動態生成結尾引導話
     var footer = "";
     if (isActivityReady) {
-      footer = "💡 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！";
+      footer = "💡 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！\n─────────────\n💡 Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via \"Activities\", or reserve gear via \"Equipment Rental\" anytime!";
     } else {
+      var fieldEnMap = {
+        "姓名": "Name", "性別": "Gender", "聯絡電話": "Phone", "生日": "Birthday",
+        "身分證/護照": "ID/ARC/Passport", "通訊地址": "Current Address", "緊急聯絡人姓名": "Emergency Contact Name",
+        "與緊急聯絡人關係": "Relationship", "緊急聯絡人地址": "Emergency Contact Address", "緊急聯絡人電話": "Emergency Contact Phone",
+        "體能自評": "Fitness Self-Assessment", "體能證明": "Fitness Proof", "爬山經驗": "Hiking Experience"
+      };
       var missingText = activityMissing.slice(0, 4).join("、") + (activityMissing.length > 4 ? " 等 " + activityMissing.length + " 項" : "");
-      footer = "💡 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n⚠️ 提醒：出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！🏕️";
+      var missingEnText = activityMissing.slice(0, 4).map(function(f) { return fieldEnMap[f] || f; }).join(", ") + (activityMissing.length > 4 ? " and " + (activityMissing.length - 4) + " more" : "");
+
+      footer = "💡 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n⚠️ 提醒：出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！🏕️\n─────────────\n💡 You can reserve outdoor gear anytime via \"Equipment Rental\" without full trip details!\n\n⚠️ Trip Notice: Participating in hiking events requires safety insurance and qualification review. You currently have missing trip information (" + missingEnText + "). If you plan to join upcoming events, please update your profile via \"Register\" in the menu to enable one-click signup! 🏕️";
     }
 
     if (isNew) {

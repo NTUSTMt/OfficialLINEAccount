@@ -439,26 +439,29 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
       // 4. 傳送結構化確認訊息給使用者 (透過 liff.sendMessages，0 額度消耗)
       const identityText = form.purpose === '社團出隊'
-        ? '社團出隊 (免租金)'
-        : (isOfficial ? '社員個人 (享5折)' : '非社員 (原價)');
+        ? '社團出隊 (免租金) / Club Trip (Free)'
+        : (isOfficial ? '社員個人 (享5折) / Member (50% Off)' : '非社員 (原價) / Non-member (Regular)');
       const itemsListText = selectedCartItems.map(item => `• ${item.name} x ${item.quantity}`).join('\n');
 
       const userMessageText = 
-        `【🎒 我的裝備租借預訂單】\n` +
+        `【🎒 我的裝備租借預訂單 / Equipment Rental Order】\n` +
         `────────────────────\n` +
-        `• 訂單編號：${result.loanId || '已建立'}\n` +
-        `• 借用人：${userProfile.name || '社員'} (${identityText})\n` +
-        `• 預計領取：${form.pickupDate}\n` +
-        `• 預計歸還：${form.returnDate} (共 ${days} 天)\n` +
-        `• 租借用途：${form.purpose}${form.purpose === '其他用途' && form.otherPurpose ? ` (${form.otherPurpose})` : ''}\n\n` +
-        `📦 預約裝備清單：\n` +
+        `• 訂單編號 (Order ID)：${result.loanId || '已建立 Created'}\n` +
+        `• 借用人 (Borrower)：${userProfile.name || '社員'} (${identityText})\n` +
+        `• 預計領取 (Pickup Date)：${form.pickupDate}\n` +
+        `• 預計歸還 (Return Date)：${form.returnDate} (共 ${days} 天 / ${days} days)\n` +
+        `• 租借用途 (Purpose)：${form.purpose}${form.purpose === '其他用途' && form.otherPurpose ? ` (${form.otherPurpose})` : ''}\n\n` +
+        `📦 預約裝備清單 (Items)：\n` +
         `${itemsListText}\n\n` +
-        `💰 預估總租金：$${totalRentValue} 元\n` +
+        `💰 預估總租金 (Estimated Total)：$${totalRentValue} 元\n` +
         `────────────────────\n` +
-        `📌 提醒事項：\n` +
+        `📌 提醒事項 / Important Notes：\n` +
         `1. 幹部已收到您的預約申請，將為您備齊裝備。\n` +
+        `   Officers have received your request and will prepare the gear.\n` +
         `2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n` +
-        `3. 將有幹部主動聯繫你，確認領取時間以及地點。`;
+        `   If fees apply, please complete payment in "Payment Declaration" before pickup.\n` +
+        `3. 將有幹部主動聯繫你，確認領取時間以及地點。\n` +
+        `   An officer will contact you to confirm pickup time and location.`;
 
       if (liff.isInClient()) {
         try {
