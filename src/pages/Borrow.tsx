@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { ShoppingCart, RotateCw, Search, X } from 'lucide-react';
+import { ShoppingCart, RotateCw, Search, X, ShieldAlert } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
-import { fetchEquipmentsFromSupabase, fetchDashboardFromSupabase, submitEquipmentLoanToSupabase } from '../utils/supabaseClient';
+import { fetchEquipmentsFromSupabase, fetchDashboardFromSupabase, fetchMemberProfileFromSupabase, submitEquipmentLoanToSupabase } from '../utils/supabaseClient';
 import type { Equipment } from '../types/equipment';
 import { EquipmentCard } from '../components/borrow/EquipmentCard';
 import { BorrowCartDrawer } from '../components/borrow/BorrowCartDrawer';
@@ -88,6 +88,22 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
     cart: {}
   });
 
+  // 借用人聯絡個資快取 (用於推播通知與確認訊息)
+  const [userProfile, setUserProfile] = useState<{
+    name: string;
+    phone: string;
+    realLineId: string;
+  }>({ name: '', phone: '', realLineId: '' });
+
+  // 外部瀏覽器阻擋防護狀態
+  const isLocalhost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname.includes('192.168.')
+  );
+  const isInLineClient = liff.isInClient();
+  const [bypassExternalLock, setBypassExternalLock] = useState<boolean>(false);
+
   // ==========================================
   // 3. 資料獲取 (SWR Caching)
   // ==========================================
@@ -126,6 +142,17 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
       }
 
       if (userId && userId !== 'TEST_USER_ID') {
+        // 預載社員姓名、LINE ID 與電話 (用於訂單明細與推播)
+        fetchMemberProfileFromSupabase(userId).then(p => {
+          if (p && !ignore) {
+            setUserProfile({
+              name: p.name || '',
+              phone: p.phone || '',
+              realLineId: p.realLineId || ''
+            });
+          }
+        }).catch(err => console.warn('[Borrow] 社員資料載入略過:', err));
+
         const cachedOfficial = getCache<boolean>(CACHE_KEY_OFFICIAL + userId);
         if (cachedOfficial !== null) {
           setIsOfficial(cachedOfficial);
@@ -140,6 +167,9 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
               if (!ignore) {
                 setIsOfficial(official);
                 setCache(CACHE_KEY_OFFICIAL + userId, official, 600);
+                if (dash.profile.name) {
+                  setUserProfile(prev => ({ ...prev, name: prev.name || dash.profile.name }));
+                }
               }
             }
           } catch (sbErr) {
@@ -155,6 +185,9 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
                 const official = Boolean(myStatusData.data.profile.isOfficial);
                 setIsOfficial(official);
                 setCache(CACHE_KEY_OFFICIAL + userId, official, 600);
+                if (myStatusData.data.profile.name) {
+                  setUserProfile(prev => ({ ...prev, name: prev.name || myStatusData.data.profile.name }));
+                }
               }
             } catch (err) {
               console.error('社員身分載入失敗:', err);
@@ -349,7 +382,23 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
     setIsSubmittingOrder(true);
     try {
-      // ⚡ 1. 100% 直連 Supabase 原子性 RPC (< 50ms)
+      // 1. 預先收集所借品項之中文名稱與數量
+      const selectedCartItems = Object.entries(form.cart)
+        .filter(([_, qty]) => qty > 0)
+        .map(([id, qty]) => {
+          const eq = equipments.find(e => e.id === id);
+          return {
+            id,
+            name: eq ? eq.name : id,
+            quantity: qty
+          };
+        });
+
+      const pDate = new Date(form.pickupDate);
+      const rDate = new Date(form.returnDate);
+      const days = Math.max(1, Math.round((rDate.getTime() - pDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+      // ⚡ 2. 100% 直連 Supabase 原子性 RPC (< 50ms)
       const result = await submitEquipmentLoanToSupabase(userId, form);
 
       if (!result.success) {
@@ -357,7 +406,9 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         return;
       }
 
-      // 2. 非同步背景發送 LINE 幹部審核推播 (純通知 API，絕不碰 Google Sheets)
+      const totalRentValue = result.totalRent !== undefined ? result.totalRent : totalPrice;
+
+      // 3. 非同步背景發送 LINE 幹部審核推播 (包含 LINE ID、中文名稱清單、電話與租金)
       fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -365,8 +416,14 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
           action: 'notify_officers_loan',
           userId: userId,
           loanId: result.loanId,
+          borrowerName: userProfile.name || '',
+          borrowerLineId: userProfile.realLineId || '',
+          borrowerPhone: userProfile.phone || '',
+          isOfficial: isOfficial,
+          days: days,
           details: form,
-          totalRent: result.totalRent
+          cartDetails: selectedCartItems,
+          totalRent: totalRentValue
         }))
       }).catch(err => console.warn('[Borrow] 非同步推播通知略過:', err));
 
@@ -380,22 +437,44 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         otherPurpose: ''
       });
 
+      // 4. 傳送結構化確認訊息給使用者 (透過 liff.sendMessages，0 額度消耗)
+      const identityText = form.purpose === '社團出隊'
+        ? '社團出隊 (免租金)'
+        : (isOfficial ? '社員個人 (享5折)' : '非社員 (原價)');
+      const itemsListText = selectedCartItems.map(item => `• ${item.name} x ${item.quantity}`).join('\n');
+
+      const userMessageText = 
+        `【🎒 我的裝備租借預訂單】\n` +
+        `────────────────────\n` +
+        `• 訂單編號：${result.loanId || '已建立'}\n` +
+        `• 借用人：${userProfile.name || '社員'} (${identityText})\n` +
+        `• 預計領取：${form.pickupDate}\n` +
+        `• 預計歸還：${form.returnDate} (共 ${days} 天)\n` +
+        `• 租借用途：${form.purpose}${form.purpose === '其他用途' && form.otherPurpose ? ` (${form.otherPurpose})` : ''}\n\n` +
+        `📦 預約裝備清單：\n` +
+        `${itemsListText}\n\n` +
+        `💰 預估總租金：$${totalRentValue} 元\n` +
+        `────────────────────\n` +
+        `📌 提醒事項：\n` +
+        `1. 幹部已收到您的預約申請，將為您備齊裝備。\n` +
+        `2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n` +
+        `3. 將有幹部主動聯繫你，確認領取時間以及地點。`;
+
       if (liff.isInClient()) {
-        Promise.race([
-          liff.sendMessages([{
+        try {
+          await liff.sendMessages([{
             type: 'text',
-            text: t('borrow.alert.submitSuccess', { count: totalItems })
-          }]),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 800))
-        ]).catch(liffErr => {
+            text: userMessageText
+          }]);
+        } catch (liffErr) {
           console.warn('liff.sendMessages 略過:', liffErr);
-        }).finally(() => {
+        } finally {
           try {
             liff.closeWindow();
           } catch (e) {
             console.warn('liff.closeWindow 略過:', e);
           }
-        });
+        }
       } else {
         alert(t('borrow.alert.submitSuccessBrowser'));
       }
@@ -421,6 +500,100 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
   // ==========================================
   // 5. 畫面渲染 (Render)
   // ==========================================
+
+  // 外部瀏覽器全螢幕鎖定遮罩 (不允許使用外部瀏覽器，保障預約身分與紀錄)
+  if (!isInLineClient && !bypassExternalLock) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px 20px',
+        background: 'linear-gradient(135deg, #064e3b 0%, #0f172a 100%)',
+        color: '#ffffff',
+        textAlign: 'center',
+        boxSizing: 'border-box'
+      }}>
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.08)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: '24px',
+          padding: '36px 24px',
+          maxWidth: '380px',
+          width: '100%',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+        }}>
+          <div style={{
+            width: '68px',
+            height: '68px',
+            borderRadius: '20px',
+            background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px auto',
+            boxShadow: '0 8px 20px rgba(16, 185, 129, 0.35)'
+          }}>
+            <ShieldAlert size={36} color="#ffffff" />
+          </div>
+
+          <h1 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 10px 0', letterSpacing: '0.5px' }}>
+            請於 LINE 官方帳號中開啟
+          </h1>
+
+          <p style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: '1.6', margin: '0 0 24px 0' }}>
+            台科登山社裝備租借系統不支援外部瀏覽器（Safari / Chrome）。為了確保您的預約身分與裝備借還紀錄無誤，請由 <strong>LINE 官方帳號</strong> 下方選單點選進入。
+          </p>
+
+          <a
+            href="https://liff.line.me/2009217429-zXvGeSrI"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              width: '100%',
+              padding: '14px 20px',
+              background: '#06c755',
+              color: '#ffffff',
+              borderRadius: '14px',
+              fontWeight: 600,
+              fontSize: '15px',
+              textDecoration: 'none',
+              boxShadow: '0 4px 12px rgba(6, 199, 85, 0.3)',
+              boxSizing: 'border-box'
+            }}
+          >
+            <span>開啟 LINE 官方帳號</span>
+          </a>
+
+          {isLocalhost && (
+            <button
+              type="button"
+              onClick={() => setBypassExternalLock(true)}
+              style={{
+                marginTop: '18px',
+                background: 'transparent',
+                border: '1px dashed rgba(255,255,255,0.3)',
+                color: '#94a3b8',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              ⚙️ 本地開發預覽 (Bypass Lock)
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* 費用試算說明 Banner */}

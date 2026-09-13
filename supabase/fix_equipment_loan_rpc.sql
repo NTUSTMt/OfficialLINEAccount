@@ -1,16 +1,16 @@
 -- ==============================================================================
--- 🎒 台科登山社社團系統：裝備租借原子性提交 RPC (submit_equipment_loan_rpc)
--- 目的：完全取代舊版 GAS doPost('submit_multi_loan')，在資料庫層原子扣減庫存與計算費用
--- 計費模型：2天基本租金 + 每日加成、社團出隊免租、社員個人5折 (完全對齊前端)
+-- 🎒 台科登山社社團系統：修復裝備租借 submit_equipment_loan_rpc 與防呆欄位補齊
+-- 目的：徹底解決 column "member_price_per_day" does not exist 錯誤，
+--       並對齊「2天基本租金 + 每日加成、社團出隊免租、社員個人5折」真實計費模型
 -- ==============================================================================
 
--- 1. 確保 equipments 欄位完全雙軌相容
+-- 1. 確保 equipments 欄位完全雙軌相容 (無論舊腳本或新程式皆不會噴 column does not exist)
 ALTER TABLE equipments ADD COLUMN IF NOT EXISTS price_2day INTEGER DEFAULT 0;
 ALTER TABLE equipments ADD COLUMN IF NOT EXISTS price_extra_day INTEGER DEFAULT 0;
 ALTER TABLE equipments ADD COLUMN IF NOT EXISTS member_price_per_day INTEGER DEFAULT 0;
 ALTER TABLE equipments ADD COLUMN IF NOT EXISTS non_member_price_per_day INTEGER DEFAULT 0;
 
--- 2. 確保 loans 與 loan_items 欄位完整存在
+-- 2. 確保 loans 與 loan_items 欄位完整存在 (防呆補齊可能遺漏的欄位，如 days, unit_price_snapshot 等)
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS name TEXT;
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS start_date DATE;
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS end_date DATE;
@@ -30,6 +30,14 @@ ALTER TABLE loans ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS unit_price_snapshot INTEGER DEFAULT 0;
 ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS subtotal INTEGER DEFAULT 0;
 
+-- 3. 雙向資料回填：若舊欄位有值但新欄位為 0，或新欄位有值但舊欄位為 0，自動同步
+UPDATE equipments 
+SET price_2day = COALESCE(NULLIF(price_2day, 0), member_price_per_day, 0),
+    member_price_per_day = COALESCE(NULLIF(member_price_per_day, 0), price_2day, 0),
+    price_extra_day = COALESCE(NULLIF(price_extra_day, 0), non_member_price_per_day, 0),
+    non_member_price_per_day = COALESCE(NULLIF(non_member_price_per_day, 0), price_extra_day, 0);
+
+-- 4. 重建原子性租借提交 RPC (submit_equipment_loan_rpc)
 CREATE OR REPLACE FUNCTION submit_equipment_loan_rpc(
     p_line_user_id TEXT,
     p_details JSONB

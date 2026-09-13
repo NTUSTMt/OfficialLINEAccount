@@ -2212,6 +2212,16 @@ function handleLiffHelperApi(json) {
     return _handleUpdateEquipmentImages(json);
   }
 
+  // 7. 儲存/新增活動 (AdminEvents: 建立/更新活動、資料夾、名冊試算表、封面圖、幹部推播、Supabase 同步)
+  if (action === "save_event") {
+    return _handleSaveEvent(json);
+  }
+
+  // 8. 發送審核結果推播通知 (AdminEvents: 發送正取/備取 Flex 訊息)
+  if (action === "send_event_notifications") {
+    return _handleSendEventNotifications(json);
+  }
+
   return _errorResponse("未支援的 Helper Action: " + action);
 }
 
@@ -2259,7 +2269,60 @@ function _handleDriveUploadHelper(json) {
 }
 
 /**
+ * 取得社員聯絡資訊輔助函式 (優先查詢 Supabase members 表，備援查詢 Google Sheets Members 表)
+ */
+function _getMemberContactInfo(userId) {
+  if (!userId || userId === "TEST_USER_ID") return null;
+  try {
+    if (typeof _supabaseGet === "function") {
+      var sbMembers = _supabaseGet("members", { line_user_id: "eq." + userId });
+      if (sbMembers && sbMembers.length > 0) {
+        var m = sbMembers[0];
+        return {
+          name: m.name || "",
+          realLineId: m.line_id || "",
+          phone: m.phone || "",
+          isOfficial: !!(m.is_official_member)
+        };
+      }
+    }
+  } catch (e) {
+    console.warn("_getMemberContactInfo Supabase 例外:", e);
+  }
+
+  try {
+    if (typeof SpreadsheetApp !== "undefined" && typeof SPREADSHEET_ID !== "undefined") {
+      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var sheet = ss ? ss.getSheetByName("Members") : null;
+      if (sheet) {
+        var data = sheet.getDataRange().getValues();
+        var headers = data[0];
+        var idIdx = _fi(headers, "系統識別碼");
+        for (var i = 1; i < data.length; i++) {
+          if (idIdx > -1 && data[i][idIdx] === userId) {
+            var nameIdx = _fi(headers, "姓名");
+            var lineIdx = _fi(headers, "LINE");
+            var phoneIdx = _fi(headers, "聯絡電話");
+            var payIdx = _fi(headers, "繳費狀態");
+            return {
+              name: nameIdx > -1 ? data[i][nameIdx] : "",
+              realLineId: lineIdx > -1 ? data[i][lineIdx] : "",
+              phone: phoneIdx > -1 ? data[i][phoneIdx] : "",
+              isOfficial: payIdx > -1 && String(data[i][payIdx]).trim() === "已繳費 Paid"
+            };
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("_getMemberContactInfo Sheet 例外:", e);
+  }
+  return null;
+}
+
+/**
  * 裝備租借幹部推播 Helper (純推播訊息)
+ * 包含：訂單編號、申請人真實姓名、LINE ID、聯絡電話、出隊天數、租借用途、預估租金與中文品項明細
  */
 function _handleNotifyOfficersLoan(json) {
   try {
@@ -2267,23 +2330,69 @@ function _handleNotifyOfficersLoan(json) {
     var details = json.details || {};
     var loanId = json.loanId || "新訂單";
     var totalRent = json.totalRent !== undefined ? json.totalRent : 0;
+    var isOfficial = json.isOfficial;
+    var borrowerName = json.borrowerName || "";
+    var borrowerLineId = json.borrowerLineId || "";
+    var borrowerPhone = json.borrowerPhone || "";
+    var days = json.days;
 
-    var cart = details.cart || {};
+    // 若未傳入天數，由日期動態推算
+    if (!days && details.pickupDate && details.returnDate) {
+      var pTime = new Date(String(details.pickupDate).replace(/-/g, "/")).getTime();
+      var rTime = new Date(String(details.returnDate).replace(/-/g, "/")).getTime();
+      days = Math.max(1, Math.round((rTime - pTime) / (1000 * 60 * 60 * 24)) + 1);
+    }
+    if (!days) days = 1;
+
+    // 若前端未附帶姓名或 LINE ID，自動查詢 Supabase / 試算表補齊
+    if (!borrowerName || !borrowerLineId) {
+      var memberInfo = _getMemberContactInfo(userId);
+      if (memberInfo) {
+        if (!borrowerName) borrowerName = memberInfo.name;
+        if (!borrowerLineId) borrowerLineId = memberInfo.realLineId;
+        if (!borrowerPhone) borrowerPhone = memberInfo.phone;
+        if (isOfficial === undefined) isOfficial = memberInfo.isOfficial;
+      }
+    }
+    if (!borrowerName) borrowerName = "未知社員";
+    if (!borrowerLineId) borrowerLineId = "未填寫";
+    if (!borrowerPhone) borrowerPhone = "未填寫";
+
+    var purpose = details.purpose || "社團出隊";
+    if (purpose === "其他用途" && details.otherPurpose) {
+      purpose = "其他用途 (" + details.otherPurpose + ")";
+    }
+
+    var identityDesc = (purpose === "社團出隊") ? "社團出隊 (免租金)" : (isOfficial ? "社員 (享5折)" : "非社員 (原價)");
+
     var itemsSummary = [];
-    for (var eqId in cart) {
-      if (cart[eqId] > 0) {
-        itemsSummary.push("• " + eqId + " x" + cart[eqId]);
+    if (Array.isArray(json.cartDetails) && json.cartDetails.length > 0) {
+      for (var i = 0; i < json.cartDetails.length; i++) {
+        var itm = json.cartDetails[i];
+        var itmName = itm.name || itm.id || "裝備";
+        var itmQty = itm.quantity || itm.qty || 1;
+        itemsSummary.push("• " + itmName + (itm.id && itm.name !== itm.id ? " (" + itm.id + ")" : "") + " x " + itmQty);
+      }
+    } else {
+      var cart = details.cart || {};
+      for (var eqId in cart) {
+        if (cart[eqId] > 0) {
+          itemsSummary.push("• " + eqId + " x " + cart[eqId]);
+        }
       }
     }
 
-    var msg = "【🎒 幹部通知：新裝備租借申請】\n\n" +
-      "單號：" + loanId + "\n" +
-      "借用者 ID：" + userId + "\n" +
-      "預計領取：" + (details.pickupDate || "") + "\n" +
-      "預計歸還：" + (details.returnDate || "") + "\n" +
-      "用途：" + (details.purpose || "") + (details.otherPurpose ? " (" + details.otherPurpose + ")" : "") + "\n" +
-      "預估總租金：$" + totalRent + "\n\n" +
-      "品項明細：\n" + itemsSummary.join("\n") + "\n\n" +
+    var msg = "【🎒 幹部通知：新裝備租借申請】\n" +
+      "────────────────────\n" +
+      "• 訂單編號：" + loanId + "\n" +
+      "• 申請人：" + borrowerName + " (" + identityDesc + ")\n" +
+      "• LINE ID：" + borrowerLineId + "\n" +
+      "• 聯絡電話：" + borrowerPhone + "\n" +
+      "• 出隊天數：" + days + " 天 (" + (details.pickupDate || "") + " ~ " + (details.returnDate || "") + ")\n" +
+      "• 租借用途：" + purpose + "\n" +
+      "• 預估總租金：$" + totalRent + " 元\n\n" +
+      "📦 借用裝備明細：\n" +
+      (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") + "\n\n" +
       "⚡ 本資料已安全寫入 Supabase，請至幹部後台確認備用！";
 
     pushAdminMessage(msg);
@@ -2491,33 +2600,25 @@ function _handleCheckOfficerStatus(json) {
     var userId = json.userId;
     if (!userId) return _jsonResponse({ status: "success", isOfficer: false });
 
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName("Officers");
-    if (!sheet) return _jsonResponse({ status: "success", isOfficer: false });
+    var ss = null;
+    try {
+      if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    } catch (e) {}
 
-    var data = sheet.getDataRange().getValues();
-    var headers = data[0];
-    var uidIdx = _fi(headers, "系統識別碼");
-    if (uidIdx === -1) uidIdx = 3; // 預設第 4 欄
-
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][uidIdx]).trim() === String(userId).trim()) {
-        return _jsonResponse({
-          status: "success",
-          isOfficer: true,
-          name: data[i][0] || "幹部",
-          role: data[i][1] || "幹部"
-        });
-      }
-    }
-    return _jsonResponse({ status: "success", isOfficer: false });
+    var res = checkOfficerInternal(ss, userId);
+    return _jsonResponse({
+      status: "success",
+      isOfficer: res.isOfficer,
+      name: res.name || "幹部",
+      role: res.role || "幹部"
+    });
   } catch (err) {
     return _jsonResponse({ status: "success", isOfficer: false, error: err.toString() });
   }
 }
 
 /**
- * GAS GET 請求入口 (支援 check_officer_status, get_unpaid 唯讀備援與健康檢查)
+ * GAS GET 請求入口 (支援 check_officer_status, send_event_notifications, get_admin_events, get_event_signups, get_unpaid 與健康檢查)
  */
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
@@ -2528,7 +2629,24 @@ function doGet(e) {
     return _handleCheckOfficerStatus({ userId: userId });
   }
 
-  // 2. 待繳費用清單唯讀備援 (保證絕不噴 500/404 錯誤，回傳安全空結構)
+  // 2. 審核結果推播通知 (GET 端點支援)
+  if (action === "send_event_notifications") {
+    var eventId = (e && e.parameter && e.parameter.eventId) ? e.parameter.eventId : "";
+    return _handleSendEventNotifications({ userId: userId, eventId: eventId });
+  }
+
+  // 3. 活動清單唯讀備援
+  if (action === "get_admin_events") {
+    return _handleGetAdminEvents(userId);
+  }
+
+  // 4. 報名名冊唯讀備援
+  if (action === "get_event_signups") {
+    var signupEventId = (e && e.parameter && e.parameter.eventId) ? e.parameter.eventId : "";
+    return _handleGetEventSignups(signupEventId, userId);
+  }
+
+  // 5. 待繳費用清單唯讀備援 (保證絕不噴 500/404 錯誤，回傳安全空結構)
   if (action === "get_unpaid") {
     return _jsonResponse({
       status: "success",
@@ -2541,11 +2659,11 @@ function doGet(e) {
     });
   }
 
-  // 3. 預設健康檢查
+  // 6. 預設健康檢查
   return _jsonResponse({
     status: "ok",
     service: "Wilderness GAS Microservices",
-    version: "2.0.1",
+    version: "2.0.2",
     architecture: "Modular (Supabase Primary, GAS Helper & Background Sync)"
   });
 }
@@ -2774,6 +2892,849 @@ function _handleUpdateEquipmentImages(payload) {
   } catch (error) {
     console.error("更新裝備照片失敗:", error);
     return _errorResponse("更新裝備照片時發生後端錯誤: " + error.toString());
+  }
+}
+
+/**
+ * 內部輔助：檢驗使用者是否為登山社幹部 (支援 Google Sheets Officers 工作表 + Supabase members 表雙軌校驗)
+ */
+function checkOfficerInternal(ss, userId, userName) {
+  if (!userId && !userName) return { isOfficer: false, role: "", name: "" };
+  if (userId === "TEST_USER_ID") return { isOfficer: true, role: "管理員", name: "測試管理員" };
+
+  try {
+    // 1. 若有提供試算表物件，先搜尋 Officers 工作表
+    if (ss) {
+      var oSheet = ss.getSheetByName("Officers");
+      if (oSheet) {
+        var oData = oSheet.getDataRange().getDisplayValues();
+        if (oData.length > 1) {
+          var oH = oData[0];
+          var nameIdx = oH.findIndex(function (h) { return String(h).includes("姓名") || String(h).includes("名字"); });
+          var roleIdx = oH.findIndex(function (h) { return String(h).includes("職稱") || String(h).includes("職位"); });
+          var sysIdx = oH.findIndex(function (h) {
+            var s = String(h).toLowerCase();
+            return s.includes("識別碼") || s.includes("userid") || s.includes("user id") || s.includes("uid") || s.includes("幹部 id") || s.includes("幹部id");
+          });
+          var lineIdx = oH.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
+
+          // (1) 以 userId 比對識別碼或 LINE ID
+          if (userId) {
+            var cleanUserId = String(userId).trim();
+            for (var i = 1; i < oData.length; i++) {
+              var rowSysId = (sysIdx > -1 && oData[i][sysIdx]) ? String(oData[i][sysIdx]).trim() : "";
+              var rowLineId = (lineIdx > -1 && oData[i][lineIdx]) ? String(oData[i][lineIdx]).trim() : "";
+
+              if ((rowSysId && (rowSysId === cleanUserId || cleanUserId.indexOf(rowSysId) > -1 || rowSysId.indexOf(cleanUserId) > -1)) ||
+                (rowLineId && rowLineId === cleanUserId)) {
+                var role = (roleIdx > -1 && oData[i][roleIdx]) ? String(oData[i][roleIdx]).trim() : "幹部";
+                return { isOfficer: true, role: role, name: (nameIdx > -1) ? String(oData[i][nameIdx]).trim() : "" };
+              }
+            }
+          }
+
+          // (2) 以 userName 比對姓名
+          if (userName && nameIdx > -1) {
+            var cleanUserName = userName.trim();
+            for (var j = 1; j < oData.length; j++) {
+              var oName = oData[j][nameIdx].trim();
+              if (oName !== "" && (oName === cleanUserName || cleanUserName.indexOf(oName) > -1 || oName.indexOf(cleanUserName) > -1)) {
+                var officerRole = (roleIdx > -1) ? oData[j][roleIdx].trim() : "幹部";
+                if (userId && sysIdx > -1 && !oData[j][sysIdx]) {
+                  try { oSheet.getRange(j + 1, sysIdx + 1).setValue(userId); } catch (e) {}
+                }
+                return { isOfficer: true, role: officerRole, name: oName };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. 雙軌校驗：查詢 Supabase members 表
+    var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
+    var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
+    if (sbUrl && sbKey && userId) {
+      var queryUrl = sbUrl + "/rest/v1/members?or=(user_id.eq." + encodeURIComponent(userId) + ",line_user_id.eq." + encodeURIComponent(userId) + ")&select=name,role,is_officer&limit=1";
+      var sbRes = UrlFetchApp.fetch(queryUrl, {
+        method: "get",
+        headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
+        muteHttpExceptions: true
+      });
+      if (sbRes.getResponseCode() === 200) {
+        var members = JSON.parse(sbRes.getContentText());
+        if (members && members.length > 0) {
+          var m = members[0];
+          if (m.is_officer === true || m.role === "幹部" || m.role === "管理員" || m.role === "社長") {
+            return { isOfficer: true, role: m.role || "幹部", name: m.name || "" };
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("幹部身分檢查例外:", err);
+  }
+
+  return { isOfficer: false, role: "", name: "" };
+}
+
+/**
+ * 主動推播 Flex 訊息
+ */
+function pushFlexMessage(to, altText, contents) {
+  if (!to || !contents) return;
+  var token = MEMBER_BOT_TOKEN || PropertiesService.getScriptProperties().getProperty("MEMBER_BOT_TOKEN");
+  return _lineAPI("push", token, {
+    to: to,
+    messages: [{
+      type: "flex",
+      altText: altText || "通知訊息",
+      contents: contents
+    }]
+  });
+}
+
+/**
+ * 安全設置或更新 _CONFIG 工作表中的鍵值對
+ */
+function _setOrUpdateConfigRow(configSheet, key, value) {
+  if (!configSheet || !key) return;
+  var cData = configSheet.getDataRange().getValues();
+  for (var i = 0; i < cData.length; i++) {
+    if (String(cData[i][0]).trim().toUpperCase() === String(key).trim().toUpperCase()) {
+      configSheet.getRange(i + 1, 2).setValue(value !== undefined && value !== null ? value : "");
+      return;
+    }
+  }
+  configSheet.appendRow([key, value !== undefined && value !== null ? value : ""]);
+}
+
+/**
+ * 建立活動專屬雲端硬碟資料夾 (YYYY/MM/DD_活動名稱) 與報名名冊試算表
+ */
+function _createEventDriveFolderAndSheet(payload, eventId) {
+  try {
+    var rawDate = payload.startDate || "";
+    var datePart = "";
+    if (rawDate) {
+      datePart = String(rawDate).trim().replace(/-/g, "/").split(" ")[0].split("T")[0];
+    }
+    if (!datePart) {
+      datePart = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyy/MM/dd");
+    }
+
+    var eventName = (payload.name || "未命名活動").trim();
+    var folderName = datePart + "_" + eventName;
+
+    // 1. 於 Google Drive 根目錄建立專屬活動資料夾
+    var folder = DriveApp.getRootFolder().createFolder(folderName);
+    var folderUrl = folder.getUrl();
+    var folderId = folder.getId();
+
+    // 2. 建立活動專屬報名試算表 (優先從 EVENT_SHEET_TEMPLATE_ID 範本自動複製)
+    var sheetName = folderName + "_報名名冊";
+    var templateId = PropertiesService.getScriptProperties().getProperty("EVENT_SHEET_TEMPLATE_ID");
+    var newSS = null;
+    var ssId = "";
+    var ssUrl = "";
+
+    if (templateId) {
+      try {
+        var templateFile = DriveApp.getFileById(templateId.trim());
+        var copiedFile = templateFile.makeCopy(sheetName, folder);
+        ssId = copiedFile.getId();
+        ssUrl = copiedFile.getUrl();
+        newSS = SpreadsheetApp.open(copiedFile);
+        console.log("⚡ [Template] 成功複製範本試算表: " + ssId);
+      } catch (tmplErr) {
+        console.warn("複製範本試算表失敗，切換為程式化動態生成:", tmplErr);
+      }
+    }
+
+    if (!newSS) {
+      newSS = SpreadsheetApp.create(sheetName);
+      ssId = newSS.getId();
+      ssUrl = newSS.getUrl();
+
+      var file = DriveApp.getFileById(ssId);
+      folder.addFile(file);
+      DriveApp.getRootFolder().removeFile(file);
+
+      var signupSheet = newSS.getSheets()[0];
+      signupSheet.setName("報名名冊");
+
+      var headers = [
+        "系統識別碼", "專屬碼", "姓名", "性別", "LINE ID", "聯絡信箱", "聯絡電話", "聯絡地址",
+        "生日", "證件號碼", "緊急聯絡人姓名", "緊急聯絡人電話", "緊急聯絡人聯絡地址", "緊急聯絡人關係",
+        "爬山經驗", "體能測驗", "體能證明", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註"
+      ];
+      signupSheet.appendRow(headers);
+
+      var headerRange = signupSheet.getRange(1, 1, 1, headers.length);
+      headerRange.setFontWeight("bold");
+      headerRange.setBackground("#2563eb");
+      headerRange.setFontColor("#ffffff");
+      signupSheet.setFrozenRows(1);
+    }
+
+    // 3. 建立或動態更新隱藏之 _CONFIG 工作表
+    var configSheet = newSS.getSheetByName("_CONFIG");
+    if (!configSheet) {
+      configSheet = newSS.insertSheet("_CONFIG");
+      configSheet.appendRow(["KEY", "VALUE"]);
+    }
+
+    var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL") || "";
+    var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY") || "";
+    var botToken = PropertiesService.getScriptProperties().getProperty("MEMBER_BOT_TOKEN") || PropertiesService.getScriptProperties().getProperty("LINE_BOT_TOKEN") || "";
+
+    _setOrUpdateConfigRow(configSheet, "EVENT_ID", eventId);
+    _setOrUpdateConfigRow(configSheet, "EVENT_NAME", eventName);
+    _setOrUpdateConfigRow(configSheet, "FOLDER_ID", folderId);
+    _setOrUpdateConfigRow(configSheet, "CREATED_AT", new Date().toISOString());
+    if (sbUrl) _setOrUpdateConfigRow(configSheet, "SUPABASE_URL", sbUrl);
+    if (sbKey) _setOrUpdateConfigRow(configSheet, "SUPABASE_SERVICE_ROLE_KEY", sbKey);
+    if (botToken) _setOrUpdateConfigRow(configSheet, "MEMBER_BOT_TOKEN", botToken);
+    configSheet.hideSheet();
+
+    return {
+      folderUrl: folderUrl,
+      folderId: folderId,
+      spreadsheetUrl: ssUrl,
+      spreadsheetId: ssId
+    };
+  } catch (err) {
+    console.error("建立活動專屬雲端資料夾與試算表失敗:", err);
+    return null;
+  }
+}
+
+/**
+ * 將活動雲端資料夾與試算表連結同步至 Supabase events 表
+ */
+function _syncEventDriveUrlsToSupabase(eventId, driveFolderUrl, spreadsheetUrl, spreadsheetId) {
+  var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
+  var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
+  if (!sbUrl || !sbKey || !eventId) return;
+
+  try {
+    var updatePayload = {
+      updated_at: new Date().toISOString()
+    };
+    if (driveFolderUrl) updatePayload.drive_folder_url = driveFolderUrl;
+    if (spreadsheetUrl) updatePayload.spreadsheet_url = spreadsheetUrl;
+    if (spreadsheetId) updatePayload.spreadsheet_id = spreadsheetId;
+
+    var url = sbUrl + "/rest/v1/events?id=eq." + encodeURIComponent(eventId);
+    var res = UrlFetchApp.fetch(url, {
+      method: "patch",
+      contentType: "application/json",
+      headers: {
+        "apikey": sbKey,
+        "Authorization": "Bearer " + sbKey,
+        "Prefer": "return=representation"
+      },
+      payload: JSON.stringify(updatePayload),
+      muteHttpExceptions: true
+    });
+
+    var updated = [];
+    try {
+      if (res.getResponseCode() === 200) {
+        updated = JSON.parse(res.getContentText());
+      }
+    } catch (parseErr) {}
+
+    if (!updated || updated.length === 0) {
+      var upsertUrl = sbUrl + "/rest/v1/events?on_conflict=id";
+      updatePayload.id = eventId;
+      if (!updatePayload.title) updatePayload.title = eventId;
+      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyy-MM-dd");
+      updatePayload.fee = 0;
+      updatePayload.start_date = todayStr;
+      updatePayload.end_date = todayStr;
+      updatePayload.status = "開放";
+      UrlFetchApp.fetch(upsertUrl, {
+        method: "post",
+        contentType: "application/json",
+        headers: {
+          "apikey": sbKey,
+          "Authorization": "Bearer " + sbKey,
+          "Prefer": "resolution=merge-duplicates,return=minimal"
+        },
+        payload: JSON.stringify(updatePayload),
+        muteHttpExceptions: true
+      });
+    }
+  } catch (err) {
+    console.warn("同步活動雲端連結至 Supabase 失敗:", err);
+  }
+}
+
+/**
+ * 將活動完整資料同步/Upsert 至 Supabase events 表
+ */
+function _syncEventToSupabase(eventData) {
+  var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
+  var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
+  if (!sbUrl || !sbKey || !eventData || !eventData.id) return;
+
+  try {
+    var url = sbUrl + "/rest/v1/events?on_conflict=id";
+    var costNum = 0;
+    if (eventData.cost !== undefined && eventData.cost !== null) {
+      costNum = parseInt(String(eventData.cost).replace(/[^\d]/g, ""), 10) || 0;
+    }
+
+    var startStr = null;
+    if (eventData.startDate) {
+      startStr = String(eventData.startDate).replace(/\//g, "-").split(" ")[0].split("T")[0];
+    }
+    var endStr = null;
+    if (eventData.endDate) {
+      endStr = String(eventData.endDate).replace(/\//g, "-").split(" ")[0].split("T")[0];
+    } else {
+      endStr = startStr;
+    }
+    var deadlineIso = null;
+    if (eventData.deadline) {
+      var dStr = String(eventData.deadline).replace(/\//g, "-").trim();
+      deadlineIso = dStr.includes("T") ? dStr : (dStr + "T23:59:59Z");
+    }
+
+    var payload = {
+      id: eventData.id,
+      title: eventData.name || eventData.title || eventData.id,
+      fee: costNum,
+      start_date: startStr,
+      end_date: endStr,
+      deadline: deadlineIso,
+      status: eventData.status || "開放",
+      summary: eventData.shortDesc || "",
+      itinerary: eventData.fullDesc || "",
+      cover_image_url: eventData.imageUrl || "",
+      drive_folder_url: eventData.driveFolderUrl || null,
+      spreadsheet_url: eventData.spreadsheetUrl || null,
+      spreadsheet_id: eventData.spreadsheetId || null,
+      updated_at: new Date().toISOString()
+    };
+
+    var res = UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "apikey": sbKey,
+        "Authorization": "Bearer " + sbKey,
+        "Prefer": "resolution=merge-duplicates,return=representation"
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code >= 200 && code < 300) {
+      console.log("⚡ [Supabase] 已成功 Upsert 活動至 events 表: " + eventData.id);
+    } else {
+      console.warn("⚠️ [Supabase] Upsert 活動失敗 (" + code + "): " + res.getContentText());
+    }
+  } catch (err) {
+    console.warn("同步活動至 Supabase 例外:", err);
+  }
+}
+
+/**
+ * API: 儲存或新增活動 (POST action=save_event)
+ */
+function _handleSaveEvent(json) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = null;
+    try {
+      if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    } catch (e) {
+      console.warn("無法開啟主試算表: " + e.toString());
+    }
+
+    var officerCheck = checkOfficerInternal(ss, json.userId);
+    if (!officerCheck.isOfficer) {
+      return _errorResponse("權限不足，無法儲存活動！");
+    }
+
+    var eventId = json.eventId ? String(json.eventId).trim() : "";
+    var isUpdate = false;
+    var targetRow = -1;
+    var eventSheet = null;
+    var headers = [];
+    var hIdx = {};
+
+    if (ss) {
+      eventSheet = ss.getSheetByName("Events");
+      if (!eventSheet) {
+        eventSheet = ss.insertSheet("Events");
+        eventSheet.appendRow(["活動編號", "活動名稱", "活動開始日期", "活動結束日期", "報名截止日期", "預計費用", "報名狀態", "簡介", "詳細行程", "封面圖網址", "雲端資料夾網址", "報名名冊網址", "試算表ID"]);
+      }
+
+      var eData = eventSheet.getDataRange().getDisplayValues();
+      headers = eData[0];
+      hIdx = {
+        id: getOrCreateColIdx(eventSheet, headers, "活動編號"),
+        name: getOrCreateColIdx(eventSheet, headers, "活動名稱"),
+        startDate: getOrCreateColIdx(eventSheet, headers, "活動開始日期"),
+        endDate: getOrCreateColIdx(eventSheet, headers, "活動結束日期"),
+        deadline: getOrCreateColIdx(eventSheet, headers, "報名截止日期"),
+        cost: getOrCreateColIdx(eventSheet, headers, "預計費用"),
+        status: getOrCreateColIdx(eventSheet, headers, "報名狀態"),
+        shortDesc: getOrCreateColIdx(eventSheet, headers, "簡介"),
+        fullDesc: getOrCreateColIdx(eventSheet, headers, "詳細行程"),
+        img: getOrCreateColIdx(eventSheet, headers, "封面圖網址"),
+        driveFolder: getOrCreateColIdx(eventSheet, headers, "雲端資料夾網址"),
+        sheetUrl: getOrCreateColIdx(eventSheet, headers, "報名名冊網址"),
+        sheetId: getOrCreateColIdx(eventSheet, headers, "試算表ID")
+      };
+
+      if (eventId) {
+        for (var i = 1; i < eData.length; i++) {
+          if (String(eData[i][hIdx.id]).trim() === eventId) {
+            isUpdate = true;
+            targetRow = i + 1;
+            break;
+          }
+        }
+      }
+    }
+
+    if (eventId) {
+      isUpdate = true;
+    }
+
+    // 若為新活動且未提供編號，自動產生編號：E + 年月 + 序號 (如 E2609-01)
+    if (!isUpdate && !eventId) {
+      var datePrefix = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyMM");
+      var maxSeq = 0;
+      if (eventSheet) {
+        var curData = eventSheet.getDataRange().getDisplayValues();
+        for (var j = 1; j < curData.length; j++) {
+          var existingId = String(curData[j][hIdx.id] || "").trim();
+          if (existingId.indexOf("E" + datePrefix) === 0) {
+            var numPart = parseInt(existingId.replace("E" + datePrefix, "").replace("-", ""), 10);
+            if (!isNaN(numPart) && numPart > maxSeq) maxSeq = numPart;
+          }
+        }
+      }
+      var nextSeqStr = (maxSeq + 1 < 10) ? ("0" + (maxSeq + 1)) : String(maxSeq + 1);
+      eventId = "E" + datePrefix + "-" + nextSeqStr;
+    }
+
+    // 若為新活動，自動於 Google Drive 建立專屬資料夾與報名名冊試算表
+    var driveFolderUrl = json.driveFolderUrl || "";
+    var spreadsheetUrl = json.spreadsheetUrl || "";
+    var spreadsheetId = json.spreadsheetId || "";
+
+    if (!isUpdate && (!driveFolderUrl || !spreadsheetUrl)) {
+      var driveInfo = _createEventDriveFolderAndSheet(json, eventId);
+      if (driveInfo) {
+        driveFolderUrl = driveInfo.folderUrl;
+        spreadsheetUrl = driveInfo.spreadsheetUrl;
+        spreadsheetId = driveInfo.spreadsheetId;
+        _syncEventDriveUrlsToSupabase(eventId, driveFolderUrl, spreadsheetUrl, spreadsheetId);
+      }
+    }
+
+    // 處理圖片上傳
+    var imageUrl = json.imageUrl || "";
+    if (json.coverImageFile && json.coverImageFile.base64) {
+      var eventFirstDate = json.startDate ? String(json.startDate).replace(/\D/g, "").substring(0, 8) : Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
+      var eventCleanName = (json.name || "活動").trim();
+      var fileName = eventFirstDate + "_" + eventCleanName + "_封面.jpg";
+      var uploadResult = uploadFileToDrive(json.coverImageFile.base64, fileName, "活動封面");
+      if (uploadResult && !uploadResult.startsWith("上傳失敗")) {
+        var driveMatch = uploadResult.match(/(?:file\/d\/|id=)([^/&?]+)/);
+        if (driveMatch && driveMatch[1]) {
+          imageUrl = "https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000";
+        } else {
+          imageUrl = uploadResult;
+        }
+      }
+    }
+
+    // 寫入 Google Sheets
+    if (eventSheet && headers.length > 0) {
+      var rowValues = new Array(headers.length).fill("");
+      if (isUpdate && targetRow > -1) {
+        rowValues = eventSheet.getRange(targetRow, 1, 1, headers.length).getValues()[0];
+      }
+
+      rowValues[hIdx.id] = eventId;
+      rowValues[hIdx.name] = json.name || "";
+      rowValues[hIdx.startDate] = json.startDate || "";
+      rowValues[hIdx.endDate] = json.endDate || "";
+      rowValues[hIdx.deadline] = json.deadline || "";
+      rowValues[hIdx.cost] = json.cost || "";
+      rowValues[hIdx.status] = json.status || "開放";
+      rowValues[hIdx.shortDesc] = json.shortDesc || "";
+      rowValues[hIdx.fullDesc] = json.fullDesc || "";
+      if (imageUrl) rowValues[hIdx.img] = imageUrl;
+      if (driveFolderUrl) rowValues[hIdx.driveFolder] = driveFolderUrl;
+      if (spreadsheetUrl) rowValues[hIdx.sheetUrl] = spreadsheetUrl;
+      if (spreadsheetId) rowValues[hIdx.sheetId] = spreadsheetId;
+
+      if (isUpdate && targetRow > -1) {
+        eventSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+      } else {
+        eventSheet.appendRow(rowValues);
+      }
+    }
+
+    // 即時完整同步至 Supabase events 表
+    try {
+      _syncEventToSupabase({
+        id: eventId,
+        name: json.name,
+        startDate: json.startDate,
+        endDate: json.endDate,
+        deadline: json.deadline,
+        cost: json.cost,
+        status: json.status,
+        shortDesc: json.shortDesc,
+        fullDesc: json.fullDesc,
+        imageUrl: imageUrl,
+        driveFolderUrl: driveFolderUrl,
+        spreadsheetUrl: spreadsheetUrl,
+        spreadsheetId: spreadsheetId
+      });
+    } catch (sbSyncErr) {
+      console.warn("同步活動資料至 Supabase 警告:", sbSyncErr);
+    }
+
+    // 若有勾選推播至幹部群組
+    if (json.notifyOfficerGroup) {
+      try {
+        var groupMsg = "【幹部通知：新活動發布】\n\n" +
+          "活動名稱：" + (json.name || "") + "\n" +
+          "活動編號：" + eventId + "\n" +
+          "出隊日期：" + (json.startDate || "") + " ~ " + (json.endDate || "") + "\n" +
+          "報名截止：" + (json.deadline || "") + "\n" +
+          "預計費用：" + (json.cost || "") + "\n" +
+          "狀態：" + (json.status || "開放") + "\n\n" +
+          "已上架完成，社員可在「最新活動」瀏覽與報名！";
+        pushAdminMessage(groupMsg);
+      } catch (err) {
+        console.error("推播至幹部群組失敗: " + err.toString());
+      }
+    }
+
+    return _jsonResponse({
+      status: "success",
+      eventId: eventId,
+      imageUrl: imageUrl,
+      driveFolderUrl: driveFolderUrl,
+      spreadsheetUrl: spreadsheetUrl,
+      spreadsheetId: spreadsheetId,
+      message: isUpdate ? "活動資訊更新成功！" : "新活動發布成功！"
+    });
+
+  } catch (err) {
+    console.error("儲存活動失敗:", err);
+    return _errorResponse("儲存活動失敗: " + (err.message || err.toString()));
+  } finally {
+    _safeReleaseLock(lock);
+  }
+}
+
+/**
+ * API: 發送審核結果推播通知 (POST/GET action=send_event_notifications)
+ */
+function _handleSendEventNotifications(json) {
+  try {
+    var userId = json.userId;
+    var targetEventId = json.eventId ? String(json.eventId).trim() : "";
+
+    var ss = null;
+    try {
+      if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    } catch (e) {}
+
+    var officerCheck = checkOfficerInternal(ss, userId);
+    if (!officerCheck.isOfficer) {
+      return _errorResponse("權限不足，僅限幹部發送推播通知");
+    }
+
+    var notifiedCount = 0;
+
+    // 1. 優先嘗試由 Google Sheets 查詢與更新
+    if (ss) {
+      var sSheet = ss.getSheetByName("Signups");
+      var eventSheet = ss.getSheetByName("Events");
+      if (sSheet && eventSheet) {
+        var sData = sSheet.getDataRange().getValues();
+        var eData = eventSheet.getDataRange().getDisplayValues();
+        var eIdIdx = _fi(eData[0], "活動編號");
+        var eNameIdx = _fi(eData[0], "活動名稱");
+
+        var sysIdx = sData[0].findIndex(function (h) {
+          var s = String(h).toLowerCase();
+          return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
+        });
+        var nameIdx = _fi(sData[0], "姓名");
+        var evtIdx = _fi(sData[0], "活動編號");
+        var resultIdx = sData[0].findIndex(function (h) {
+          return String(h).includes("審核") || String(h).includes("結果");
+        });
+        var notifyIdx = sData[0].findIndex(function (h) {
+          return String(h).includes("通知");
+        });
+
+        for (var i = 1; i < sData.length; i++) {
+          var rowEventId = (evtIdx > -1) ? String(sData[i][evtIdx] || "").trim() : "";
+          if (targetEventId && rowEventId !== targetEventId) continue;
+
+          var result = (resultIdx > -1) ? String(sData[i][resultIdx] || "") : "";
+          var notifyStatus = (notifyIdx > -1) ? String(sData[i][notifyIdx] || "") : "";
+          var targetUid = (sysIdx > -1) ? String(sData[i][sysIdx] || "").trim() : "";
+          var name = (nameIdx > -1 && sData[i][nameIdx]) ? String(sData[i][nameIdx]) : "社員";
+
+          var isAcceptedOrWaitlisted = (result.indexOf("正取") > -1 || result.indexOf("備取") > -1);
+          if (isAcceptedOrWaitlisted && notifyStatus !== "已通知" && result.indexOf("取消") === -1 && targetUid.startsWith("U")) {
+            var eventName = rowEventId;
+            for (var e = 1; e < eData.length; e++) {
+              if (eData[e][eIdIdx > -1 ? eIdIdx : 0] === rowEventId) {
+                eventName = eData[e][eNameIdx > -1 ? eNameIdx : 1];
+                break;
+              }
+            }
+
+            if (result.indexOf("正取") > -1) {
+              var acceptedFlex = {
+                type: "bubble",
+                body: {
+                  type: "box",
+                  layout: "vertical",
+                  contents: [
+                    { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#1DB446", size: "sm" },
+                    { type: "text", text: "活動正取通知", weight: "bold", size: "xl", margin: "md" },
+                    { type: "text", text: "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", margin: "md", size: "sm", wrap: true },
+                    { type: "text", text: eventName, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
+                    { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
+                    { type: "text", text: "【 " + result + " 】", weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
+                    { type: "separator", margin: "md" },
+                    { type: "text", text: "恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入出隊群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                  ]
+                },
+                footer: {
+                  type: "box",
+                  layout: "vertical",
+                  contents: [{
+                    type: "button",
+                    style: "primary",
+                    color: "#1DB446",
+                    action: {
+                      type: "uri",
+                      label: "前往繳費系統 Pay",
+                      uri: "https://liff.line.me/" + (LIFF_CHANNEL_ID || "2009217429") + "-u7OCkmQO"
+                    }
+                  }]
+                }
+              };
+              pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
+            } else {
+              var waitlistFlex = {
+                type: "bubble",
+                body: {
+                  type: "box",
+                  layout: "vertical",
+                  contents: [
+                    { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#FF9800", size: "sm" },
+                    { type: "text", text: "活動備取通知", weight: "bold", size: "xl", margin: "md" },
+                    { type: "text", text: "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", margin: "md", size: "sm", wrap: true },
+                    { type: "text", text: eventName, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
+                    { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
+                    { type: "text", text: "【 " + result + " 】", weight: "bold", color: "#FF9800", size: "lg", align: "center", margin: "md" },
+                    { type: "separator", margin: "md" },
+                    { type: "text", text: "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                  ]
+                },
+                footer: {
+                  type: "box",
+                  layout: "vertical",
+                  contents: [{
+                    type: "button",
+                    style: "primary",
+                    color: "#FF9800",
+                    action: {
+                      type: "postback",
+                      label: "確認備取意願 Confirm Waitlist",
+                      data: "action=confirm_waitlist&eventId=" + rowEventId + "&userId=" + targetUid
+                    }
+                  }]
+                }
+              };
+              pushFlexMessage(targetUid, "【活動備取通知 Waitlist】", waitlistFlex);
+            }
+
+            if (notifyIdx > -1) {
+              sSheet.getRange(i + 1, notifyIdx + 1).setValue("已通知");
+            }
+            notifiedCount++;
+          }
+        }
+      }
+    }
+
+    // 2. 同步更新 Supabase event_signups 表的 notify_status
+    var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
+    var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
+    if (sbUrl && sbKey && targetEventId) {
+      try {
+        var patchUrl = sbUrl + "/rest/v1/event_signups?event_id=eq." + encodeURIComponent(targetEventId) + "&review_status=in.(正取,備取)&notify_status=neq.已通知";
+        UrlFetchApp.fetch(patchUrl, {
+          method: "patch",
+          contentType: "application/json",
+          headers: {
+            "apikey": sbKey,
+            "Authorization": "Bearer " + sbKey,
+            "Prefer": "return=minimal"
+          },
+          payload: JSON.stringify({ notify_status: "已通知" }),
+          muteHttpExceptions: true
+        });
+      } catch (sbErr) {
+        console.warn("同步 Supabase 報名通知狀態警告:", sbErr);
+      }
+    }
+
+    return _jsonResponse({
+      status: "success",
+      notifiedCount: notifiedCount,
+      message: "已成功發送 " + notifiedCount + " 則審核推播通知！"
+    });
+  } catch (err) {
+    console.error("發送審核通知失敗:", err);
+    return _errorResponse("發送審核通知失敗: " + (err.message || err.toString()));
+  }
+}
+
+/**
+ * API: 活動列表唯讀備援 (GET action=get_admin_events)
+ */
+function _handleGetAdminEvents(userId) {
+  try {
+    var ss = null;
+    try {
+      if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    } catch (e) {}
+
+    var officerCheck = checkOfficerInternal(ss, userId);
+    if (!officerCheck.isOfficer) {
+      return _errorResponse("權限不足");
+    }
+
+    if (ss) {
+      var eSheet = ss.getSheetByName("Events");
+      if (eSheet) {
+        var eData = eSheet.getDataRange().getDisplayValues();
+        var headers = eData[0];
+        var idIdx = _fi(headers, "活動編號");
+        var nameIdx = _fi(headers, "活動名稱");
+        var startIdx = _fi(headers, "活動開始日期");
+        var endIdx = _fi(headers, "活動結束日期");
+        var deadIdx = _fi(headers, "報名截止日期");
+        var costIdx = _fi(headers, "預計費用");
+        var statIdx = _fi(headers, "報名狀態");
+        var shortIdx = _fi(headers, "簡介");
+        var fullIdx = _fi(headers, "詳細行程");
+        var imgIdx = _fi(headers, "封面圖網址");
+        var driveIdx = _fi(headers, "雲端資料夾網址");
+        var sheetUrlIdx = _fi(headers, "報名名冊網址");
+        var sheetIdIdx = _fi(headers, "試算表ID");
+
+        var events = [];
+        for (var i = 1; i < eData.length; i++) {
+          var id = (idIdx > -1) ? eData[i][idIdx] : "";
+          if (!id) continue;
+          events.push({
+            id: id,
+            name: (nameIdx > -1) ? eData[i][nameIdx] : "",
+            startDate: (startIdx > -1) ? eData[i][startIdx] : "",
+            endDate: (endIdx > -1) ? eData[i][endIdx] : "",
+            deadline: (deadIdx > -1) ? eData[i][deadIdx] : "",
+            cost: (costIdx > -1) ? eData[i][costIdx] : "0",
+            status: (statIdx > -1) ? eData[i][statIdx] : "開放",
+            shortDesc: (shortIdx > -1) ? eData[i][shortIdx] : "",
+            fullDesc: (fullIdx > -1) ? eData[i][fullIdx] : "",
+            imageUrl: (imgIdx > -1) ? eData[i][imgIdx] : "",
+            driveFolderUrl: (driveIdx > -1) ? eData[i][driveIdx] : "",
+            spreadsheetUrl: (sheetUrlIdx > -1) ? eData[i][sheetUrlIdx] : "",
+            spreadsheetId: (sheetIdIdx > -1) ? eData[i][sheetIdIdx] : ""
+          });
+        }
+        return _jsonResponse({ status: "success", events: events });
+      }
+    }
+
+    return _jsonResponse({ status: "success", events: [] });
+  } catch (err) {
+    return _errorResponse("取得活動列表例外: " + err.toString());
+  }
+}
+
+/**
+ * API: 報名名冊唯讀備援 (GET action=get_event_signups)
+ */
+function _handleGetEventSignups(eventId, userId) {
+  try {
+    var ss = null;
+    try {
+      if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    } catch (e) {}
+
+    var officerCheck = checkOfficerInternal(ss, userId);
+    if (!officerCheck.isOfficer) {
+      return _errorResponse("權限不足");
+    }
+
+    if (ss) {
+      var sSheet = ss.getSheetByName("Signups");
+      if (sSheet) {
+        var sData = sSheet.getDataRange().getDisplayValues();
+        var headers = sData[0];
+        var evtIdx = _fi(headers, "活動編號");
+        var codeIdx = _fi(headers, "專屬碼");
+        var nameIdx = _fi(headers, "姓名");
+        var genderIdx = _fi(headers, "性別");
+        var emailIdx = _fi(headers, "聯絡信箱");
+        var phoneIdx = _fi(headers, "聯絡電話");
+        var expIdx = _fi(headers, "爬山經驗");
+        var proofIdx = _fi(headers, "體能證明");
+        var resultIdx = headers.findIndex(function (h) { return String(h).includes("審核") || String(h).includes("結果"); });
+        var notifyIdx = headers.findIndex(function (h) { return String(h).includes("通知"); });
+        var payIdx = headers.findIndex(function (h) { return String(h).includes("繳費"); });
+
+        var signups = [];
+        for (var i = 1; i < sData.length; i++) {
+          var rowEvtId = (evtIdx > -1) ? sData[i][evtIdx] : "";
+          if (eventId && rowEvtId !== eventId) continue;
+
+          signups.push({
+            rowNumber: i + 1,
+            signupCode: (codeIdx > -1) ? sData[i][codeIdx] : "",
+            name: (nameIdx > -1) ? sData[i][nameIdx] : "",
+            gender: (genderIdx > -1) ? sData[i][genderIdx] : "",
+            email: (emailIdx > -1) ? sData[i][emailIdx] : "",
+            phone: (phoneIdx > -1) ? sData[i][phoneIdx] : "",
+            experience: (expIdx > -1) ? sData[i][expIdx] : "",
+            fitnessProof: (proofIdx > -1) ? sData[i][proofIdx] : "",
+            reviewResult: (resultIdx > -1) ? sData[i][resultIdx] : "未審核",
+            notifyStatus: (notifyIdx > -1) ? sData[i][notifyIdx] : "未通知",
+            paymentStatus: (payIdx > -1) ? sData[i][payIdx] : "未繳費"
+          });
+        }
+        return _jsonResponse({ status: "success", signups: signups });
+      }
+    }
+
+    return _jsonResponse({ status: "success", signups: [] });
+  } catch (err) {
+    return _errorResponse("取得報名名冊例外: " + err.toString());
   }
 }
 

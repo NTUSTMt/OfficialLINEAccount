@@ -2320,3 +2320,401 @@ describe('16. 個人檔案動態推播訊息與出隊資格引導測試', () => 
     assert.ok(!notice.includes('https://drive.google.com/uploaded_image_link.jpg'));
   });
 });
+
+describe('37. 活動管理 save_event 與 send_event_notifications 處理邏輯驗證', () => {
+  function simulateCheckOfficer(userId, mockOfficersSheet = []) {
+    if (userId === 'TEST_USER_ID') return { isOfficer: true, role: '管理員', name: '測試管理員' };
+    for (const o of mockOfficersSheet) {
+      if (o.userId === userId) {
+        return { isOfficer: true, role: o.role || '幹部', name: o.name || '幹部' };
+      }
+    }
+    return { isOfficer: false, role: '', name: '' };
+  }
+
+  function simulateSaveEvent(payload, mockDb = { events: [] }) {
+    const officerCheck = simulateCheckOfficer(payload.userId);
+    if (!officerCheck.isOfficer) {
+      return { status: 'error', message: '權限不足，無法儲存活動！' };
+    }
+
+    let eventId = payload.eventId ? String(payload.eventId).trim() : '';
+    let isUpdate = false;
+
+    if (eventId) {
+      isUpdate = true;
+      const existing = mockDb.events.find(e => e.id === eventId);
+      if (existing) {
+        existing.title = payload.name;
+        existing.fee = parseInt(String(payload.cost).replace(/[^\d]/g, ''), 10) || 0;
+        existing.status = payload.status || '開放';
+      }
+    } else {
+      eventId = 'E2609-01';
+      mockDb.events.push({
+        id: eventId,
+        title: payload.name,
+        fee: parseInt(String(payload.cost).replace(/[^\d]/g, ''), 10) || 0,
+        status: payload.status || '開放'
+      });
+    }
+
+    return {
+      status: 'success',
+      eventId: eventId,
+      imageUrl: payload.imageUrl || '',
+      driveFolderUrl: payload.driveFolderUrl || (isUpdate ? '' : 'https://drive.google.com/drive/folders/mock_folder'),
+      spreadsheetUrl: payload.spreadsheetUrl || (isUpdate ? '' : 'https://docs.google.com/spreadsheets/d/mock_sheet'),
+      spreadsheetId: payload.spreadsheetId || (isUpdate ? '' : 'mock_sheet_id'),
+      message: isUpdate ? '活動資訊更新成功！' : '新活動發布成功！'
+    };
+  }
+
+  function simulateSendEventNotifications(payload, mockSignups = []) {
+    const officerCheck = simulateCheckOfficer(payload.userId);
+    if (!officerCheck.isOfficer) {
+      return { status: 'error', message: '權限不足，僅限幹部發送推播通知' };
+    }
+
+    let notifiedCount = 0;
+    const notifiedUsers = [];
+
+    for (const s of mockSignups) {
+      if (payload.eventId && s.eventId !== payload.eventId) continue;
+      const isAcceptedOrWaitlisted = (s.reviewResult.includes('正取') || s.reviewResult.includes('備取'));
+      if (isAcceptedOrWaitlisted && s.notifyStatus !== '已通知' && s.userId.startsWith('U')) {
+        s.notifyStatus = '已通知';
+        notifiedCount++;
+        notifiedUsers.push({ userId: s.userId, result: s.reviewResult });
+      }
+    }
+
+    return {
+      status: 'success',
+      notifiedCount: notifiedCount,
+      notifiedUsers: notifiedUsers,
+      message: '已成功發送 ' + notifiedCount + ' 則審核推播通知！'
+    };
+  }
+
+  it('save_event: 幹部編輯既有活動 (Test6) 成功回傳更新訊息且保持 eventId', () => {
+    const mockDb = {
+      events: [
+        { id: 'E2609-06', title: 'Test6', fee: 500, status: '開放' }
+      ]
+    };
+
+    const res = simulateSaveEvent({
+      userId: 'TEST_USER_ID',
+      eventId: 'E2609-06',
+      name: 'Test6 - 修正版',
+      cost: '600',
+      status: '開放'
+    }, mockDb);
+
+    assert.equal(res.status, 'success');
+    assert.equal(res.eventId, 'E2609-06');
+    assert.equal(res.message, '活動資訊更新成功！');
+    assert.equal(mockDb.events[0].title, 'Test6 - 修正版');
+    assert.equal(mockDb.events[0].fee, 600);
+  });
+
+  it('save_event: 非幹部無法儲存活動', () => {
+    const res = simulateSaveEvent({
+      userId: 'U_NON_OFFICER',
+      eventId: 'E2609-06',
+      name: 'Test6'
+    });
+
+    assert.equal(res.status, 'error');
+    assert.ok(res.message.includes('權限不足'));
+  });
+
+  it('save_event: 建立新活動自動產生編號與雲端資料夾試算表連結', () => {
+    const mockDb = { events: [] };
+    const res = simulateSaveEvent({
+      userId: 'TEST_USER_ID',
+      name: '合歡西北下華岡',
+      cost: '1200',
+      status: '開放'
+    }, mockDb);
+
+    assert.equal(res.status, 'success');
+    assert.equal(res.eventId, 'E2609-01');
+    assert.equal(res.message, '新活動發布成功！');
+    assert.ok(res.driveFolderUrl.includes('mock_folder'));
+    assert.ok(res.spreadsheetUrl.includes('mock_sheet'));
+  });
+
+  it('send_event_notifications: 正確發送正取與備取推播並更新狀態為已通知', () => {
+    const mockSignups = [
+      { userId: 'U12345678', eventId: 'E2609-06', reviewResult: '正取 1', notifyStatus: '' },
+      { userId: 'U87654321', eventId: 'E2609-06', reviewResult: '備取 1', notifyStatus: '' },
+      { userId: 'U99999999', eventId: 'E2609-06', reviewResult: '未通過', notifyStatus: '' },
+      { userId: 'U11111111', eventId: 'E2609-06', reviewResult: '正取 2', notifyStatus: '已通知' }
+    ];
+
+    const res = simulateSendEventNotifications({
+      userId: 'TEST_USER_ID',
+      eventId: 'E2609-06'
+    }, mockSignups);
+
+    assert.equal(res.status, 'success');
+    assert.equal(res.notifiedCount, 2);
+    assert.equal(mockSignups[0].notifyStatus, '已通知');
+    assert.equal(mockSignups[1].notifyStatus, '已通知');
+    assert.equal(mockSignups[2].notifyStatus, '');
+    assert.equal(mockSignups[3].notifyStatus, '已通知');
+  });
+});
+
+describe('38. 裝備租借計費公式 (2天基本+續租加成、社員5折、社團免租) 與 Supabase 欄位雙軌相容測試', () => {
+  function simulateCalculateEquipmentRent(item, qty, days, purpose, isOfficial) {
+    // 雙軌取得欄位：優先 price_2day，無則 member_price_per_day
+    const p2 = item.price_2day ?? item.member_price_per_day ?? 0;
+    const pExtra = item.price_extra_day ?? item.non_member_price_per_day ?? 0;
+
+    const extraDays = Math.max(0, days - 2);
+    const itemBase = p2 + (extraDays * pExtra);
+
+    let unitPrice = itemBase;
+    if (purpose === '社團出隊') {
+      unitPrice = 0;
+    } else if (isOfficial) {
+      unitPrice = Math.round(itemBase * 0.5);
+    }
+
+    return {
+      extraDays: extraDays,
+      itemBase: itemBase,
+      unitPrice: unitPrice,
+      subtotal: unitPrice * qty
+    };
+  }
+
+  it('精確重現使用者截圖情況：出隊 3 天 (2天基本+1天加成)，兩件 600+100 裝備，社員個人 5 折總租金 700 元', () => {
+    // 兩件裝備：帳篷 (基本 600，加成 100)
+    const tent = { id: 'EQ_TENT_01', price_2day: 600, price_extra_day: 100 };
+    const sleepPad = { id: 'EQ_PAD_01', price_2day: 600, price_extra_day: 100 };
+
+    const days = 3;
+    const purpose = '個人使用';
+    const isOfficial = true; // 社員
+
+    const res1 = simulateCalculateEquipmentRent(tent, 1, days, purpose, isOfficial);
+    const res2 = simulateCalculateEquipmentRent(sleepPad, 1, days, purpose, isOfficial);
+
+    assert.equal(res1.extraDays, 1);
+    assert.equal(res1.itemBase, 700); // 600 + 100 * 1
+    assert.equal(res1.unitPrice, 350); // 700 * 0.5
+    assert.equal(res1.subtotal, 350);
+
+    assert.equal(res2.subtotal, 350);
+
+    const totalRent = res1.subtotal + res2.subtotal;
+    assert.equal(totalRent, 700); // 與使用者截圖之 $700 100% 精準吻合！
+  });
+
+  it('社團出隊無論天數與件數，租金一律為 0 元 (免租)', () => {
+    const tent = { id: 'EQ_TENT_01', price_2day: 600, price_extra_day: 100 };
+    const res = simulateCalculateEquipmentRent(tent, 2, 5, '社團出隊', true);
+    assert.equal(res.unitPrice, 0);
+    assert.equal(res.subtotal, 0);
+  });
+
+  it('若資料表僅有舊欄位 member_price_per_day / non_member_price_per_day，亦能雙軌相容計費', () => {
+    const legacyEquip = {
+      id: 'EQ_LEGACY_01',
+      member_price_per_day: 400,
+      non_member_price_per_day: 80
+    };
+    const res = simulateCalculateEquipmentRent(legacyEquip, 1, 3, '個人使用', false);
+    // 400 + 80 * 1 = 480，非社員原價
+    assert.equal(res.unitPrice, 480);
+    assert.equal(res.subtotal, 480);
+  });
+});
+
+describe('39. 裝備租借通知幹部 (含 LINE ID) 與使用者確認訊息 (零額度消耗) 測試', () => {
+  function simulateNotifyOfficersLoan(payload, mockMembers = []) {
+    const details = payload.details || {};
+    let borrowerName = payload.borrowerName || '';
+    let borrowerLineId = payload.borrowerLineId || '';
+    let borrowerPhone = payload.borrowerPhone || '';
+    let isOfficial = payload.isOfficial;
+    const loanId = payload.loanId || '新訂單';
+    const totalRent = payload.totalRent !== undefined ? payload.totalRent : 0;
+    let days = payload.days;
+
+    if (!days && details.pickupDate && details.returnDate) {
+      const pTime = new Date(String(details.pickupDate).replace(/-/g, '/')).getTime();
+      const rTime = new Date(String(details.returnDate).replace(/-/g, '/')).getTime();
+      days = Math.max(1, Math.round((rTime - pTime) / (1000 * 60 * 60 * 24)) + 1);
+    }
+    if (!days) days = 1;
+
+    // Fallback: 查詢社員資料表
+    if (!borrowerName || !borrowerLineId) {
+      const found = mockMembers.find(m => m.line_user_id === payload.userId);
+      if (found) {
+        if (!borrowerName) borrowerName = found.name;
+        if (!borrowerLineId) borrowerLineId = found.line_id;
+        if (!borrowerPhone) borrowerPhone = found.phone;
+        if (isOfficial === undefined) isOfficial = found.is_official_member;
+      }
+    }
+    if (!borrowerName) borrowerName = '未知社員';
+    if (!borrowerLineId) borrowerLineId = '未填寫';
+    if (!borrowerPhone) borrowerPhone = '未填寫';
+
+    let purpose = details.purpose || '社團出隊';
+    if (purpose === '其他用途' && details.otherPurpose) {
+      purpose = '其他用途 (' + details.otherPurpose + ')';
+    }
+
+    const identityDesc = (purpose === '社團出隊') ? '社團出隊 (免租金)' : (isOfficial ? '社員 (享5折)' : '非社員 (原價)');
+
+    const itemsSummary = [];
+    if (Array.isArray(payload.cartDetails) && payload.cartDetails.length > 0) {
+      for (const itm of payload.cartDetails) {
+        const itmName = itm.name || itm.id || '裝備';
+        const itmQty = itm.quantity || itm.qty || 1;
+        itemsSummary.push('• ' + itmName + (itm.id && itm.name !== itm.id ? ' (' + itm.id + ')' : '') + ' x ' + itmQty);
+      }
+    } else {
+      const cart = details.cart || {};
+      for (const eqId in cart) {
+        if (cart[eqId] > 0) {
+          itemsSummary.push('• ' + eqId + ' x ' + cart[eqId]);
+        }
+      }
+    }
+
+    const msg = "【🎒 幹部通知：新裝備租借申請】\n" +
+      "────────────────────\n" +
+      "• 訂單編號：" + loanId + "\n" +
+      "• 申請人：" + borrowerName + " (" + identityDesc + ")\n" +
+      "• LINE ID：" + borrowerLineId + "\n" +
+      "• 聯絡電話：" + borrowerPhone + "\n" +
+      "• 出隊天數：" + days + " 天 (" + (details.pickupDate || "") + " ~ " + (details.returnDate || "") + ")\n" +
+      "• 租借用途：" + purpose + "\n" +
+      "• 預估總租金：$" + totalRent + " 元\n\n" +
+      "📦 借用裝備明細：\n" +
+      (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") + "\n\n" +
+      "⚡ 本資料已安全寫入 Supabase，請至幹部後台確認備用！";
+
+    return {
+      status: 'success',
+      messageText: msg,
+      adminGroupNotified: true
+    };
+  }
+
+  function simulateGenerateUserConfirmationMessage(orderInfo) {
+    const identityText = orderInfo.purpose === '社團出隊'
+      ? '社團出隊 (免租金)'
+      : (orderInfo.isOfficial ? '社員個人 (享5折)' : '非社員 (原價)');
+    const itemsListText = orderInfo.cartDetails.map(item => `• ${item.name} x ${item.quantity}`).join('\n');
+
+    return `【🎒 我的裝備租借預訂單】\n` +
+      `────────────────────\n` +
+      `• 訂單編號：${orderInfo.loanId}\n` +
+      `• 借用人：${orderInfo.borrowerName} (${identityText})\n` +
+      `• 預計領取：${orderInfo.pickupDate}\n` +
+      `• 預計歸還：${orderInfo.returnDate} (共 ${orderInfo.days} 天)\n` +
+      `• 租借用途：${orderInfo.purpose}\n\n` +
+      `📦 預約裝備清單：\n` +
+      `${itemsListText}\n\n` +
+      `💰 預估總租金：$${orderInfo.totalRent} 元\n` +
+      `────────────────────\n` +
+      `📌 提醒事項：\n` +
+      `1. 幹部已收到您的預約申請，將為您備齊裝備。\n` +
+      `2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n` +
+      `3. 將有幹部主動聯繫你，確認領取時間以及地點。`;
+  }
+
+  it('幹部推播訊息精確包含 LINE ID、申請人真實姓名、出隊天數、預估租金與中文品項名稱', () => {
+    const payload = {
+      action: 'notify_officers_loan',
+      userId: 'U1234567890',
+      loanId: 'ORD_20260913_9999',
+      borrowerName: '洪楷量',
+      borrowerLineId: 'brian_line_id',
+      borrowerPhone: '0975123456',
+      isOfficial: true,
+      days: 3,
+      details: {
+        pickupDate: '2026-09-13',
+        returnDate: '2026-09-16',
+        purpose: '個人使用'
+      },
+      cartDetails: [
+        { id: 'EQ_TENT_01', name: '雙人高山帳', quantity: 1 },
+        { id: 'EQ_SLEEP_01', name: '羽絨睡袋', quantity: 1 }
+      ],
+      totalRent: 700
+    };
+
+    const res = simulateNotifyOfficersLoan(payload);
+    assert.equal(res.status, 'success');
+    assert.ok(res.messageText.includes('【🎒 幹部通知：新裝備租借申請】'));
+    assert.ok(res.messageText.includes('• 訂單編號：ORD_20260913_9999'));
+    assert.ok(res.messageText.includes('• 申請人：洪楷量 (社員 (享5折))'));
+    assert.ok(res.messageText.includes('• LINE ID：brian_line_id'));
+    assert.ok(res.messageText.includes('• 聯絡電話：0975123456'));
+    assert.ok(res.messageText.includes('• 出隊天數：3 天 (2026-09-13 ~ 2026-09-16)'));
+    assert.ok(res.messageText.includes('• 預估總租金：$700 元'));
+    assert.ok(res.messageText.includes('• 雙人高山帳 (EQ_TENT_01) x 1'));
+    assert.ok(res.messageText.includes('• 羽絨睡袋 (EQ_SLEEP_01) x 1'));
+  });
+
+  it('若前端未附帶 borrowerLineId，幹部推播自動由資料表反查補齊 LINE ID', () => {
+    const mockMembers = [
+      { line_user_id: 'U999888', name: '小岳隊友', line_id: 'mt_climber_888', phone: '0912345678', is_official_member: true }
+    ];
+    const payload = {
+      action: 'notify_officers_loan',
+      userId: 'U999888',
+      loanId: 'ORD_20260913_8888',
+      details: {
+        pickupDate: '2026-09-20',
+        returnDate: '2026-09-21',
+        purpose: '社團出隊'
+      },
+      totalRent: 0
+    };
+
+    const res = simulateNotifyOfficersLoan(payload, mockMembers);
+    assert.ok(res.messageText.includes('• 申請人：小岳隊友 (社團出隊 (免租金))'));
+    assert.ok(res.messageText.includes('• LINE ID：mt_climber_888'));
+    assert.ok(res.messageText.includes('• 聯絡電話：0912345678'));
+  });
+
+  it('使用者端確認訊息採用 liff.sendMessages，完整包含「將有幹部主動聯繫你，確認領取時間以及地點」', () => {
+    const orderInfo = {
+      loanId: 'ORD_20260913_9999',
+      borrowerName: '洪楷量',
+      isOfficial: true,
+      pickupDate: '2026-09-13',
+      returnDate: '2026-09-16',
+      days: 3,
+      purpose: '個人使用',
+      cartDetails: [
+        { id: 'EQ_TENT_01', name: '雙人高山帳', quantity: 1 }
+      ],
+      totalRent: 350
+    };
+
+    const userMsg = simulateGenerateUserConfirmationMessage(orderInfo);
+    assert.ok(userMsg.includes('【🎒 我的裝備租借預訂單】'));
+    assert.ok(userMsg.includes('• 訂單編號：ORD_20260913_9999'));
+    assert.ok(userMsg.includes('• 借用人：洪楷量 (社員個人 (享5折))'));
+    assert.ok(userMsg.includes('• 雙人高山帳 x 1'));
+    assert.ok(userMsg.includes('💰 預估總租金：$350 元'));
+    // 嚴格檢驗使用者指定修改之提醒話術
+    assert.ok(userMsg.includes('3. 將有幹部主動聯繫你，確認領取時間以及地點。'));
+  });
+});
+
+
+

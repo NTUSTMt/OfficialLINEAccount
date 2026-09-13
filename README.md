@@ -3,11 +3,90 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.83` (v0.1.83)
+- **當前版本**：`0.1.87` (v0.1.87)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 187. 裝備預約通知幹部群組 (含 LINE ID) 與使用者聊天室確認訊息 (零額度消耗) 及外部瀏覽器鎖定防護 (v0.1.87)
+- **使用者需求與架構設計 (Requirements & Architecture)**：
+  - **使用者端確認訊息（零額度消耗）**：
+    - 送出預訂單後，透過前端 `liff.sendMessages` 以借用者身分在聊天室代發結構化預訂單明細，**完全不消耗 LINE 官方帳號的推播額度（0 額度消耗）**。
+    - 內容包含：【訂單編號】、借用人（社員 5 折 / 社團出隊免租 / 非社員）、預計領取與歸還日期（出隊天數）、租借用途、預約裝備中文名稱與數量、預估總租金，以及提醒「將有幹部主動聯繫你，確認領取時間以及地點」。
+    - 確保在訊息送達後才平滑關閉 LIFF 視窗，提供絕佳體驗。
+  - **幹部群組通知全面升級 (`gas_modules/06_Helper_Services.js`, `src/gas.js`)**：
+    - 升級 `_handleNotifyOfficersLoan`，推播至幹部群組之訊息新增：申請人真實姓名、**LINE ID**、聯絡電話、出隊天數、租借用途、預估總租金與中文品項明細（如 `• 雙人高山帳 (EQ_TENT_01) x 1`）。
+    - 內建 `_getMemberContactInfo` 容錯雙軌反查：若前端未傳入 LINE ID 或姓名，自動即時由 Supabase `members` 表或 Google Sheets `Members` 補齊。
+  - **外部瀏覽器全螢幕鎖定防護 (`src/pages/Borrow.tsx`)**：
+    - 依社團規範「不允許使用外部瀏覽器」，於 `!liff.isInClient()` 時顯示全螢幕友善提示卡片「請於 LINE 官方帳號開啟」，並提供直連「開啟 LINE 官方帳號」按鈕，阻斷外部預約以確保身分與帳號綁定無誤（本地開發提供 Bypass 開關）。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`test/gas_simulation.test.mjs` 新增 Suite 39，驗證幹部通知格式包含 LINE ID、品項中文名稱、使用者確認訊息話術與未帶 LINE ID 自動反查補齊，`pnpm test` 98/98 項測試全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+### 186. 裝備租借送出「column "days" of relation "loans" does not exist」防呆補齊與資料庫結構容錯修復 (v0.1.86)
+- **根本原因排查 (Root Cause Analysis)**：
+  - 使用者在裝備租借詳情頁送出預訂單時，前端透過 `submit_equipment_loan_rpc` 呼叫資料庫，在執行 `INSERT INTO loans` 時觸發 PostgreSQL 報錯：`column "days" of relation "loans" does not exist`。
+  - 由於生產環境之 Supabase `loans` 資料表於早期建立，當時尚未包含 `days` 欄位（或其他新欄位如 `name`, `unit_price_snapshot` 等），導致即使 RPC 程式碼正確，寫入操作仍因缺少欄位遭資料庫中斷。
+- **全方位 DDL 防呆與相容更新 (`supabase/fix_equipment_loan_rpc.sql`, `supabase/equipment_loan_rpc.sql`)**：
+  - **`loans` 主表防呆欄位補齊**：
+    - 補齊 `days INTEGER NOT NULL DEFAULT 1`
+    - 補齊 `name TEXT`, `start_date DATE`, `end_date DATE`, `purpose TEXT DEFAULT '社團出隊'`, `purpose_other TEXT`, `status TEXT DEFAULT '待領取 To Be Collected'`, `payment_status TEXT DEFAULT '未繳費'`, `total_deposit INTEGER DEFAULT 0`, `total_rent INTEGER DEFAULT 0`, `notes TEXT`, `refund_needed BOOLEAN DEFAULT FALSE`, `cancelled_at TIMESTAMPTZ`, `created_at TIMESTAMPTZ DEFAULT NOW()`, `updated_at TIMESTAMPTZ DEFAULT NOW()`。
+  - **`loan_items` 細項表防呆補齊**：
+    - 補齊 `unit_price_snapshot INTEGER DEFAULT 0` 與 `subtotal INTEGER DEFAULT 0`。
+  - **一鍵修復腳本**：
+    - 提供全量與單一修復 SQL，只要在 Supabase SQL Editor 執行一次，即可無痛補齊所有關聯資料表與欄位，杜絕任何 `column does not exist` 報錯。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 95/95 項測試全數通過。
+  - 前端打包：`pnpm run build` 成功編譯通過。
+
+### 185. 裝備租借送出預約「column "member_price_per_day" does not exist」修復與真實計費公式對齊 (v0.1.85)
+- **根本原因排查 (Root Cause Analysis)**：
+  - 社團真實租借計費模型為「**2 天基本租金 + 每日加成續租**」，Supabase 資料庫中 `equipments` 表實際存在的欄位為 `price_2day` 與 `price_extra_day`。
+  - 舊版 `submit_equipment_loan_rpc` 儲存程序執行時直接執行 `SELECT ... member_price_per_day, non_member_price_per_day FROM equipments`，因資料表中不存在 `member_price_per_day` 欄位，導致 PostgreSQL 拋出 `column "member_price_per_day" does not exist` 阻斷預訂單提交。
+- **雙軌容錯 Migration 與 RPC 重建 (`supabase/fix_equipment_loan_rpc.sql`, `supabase/equipment_loan_rpc.sql`)**：
+  - **Zero-Failure DDL 防呆補齊**：
+    - 透過 `ALTER TABLE equipments ADD COLUMN IF NOT EXISTS` 自動補齊 `price_2day`, `price_extra_day`, `member_price_per_day`, `non_member_price_per_day` 4 大欄位。
+    - 執行雙向資料回填，確保無論存取新舊欄位皆能取得到非 0 之數值，徹底絕跡 `column does not exist`。
+  - **對齊前端真實計費模型 (`submit_equipment_loan_rpc`)**：
+    - 天數計算：`v_days := (v_return_date - v_pickup_date) + 1`，加成天數 `v_extra_days := GREATEST(0, v_days - 2)`。
+    - 單項基準價：`v_item_base := p2 + (v_extra_days * p_extra)`。
+    - 目的折讓規則：
+      - 社團出隊（`purpose = '社團出隊'`）：租金全免 (`0 元`)。
+      - 社員個人使用（`is_official` 為真）：享 5 折 (`ROUND(v_item_base * 0.5)`)。
+      - 非社員個人使用：全額原價。
+    - 與使用者真實送出範例（3 天出隊、兩件 600+100 裝備、社員個人 5 折總租金 700 元）**100% 精準吻合**。
+  - **成員外鍵安全性防呆**：
+    - 若 `p_line_user_id` 尚未完成個人基本資料註冊，於寫入 `loans` 主表前自動插入佔位成員紀錄，避免違反外鍵約束。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`test/gas_simulation.test.mjs` 新增 Suite 38，驗證 3 天出隊 5 折總額 700 元、社團出隊免租與雙軌欄位回退容錯，`pnpm test` 95/95 項測試 100% 全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+### 184. 活動管理儲存活動「未支援的 Helper Action: save_event」修復與審核結果推播通知補齊 (v0.1.84)
+- **根本原因排查 (Root Cause Analysis)**：
+  - 在先前將龐大的單一腳本 `gas.backup.js` 模組化為 `gas_modules/` 時，[`gas_modules/06_Helper_Services.js`](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js) 的 `handleLiffHelperApi` 僅收錄了 6 個基礎 action，遺漏了 `AdminEvents.tsx` 所依賴的活動管理核心 action。
+  - 當幹部在活動管理頁面編輯活動並點擊「儲存活動修改」時，前端送出 `action: 'save_event'`，後端因無相應分支直接回傳 `操作失敗: 未支援的 Helper Action: save_event`。
+- **補齊活動管理核心 Actions (`gas_modules/06_Helper_Services.js`, `src/gas.js`)**：
+  - **`save_event` 建立與更新活動處理核心 (`_handleSaveEvent`)**：
+    - **身分驗證**：調用 `checkOfficerInternal`，具備 Google Sheets `Officers` 工作表 + Supabase `members` 資料表（`role = '幹部'` 或 `is_officer = true`）雙軌查驗，且相容 `TEST_USER_ID`。
+    - **新舊活動智慧判斷**：
+      - 若有帶入 `eventId`，判定為更新既有活動，精準定位工作表行數進行覆寫。
+      - 若無 `eventId`，自動以 `E` + `yyMM` + `-序號`（如 `E2609-01`）生成標準活動編號。
+    - **雲端資料夾與名冊試算表自動化**：
+      - 若為新活動，自動於 Google Drive 建立專屬活動資料夾（`YYYY/MM/DD_活動名稱`）。
+      - 優先從 `EVENT_SHEET_TEMPLATE_ID` 範本複製，或動態生成包含 22 欄標準表頭與隱藏 `_CONFIG` 連線配置表之報名試算表。
+    - **活動封面照片上傳**：若有帶入 base64 封面圖片，自動上傳至 Google Drive「活動封面」資料夾並轉換為 `lh3.googleusercontent.com` 高清直連網址。
+    - **資料庫雙軌即時同步**：即時 Upsert 至 Supabase `events` 資料表（欄位包含 `id`, `title`, `fee`, `start_date`, `end_date`, `deadline`, `status`, `summary`, `itinerary`, `cover_image_url`, `drive_folder_url`, `spreadsheet_url`, `spreadsheet_id`）。
+    - **幹部群組推播**：若勾選通知幹部群組，透過 `pushAdminMessage` 發送新活動上架通知。
+  - **`send_event_notifications` 一鍵發送審核結果推播 (`_handleSendEventNotifications`)**：
+    - 支援 `POST` 與 `GET` 端點呼叫。
+    - 查詢正取與備取且尚未通知之名單，透過 `pushFlexMessage` 發送精美錄取／備取通知卡片。
+    - 同步更新試算表與 Supabase `event_signups` 之 `notify_status` 為「已通知」。
+  - **唯讀備援端點支援 (`doGet`)**：
+    - 補齊 `get_admin_events` 與 `get_event_signups` 唯讀查詢端點，在 Supabase 短暫離線時提供無縫備援。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`test/gas_simulation.test.mjs` 新增 Suite 37，驗證 `save_event`（編輯既有活動、非幹部攔截、建立新活動與 ID/雲端連結生成）與 `send_event_notifications`（正備取推播與防重複發送），`pnpm test` 92/92 項測試 100% 全數通過。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
 
 ### 183. 裝備租借頁面即時搜尋框、7 大登山系統分類篩選與 Supabase 下拉選單 ENUM (v0.1.83)
 - **裝備租借即時搜尋與分類篩選 (`src/pages/Borrow.tsx`, `src/components/borrow/EquipmentCard.tsx`)**：
