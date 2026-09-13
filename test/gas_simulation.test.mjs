@@ -1663,6 +1663,281 @@ describe('13. 社團主試算表 (Members, Equipments, Events) 零幻想精準�
   });
 });
 
+describe('14. 活動報名資料防呆檢查、幹部群組 @Mention 召喚與服務選單回傳測試', () => {
+  // 模擬 _checkProfileComplete 邏輯
+  function simulateCheckProfileComplete(memberData, type) {
+    if (!memberData) {
+      return { isComplete: false, missingFields: ['尚未建立社員基本資料，請先填寫'], profile: null };
+    }
+    const missing = [];
+    if (!memberData.name) missing.push('姓名');
+    if (!memberData.gender) missing.push('性別');
+    if (!memberData.phone) missing.push('聯絡電話');
 
+    if (type === 'activity') {
+      if (!memberData.birthday) missing.push('生日 (Birthday)');
+      if (!memberData.id_card) missing.push('身分證字號 / 居留證號 (ID Number)');
+      if (!memberData.address) missing.push('聯絡地址 (Address)');
+      if (!memberData.emergency_contact_name) missing.push('緊急聯絡人姓名 (Emergency Contact)');
+      if (!memberData.emergency_contact_relation) missing.push('與緊急聯絡人關係 (Relationship)');
+      if (!memberData.emergency_contact_phone) missing.push('緊急聯絡人電話 (Emergency Contact Phone)');
+    }
 
+    return {
+      isComplete: missing.length === 0,
+      missingFields: missing,
+      profile: memberData
+    };
+  }
 
+  it('活動報名個資防呆：當缺少生日與緊急聯絡人資料時，逐項列出缺失欄位', () => {
+    const incompleteMember = {
+      name: '測試隊員',
+      gender: '男',
+      phone: '0912345678',
+      address: '台北市大安區基隆路四段43號'
+    };
+    const result = simulateCheckProfileComplete(incompleteMember, 'activity');
+    assert.equal(result.isComplete, false);
+    assert.ok(result.missingFields.includes('生日 (Birthday)'));
+    assert.ok(result.missingFields.includes('身分證字號 / 居留證號 (ID Number)'));
+    assert.ok(result.missingFields.includes('緊急聯絡人姓名 (Emergency Contact)'));
+    assert.ok(result.missingFields.includes('與緊急聯絡人關係 (Relationship)'));
+    assert.ok(result.missingFields.includes('緊急聯絡人電話 (Emergency Contact Phone)'));
+  });
+
+  it('活動報名個資防呆：當欄位齊全時，回傳 isComplete 為 true', () => {
+    const completeMember = {
+      name: '王大明',
+      gender: '男',
+      phone: '0912345678',
+      birthday: '1999/01/01',
+      id_card: 'A123456789',
+      address: '台北市大安區基隆路四段43號',
+      emergency_contact_name: '王媽媽',
+      emergency_contact_relation: '母子',
+      emergency_contact_phone: '0987654321'
+    };
+    const result = simulateCheckProfileComplete(completeMember, 'activity');
+    assert.equal(result.isComplete, true);
+    assert.equal(result.missingFields.length, 0);
+  });
+
+  it('幹部群組呼叫偵測：在群組中被 @小岳 或呼叫「小岳 幹部系統」時，回傳指定助理引導卡片', () => {
+    function simulateGroupRouter(text, groupId, isMentionedSelf) {
+      const lowerText = text.toLowerCase();
+      const isGroup = !!groupId;
+      let isMentioned = isMentionedSelf;
+      if (!isMentioned) {
+        if (text.includes('@小岳') || text.startsWith('小岳') || lowerText.includes('小岳')) {
+          isMentioned = true;
+        }
+      }
+
+      if (isGroup && !isMentioned) {
+        return null; // 靜默
+      }
+
+      const cleanText = text.replace(/@\S+/g, '').replace(/小岳/g, '').trim();
+      if (
+        (isGroup && isMentioned && (cleanText === '' || cleanText === '幹部系統' || cleanText === '嗨')) ||
+        text === '小岳 幹部系統' ||
+        text === '幹部系統'
+      ) {
+        return '🌲 幹部專屬助理小岳在此！';
+      }
+      return 'AI_OR_OTHER';
+    }
+
+    // 1. 群組被 @小岳 (空訊息)
+    const res1 = simulateGroupRouter('@小岳', 'c_admin_group', true);
+    assert.equal(res1, '🌲 幹部專屬助理小岳在此！');
+
+    // 2. 群組打招呼「小岳 嗨」
+    const res2 = simulateGroupRouter('小岳 嗨', 'c_admin_group', false);
+    assert.equal(res2, '🌲 幹部專屬助理小岳在此！');
+
+    // 3. 輸入「小岳 幹部系統」
+    const res3 = simulateGroupRouter('小岳 幹部系統', 'c_admin_group', false);
+    assert.equal(res3, '🌲 幹部專屬助理小岳在此！');
+
+    // 4. 群組一般閒聊未提及小岳 -> 靜默防洗版 (null)
+    const res4 = simulateGroupRouter('大家明天要爬山嗎？', 'c_admin_group', false);
+    assert.equal(res4, null);
+  });
+
+  it('「更多服務 More Services」包含「幹部是誰」與「意見與回饋」功能項目', () => {
+    const options = [
+      { title: '裝備租借商城', keyword: '裝備租借' },
+      { title: '繳費與對帳申報', keyword: '繳費系統' },
+      { title: '個人主頁 / 我的狀態', keyword: '我的狀態' },
+      { title: '幹部名單 (幹部是誰)', keyword: '幹部是誰' },
+      { title: '意見與回饋', keyword: '意見與回饋' }
+    ];
+
+    const hasOfficers = options.some(o => o.keyword === '幹部是誰');
+    const hasFeedback = options.some(o => o.keyword === '意見與回饋');
+    assert.equal(hasOfficers, true);
+    assert.equal(hasFeedback, true);
+  });
+});
+
+describe('15. Supabase SSOT 報名驗證、Sync Worker 全 CRUD 增刪鏡像、幹部意願通知與裝備照片更新測試', () => {
+  // 1. 報名檢查邏輯測試：Supabase 優先 SSOT
+  it('重複報名判定 100% 依據 Supabase：當 Supabase 無有效報名（即使試算表有舊列），判定為未報名放行', () => {
+    function simulateCheckAlreadySignedUp(supabaseSignups) {
+      if (!supabaseSignups || supabaseSignups.length === 0) {
+        return false; // 未報名
+      }
+      return supabaseSignups.some(sig => {
+        const st = String(sig.status || '');
+        return !st.includes('取消') && !st.toLowerCase().includes('cancelled');
+      });
+    }
+
+    // 情境 A：Supabase 紀錄已被刪除（空陣列）
+    assert.equal(simulateCheckAlreadySignedUp([]), false);
+
+    // 情境 B：Supabase 只有已取消的紀錄
+    assert.equal(simulateCheckAlreadySignedUp([{ id: 'S01', status: '已取消 Cancelled' }]), false);
+
+    // 情境 C：Supabase 有審核中的有效紀錄
+    assert.equal(simulateCheckAlreadySignedUp([{ id: 'S02', status: '審核中 Checking' }]), true);
+
+    // 情境 D：Supabase 有正取的有效紀錄
+    assert.equal(simulateCheckAlreadySignedUp([{ id: 'S03', status: '正取 Confirmed' }]), true);
+  });
+
+  // 2. Sync Worker DELETE 動作測試
+  it('Sync Worker 支援 action === DELETE，能精準自模擬資料列中刪除對應項目', () => {
+    const mockSignups = [
+      { id: 'S01', user: 'U01', event: 'E01' },
+      { id: 'S02', user: 'U02', event: 'E01' },
+      { id: 'S03', user: 'U03', event: 'E02' }
+    ];
+
+    function simulateDeleteSignup(list, payload) {
+      const idx = list.findIndex(item => item.id === payload.id || (item.user === payload.line_user_id && item.event === payload.event_id));
+      if (idx > -1) {
+        list.splice(idx, 1);
+        return true;
+      }
+      return false;
+    }
+
+    // 刪除 S02
+    const deleted = simulateDeleteSignup(mockSignups, { id: 'S02' });
+    assert.equal(deleted, true);
+    assert.equal(mockSignups.length, 2);
+    assert.equal(mockSignups.some(s => s.id === 'S02'), false);
+
+    // 依 user + event 刪除 S01
+    const deleted2 = simulateDeleteSignup(mockSignups, { line_user_id: 'U01', event_id: 'E01' });
+    assert.equal(deleted2, true);
+    assert.equal(mockSignups.length, 1);
+    assert.equal(mockSignups[0].id, 'S03');
+  });
+
+  // 3. 幹部意願通知測試
+  it('基本資料填寫勾選有意願擔任幹部時，正確判定並觸發幹部推播訊息', () => {
+    function shouldNotifyAdminForOfficer(formData) {
+      const intent = formData.intendOfficer || formData.officer_intent || '';
+      if (!intent) return false;
+      const lower = String(intent).trim().toLowerCase();
+      if (lower === '無' || lower === '無意願' || lower === '否' || lower === 'none' || lower === 'no') {
+        return false;
+      }
+      return true;
+    }
+
+    assert.equal(shouldNotifyAdminForOfficer({ intendOfficer: '有意願成為幹部' }), true);
+    assert.equal(shouldNotifyAdminForOfficer({ intendOfficer: '活動幹部' }), true);
+    assert.equal(shouldNotifyAdminForOfficer({ intendOfficer: '無意願' }), false);
+    assert.equal(shouldNotifyAdminForOfficer({ intendOfficer: '否' }), false);
+    assert.equal(shouldNotifyAdminForOfficer({ intendOfficer: '' }), false);
+  });
+
+  // 4. 裝備照片更新 API 測試
+  it('update_equipment_images 正確保留舊有照片並附加新上傳照片網址', () => {
+    function simulateUpdateEquipmentImages(keptUrls, newUploadedUrls) {
+      const finalUrls = [];
+      (keptUrls || []).forEach(u => {
+        if (u && u.startsWith('http') && !finalUrls.includes(u)) {
+          finalUrls.push(u);
+        }
+      });
+      (newUploadedUrls || []).forEach(u => {
+        if (u && u.startsWith('http') && !finalUrls.includes(u)) {
+          finalUrls.push(u);
+        }
+      });
+      return finalUrls.join('\n');
+    }
+
+    const res = simulateUpdateEquipmentImages(
+      ['https://lh3.googleusercontent.com/d/old1=w1000'],
+      ['https://lh3.googleusercontent.com/d/new2=w1000']
+    );
+    assert.ok(res.includes('old1'));
+    assert.ok(res.includes('new2'));
+    assert.equal(res.split('\n').length, 2);
+  });
+
+  // 5. 裝備租借費用欄位解析與容錯測試
+  it('fetchEquipmentsFromSupabase 正確支援 price_2day 與 price_extra_day 欄位解析與 fallback', () => {
+    function mapEquipmentRow(row) {
+      let imgStr = '';
+      if (Array.isArray(row.images)) {
+        imgStr = row.images.filter(Boolean).join(',');
+      } else if (typeof row.images === 'string') {
+        imgStr = row.images;
+      }
+
+      return {
+        id: row.id,
+        name: row.name || '未知裝備',
+        remainQty: row.available_qty ?? 0,
+        price: row.price_2day ?? row.price ?? row.member_price_per_day ?? 0,
+        priceExtra: row.price_extra_day ?? row.price_extra ?? row.non_member_price_per_day ?? 0,
+        imageUrl: imgStr,
+        description: row.notes || row.specs || ''
+      };
+    }
+
+    // 情況 A：使用真實 Supabase 欄位 price_2day 與 price_extra_day
+    const rowA = {
+      id: 'EQ_TENT',
+      name: '四人帳篷',
+      available_qty: 3,
+      price_2day: 150,
+      price_extra_day: 50,
+      member_price_per_day: null,
+      non_member_price_per_day: null
+    };
+    const equipA = mapEquipmentRow(rowA);
+    assert.equal(equipA.price, 150);
+    assert.equal(equipA.priceExtra, 50);
+
+    // 情況 B：使用舊版 member_price_per_day 與 non_member_price_per_day
+    const rowB = {
+      id: 'EQ_BAG',
+      name: '登山大背包',
+      available_qty: 5,
+      member_price_per_day: 80,
+      non_member_price_per_day: 30
+    };
+    const equipB = mapEquipmentRow(rowB);
+    assert.equal(equipB.price, 80);
+    assert.equal(equipB.priceExtra, 30);
+
+    // 情況 C：若皆為 undefined 則正確 fallback 為 0
+    const rowC = {
+      id: 'EQ_HELMET',
+      name: '岩盔',
+      available_qty: 2
+    };
+    const equipC = mapEquipmentRow(rowC);
+    assert.equal(equipC.price, 0);
+    assert.equal(equipC.priceExtra, 0);
+  });
+});

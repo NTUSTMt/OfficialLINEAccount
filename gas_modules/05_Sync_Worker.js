@@ -101,25 +101,26 @@ function syncPendingQueueFromSupabase() {
 function _processSingleSyncItem(ss, item) {
   var table = item.table_name;
   var payload = item.payload;
+  var action = item.action || "UPDATE";
 
   if (table === "members") {
-    _syncMemberToSheet(ss, payload);
+    _syncMemberToSheet(ss, payload, action);
   } else if (table === "events") {
-    _syncEventToSheet(ss, payload);
+    _syncEventToSheet(ss, payload, action);
   } else if (table === "event_signups") {
-    _syncSignupToSheet(ss, payload);
+    _syncSignupToSheet(ss, payload, action);
   } else if (table === "equipments") {
-    _syncEquipmentToSheet(ss, payload);
+    _syncEquipmentToSheet(ss, payload, action);
   } else if (table === "loans") {
-    _syncLoanToSheet(ss, payload);
+    _syncLoanToSheet(ss, payload, action);
   } else if (table === "payments") {
-    _syncPaymentToSheet(ss, payload);
+    _syncPaymentToSheet(ss, payload, action);
   } else if (table === "reflections") {
-    _syncReflectionToSheet(ss, payload);
+    _syncReflectionToSheet(ss, payload, action);
   }
 }
 
-function _syncMemberToSheet(ss, p) {
+function _syncMemberToSheet(ss, p, action) {
   if (!p || !p.line_user_id) return;
   var sheet = ss.getSheetByName("Members");
   if (!sheet) return;
@@ -134,6 +135,15 @@ function _syncMemberToSheet(ss, p) {
       targetRow = i + 1;
       break;
     }
+  }
+
+  // 處理 DELETE 刪除事件
+  if (action === "DELETE") {
+    if (targetRow > -1) {
+      sheet.deleteRow(targetRow);
+      Logger.log("🗑️ 已從 Members 表刪除隊員: " + p.line_user_id);
+    }
+    return;
   }
 
   var offVal = p.is_official_member ? "是" : "否";
@@ -157,7 +167,7 @@ function _syncMemberToSheet(ss, p) {
   }
 }
 
-function _syncEventToSheet(ss, p) {
+function _syncEventToSheet(ss, p, action) {
   var sheet = ss.getSheetByName("Events");
   if (!sheet || !p || !p.id) return;
   var data = sheet.getDataRange().getValues();
@@ -173,6 +183,15 @@ function _syncEventToSheet(ss, p) {
     }
   }
 
+  // 處理 DELETE 刪除事件
+  if (action === "DELETE") {
+    if (targetRow > -1) {
+      sheet.deleteRow(targetRow);
+      Logger.log("🗑️ 已從 Events 表刪除活動: " + p.id);
+    }
+    return;
+  }
+
   if (targetRow > -1) {
     if (p.title) _setCellVal(sheet, targetRow, headers, "活動名稱", p.title);
     if (p.status) _setCellVal(sheet, targetRow, headers, "報名狀態", p.status);
@@ -181,27 +200,62 @@ function _syncEventToSheet(ss, p) {
   }
 }
 
-function _syncSignupToSheet(ss, p) {
+function _syncSignupToSheet(ss, p, action) {
   var sheet = ss.getSheetByName("Signups");
-  if (!sheet || !p || !p.id) return;
+  if (!sheet || !p) return;
   var data = sheet.getDataRange().getValues();
   var headers = data[0];
   var sIdx = _fi(headers, "專屬碼");
+  var uIdx = _fi(headers, "系統識別碼");
+  var eIdx = _fi(headers, "活動編號");
   var stCol = _fi(headers, "審核結果");
   var nCol = _fi(headers, "備註");
   var rCol = _fi(headers, "取消原因");
 
+  var targetRow = -1;
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][sIdx]).trim() === String(p.id).trim()) {
-      if (stCol > -1 && p.status) sheet.getRange(i + 1, stCol + 1).setValue(p.status);
-      if (nCol > -1 && p.notes !== undefined) sheet.getRange(i + 1, nCol + 1).setValue(p.notes);
-      if (rCol > -1 && p.cancel_reason !== undefined) sheet.getRange(i + 1, rCol + 1).setValue(p.cancel_reason);
+    var matchById = (sIdx > -1 && p.id && String(data[i][sIdx]).trim() === String(p.id).trim());
+    var matchByUserAndEvent = (uIdx > -1 && eIdx > -1 && p.line_user_id && p.event_id &&
+      String(data[i][uIdx]).trim() === String(p.line_user_id).trim() &&
+      String(data[i][eIdx]).trim() === String(p.event_id).trim());
+
+    if (matchById || matchByUserAndEvent) {
+      targetRow = i + 1;
       break;
     }
   }
+
+  // 1. 處理 DELETE 刪除事件
+  if (action === "DELETE") {
+    if (targetRow > -1) {
+      sheet.deleteRow(targetRow);
+      Logger.log("🗑️ 已從 Signups 表刪除報名紀錄: " + (p.id || (p.line_user_id + "_" + p.event_id)));
+    }
+    return;
+  }
+
+  // 2. 處理既有列 UPDATE
+  if (targetRow > -1) {
+    if (stCol > -1 && p.status) sheet.getRange(targetRow, stCol + 1).setValue(p.status);
+    if (nCol > -1 && p.notes !== undefined) sheet.getRange(targetRow, nCol + 1).setValue(p.notes);
+    if (rCol > -1 && p.cancel_reason !== undefined) sheet.getRange(targetRow, rCol + 1).setValue(p.cancel_reason);
+    if (p.id && sIdx > -1) sheet.getRange(targetRow, sIdx + 1).setValue(p.id);
+  } else {
+    // 3. 處理 INSERT 新增分支 (試算表尚無此紀錄)
+    var newRow = new Array(headers.length).fill("");
+    if (eIdx > -1) newRow[eIdx] = p.event_id || "";
+    if (uIdx > -1) newRow[uIdx] = p.line_user_id || "";
+    if (sIdx > -1) newRow[sIdx] = p.id || "";
+    if (_fi(headers, "姓名") > -1) newRow[_fi(headers, "姓名")] = p.name || "";
+    if (stCol > -1) newRow[stCol] = p.status || "審核中 Checking";
+    if (nCol > -1) newRow[nCol] = p.notes || "";
+    if (_fi(headers, "是否為社員") > -1) newRow[_fi(headers, "是否為社員")] = p.is_official_member_snapshot ? "是" : "否";
+    sheet.appendRow(newRow);
+    Logger.log("➕ 已新增報名紀錄至 Signups 表: " + (p.id || p.line_user_id));
+  }
 }
 
-function _syncEquipmentToSheet(ss, p) {
+function _syncEquipmentToSheet(ss, p, action) {
   var sheet = ss.getSheetByName("Equipments");
   if (!sheet || !p || !p.id) return;
   var data = sheet.getDataRange().getValues();
@@ -210,16 +264,31 @@ function _syncEquipmentToSheet(ss, p) {
   var rQtyCol = _fi(headers, "剩餘數量");
   var tQtyCol = _fi(headers, "總數量");
 
+  var targetRow = -1;
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][idIdx]).trim() === String(p.id).trim()) {
-      if (rQtyCol > -1 && p.available_qty !== undefined) sheet.getRange(i + 1, rQtyCol + 1).setValue(p.available_qty);
-      if (tQtyCol > -1 && p.total_qty !== undefined) sheet.getRange(i + 1, tQtyCol + 1).setValue(p.total_qty);
+      targetRow = i + 1;
       break;
     }
   }
+
+  // 處理 DELETE 刪除事件
+  if (action === "DELETE") {
+    if (targetRow > -1) {
+      sheet.deleteRow(targetRow);
+      Logger.log("🗑️ 已從 Equipments 表刪除裝備: " + p.id);
+    }
+    return;
+  }
+
+  if (targetRow > -1) {
+    if (rQtyCol > -1 && p.available_qty !== undefined) sheet.getRange(targetRow, rQtyCol + 1).setValue(p.available_qty);
+    if (tQtyCol > -1 && p.total_qty !== undefined) sheet.getRange(targetRow, tQtyCol + 1).setValue(p.total_qty);
+    if (p.image_url) _setCellVal(sheet, targetRow, headers, "圖片網址", p.image_url);
+  }
 }
 
-function _syncLoanToSheet(ss, p) {
+function _syncLoanToSheet(ss, p, action) {
   var sheet = ss.getSheetByName("Loan_Records");
   if (!sheet || !p || !p.id) return;
   var data = sheet.getDataRange().getValues();
@@ -229,6 +298,19 @@ function _syncLoanToSheet(ss, p) {
   var payCol = _fi(headers, "繳費狀態");
 
   if (ordIdx === -1) return;
+
+  // 處理 DELETE 刪除事件 (倒序刪除該訂單所有項目列)
+  if (action === "DELETE") {
+    var delCount = 0;
+    for (var r = data.length - 1; r >= 1; r--) {
+      if (String(data[r][ordIdx]).trim() === String(p.id).trim()) {
+        sheet.deleteRow(r + 1);
+        delCount++;
+      }
+    }
+    Logger.log("🗑️ 已從 Loan_Records 表刪除訂單 " + p.id + " 共 " + delCount + " 列");
+    return;
+  }
 
   var found = false;
   for (var i = 1; i < data.length; i++) {
@@ -282,7 +364,7 @@ function _syncLoanToSheet(ss, p) {
   }
 }
 
-function _syncPaymentToSheet(ss, p) {
+function _syncPaymentToSheet(ss, p, action) {
   var sheet = ss.getSheetByName("Payments");
   if (!sheet || !p || !p.id) return;
   var data = sheet.getDataRange().getValues();
@@ -290,15 +372,29 @@ function _syncPaymentToSheet(ss, p) {
   var pidIdx = _fi(headers, "繳費單號");
   var stCol = _fi(headers, "對帳狀態") > -1 ? _fi(headers, "對帳狀態") : _fi(headers, "審核狀態");
 
+  var targetRow = -1;
   for (var i = 1; i < data.length; i++) {
     if (pidIdx > -1 && String(data[i][pidIdx]).trim() === String(p.id).trim()) {
-      if (stCol > -1 && p.status) sheet.getRange(i + 1, stCol + 1).setValue(p.status);
+      targetRow = i + 1;
       break;
     }
   }
+
+  // 處理 DELETE 刪除事件
+  if (action === "DELETE") {
+    if (targetRow > -1) {
+      sheet.deleteRow(targetRow);
+      Logger.log("🗑️ 已從 Payments 表刪除繳費單: " + p.id);
+    }
+    return;
+  }
+
+  if (targetRow > -1 && stCol > -1 && p.status) {
+    sheet.getRange(targetRow, stCol + 1).setValue(p.status);
+  }
 }
 
-function _syncReflectionToSheet(ss, p) {
+function _syncReflectionToSheet(ss, p, action) {
   var sheet = ss.getSheetByName("Reflections");
   if (!sheet || !p) return;
   var data = sheet.getDataRange().getValues();
@@ -315,6 +411,15 @@ function _syncReflectionToSheet(ss, p) {
     }
   }
 
+  // 處理 DELETE 刪除事件
+  if (action === "DELETE") {
+    if (targetRow > -1) {
+      sheet.deleteRow(targetRow);
+      Logger.log("🗑️ 已從 Reflections 表刪除心得: " + p.event_id + "_" + p.line_user_id);
+    }
+    return;
+  }
+
   var photoStr = Array.isArray(p.photo_urls) ? p.photo_urls.join("\n") : (p.photo_urls || "");
 
   if (targetRow > -1) {
@@ -328,9 +433,149 @@ function _syncReflectionToSheet(ss, p) {
   }
 }
 
+/**
+ * 主試算表 Signups 自癒對齊函式 (Reconciliation Engine)
+ * 目的：消滅歷史幽靈列，以 Supabase event_signups 為唯一準則，修剪已不存在的資料
+ */
+function reconcileSignupsWithSupabase(ss) {
+  if (!ss) ss = _getSpreadsheet();
+  if (!ss) return;
+  var sheet = ss.getSheetByName("Signups");
+  if (!sheet) return;
+
+  var sbSignups = _supabaseGet("event_signups", { select: "id,line_user_id,event_id,status" });
+  if (!sbSignups || !Array.isArray(sbSignups)) return;
+
+  var validSet = {};
+  for (var s = 0; s < sbSignups.length; s++) {
+    var item = sbSignups[s];
+    if (item.id) validSet[String(item.id).trim()] = true;
+    if (item.line_user_id && item.event_id) {
+      validSet[String(item.line_user_id).trim() + "_" + String(item.event_id).trim()] = true;
+    }
+  }
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return;
+  var headers = data[0];
+  var sIdx = _fi(headers, "專屬碼");
+  var uIdx = _fi(headers, "系統識別碼");
+  var eIdx = _fi(headers, "活動編號");
+
+  var prunedCount = 0;
+  // 倒序迴圈刪除孤兒列
+  for (var r = data.length - 1; r >= 1; r--) {
+    var code = sIdx > -1 ? String(data[r][sIdx]).trim() : "";
+    var uid = uIdx > -1 ? String(data[r][uIdx]).trim() : "";
+    var eid = eIdx > -1 ? String(data[r][eIdx]).trim() : "";
+    var key = uid + "_" + eid;
+
+    // 只要有身分與活動識別，但既找不到專屬碼也找不到組合鍵，即為歷史幽靈列
+    if (uid && eid && !validSet[code] && !validSet[key]) {
+      sheet.deleteRow(r + 1);
+      prunedCount++;
+    }
+  }
+
+  if (prunedCount > 0) {
+    Logger.log("🧹 [自癒修剪] 已成功自 Signups 表清除 " + prunedCount + " 筆歷史幽靈報名列！");
+  }
+}
+
 function _setCellVal(sheet, row, headers, colName, value) {
   var idx = _fi(headers, colName);
   if (idx > -1 && value !== undefined && value !== null) {
     sheet.getRange(row, idx + 1).setValue(value);
   }
 }
+
+/**
+ * 將活動報名紀錄同步寫入 Supabase (包含 upsert members 與 insert/upsert event_signups)
+ */
+function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus, eventName) {
+  var props = PropertiesService.getScriptProperties();
+  var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
+  var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!sbUrl || !sbKey) {
+    console.warn("⚠️ [Supabase] 尚未配置 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY，略過報名同步。");
+    return false;
+  }
+  if (!userId || !eventId || !signupCode) {
+    console.warn("⚠️ [Supabase] 缺少必要參數: userId=" + userId + ", eventId=" + eventId + ", signupCode=" + signupCode);
+    return false;
+  }
+  try {
+    p = p || {};
+    var isOfficial = (p.isOfficial === "是" || p.isOfficial === true);
+
+    // 1. 先 Upsert members 表，確保外鍵約束滿足且個資最新
+    var memberPayload = {
+      line_user_id: userId,
+      name: p.name || "社員",
+      gender: p.gender || null,
+      line_id: p.lineId || p.realLineId || null,
+      email: p.email || null,
+      phone: p.phone || null,
+      department: p.department || null,
+      student_id: p.studentId || null,
+      birthday: p.birthday || null,
+      id_card: p.idNumber || p.idCard || null,
+      address: p.studentAddr || p.address || null,
+      outdoor_experience: p.exp || null,
+      fitness_desc: p.strength || null,
+      emergency_contact_name: p.emerName || null,
+      emergency_contact_rel: p.emerRel || null,
+      emergency_contact_phone: p.emerPhone || null,
+      emergency_contact_address: p.emerAddr || null,
+      medical_history: p.medicalHistory || null,
+      is_official_member: isOfficial,
+      updated_at: new Date().toISOString()
+    };
+
+    var memberUrl = sbUrl + "/rest/v1/members?on_conflict=line_user_id";
+    UrlFetchApp.fetch(memberUrl, {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "apikey": sbKey,
+        "Authorization": "Bearer " + sbKey,
+        "Prefer": "resolution=merge-duplicates,return=minimal"
+      },
+      payload: JSON.stringify(memberPayload),
+      muteHttpExceptions: true
+    });
+
+    // 2. 寫入或更新 event_signups 表
+    var signupPayload = {
+      id: signupCode,
+      event_id: eventId,
+      line_user_id: userId,
+      name: p.name || "",
+      status: signupStatus || "審核中 Checking",
+      is_official_member_snapshot: isOfficial,
+      notes: "",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    var signupUrl = sbUrl + "/rest/v1/event_signups?on_conflict=id";
+    var res = UrlFetchApp.fetch(signupUrl, {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        "apikey": sbKey,
+        "Authorization": "Bearer " + sbKey,
+        "Prefer": "resolution=merge-duplicates,return=minimal"
+      },
+      payload: JSON.stringify(signupPayload),
+      muteHttpExceptions: true
+    });
+
+    return res.getResponseCode() >= 200 && res.getResponseCode() < 300;
+  } catch (err) {
+    console.warn("同步報名至 Supabase 例外:", err);
+    return false;
+  }
+}
+

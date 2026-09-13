@@ -69,7 +69,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
   const [form, setForm] = useState<FormState>({
     pickupDate: '',
     returnDate: '',
-    purpose: '社團出隊',
+    purpose: '個人使用',
     otherPurpose: '',
     cart: {}
   });
@@ -479,8 +479,15 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
               </div>
             </div>
           </div>
-          <button className="view-cart-btn" onClick={() => setIsCartOpen(true)} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
-            <ShoppingCart size={18} />
+          <button
+            type="button"
+            className="view-cart-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsCartOpen(true);
+            }}
+          >
+            <ShoppingCart size={16} />
             <span>{t('borrow.floating.viewDetail', '查看預訂單')}</span>
           </button>
         </div>

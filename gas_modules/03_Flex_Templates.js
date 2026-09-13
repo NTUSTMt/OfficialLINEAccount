@@ -590,57 +590,304 @@ function sendFeedbackLink(replyToken) {
 }
 
 /**
- * 處理活動一鍵報名 (含防衝突鎖定與資料驗證)
+ * 檢查隊員個人資料是否完整 (支援 signup 與 loan 兩種驗證等級)
+ */
+function _checkProfileComplete(userId, ss, type) {
+  var missingFields = [];
+  var p = {
+    name: "", gender: "", realLineId: "", email: "", phone: "",
+    department: "", studentId: "", birthday: "", idNumber: "", studentAddr: "",
+    emerName: "", emerRel: "", emerAddr: "", emerPhone: "",
+    exp: "", strength: "", strengthProof: "", medicalHistory: "", isOfficial: "否"
+  };
+
+  // 1. 優先直查 Supabase members 表（SSOT）
+  var sbMembers = _supabaseGet("members", { line_user_id: "eq." + userId });
+  if (sbMembers !== null) {
+    if (sbMembers.length === 0) {
+      return { missingFields: ["NOT_FOUND"], p: null };
+    }
+    var m = sbMembers[0];
+    p.name = m.name || "";
+    p.gender = m.gender || "";
+    p.realLineId = m.line_id || "";
+    p.email = m.email || "";
+    p.phone = m.phone || "";
+    p.department = m.department || "";
+    p.studentId = m.student_id || "";
+    p.birthday = m.birthday || "";
+    p.idNumber = m.id_card || "";
+    p.studentAddr = m.address || "";
+    p.emerName = m.emergency_contact_name || "";
+    p.emerRel = m.emergency_contact_rel || "";
+    p.emerPhone = m.emergency_contact_phone || "";
+    p.emerAddr = m.emergency_contact_address || "";
+    p.exp = m.outdoor_experience || "";
+    p.strength = m.fitness_desc || "";
+    p.strengthProof = Array.isArray(m.proof_urls) ? m.proof_urls.join("\n") : (m.proof_urls || "");
+    p.medicalHistory = m.medical_history || "";
+    p.isOfficial = m.is_official_member ? "是" : "否";
+  } else {
+    // 2. 若 Supabase 連線異常，備援讀取試算表 Members 表
+    if (!ss) ss = _getSpreadsheet();
+    var memberSheet = ss ? ss.getSheetByName("Members") : null;
+    if (!memberSheet) {
+      return { missingFields: ["NOT_FOUND"], p: null };
+    }
+    var mData = memberSheet.getDataRange().getValues();
+    var mH = mData.length > 0 ? mData[0] : [];
+    var mSysIdx = _fi(mH, "系統識別碼");
+    var isMember = false;
+
+    for (var i = mData.length - 1; i >= 1; i--) {
+      if (mSysIdx > -1 && String(mData[i][mSysIdx]).trim() === String(userId).trim()) {
+        isMember = true;
+        p.name = mData[i][_fi(mH, "姓名")] || "";
+        p.gender = mData[i][_fi(mH, "性別")] || "";
+        p.realLineId = mData[i][mH.findIndex(function (h) {
+          return String(h).toUpperCase().includes("LINE");
+        })] || "";
+        p.email = mData[i][mH.findIndex(function (h) {
+          return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱");
+        })] || "";
+        p.phone = mData[i][mH.findIndex(function (h) {
+          return String(h).includes("電話") && !String(h).includes("緊急");
+        })] || "";
+        p.department = mData[i][_fi(mH, "系所")] || "";
+        p.studentId = mData[i][_fi(mH, "學號")] || "";
+        p.birthday = mData[i][_fi(mH, "生日")] || "";
+        p.idNumber = mData[i][_fi(mH, "證件")] || "";
+        p.studentAddr = mData[i][mH.findIndex(function (h) {
+          return String(h).includes("地址") && !String(h).includes("緊急");
+        })] || "";
+        p.emerName = mData[i][mH.findIndex(function (h) {
+          return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
+        })] || "";
+        p.emerRel = _getEmerRelValue(mH, mData[i]);
+        p.emerAddr = mData[i][mH.findIndex(function (h) {
+          return String(h).includes("地址") && String(h).includes("緊急");
+        })] || "";
+        p.emerPhone = mData[i][_fi(mH, "緊急聯絡人電話")] || "";
+        p.exp = mData[i][_fi(mH, "經驗")] || "";
+        p.strength = mData[i][_fi(mH, "體能")] || "";
+        p.strengthProof = mData[i][_fi(mH, "證明")] || "";
+        p.medicalHistory = mData[i][_fi(mH, "病史")] || "";
+
+        var payIdx = _fi(mH, "繳費狀態");
+        var paymentStatus = payIdx > -1 ? String(mData[i][payIdx]).trim() : "";
+        p.isOfficial = (paymentStatus === "已繳費 Paid" || paymentStatus === "已繳" || paymentStatus === "是") ? "是" : "否";
+        break;
+      }
+    }
+
+    if (!isMember) {
+      return { missingFields: ["NOT_FOUND"], p: null };
+    }
+  }
+
+  // 統一檢驗必填項目
+  if (String(p.name).trim() === "") missingFields.push("姓名 (Name)");
+  if (String(p.gender).trim() === "") missingFields.push("性別 (Gender)");
+  if (String(p.phone).trim() === "") missingFields.push("聯絡電話 (Phone)");
+
+  if (type === "signup" || type === "activity") {
+    if (String(p.birthday).trim() === "") missingFields.push("生日 (Birthday)");
+    if (String(p.idNumber).trim() === "") missingFields.push("身分證/護照號碼 (ID/Passport)");
+    if (String(p.studentAddr).trim() === "") missingFields.push("聯絡地址 (Correspondence Address)");
+    if (String(p.emerName).trim() === "") missingFields.push("緊急聯絡人姓名 (Emergency Contact)");
+    if (String(p.emerRel).trim() === "") missingFields.push("與緊急聯絡人關係 (Emergency Relation)");
+    if (String(p.emerAddr).trim() === "") missingFields.push("緊急聯絡人地址 (Emergency Address)");
+    if (String(p.emerPhone).trim() === "") missingFields.push("緊急聯絡人電話 (Emergency Phone)");
+    if (String(p.strength).trim() === "") missingFields.push("體能 (Physical Fitness)");
+    if (String(p.strengthProof).trim() === "") missingFields.push("體能證明 (Proof of Physical Fitness)");
+    if (String(p.exp).trim() === "") missingFields.push("爬山經驗 (Mountaineering Experience)");
+  }
+
+  return { missingFields: missingFields, p: p };
+}
+
+/**
+ * 處理活動一鍵報名 (漸進式個資檢查 + 報名寫入與多軌同步)
  */
 function handleSignup(replyToken, userId, eventId, ss) {
   if (!ss) ss = _getSpreadsheet();
-  if (!ss) return;
 
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
 
-    var eventSheet = ss.getSheetByName("Events");
-    var evName = eventId;
-    if (eventSheet) {
-      var eData = eventSheet.getDataRange().getDisplayValues();
-      if (eData.length > 1) {
-        var eHeaders = eData[0];
-        var eIdCol = _fi(eHeaders, "活動編號");
-        var eNameCol = _fi(eHeaders, "活動名稱");
-        var eStatusCol = eHeaders.findIndex(function (h) {
-          return String(h).includes("報名狀態") || String(h).includes("狀態");
-        });
-        var eDeadCol = _fi(eHeaders, "報名截止日期");
+    // 1. 檢查活動是否存在與是否已截止/已關閉 (優先查 Supabase events 表)
+    var evName = _getEventName(ss, eventId);
+    var sbEvents = _supabaseGet("events", { id: "eq." + eventId, select: "id,title,status,deadline" });
+    if (sbEvents && sbEvents.length > 0) {
+      var ev = sbEvents[0];
+      if (ev.title) evName = ev.title;
+      var isEvExpired = _isEventExpired(ev.deadline);
+      if (isEvExpired || ev.status === "關閉" || ev.status === "已截止") {
+        _replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (ev.deadline || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration is closed.");
+        return;
+      }
+    } else if (ss) {
+      // 備援檢查 Sheets Events 表
+      var eventSheet = ss.getSheetByName("Events");
+      if (eventSheet) {
+        var eData = eventSheet.getDataRange().getDisplayValues();
+        if (eData.length > 1) {
+          var eHeaders = eData[0];
+          var eIdCol = _fi(eHeaders, "活動編號");
+          var eNameCol = _fi(eHeaders, "活動名稱");
+          var eStatusCol = eHeaders.findIndex(function (h) {
+            return String(h).includes("報名狀態") || String(h).includes("狀態");
+          });
+          var eDeadCol = _fi(eHeaders, "報名截止日期");
 
-        for (var ev = 1; ev < eData.length; ev++) {
-          if (eData[ev][eIdCol > -1 ? eIdCol : 0] === eventId) {
-            var evStatus = eStatusCol > -1 ? eData[ev][eStatusCol] : "";
-            var evDead = eDeadCol > -1 ? eData[ev][eDeadCol] : "";
-            evName = eNameCol > -1 ? eData[ev][eNameCol] : eventId;
-            var isEvExpired = _isEventExpired(evDead);
-
-            if (isEvExpired || evStatus === "關閉" || evStatus === "已截止") {
-              if (evStatus === "開放" && isEvExpired) {
-                try {
-                  eventSheet.getRange(ev + 1, eStatusCol + 1).setValue("關閉");
-                } catch (err) { }
+          for (var row = 1; row < eData.length; row++) {
+            if (String(eData[row][eIdCol > -1 ? eIdCol : 0]).trim() === String(eventId).trim()) {
+              var evStatus = eStatusCol > -1 ? String(eData[row][eStatusCol]).trim() : "";
+              var evDead = eDeadCol > -1 ? String(eData[row][eDeadCol]).trim() : "";
+              if (eNameCol > -1 && eData[row][eNameCol]) evName = eData[row][eNameCol];
+              if (_isEventExpired(evDead) || evStatus === "關閉" || evStatus === "已截止") {
+                _replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (evDead || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️");
+                return;
               }
-              _replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (evDead || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration closed on " + (evDead || "deadline") + ".");
-              return;
+              break;
             }
-            break;
           }
         }
       }
     }
 
-    // 提示前往 LIFF 完成報名或確認報名資格
-    var signupLiffUrl = "https://liff.line.me/2009217429-AhPRqAHg";
-    _replyMessage(replyToken, "🎉 準備報名【" + evName + "】！\n\n請點擊下方專屬連結確認您的報名資料並送出：\n" + signupLiffUrl + "\n\n若您先前已填寫過基本資料，系統將自動為您帶入！");
+    // 2. 執行個人資料完整性檢查 (100% 直查 Supabase)
+    var profileCheck = _checkProfileComplete(userId, ss, "signup");
+
+    if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
+      _replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先點選單中的「填寫資料」完成註冊後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first:\nhttps://liff.line.me/2009217429-AhPRqAHg");
+      return;
+    }
+
+    if (profileCheck.missingFields.length > 0) {
+      _replyMessage(replyToken, "⚠️ 報名失敗：您的個人資料尚不完整！\n\n為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n👉 " + profileCheck.missingFields.join("\n👉 ") + "\n\n完成資料更新後，再回來點擊一鍵報名喔！🏕️\n─────────────\n👉 https://liff.line.me/2009217429-AhPRqAHg");
+      return;
+    }
+
+    var p = profileCheck.p;
+
+    // 3. 檢查重複報名 (⭐️ 100% 查 Supabase event_signups 表，絕不查主試算表！)
+    var sbSignups = _supabaseGet("event_signups", { line_user_id: "eq." + userId, event_id: "eq." + eventId, select: "id,status" });
+    if (sbSignups && sbSignups.length > 0) {
+      // 只要有一筆狀態非「取消」的報名，才視為重複報名
+      var hasActiveSignup = sbSignups.some(function (sig) {
+        var st = String(sig.status || "");
+        return st.indexOf("取消") === -1 && st.toLowerCase().indexOf("cancelled") === -1;
+      });
+      if (hasActiveSignup) {
+        _replyMessage(replyToken, "⚠️ 您已經報名過【" + evName + "】囉！\n請耐心等候幹部審核，或是至個人主頁查詢進度。\n─────────────\n⚠️ You have already registered for [" + evName + "]!\nPlease wait for officer review.");
+        return;
+      }
+    }
+
+    // 4. 生成報名碼並即時寫入 Supabase (SSOT 優先)
+    var signupCode = "S" + Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "MMddHHmmss");
+    try {
+      _syncSignupToSupabase(userId, eventId, signupCode, p, "審核中 Checking", evName);
+    } catch (sbErr) {
+      console.warn("同步報名至 Supabase 例外 (略過不影響主流程):", sbErr);
+    }
+
+    // 5. 寫入主試算表 Signups 表（防呆覆蓋：若試算表殘留同人同活動舊列，覆蓋更新；否則 appendRow）
+    if (ss) {
+      var signupSheet = ss.getSheetByName("Signups");
+      if (!signupSheet) {
+        signupSheet = ss.insertSheet("Signups");
+        signupSheet.appendRow(["活動編號", "系統識別碼", "專屬碼", "活動名稱", "姓名", "性別", "LINE ID", "聯絡信箱 Email", "聯絡電話", "生日", "證件號碼", "緊急聯絡人姓名", "與緊急聯絡人關係", "爬山經驗", "緊急聯絡人聯絡地址", "體能測驗", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "聯絡地址", "緊急聯絡人電話"]);
+      }
+      var sheetHeaders = signupSheet.getRange(1, 1, 1, signupSheet.getLastColumn()).getValues()[0];
+      var relColIdx = _findEmerRelColIdx(sheetHeaders);
+
+      var rowData = new Array(sheetHeaders.length).fill("");
+      function placeData(keyword, value) {
+        var idx = _fi(sheetHeaders, keyword);
+        if (idx > -1) rowData[idx] = value;
+      }
+
+      placeData("活動編號", eventId);
+      placeData("系統識別碼", userId);
+      placeData("專屬碼", signupCode);
+      placeData("活動名稱", evName);
+      placeData("姓名", p.name);
+      placeData("性別", p.gender);
+      placeData("LINE", p.realLineId);
+      placeData("Email", p.email);
+
+      var phoneIdx = sheetHeaders.findIndex(function (h) {
+        return String(h).includes("電話") && !String(h).includes("緊急");
+      });
+      if (phoneIdx > -1) rowData[phoneIdx] = p.phone ? "'" + String(p.phone) : "";
+
+      placeData("生日", p.birthday);
+      placeData("證件", p.idNumber);
+
+      var studentAddrIdx = sheetHeaders.findIndex(function (h) {
+        return String(h).includes("地址") && !String(h).includes("緊急");
+      });
+      if (studentAddrIdx > -1) rowData[studentAddrIdx] = p.studentAddr;
+
+      var emerNameIdx = sheetHeaders.findIndex(function (h) {
+        return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
+      });
+      if (emerNameIdx > -1) rowData[emerNameIdx] = p.emerName;
+
+      if (relColIdx > -1) rowData[relColIdx] = p.emerRel;
+
+      var emerAddrIdx = sheetHeaders.findIndex(function (h) {
+        return String(h).includes("地址") && String(h).includes("緊急");
+      });
+      if (emerAddrIdx > -1) rowData[emerAddrIdx] = p.emerAddr;
+
+      var emerPhoneIdx = sheetHeaders.findIndex(function (h) {
+        return String(h).includes("電話") && String(h).includes("緊急");
+      });
+      if (emerPhoneIdx > -1) rowData[emerPhoneIdx] = p.emerPhone ? "'" + String(p.emerPhone) : "";
+
+      placeData("經驗", p.exp);
+      placeData("體能", p.strength);
+      placeData("證明", p.strengthProof);
+      placeData("是否為社員", p.isOfficial);
+      placeData("審核結果", "審核中 Checking");
+      placeData("通知狀態", "");
+      placeData("繳費狀態", "未繳費 Unpaid");
+      placeData("系所", p.department);
+      placeData("學號", p.studentId);
+      placeData("病史", p.medicalHistory);
+
+      // 檢查試算表中是否有歷史舊列需要覆蓋
+      var existingData = signupSheet.getDataRange().getValues();
+      var foundRow = -1;
+      if (existingData.length > 1) {
+        var eSysIdx = _fi(sheetHeaders, "系統識別碼");
+        var eEvtIdx = _fi(sheetHeaders, "活動編號");
+        for (var s = 1; s < existingData.length; s++) {
+          if (eSysIdx > -1 && String(existingData[s][eSysIdx]).trim() === String(userId).trim() &&
+              eEvtIdx > -1 && String(existingData[s][eEvtIdx]).trim() === String(eventId).trim()) {
+            foundRow = s + 1;
+            break;
+          }
+        }
+      }
+
+      if (foundRow > -1) {
+        signupSheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);
+      } else {
+        signupSheet.appendRow(rowData);
+      }
+    }
+
+    // 6. 回傳確認收據
+    _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n活動 (Event)：\n" + evName + "\n活動代號 (Event ID)：" + eventId + "\n報名專屬碼 (Signup Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的報名資料。\n\n⚠️ 【重要提醒 / Important】\n由於部分戶外行程有人數安全限制，此階段為「報名登記」。幹部將進行體能評估與審核，最終錄取名單（正取/備取）將透過本帳號推播通知您！");
+
   } catch (err) {
-    console.error("handleSignup 異常:", err);
-    _replyMessage(replyToken, "⚠️ 系統處理報名時發生錯誤，請稍後再試。");
+    console.error("活動報名失敗:", err);
+    _replyMessage(replyToken, "⚠️ 系統目前忙碌中，請稍後再試！");
   } finally {
     _safeReleaseLock(lock);
   }

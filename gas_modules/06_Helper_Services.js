@@ -34,6 +34,11 @@ function handleLiffHelperApi(json) {
     return _handleCheckOfficerStatus(json);
   }
 
+  // 6. 幹部更新裝備照片 Helper
+  if (action === "update_equipment_images") {
+    return _handleUpdateEquipmentImages(json);
+  }
+
   return _errorResponse("未支援的 Helper Action: " + action);
 }
 
@@ -193,6 +198,31 @@ function _handleNotifyProfileSaved(json) {
       "💡 您可隨時於 LINE 選單點擊「最新活動」瀏覽開放出隊行程，或至「裝備租借」預約出隊器材！";
 
     _pushMessage(userId, msg);
+
+    // 2. 若隊員勾選「有意願成為幹部」，即時推播幹部管理群組
+    var officerIntent = data.intendOfficer || data.officer_intent || "";
+    var wantsToBeOfficer = false;
+    if (officerIntent) {
+      var lowerOfficerIntent = String(officerIntent).trim().toLowerCase();
+      if (lowerOfficerIntent !== "無" && lowerOfficerIntent !== "無意願" && lowerOfficerIntent !== "否" && lowerOfficerIntent !== "none" && lowerOfficerIntent !== "no") {
+        wantsToBeOfficer = true;
+      }
+    }
+
+    if (wantsToBeOfficer) {
+      var adminNotice = "🌟 【新幹部招募意願通知】\n" +
+        "─────────────\n" +
+        "社員填寫個人資料時，勾選表達了加入幹部團隊的熱情意願！\n\n" +
+        "• 姓名：" + name + "\n" +
+        "• 系所 / 學號：" + dept + " (" + studentId + ")\n" +
+        "• 聯絡電話：" + phone + "\n" +
+        "• LINE ID：" + (data.realLineId || data.lineId || "同本帳號") + "\n" +
+        "• 擔任幹部意願：" + officerIntent + "\n" +
+        (data.exp ? ("• 爬山經歷：" + data.exp + "\n") : "") +
+        "\n💡 幹部團隊可主動與該社員聯繫，歡迎新夥伴加入！";
+      pushAdminMessage(adminNotice);
+    }
+
     return _successResponse({ message: "資料更新推播已成功發送" });
   } catch (err) {
     console.warn("個人資料更新推播失敗:", err);
@@ -266,3 +296,114 @@ function doGet(e) {
     architecture: "Modular (Supabase Primary, GAS Helper & Background Sync)"
   });
 }
+
+/**
+ * 幹部更新裝備照片處理函式
+ */
+function _handleUpdateEquipmentImages(json) {
+  try {
+    var equipId = json.equipId;
+    var equipName = json.equipName || "裝備";
+    var keptUrls = json.keptUrls || [];
+    var newPhotoFiles = json.newPhotoFiles || [];
+
+    if (!equipId) {
+      return _errorResponse("缺少裝備編號 (equipId)");
+    }
+
+    var finalUrls = [];
+    for (var k = 0; k < keptUrls.length; k++) {
+      var ku = String(keptUrls[k]).trim();
+      if (ku && ku.startsWith("http") && finalUrls.indexOf(ku) === -1) {
+        finalUrls.push(ku);
+      }
+    }
+
+    // 若有新上傳照片，上傳至 Google Drive 裝備專屬目錄
+    if (Array.isArray(newPhotoFiles) && newPhotoFiles.length > 0) {
+      var rootFolder;
+      var folderId = PropertiesService.getScriptProperties().getProperty("DRIVE_FOLDER_ID");
+      if (folderId) {
+        rootFolder = DriveApp.getFolderById(folderId);
+      } else {
+        rootFolder = DriveApp.getRootFolder();
+      }
+
+      var subFolderName = "裝備照片";
+      var subFolders = rootFolder.getFoldersByName(subFolderName);
+      var equipBaseFolder = subFolders.hasNext() ? subFolders.next() : rootFolder.createFolder(subFolderName);
+
+      var cleanEquipName = equipName.replace(/[/\\?%*:|"<>]/g, "_");
+      var itemFolders = equipBaseFolder.getFoldersByName(cleanEquipName);
+      var targetFolder = itemFolders.hasNext() ? itemFolders.next() : equipBaseFolder.createFolder(cleanEquipName);
+
+      var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyyyMMdd");
+      for (var f = 0; f < newPhotoFiles.length; f++) {
+        if (finalUrls.length >= 5) break;
+        var fileObj = newPhotoFiles[f];
+        var base64Data = fileObj.base64 || fileObj.data || "";
+        if (base64Data.indexOf(",") > -1) {
+          base64Data = base64Data.split(",")[1];
+        }
+        if (!base64Data) continue;
+
+        var ext = (fileObj.name && fileObj.name.split('.').pop()) || "jpg";
+        var fileName = cleanEquipName + "_" + todayStr + "_" + (finalUrls.length + 1) + "." + ext;
+        var decoded = Utilities.base64Decode(base64Data);
+        var blob = Utilities.newBlob(decoded, fileObj.mimeType || "image/jpeg", fileName);
+        var driveFile = targetFolder.createFile(blob);
+        driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+        var directUrl = "https://lh3.googleusercontent.com/d/" + driveFile.getId() + "=w1000";
+        finalUrls.push(directUrl);
+      }
+    }
+
+    var imgUrlCombined = finalUrls.join("\n");
+
+    // 1. 同步更新 Supabase equipments 表
+    var props = PropertiesService.getScriptProperties();
+    var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
+    var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+    if (sbUrl && sbKey) {
+      var patchUrl = sbUrl + "/rest/v1/equipments?id=eq." + encodeURIComponent(equipId);
+      UrlFetchApp.fetch(patchUrl, {
+        method: "patch",
+        contentType: "application/json",
+        headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
+        payload: JSON.stringify({ image_url: imgUrlCombined, updated_at: new Date().toISOString() }),
+        muteHttpExceptions: true
+      });
+    }
+
+    // 2. 同步更新主試算表 Equipments 表
+    var ss = _getSpreadsheet();
+    if (ss) {
+      var equipSheet = ss.getSheetByName("Equipments");
+      if (equipSheet) {
+        var eData = equipSheet.getDataRange().getValues();
+        var eHeaders = eData[0];
+        var idIdx = _fi(eHeaders, "裝備代號");
+        var imgIdx = _fi(eHeaders, "圖片網址");
+        if (idIdx > -1 && imgIdx > -1) {
+          for (var r = 1; r < eData.length; r++) {
+            if (String(eData[r][idIdx]).trim() === String(equipId).trim()) {
+              equipSheet.getRange(r + 1, imgIdx + 1).setValue(imgUrlCombined);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    return _successResponse({
+      status: "success",
+      imageUrl: imgUrlCombined,
+      message: "裝備照片已成功更新！"
+    });
+  } catch (err) {
+    console.error("更新裝備照片失敗:", err);
+    return _errorResponse("更新裝備照片失敗: " + err.toString());
+  }
+}
+

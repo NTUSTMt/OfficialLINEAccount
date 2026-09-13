@@ -3,11 +3,94 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.72` (v0.1.72)
+- **當前版本**：`0.1.75` (v0.1.75)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 175. 裝備租借費用欄位修復（price_2day 與 price_extra_day）、森林綠毛玻璃底條與磨砂白購物車按鈕 UI 重塑 (v0.1.75)
+- **裝備租借費用全面對齊 Supabase 真實欄位 (`src/utils/supabaseClient.ts`, `supabase/schema.sql`)**：
+  - **根本原因排查**：前端先前的 `fetchEquipmentsFromSupabase` 僅查詢 `member_price_per_day` 與 `non_member_price_per_day`，但 Supabase 資料庫中的真實欄位為 `price_2day`（基本2天租金）與 `price_extra_day`（續租+1天租金），造成回傳全為 `undefined` 並 fallback 為 0。
+  - **智慧容錯解析**：
+    - 基本租金（2天）：優先取 `price_2day ?? price ?? member_price_per_day ?? 0`。
+    - 續租租金（+1天）：優先取 `price_extra_day ?? price_extra ?? non_member_price_per_day ?? 0`。
+    - 同步在 `supabase/schema.sql` 明確記錄與聲明 `price_2day` 與 `price_extra_day` 欄位。
+- **預設用途調整為個人使用 (`src/pages/Borrow.tsx`)**：
+  - 將借用表單用途預設值由原本的「社團出隊」調整為「個人使用」。
+  - 進入租借頁面時不再預設套用社團免費出隊，使用者可立即看到真實預估租金；如為社團出隊可於表單抽屜內自由切換為「社團出隊」以享免租。
+- **重塑底部浮動購物條與查看預訂單按鈕 UI (`src/App.css`, `src/pages/Borrow.tsx`)**：
+  - **橫條底色**：由原本厚重的深黑藍（Slate 900）更換為契合登山調性的**森林質感深綠色**（`rgba(20, 54, 40, 0.92)` 搭配 `backdrop-filter: blur(12px)` 與細緻微光邊框）。
+  - **按鈕 UI 重塑**：
+    - 新增 `.view-cart-btn` 專屬樣式，重塑為**半透明磨砂白膠囊按鈕**（`rgba(255, 255, 255, 0.2)` 搭配 `blur(4px)`、細緻白邊框與懸浮微放大動效）。
+    - 修正購物車圖示垂直錯位與文字擁擠折行問題，統一 Flexbox 居中與 8px 間距，圖示調整為精準 16px。
+    - 按鈕點擊事件加入 `e.stopPropagation()`，避免重複觸發整條橫條的點擊展開事件。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 74/74 項測試 100% 全數通過（新增測試驗證 `price_2day` 與 `price_extra_day` 解析與 fallback）。
+  - 前端打包：`pnpm run build` 成功建置，0 TypeScript / CSS 錯誤。
+
+
+### 174. 報名與個資檢核 100% 確立 Supabase SSOT、主試算表全量 CRUD 增刪鏡像同步、幹部意願群組通知與裝備照片更新 API (v0.1.74)
+- **確立 Supabase 為 100% 單一信任真實來源 (SSOT) 根治假性重複報名 (`01_Config_Auth.js`, `03_Flex_Templates.js`)**：
+  - **根本原因排查**：先前 `handleSignup` 依然直接讀取主試算表 `Signups` 表比對資料。當使用者在 Supabase 刪除某筆活動報名時，因主試算表殘留歷史舊列，導致 LINE Bot 誤判隊員「已經報名過」，直接阻擋了正常出隊登記；`_checkProfileComplete` 亦存在讀取試算表舊資料的延遲問題。
+  - **架構修復**：
+    - 新增通用查詢函式 `_supabaseGet(table, queryParams)`，以 Service Role Key 統一安全檢索 Supabase REST API。
+    - **重複報名檢驗 100% 直查 Supabase `event_signups` 表**：只在 Supabase 存在非「取消」狀態之記錄時才提示已報名；若 Supabase 查無記錄或狀態為已取消，一律判定未報名並放行！
+    - **試算表舊列覆蓋防呆**：若主試算表剛好殘留該活動的歷史髒資料列，系統在登記時直接就地覆蓋更新，確保主試算表不會產生幽靈重複列。
+    - **個資檢核直查 Supabase `members` 表**：以資料庫最新個資為準進行防呆比對，完全不觸碰試算表。
+- **主試算表增刪完全鏡像同步與全表 DELETE 支援 (`05_Sync_Worker.js`)**：
+  - **根本原因排查**：先前 `Sync_Worker` 僅處理 UPDATE，完全未傳入與處理 `item.action`。當 Supabase 刪除資料、DB Trigger 送出 `action: 'DELETE'` 時，GAS 未執行刪除，導致主試算表永遠留存幽靈資料。
+  - **全資料表 DELETE 鏡像實作**：
+    - `Signups`：依專屬碼或 `line_user_id + event_id` 找到列號，執行 `sheet.deleteRow(targetRow)`。
+    - `Members`：依 `line_user_id` 精準 `deleteRow`。
+    - `Events`：依活動編號精準 `deleteRow`。
+    - `Equipments`：依裝備代號精準 `deleteRow`。
+    - `Loan_Records`：依租借單號倒序清除該單號之所有明細列。
+    - `Payments`：依繳費單號精準 `deleteRow`。
+    - `Reflections`：依 `event_id + line_user_id` 精準 `deleteRow`。
+  - **補齊 `Signups` 表 INSERT 分支**：當試算表無此專屬碼時，自動依 22 欄標準表頭新增一列。
+  - **新增資料自癒修剪引擎 (`reconcileSignupsWithSupabase`)**：可一鍵或排程比對 Supabase 有效名冊，自動修剪並清除 Google Sheets 中的所有歷史孤兒幽靈列。
+- **有意願成為幹部即時推播幹部管理群組 (`06_Helper_Services.js`)**：
+  - **根本原因排查**：`_handleNotifyProfileSaved` 過去只推播隊員本人，完全未檢查 `intendOfficer`，導致幹部無法及時得知新成員的招募意願。
+  - **功能實作**：精準偵測 `formData.intendOfficer`，若填寫有意願，即刻格式化專屬招募卡片並透過 `pushAdminMessage` 推播至幹部群組，包含姓名、系所、學號、電話、Line ID、經歷與擔任意願，便利幹部第一時間主動聯繫。
+- **實作裝備照片更新 Helper API (`update_equipment_images`) (`06_Helper_Services.js`)**：
+  - **根本原因排查**：前端 `EquipmentDetailModal.tsx` 呼叫 `action: 'update_equipment_images'`，但 GAS 端 Action 路由表未註冊該 API，拋出「未支援的 Helper Action: update_equipment_images」。
+  - **功能實作**：完整實作 `_handleUpdateEquipmentImages`，自動將新上傳照片寫入 Google Drive 裝備專屬目錄（`裝備照片/{裝備名稱}/`），取得直連網址，並同步更新 Supabase `equipments.image_url` 與主試算表 `Equipments` 表之圖片網址。
+- **測試與驗證 (Verification)**：
+  - 單檔合併：`src/gas.js` 重新生成，`node -c src/gas.js` 0 語法錯誤。
+  - 單元測試：`pnpm test` 73/73 項測試 100% 全數通過（新增 Suite 15）。
+  - 前端打包：`pnpm run build` 成功建置。
+
+
+### 173. 活動報名個資防呆檢查、自動報名寫入雙軌同步與幹部群組 @Mention 專屬助理機制 (v0.1.73)
+- **活動報名個資防呆檢查與自動報名全流程恢復 (`03_Flex_Templates.js`)**：
+  - **核心問題**：先前隊員點擊「一鍵報名 Sign Up」時，系統過度簡化，一律跳出「🎉 準備報名【活動】！請點擊下方專屬連結確認您的報名資料並送出...」之靜態訊息，缺乏自動檢查防呆與自動寫入機制。
+  - **個資防呆檢查函式 (`_checkProfileComplete`)**：
+    - 嚴格比對社員基本資料，針對活動投保與出隊需求，依序檢驗 10 項關鍵欄位：
+      - 姓名、性別、電話
+      - 生日 (Birthday)、身分證字號 / 居留證號 (ID Number)、聯絡地址 (Address)
+      - 緊急聯絡人姓名、關係、電話
+      - 爬山經驗、體能與登頂證明
+    - 若檢驗出任一欄位缺漏，即時以清單逐項條列（例如 `👉 生日 (Birthday)`、`👉 緊急聯絡人電話`），並附上資料填寫連結引導隊員補足，絕不放行缺失資料。
+  - **資料齊全自動報名 (`handleSignup`)**：
+    - 當隊員個資完整時，系統自動產生專屬報名碼（格式 `SMMddHHmmss`）。
+    - 自動寫入主試算表 `Signups` 表 22 欄標準表頭結構，並標記為正取或備取。
+    - 即時透過 `_syncSignupToSupabase` 同步寫入 Supabase `event_signups` 資料表。
+    - 透過 LINE Messaging API 回傳正式報名收據卡片（含姓名、活動名稱、專屬碼、報名時間與繳費指引）。
+- **幹部群組 @Mention 原生識別與專屬助理指引卡片 (`02_LineBot_Webhook.js`)**：
+  - **原生 @Mention 識別**：精確解析 LINE Webhook `mention.mentionees[].isSelf === true` 與「小岳」文字前綴。
+  - **幹部專屬助理引導**：當幹部在群組單純 `@小岳`、輸入「小岳 幹部系統」或進行日常招呼時，精確回傳指定幹部後台引導卡片：
+    - 標題：`🌲 幹部專屬助理小岳在此！`
+    - 提供直達活動後台之專屬網址：`👉 https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents`。
+    - 提示操作方式與查詢規範。
+  - **群組嚴格靜默防洗版**：群組中若未被 @ 或未呼叫「小岳」，系統嚴格保持靜默（`return`），杜絕機器人插嘴暴走。
+- **堅持 Web-First 架構理念**：
+  - 響應使用者需求，不再於 LINE 聊天室回傳落落長的文字版「個人狀態」或「取消預約」，所有管理與狀態操作全面引導至 LIFF 現代化響應式介面操作。
+- **測試與驗證 (Verification)**：
+  - 語法校驗：`node -c src/gas.js` 0 語法錯誤。
+  - 測試套件：`pnpm test` 69/69 單元測試 100% 通過（新增 Suite 14：個資防呆檢查、幹部群組識別與服務選單測試）。
+  - 前端打包：`pnpm run build` 成功建置。
+
 
 ### 172. 更多服務選單 100% 還原圖二「幫助中心」、最新活動輪播 sendEventList 恢復與 LINE 400 靜默失敗根除 (v0.1.72)
 - **100% 還原圖二「🛠️ 聯絡與支援 / 幫助中心」選單 (`03_Flex_Templates.js`, `02_LineBot_Webhook.js`)**：

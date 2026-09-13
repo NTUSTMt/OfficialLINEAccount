@@ -173,3 +173,113 @@ function _getSpreadsheet() {
   return null;
 }
 
+// 動態查找「與緊急聯絡人關係」欄位索引（防呆：排除登山經驗相關欄位，鎖定緊急關係）
+function _findEmerRelColIdx(headers) {
+  if (!headers || !headers.length) return -1;
+  var bestIdx = -1;
+  var fallbackIdx = -1;
+  for (var i = 0; i < headers.length; i++) {
+    var hStr = String(headers[i]);
+    if (hStr.includes("經驗") || hStr.includes("登山") || hStr.includes("爬山") || hStr.includes("經歷") || hStr.toLowerCase().includes("exp")) {
+      continue;
+    }
+    var isRel = hStr.includes("關係") || hStr.toLowerCase().includes("relation");
+    if (!isRel) continue;
+
+    var isEmer = hStr.includes("緊急") || hStr.toLowerCase().includes("emergency");
+    if (isEmer) return i;
+    if (fallbackIdx === -1) fallbackIdx = i;
+  }
+  return fallbackIdx;
+}
+
+// 提取指定 row 中的「與緊急聯絡人關係」值
+function _getEmerRelValue(headers, row) {
+  if (!headers || !row) return "";
+  var bestVal = "";
+  var fallbackVal = "";
+  for (var i = 0; i < headers.length; i++) {
+    var hStr = String(headers[i]);
+    if (hStr.includes("經驗") || hStr.includes("登山") || hStr.includes("爬山") || hStr.includes("經歷") || hStr.toLowerCase().includes("exp")) {
+      continue;
+    }
+    var isRel = hStr.includes("關係") || hStr.toLowerCase().includes("relation");
+    if (!isRel) continue;
+
+    var val = String(row[i] || "").trim();
+    if (!val) continue;
+
+    var isEmer = hStr.includes("緊急") || hStr.toLowerCase().includes("emergency");
+    if (isEmer && !bestVal) {
+      bestVal = val;
+    } else if (!fallbackVal) {
+      fallbackVal = val;
+    }
+  }
+  return bestVal || fallbackVal;
+}
+
+// 跨表查詢活動名稱 (從 Events 表根據活動編號取得名稱)
+function _getEventName(ss, eventId) {
+  if (!ss) ss = _getSpreadsheet();
+  if (!ss || !eventId) return eventId || "活動";
+  var eventSheet = ss.getSheetByName("Events");
+  if (!eventSheet) return eventId;
+  var eData = eventSheet.getDataRange().getDisplayValues();
+  if (eData.length <= 1) return eventId;
+  var eIdIdx = _fi(eData[0], "活動編號");
+  var eNameIdx = _fi(eData[0], "活動名稱");
+  for (var i = 1; i < eData.length; i++) {
+    if (eIdIdx > -1 && String(eData[i][eIdIdx]).trim() === String(eventId).trim()) {
+      return (eNameIdx > -1 && eData[i][eNameIdx]) ? eData[i][eNameIdx] : eventId;
+    }
+  }
+  return eventId;
+}
+
+// 輕量呼叫 Supabase REST API (GET)
+function _supabaseGet(table, queryParams) {
+  var props = PropertiesService.getScriptProperties();
+  var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
+  var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!sbUrl || !sbKey) {
+    console.warn("⚠️ [Supabase] 缺少 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY");
+    return null;
+  }
+
+  var queryString = "";
+  if (queryParams && typeof queryParams === "object") {
+    var parts = [];
+    for (var k in queryParams) {
+      if (Object.prototype.hasOwnProperty.call(queryParams, k)) {
+        parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(queryParams[k]));
+      }
+    }
+    if (parts.length > 0) {
+      queryString = "?" + parts.join("&");
+    }
+  }
+
+  var url = sbUrl + "/rest/v1/" + table + queryString;
+  try {
+    var res = UrlFetchApp.fetch(url, {
+      method: "get",
+      headers: {
+        "apikey": sbKey,
+        "Authorization": "Bearer " + sbKey
+      },
+      muteHttpExceptions: true
+    });
+
+    if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
+      return JSON.parse(res.getContentText());
+    } else {
+      console.warn("⚠️ [Supabase GET] HTTP " + res.getResponseCode() + " on " + table + ": " + res.getContentText());
+      return null;
+    }
+  } catch (err) {
+    console.warn("⚠️ [Supabase GET] 呼叫例外 (" + table + "): " + err.toString());
+    return null;
+  }
+}

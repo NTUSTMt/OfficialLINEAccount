@@ -509,16 +509,17 @@ body {
   transform: translateX(-50%);
   width: calc(100% - 32px);
   max-width: 568px;
-  background-color: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background-color: rgba(20, 54, 40, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   color: white;
   padding: 12px 18px;
   border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
   z-index: 90;
   cursor: pointer;
   transition: var(--transition);
@@ -526,7 +527,8 @@ body {
 
 .floating-cart-bar:hover {
   transform: translate(-50%, -2px);
-  background-color: #0f172a;
+  background-color: rgba(25, 65, 48, 0.95);
+  box-shadow: 0 14px 28px -5px rgba(0, 0, 0, 0.35), 0 10px 12px -6px rgba(0, 0, 0, 0.35);
 }
 
 .floating-cart-info {
@@ -563,6 +565,45 @@ body {
   font-size: 18px;
   font-weight: 800;
   color: white;
+}
+
+.view-cart-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 8px 16px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  outline: none;
+  line-height: 1;
+}
+
+.view-cart-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: scale(1.02);
+}
+
+.view-cart-btn:active {
+  transform: scale(0.98);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.view-cart-btn svg {
+  flex-shrink: 0;
+  color: #ffffff;
+  display: block;
 }
 
 .floating-checkout-btn {

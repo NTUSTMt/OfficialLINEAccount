@@ -21,6 +21,10 @@ interface SupabaseEquipmentRow {
   total_qty?: number;
   available_qty?: number;
   is_borrowable?: boolean;
+  price_2day?: number;
+  price_extra_day?: number;
+  price?: number;
+  price_extra?: number;
   member_price_per_day?: number;
   non_member_price_per_day?: number;
   images?: string[] | string | null;
@@ -77,8 +81,8 @@ export const fetchEquipmentsFromSupabase = async (): Promise<Equipment[] | null>
         id: row.id,
         name: row.name || '未知裝備',
         remainQty: row.available_qty ?? 0,
-        price: row.member_price_per_day ?? 0,
-        priceExtra: row.non_member_price_per_day ?? 0,
+        price: row.price_2day ?? row.price ?? row.member_price_per_day ?? 0,
+        priceExtra: row.price_extra_day ?? row.price_extra ?? row.non_member_price_per_day ?? 0,
         imageUrl: imgStr,
         description: row.notes || row.specs || ''
       };

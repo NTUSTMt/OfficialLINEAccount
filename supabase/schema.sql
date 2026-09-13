@@ -148,6 +148,8 @@ CREATE TABLE IF NOT EXISTS equipments (
     is_borrowable BOOLEAN NOT NULL DEFAULT TRUE,
     member_price_per_day INTEGER NOT NULL DEFAULT 0,
     non_member_price_per_day INTEGER NOT NULL DEFAULT 0,
+    price_2day INTEGER DEFAULT 0, -- 2天基本租金 (對齊實際欄位)
+    price_extra_day INTEGER DEFAULT 0, -- 續租+1天租金 (對齊實際欄位)
     images JSONB DEFAULT '[]'::jsonb, -- Google Drive 照片連結陣列
     specs TEXT,
     notes TEXT,
@@ -155,6 +157,9 @@ CREATE TABLE IF NOT EXISTS equipments (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE equipments ADD COLUMN IF NOT EXISTS price_2day INTEGER DEFAULT 0;
+ALTER TABLE equipments ADD COLUMN IF NOT EXISTS price_extra_day INTEGER DEFAULT 0;
 
 DROP TRIGGER IF EXISTS trg_equipments_updated_at ON equipments;
 CREATE TRIGGER trg_equipments_updated_at
