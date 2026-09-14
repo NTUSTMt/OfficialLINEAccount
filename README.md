@@ -3,11 +3,54 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.106` (v0.1.106)
+- **當前版本**：`0.1.107` (v0.1.107)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 207. 修復社團系統 4 大核心問題：活動代號防覆蓋、消除多餘 Signups 頁籤、活動專屬試算表雙向同步、詳細行程簡介排版與全面直通 Supabase (v0.1.107)
+- **需求背景與核心問題排查 (Problem Identification & Root Causes)**：
+  1. **活動代號遭覆蓋為 `E2609-01`**：幹部系統新增活動時，後端取號邏輯依賴 `ss.getSheetByName("Events")`。因全量同步工作表名為小寫 `events`，導致每次取號皆判定無資料表而歸零重算，使新活動代碼永遠為 `E2609-01`，進而覆蓋舊活動。
+  2. **主試算表產生多餘 `Signups` 頁籤**：報名邏輯寫死 `ss.insertSheet("Signups")`。在全面遷移至 Supabase 儲存 (`event_signups`) 後，原大寫工作表未被匹配，反而觸發自動建立空白分頁污染主試算表。
+  3. **活動專屬獨立試算表缺乏雙向即時同步**：活動建立時 Drive 資料夾生成之「報名名冊」獨立試算表未連動；報名時無追加、取消與審核推播時未更新，且幹部在該獨立試算表調整名冊時無法反向 PATCH 回 Supabase。
+  4. **詳細活動行程缺乏簡介與排版需優化**：LINE 詳細活動卡片內文僅有行程資訊，未完整包含簡介，且結構需要更清晰易讀。
+  5. **系統全面改為直通 Supabase (SSOT)**：排查並徹底替換系統中直接查 Google Sheets（包含備用）為優先直通 Supabase REST API（AI 客服上下文、幹部驗證、活動名冊等）。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  - **1. 活動代號取號以 Supabase events 為單一信任源 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js))**：
+    - `_handleSaveEvent` 徹底改為優先查詢 Supabase `events` 表（`id=like.{prefix}-*`），以資料庫當月實際最大序號遞增 +1。
+    - 試算表備援查詢改用大小寫相容的 `_getSheetByTableName(ss, "events")`，徹底移除 `insertSheet("Events")`，絕不覆蓋舊活動。
+  - **2. 杜絕多餘 Signups 頁籤產生 ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js))**：
+    - 移除 `handleSignup` 中任何 `insertSheet("Signups")` 之呼叫。
+    - 主試算表備援寫入改為大小寫相容的 `_getSheetByTableName(ss, "event_signups")`；若試算表無該表則安靜略過，絕不再建立非預期頁籤。
+  - **3. 活動專屬獨立試算表雙向同步與守衛機制 ([gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js) & [gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js))**：
+    - **報名即時追加 (`_asyncAppendToEventSpreadsheet`)**：報名成功後自動取得活動之 `spreadsheet_id`，將報名個資、專屬碼與狀態追加至該活動專屬獨立試算表。
+    - **取消即時同步 (`_syncCancelToEventSpreadsheet`)**：社員取消報名時，自動將獨立試算表中對應專屬碼該列之狀態更新為「已取消 Cancelled」。
+    - **審核批次推播同步 (`_syncReviewToEventSpreadsheet`)**：幹部批次發送審核推播時，自動將「審核結果」與「通知狀態」同步更新至獨立試算表。
+    - **專屬試算表編輯反向 PATCH 回 Supabase (`handleSpreadsheetEdit`)**：在可安裝觸發器中擴充對報名名冊的監聽；**僅同步具備「專屬碼」之資料列**，幹部手動修改「審核結果」、「報名狀態」、「繳費狀態」或「備註」時，即時 PATCH 回 Supabase `event_signups` 表，幹部自訂的非專屬碼自用標記欄位不強行反向同步，尊重幹部的個人作業習慣。
+  - **4. LINE 詳細活動卡片排版升級 ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js))**：
+    - `sendEventDetail` 架構嚴格遵循：
+      ```text
+      【名稱】
+      {title}
+
+      【簡介】
+      {summary}
+
+      【詳細行程】
+      {itinerary}
+      ```
+    - 不使用 separator 分隔線，改以自然空行（margin 屬性）隔開，視覺精緻且簡介與行程完整呈現。
+  - **5. 全面直通 Supabase (SSOT) 改造**：
+    - **Gemini AI 上下文 ([gas_modules/04_Ai_Gemini.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/04_Ai_Gemini.js))**：`_fetchOpenEventsContext()` 優先直查 Supabase `events` 表（`status=eq.開放`），不再強制讀取試算表。
+    - **幹部名冊卡片 ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js))**：`sendOfficerMenu` 優先直查 Supabase `members` 表（`is_officer=eq.true`）。
+    - **幹部身分校驗 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js))**：`checkOfficerInternal` 優先直查 Supabase `members` 表，杜絕試算表延遲。
+    - **活動名冊查詢 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js))**：`_handleGetEventSignups` 優先直查 Supabase `event_signups` 表。
+  - **6. 單檔同步與驗證 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+    - 完整打包至單檔 `src/gas.js`，通過 `node -c` 語法檢驗。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **120/120 項測試全數通過**（新增 Suite 49，包含取號遞增防覆蓋、杜絕 Signups 頁籤、專屬試算表雙向同步、詳細行程簡介無分隔線排版、直通 Supabase 測試）。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
 
 ### 206. 補齊歷史架構差異：試算表可安裝編輯事件 (Installable onEdit) 雙向連動、Supabase 同步與 Gemini AI 知識庫擴充 (v0.1.106)
 - **需求背景與訪談分析 (Requirements & /grill-me Insights)**：

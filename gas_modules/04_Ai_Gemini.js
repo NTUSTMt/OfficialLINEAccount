@@ -61,8 +61,23 @@ function _handleGeminiChat(userId, userQuery) {
  */
 function _fetchOpenEventsContext() {
   try {
+    // 1. 優先直通 Supabase events (SSOT)
+    if (typeof _supabaseGet === "function") {
+      var sbEvents = _supabaseGet("events", { status: "eq.開放", select: "title,fee,start_date,summary,itinerary" });
+      if (Array.isArray(sbEvents) && sbEvents.length > 0) {
+        return sbEvents.map(function(ev) {
+          var title = ev.title || "";
+          var fee = ev.fee || 0;
+          var start = ev.start_date || "";
+          var desc = ev.summary || "";
+          return "• " + title + " (開始日：" + start + "，費用：$" + fee + ")：" + desc;
+        }).join("\n");
+      }
+    }
+
+    // 2. 備援讀取試算表
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName("Events");
+    var sheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "events") : (ss.getSheetByName("events") || ss.getSheetByName("Events"));
     if (!sheet) return "目前無活動資料。";
 
     var data = sheet.getDataRange().getValues();

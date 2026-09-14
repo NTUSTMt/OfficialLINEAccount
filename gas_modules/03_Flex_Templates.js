@@ -277,65 +277,84 @@ function sendEventDetail(replyToken, eventId) {
     "body": {
       "type": "box",
       "layout": "vertical",
-      "contents": [{
-        "type": "text",
-        "text": eventName,
-        "weight": "bold",
-        "size": "xl",
-        "wrap": true
-      }, {
-        "type": "box",
-        "layout": "vertical",
-        "margin": "md",
-        "spacing": "xs",
-        "contents": [{
+      "contents": [
+        {
           "type": "text",
-          "text": "費用 Cost: " + costStr,
+          "text": "【名稱】",
+          "weight": "bold",
           "size": "sm",
-          "color": "#666666",
-          "weight": "bold"
-        }, {
+          "color": "#1DB446"
+        },
+        {
           "type": "text",
-          "text": "活動時間 Event Date:",
-          "size": "sm",
-          "color": "#666666",
-          "margin": "sm"
-        }, {
+          "text": eventName,
+          "weight": "bold",
+          "size": "lg",
+          "wrap": true,
+          "margin": "xs"
+        },
+        {
           "type": "text",
-          "text": dateDisplay,
+          "text": "【簡介】",
+          "weight": "bold",
           "size": "sm",
           "color": "#1DB446",
-          "weight": "bold"
-        }, {
+          "margin": "lg"
+        },
+        {
           "type": "text",
-          "text": "報名截止 Sign Up Deadline:",
+          "text": ev.summary || "尚無簡介",
           "size": "sm",
-          "color": "#666666",
-          "margin": "sm"
-        }, {
+          "color": "#555555",
+          "wrap": true,
+          "margin": "xs"
+        },
+        {
           "type": "text",
-          "text": deadlineFormatted,
+          "text": "【詳細行程】",
+          "weight": "bold",
           "size": "sm",
-          "color": "#E53935",
-          "weight": "bold"
-        }]
-      }, {
-        "type": "separator",
-        "margin": "lg"
-      }, {
-        "type": "text",
-        "text": "【詳細行程 Itinerary】",
-        "weight": "bold",
-        "size": "sm",
-        "margin": "md"
-      }, {
-        "type": "text",
-        "text": ev.itinerary || (ev.summary || "尚無行程資訊"),
-        "size": "sm",
-        "color": "#666666",
-        "wrap": true,
-        "margin": "sm"
-      }]
+          "color": "#1DB446",
+          "margin": "lg"
+        },
+        {
+          "type": "text",
+          "text": ev.itinerary || "尚無詳細行程",
+          "size": "sm",
+          "color": "#555555",
+          "wrap": true,
+          "margin": "xs"
+        },
+        {
+          "type": "box",
+          "layout": "vertical",
+          "margin": "xl",
+          "spacing": "xs",
+          "contents": [
+            {
+              "type": "text",
+              "text": "費用 Cost: " + costStr,
+              "size": "sm",
+              "color": "#666666",
+              "weight": "bold"
+            },
+            {
+              "type": "text",
+              "text": "活動時間 Event Date: " + dateDisplay,
+              "size": "sm",
+              "color": "#1DB446",
+              "weight": "bold"
+            },
+            {
+              "type": "text",
+              "text": "報名截止 Deadline: " + deadlineFormatted,
+              "size": "sm",
+              "color": "#E53935",
+              "weight": "bold"
+            }
+          ]
+        }
+      ]
     },
     "footer": {
       "type": "box",
@@ -362,10 +381,101 @@ function sendEventDetail(replyToken, eventId) {
  * 產生幹部團隊名冊卡片 (支援職稱、頭像與負責業務)
  */
 function sendOfficerMenu(replyToken, ss) {
+  // 1. 優先直通 Supabase members 表 (is_officer: "eq.true") (SSOT)
+  try {
+    var sbOfficers = _supabaseGet("members", { is_officer: "eq.true", select: "name,role,quote,duty,photo_url" });
+    if (sbOfficers && Array.isArray(sbOfficers) && sbOfficers.length > 0) {
+      var bubbles = [];
+      for (var k = 0; k < sbOfficers.length; k++) {
+        var off = sbOfficers[k];
+        var name = String(off.name || "").trim();
+        if (!name) continue;
+        var role = String(off.role || "幹部 Officer").trim();
+        var duty = String(off.duty || "協助社團事務 Assist with club affairs").trim();
+        var quote = String(off.quote || "歡迎加入登山社！ Welcome to the club!").trim();
+        var photoUrl = String(off.photo_url || "").trim();
+        var themeColor = (role.indexOf("社長") > -1) ? "#FF9800" : "#0367D3";
+
+        var bubble = {
+          "type": "bubble",
+          "size": "micro",
+          "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [{
+              "type": "text",
+              "text": role,
+              "weight": "bold",
+              "color": themeColor,
+              "size": "sm"
+            }, {
+              "type": "text",
+              "text": name,
+              "weight": "bold",
+              "size": "xl",
+              "margin": "sm"
+            }, {
+              "type": "separator",
+              "margin": "md"
+            }, {
+              "type": "text",
+              "text": "📌 負責業務 Duties",
+              "size": "xxs",
+              "color": "#999999",
+              "margin": "md"
+            }, {
+              "type": "text",
+              "text": duty,
+              "size": "xs",
+              "color": "#333333",
+              "wrap": true,
+              "margin": "xs"
+            }, {
+              "type": "separator",
+              "margin": "md"
+            }, {
+              "type": "text",
+              "text": "💬 " + quote,
+              "size": "xs",
+              "color": "#666666",
+              "wrap": true,
+              "margin": "md",
+              "style": "italic"
+            }]
+          }
+        };
+
+        if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) && !photoUrl.includes("drive.google.com")) {
+          bubble.hero = {
+            "type": "image",
+            "url": photoUrl,
+            "size": "full",
+            "aspectRatio": "1:1",
+            "aspectMode": "cover"
+          };
+        }
+
+        bubbles.push(bubble);
+        if (bubbles.length === 10) break;
+      }
+
+      if (bubbles.length > 0) {
+        _replyFlexMessage(replyToken, "來認識一下登山社幹部吧！ / Meet the club officers!", {
+          "type": "carousel",
+          "contents": bubbles
+        });
+        return;
+      }
+    }
+  } catch (sbErr) {
+    console.warn("從 Supabase 取得幹部名冊失敗，降級至試算表:", sbErr);
+  }
+
+  // 2. 備援讀取試算表
   if (!ss) ss = _getSpreadsheet();
   if (!ss) return;
   try {
-    var sheet = ss.getSheetByName("Officers");
+    var sheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "officers") : (ss.getSheetByName("Officers") || ss.getSheetByName("officers"));
     if (!sheet) {
       _replyMessage(replyToken, "目前幹部名冊維護中。\n─────────────\nOfficer directory is currently undergoing maintenance.");
       return;
@@ -605,7 +715,7 @@ function _checkProfileComplete(userId, ss, type) {
   } else {
     // 2. 若 Supabase 連線異常，備援讀取試算表 Members 表
     if (!ss) ss = _getSpreadsheet();
-    var memberSheet = ss ? ss.getSheetByName("Members") : null;
+    var memberSheet = ss ? ((typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "members") : (ss.getSheetByName("members") || ss.getSheetByName("Members"))) : null;
     if (!memberSheet) {
       return { missingFields: ["NOT_FOUND"], p: null };
     }
@@ -638,19 +748,21 @@ function _checkProfileComplete(userId, ss, type) {
         p.emerName = mData[i][mH.findIndex(function (h) {
           return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
         })] || "";
-        p.emerRel = _getEmerRelValue(mH, mData[i]);
+        p.emerRel = mData[i][_findEmerRelColIdx(mH)] || "";
+        p.emerPhone = mData[i][mH.findIndex(function (h) {
+          return String(h).includes("電話") && String(h).includes("緊急");
+        })] || "";
         p.emerAddr = mData[i][mH.findIndex(function (h) {
           return String(h).includes("地址") && String(h).includes("緊急");
         })] || "";
-        p.emerPhone = mData[i][_fi(mH, "緊急聯絡人電話")] || "";
         p.exp = mData[i][_fi(mH, "經驗")] || "";
         p.strength = mData[i][_fi(mH, "體能")] || "";
         p.strengthProof = mData[i][_fi(mH, "證明")] || "";
         p.medicalHistory = mData[i][_fi(mH, "病史")] || "";
-
-        var payIdx = _fi(mH, "繳費狀態");
-        var paymentStatus = payIdx > -1 ? String(mData[i][payIdx]).trim() : "";
-        p.isOfficial = (paymentStatus === "已繳費 Paid" || paymentStatus === "已繳" || paymentStatus === "是") ? "是" : "否";
+        var memberStatusCol = _fi(mH, "社員狀態");
+        if (memberStatusCol > -1) {
+          p.isOfficial = String(mData[i][memberStatusCol]).indexOf("已繳費") > -1 ? "是" : "否";
+        }
         break;
       }
     }
@@ -660,22 +772,26 @@ function _checkProfileComplete(userId, ss, type) {
     }
   }
 
-  // 統一檢驗必填項目
-  if (String(p.name).trim() === "") missingFields.push("姓名 (Name)");
-  if (String(p.gender).trim() === "") missingFields.push("性別 (Gender)");
-  if (String(p.phone).trim() === "") missingFields.push("聯絡電話 (Phone)");
+  // 3. 必填欄位清單 (依據 signup / loan 檢查)
+  if (!p.name) missingFields.push("姓名");
+  if (!p.gender) missingFields.push("性別");
+  if (!p.idNumber) missingFields.push("身分證字號/居留證號");
+  if (!p.birthday) missingFields.push("生日");
+  if (!p.phone) missingFields.push("聯絡電話");
+  if (!p.department) missingFields.push("系所");
+  if (!p.studentId) missingFields.push("學號");
+  if (!p.studentAddr) missingFields.push("現居地址");
+  if (!p.email) missingFields.push("電子郵件");
+  if (!p.realLineId) missingFields.push("真實 LINE ID");
+  if (!p.emerName) missingFields.push("緊急聯絡人姓名");
+  if (!p.emerRel) missingFields.push("與緊急聯絡人關係");
+  if (!p.emerPhone) missingFields.push("緊急聯絡人電話");
+  if (!p.emerAddr) missingFields.push("緊急聯絡人現居地址");
 
-  if (type === "signup" || type === "activity") {
-    if (String(p.birthday).trim() === "") missingFields.push("生日 (Birthday)");
-    if (String(p.idNumber).trim() === "") missingFields.push("身分證/護照號碼 (ID/Passport)");
-    if (String(p.studentAddr).trim() === "") missingFields.push("聯絡地址 (Correspondence Address)");
-    if (String(p.emerName).trim() === "") missingFields.push("緊急聯絡人姓名 (Emergency Contact)");
-    if (String(p.emerRel).trim() === "") missingFields.push("與緊急聯絡人關係 (Emergency Relation)");
-    if (String(p.emerAddr).trim() === "") missingFields.push("緊急聯絡人地址 (Emergency Address)");
-    if (String(p.emerPhone).trim() === "") missingFields.push("緊急聯絡人電話 (Emergency Phone)");
-    if (String(p.strength).trim() === "") missingFields.push("體能 (Physical Fitness)");
-    if (String(p.strengthProof).trim() === "") missingFields.push("體能證明 (Proof of Physical Fitness)");
-    if (String(p.exp).trim() === "") missingFields.push("爬山經驗 (Mountaineering Experience)");
+  if (type === "signup") {
+    if (!p.exp) missingFields.push("爬山經歷");
+    if (!p.strength) missingFields.push("體能自評");
+    if (!p.strengthProof) missingFields.push("體能證明");
   }
 
   return { missingFields: missingFields, p: p };
@@ -704,7 +820,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
       }
     } else if (ss) {
       // 備援檢查 Sheets Events 表
-      var eventSheet = ss.getSheetByName("Events");
+      var eventSheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "events") : (ss.getSheetByName("events") || ss.getSheetByName("Events"));
       if (eventSheet) {
         var eData = eventSheet.getDataRange().getDisplayValues();
         if (eData.length > 1) {
@@ -782,21 +898,34 @@ function handleSignup(replyToken, userId, eventId, ss) {
       console.warn("同步報名至 Supabase 例外 (略過不影響主流程):", sbErr);
     }
 
-    // 5. 寫入主試算表 Signups 表（防呆覆蓋：若試算表殘留同人同活動舊列，覆蓋更新；否則 appendRow）
-    if (ss) {
-      var signupSheet = ss.getSheetByName("Signups");
-      if (!signupSheet) {
-        signupSheet = ss.insertSheet("Signups");
-        signupSheet.appendRow(["活動編號", "系統識別碼", "專屬碼", "活動名稱", "姓名", "性別", "LINE ID", "聯絡信箱 Email", "聯絡電話", "生日", "證件號碼", "緊急聯絡人姓名", "與緊急聯絡人關係", "爬山經驗", "緊急聯絡人聯絡地址", "體能測驗", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "聯絡地址", "緊急聯絡人電話"]);
+    // 4.1 即時追加至活動專屬獨立試算表 (若有設定獨立試算表)
+    try {
+      if (typeof _asyncAppendToEventSpreadsheet === "function") {
+        var sDataForEventSS = Object.assign({}, p, {
+          userId: userId,
+          signupCode: signupCode,
+          eventName: evName,
+          reviewStatus: "審核中 Checking",
+          payStatus: "未繳費 Unpaid"
+        });
+        _asyncAppendToEventSpreadsheet(eventId, sDataForEventSS, evName);
       }
-      var sheetHeaders = signupSheet.getRange(1, 1, 1, signupSheet.getLastColumn()).getValues()[0];
-      var relColIdx = _findEmerRelColIdx(sheetHeaders);
+    } catch (evSSErr) {
+      console.warn("同步至活動專屬試算表例外:", evSSErr);
+    }
 
-      var rowData = new Array(sheetHeaders.length).fill("");
-      function placeData(keyword, value) {
-        var idx = _fi(sheetHeaders, keyword);
-        if (idx > -1) rowData[idx] = value;
-      }
+    // 5. 備援寫入主試算表 event_signups 表（若試算表有該表則覆蓋或追加，絕不新建 Signups 表）
+    if (ss) {
+      var signupSheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "event_signups") : (ss.getSheetByName("event_signups") || ss.getSheetByName("Signups"));
+      if (signupSheet) {
+        var sheetHeaders = signupSheet.getRange(1, 1, 1, signupSheet.getLastColumn()).getValues()[0];
+        var relColIdx = _findEmerRelColIdx(sheetHeaders);
+
+        var rowData = new Array(sheetHeaders.length).fill("");
+        function placeData(keyword, value) {
+          var idx = _fi(sheetHeaders, keyword);
+          if (idx > -1) rowData[idx] = value;
+        }
 
       placeData("活動編號", eventId);
       placeData("系統識別碼", userId);
@@ -869,6 +998,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
         signupSheet.appendRow(rowData);
       }
     }
+  }
 
     // 6. 回傳確認收據
     _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n活動 (Event)：\n" + evName + "\n活動代號 (Event ID)：" + eventId + "\n報名專屬碼 (Signup Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的報名資料。\n\n⚠️ 【重要提醒 / Important Reminder】\n由於部分戶外行程有人數安全限制，此階段為「報名登記」。幹部將進行體能評估與審核，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n─────────────\nDue to safety and team size limits, this stage is registration review. Officers will assess fitness qualifications, and confirmed/waitlisted rosters will be announced via this LINE account!");

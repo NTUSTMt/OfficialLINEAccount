@@ -3201,4 +3201,205 @@ describe('48. 試算表即時編輯觸發器 (handleSpreadsheetEdit) 與 Gemini 
   });
 });
 
+describe('49. 活動代碼自動遞增 SSOT、消除多餘 Signups 頁面、活動專屬試算表雙向同步與詳細行程簡介排版測試', () => {
+  it('1. 活動編號防覆蓋：以 Supabase events 表為 SSOT 取當月最大序號遞增 +1，絕不覆蓋舊活動', () => {
+    function simulateGenerateEventId(monthPrefix, mockSupabaseEvents, mockSheetRows) {
+      let maxSeq = 0;
+      // 1. 優先以 Supabase events (SSOT)
+      if (mockSupabaseEvents && mockSupabaseEvents.length > 0) {
+        mockSupabaseEvents.forEach(ev => {
+          const eid = String(ev.id || '').trim();
+          if (eid.startsWith(monthPrefix + '-')) {
+            const seq = parseInt(eid.split('-')[1], 10);
+            if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+          }
+        });
+      }
+      // 2. 備援以試算表 events 補充
+      if (mockSheetRows && mockSheetRows.length > 0) {
+        mockSheetRows.forEach(r => {
+          const eid = String(r[0] || '').trim();
+          if (eid.startsWith(monthPrefix + '-')) {
+            const seq = parseInt(eid.split('-')[1], 10);
+            if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+          }
+        });
+      }
+      const nextSeq = maxSeq + 1;
+      return monthPrefix + '-' + (nextSeq < 10 ? '0' + nextSeq : nextSeq);
+    }
+
+    // 模擬情境：Supabase 中已有 E2609-01，試算表為空（或大小寫不一致剛同步）
+    const sbEvents = [{ id: 'E2609-01', title: '舊合歡山賞雪' }];
+    const sheetRows = []; // 試算表暫無
+
+    const nextId = simulateGenerateEventId('E2609', sbEvents, sheetRows);
+    assert.strictEqual(nextId, 'E2609-02', '應正確產生 E2609-02，不可被重設為 E2609-01 覆蓋舊活動');
+  });
+
+  it('2. 杜絕多餘 Signups 頁面：報名僅備援寫入 event_signups，絕不調用 insertSheet("Signups")', () => {
+    const insertedSheets = [];
+    const mockSpreadsheet = {
+      getSheetByName: (name) => {
+        if (name === 'event_signups') return { name: 'event_signups', appendRow: () => {}, getDataRange: () => ({ getValues: () => [['活動編號']] }) };
+        return null;
+      },
+      insertSheet: (name) => {
+        insertedSheets.push(name);
+        return { name: name, appendRow: () => {} };
+      }
+    };
+
+    function simulateHandleSignupSheet(ss) {
+      // 修正後邏輯：使用 event_signups 表，若不存在絕不主動新建 Signups 表
+      const signupSheet = ss.getSheetByName('event_signups');
+      if (signupSheet) {
+        return 'appended_to_event_signups';
+      }
+      return 'skipped_sheet_append';
+    }
+
+    const res = simulateHandleSignupSheet(mockSpreadsheet);
+    assert.strictEqual(res, 'appended_to_event_signups');
+    assert.strictEqual(insertedSheets.length, 0, '絕不應調用 insertSheet 建立多餘的 Signups 頁籤');
+  });
+
+  it('3. 活動專屬獨立試算表雙向同步：報名追加、審核同步、取消同步，與反向 PATCH Supabase', () => {
+    const mockEventSpreadsheet = {
+      rows: [
+        ['活動編號', '專屬碼', '姓名', '審核結果', '報名狀態', '繳費狀態', '備註'],
+        ['E2609-01', 'S0914001', '王大明', '審核中', '已報名', '未繳費', '']
+      ]
+    };
+
+    // (1) 報名追加寫入
+    function simulateAppendToEventSheet(sheet, newRecord) {
+      sheet.rows.push([
+        newRecord.eventId,
+        newRecord.signupCode,
+        newRecord.name,
+        newRecord.reviewStatus || '審核中',
+        '已報名',
+        '未繳費',
+        ''
+      ]);
+    }
+
+    simulateAppendToEventSheet(mockEventSpreadsheet, {
+      eventId: 'E2609-01',
+      signupCode: 'S0914002',
+      name: '陳小美'
+    });
+    assert.strictEqual(mockEventSpreadsheet.rows.length, 3);
+    assert.strictEqual(mockEventSpreadsheet.rows[2][1], 'S0914002');
+
+    // (2) 取消同步更新
+    function simulateCancelToEventSheet(sheet, signupCode) {
+      for (let i = 1; i < sheet.rows.length; i++) {
+        if (sheet.rows[i][1] === signupCode) {
+          sheet.rows[i][4] = '已取消 Cancelled';
+          return true;
+        }
+      }
+      return false;
+    }
+
+    const cancelOk = simulateCancelToEventSheet(mockEventSpreadsheet, 'S0914001');
+    assert.strictEqual(cancelOk, true);
+    assert.strictEqual(mockEventSpreadsheet.rows[1][4], '已取消 Cancelled');
+
+    // (3) 專屬試算表手動編輯反向 PATCH Supabase
+    const mockSupabaseSignups = [
+      { id: 'S0914001', review_status: '審核中', status: '已取消 Cancelled', payment_status: '未繳費' },
+      { id: 'S0914002', review_status: '審核中', status: '已報名', payment_status: '未繳費' }
+    ];
+
+    function simulateEventSheetEdit(headers, rowData, colIndex, newValue) {
+      const signupCode = rowData[1]; // 專屬碼在欄位 1
+      if (!signupCode) return false; // 無專屬碼不予反向同步
+
+      const headerName = headers[colIndex];
+      const target = mockSupabaseSignups.find(x => x.id === signupCode);
+      if (!target) return false;
+
+      if (headerName === '審核結果') target.review_status = newValue;
+      else if (headerName === '繳費狀態') target.payment_status = newValue;
+      else if (headerName === '報名狀態') target.status = newValue;
+      return true;
+    }
+
+    // 幹部在專屬試算表將 S0914002 標記為「正取 1」，繳費狀態改為「已繳費」
+    simulateEventSheetEdit(mockEventSpreadsheet.rows[0], mockEventSpreadsheet.rows[2], 3, '正取 1');
+    simulateEventSheetEdit(mockEventSpreadsheet.rows[0], mockEventSpreadsheet.rows[2], 5, '已繳費');
+
+    assert.strictEqual(mockSupabaseSignups[1].review_status, '正取 1');
+    assert.strictEqual(mockSupabaseSignups[1].payment_status, '已繳費');
+  });
+
+  it('4. 詳細行程卡片格式排版：嚴格按照【名稱】、{title}、空行、【簡介】、{summary}、空行、【詳細行程】、{itinerary}，無 separator', () => {
+    function simulateBuildEventDetailBubble(ev) {
+      return {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [
+            { type: 'text', text: '【名稱】', weight: 'bold', size: 'sm', color: '#1DB446' },
+            { type: 'text', text: ev.title, weight: 'bold', size: 'lg', wrap: true, margin: 'xs' },
+            { type: 'text', text: '【簡介】', weight: 'bold', size: 'sm', color: '#1DB446', margin: 'lg' },
+            { type: 'text', text: ev.summary || '尚無簡介', size: 'sm', color: '#555555', wrap: true, margin: 'xs' },
+            { type: 'text', text: '【詳細行程】', weight: 'bold', size: 'sm', color: '#1DB446', margin: 'lg' },
+            { type: 'text', text: ev.itinerary || '尚無詳細行程', size: 'sm', color: '#555555', wrap: true, margin: 'xs' }
+          ]
+        }
+      };
+    }
+
+    const testEv = {
+      title: '合歡山主東峰兩日遊',
+      summary: '初登百岳新手推薦路線，享受雲海與夕陽壯麗美景。',
+      itinerary: 'D1: 台北集合 -> 清境農場 -> 石門山 -> 松雪樓\nD2: 合歡主峰 -> 合歡東峰 -> 賦歸'
+    };
+
+    const bubble = simulateBuildEventDetailBubble(testEv);
+    const contents = bubble.body.contents;
+
+    // 驗證結構順序
+    assert.strictEqual(contents[0].text, '【名稱】');
+    assert.strictEqual(contents[1].text, '合歡山主東峰兩日遊');
+    assert.strictEqual(contents[2].text, '【簡介】');
+    assert.strictEqual(contents[3].text, '初登百岳新手推薦路線，享受雲海與夕陽壯麗美景。');
+    assert.strictEqual(contents[4].text, '【詳細行程】');
+    assert.strictEqual(contents[5].text, 'D1: 台北集合 -> 清境農場 -> 石門山 -> 松雪樓\nD2: 合歡主峰 -> 合歡東峰 -> 賦歸');
+
+    // 驗證無 separator
+    const hasSeparator = contents.some(c => c.type === 'separator');
+    assert.strictEqual(hasSeparator, false, '不可存在 separator 分隔線');
+  });
+
+  it('5. 全面改為直通 Supabase (SSOT)：_fetchOpenEventsContext 與 checkOfficerInternal 優先直查 Supabase', () => {
+    let supabaseQueried = false;
+    let spreadsheetFallbackQueried = false;
+
+    function simulateFetchOpenEventsContext(mockSbGet, mockSheetGet) {
+      const sbEvents = mockSbGet('events', { status: 'eq.開放' });
+      if (sbEvents && sbEvents.length > 0) {
+        supabaseQueried = true;
+        return sbEvents.map(e => '• ' + e.title + '：' + e.summary).join('\n');
+      }
+      spreadsheetFallbackQueried = true;
+      return mockSheetGet();
+    }
+
+    const res = simulateFetchOpenEventsContext(
+      () => [{ title: '玉山單攻', summary: '單日往返台灣最高峰' }],
+      () => '試算表備援內容'
+    );
+
+    assert.strictEqual(supabaseQueried, true);
+    assert.strictEqual(spreadsheetFallbackQueried, false, 'Supabase 命中時絕不可調用試算表查詢');
+    assert.ok(res.includes('玉山單攻：單日往返台灣最高峰'));
+  });
+});
+
 

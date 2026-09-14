@@ -1272,19 +1272,32 @@ function handleSpreadsheetEdit(e) {
     return;
   }
 
-  // 3. Event_Signups / Signups / 報名名冊審核處理 (同步 Supabase，不主動發送推播通知)
+  // 3. Event_Signups / Signups / 報名名冊 / 活動專屬試算表反向同步 (同步 Supabase，不主動發送推播通知)
   var isSignupsSheet = sheetName.toLowerCase() === "event_signups" || sheetName === "Signups" || sheetName.indexOf("報名") > -1;
   if (isSignupsSheet) {
-    var reviewCol = _findHeaderCol(headers, "review_status", ["審核結果", "錄取狀態"]) + 1;
-    if (reviewCol > 0 && col === reviewCol) {
-      var signupIdCol = _findHeaderCol(headers, "id", ["專屬碼", "報名編號", "signup_id"]) + 1;
-      var signupId = signupIdCol > 0 ? String(sheet.getRange(row, signupIdCol).getValue()).trim() : "";
+    var signupIdCol = _findHeaderCol(headers, "id", ["專屬碼", "報名編號", "signup_id", "專屬代碼"]) + 1;
+    var signupId = signupIdCol > 0 ? String(sheet.getRange(row, signupIdCol).getValue()).trim() : "";
 
-      if (signupId) {
-        _supabasePatch("event_signups", { id: "eq." + signupId }, { review_status: newValue });
-        Logger.log("⚡ [試算表審核同步] 已同步報名紀錄 " + signupId + " 審核結果為: " + newValue + " (不發送推播)");
+    // ⭐️ 僅同步具備專屬碼的有效資料列，幹部自訂欄位或無專屬碼的自用註記列不予干擾
+    if (signupId) {
+      var headerName = String(headers[col - 1] || "").trim().toLowerCase();
+      var patchPayload = null;
+
+      if (headerName.indexOf("審核") > -1 || headerName.indexOf("錄取") > -1 || headerName === "review_status") {
+        patchPayload = { review_status: newValue };
+      } else if (headerName.indexOf("狀態") > -1 && headerName.indexOf("繳費") === -1 && headerName.indexOf("審核") === -1 || headerName === "status") {
+        patchPayload = { status: newValue };
+      } else if (headerName.indexOf("繳費") > -1 || headerName.indexOf("付款") > -1 || headerName === "payment_status") {
+        patchPayload = { payment_status: newValue };
+      } else if (headerName.indexOf("備註") > -1 || headerName === "notes") {
+        patchPayload = { notes: newValue };
+      }
+
+      if (patchPayload) {
+        _supabasePatch("event_signups", { id: "eq." + signupId }, patchPayload);
+        Logger.log("⚡ [專屬試算表反向同步] 已同步報名紀錄 " + signupId + " (欄位 " + headers[col - 1] + " -> " + newValue + ")");
         try {
-          e.source.toast("✅ 報名審核結果 (" + newValue + ") 已同步至 Supabase！", "審核更新", 5);
+          e.source.toast("✅ 報名資料 (" + headers[col - 1] + " -> " + newValue + ") 已同步至 Supabase！", "反向同步成功", 5);
         } catch (tErr) {}
       }
     }
