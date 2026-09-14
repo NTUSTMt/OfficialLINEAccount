@@ -43,9 +43,30 @@ function syncPendingQueueFromSupabase() {
   var completedIds = [];
   var failedItems = [];
 
-  // 2. 逐筆處理異動
+  // 2. 批次去重 (按 table_name + record_id，短時間內多次異動只保留最新一筆執行，但所有舊 queue id 一併 mark completed)
+  var dedupedMap = {};
+  var itemOrder = [];
+  var redundantCompletedIds = [];
+
   for (var i = 0; i < queue.length; i++) {
-    var item = queue[i];
+    var qItem = queue[i];
+    var qPayload = qItem.payload || {};
+    var recId = qItem.record_id || qPayload.id || qPayload.signupId || qPayload.line_user_id || qPayload.orderId || ('item_' + qItem.id);
+    var dedupKey = qItem.table_name + ':' + recId;
+
+    if (dedupedMap[dedupKey]) {
+      // 舊的被覆蓋，舊 queue id 標記為完成
+      redundantCompletedIds.push(dedupedMap[dedupKey].id);
+    } else {
+      itemOrder.push(dedupKey);
+    }
+    dedupedMap[dedupKey] = qItem;
+  }
+
+  // 3. 逐筆處理去重後的最新異動
+  for (var k = 0; k < itemOrder.length; k++) {
+    var itemKey = itemOrder[k];
+    var item = dedupedMap[itemKey];
     try {
       _processSingleSyncItem(ss, item);
       completedIds.push(item.id);
@@ -53,6 +74,11 @@ function syncPendingQueueFromSupabase() {
       Logger.log("⚠️ 處理事件失敗 (Queue ID " + item.id + "): " + err.toString());
       failedItems.push({ id: item.id, error: err.toString(), retry: (item.retry_count || 0) + 1 });
     }
+  }
+
+  // 合併已因去重而被取代的舊 queue IDs
+  for (var r = 0; r < redundantCompletedIds.length; r++) {
+    completedIds.push(redundantCompletedIds[r]);
   }
 
   // 3. 批次將成功的項目標記為 completed
@@ -324,6 +350,10 @@ function _ensureColumnsExist(sheet, headers, payload) {
   var added = false;
   for (var k = 0; k < keys.length; k++) {
     var colKey = keys[k];
+    // 嚴格防止 camelCase 臨時變數 (如 signupId, reviewResult, updatedBy) 被誤加入表頭
+    if (/^[a-z]+([A-Z][a-z0-9]+)+$/.test(colKey)) {
+      continue;
+    }
     var idx = _findColByEnglishName(headers, colKey);
     if (idx === -1) {
       headers.push(colKey);
@@ -574,11 +604,31 @@ function _syncEventToSheet(ss, p, action) {
 
 function _syncSignupToSheet(ss, p, action) {
   if (!p) return;
+
+  // 1. 欄位別名正規化 (相容舊 RPC 或前端 camelCase 傳入)
+  if (p.signupId && !p.id) p.id = p.signupId;
+  if (p.eventId && !p.event_id) p.event_id = p.eventId;
+  if (p.reviewResult && !p.status) p.status = p.reviewResult;
+  if (p.lineUserId && !p.line_user_id) p.line_user_id = p.lineUserId;
+
   var sheet = _getSheetByTableName(ss, "event_signups");
   if (!sheet) return;
   var data = sheet.getDataRange().getValues();
   var headers = data[0] || [];
-  headers = _ensureColumnsExist(sheet, headers, p);
+
+  // 2. 嚴格過濾掉非標準 Schema 欄位，防止在主試算表長出 N, O, P, Q 欄
+  var allowedCols = [
+    "id", "event_id", "line_user_id", "status", "payment_status",
+    "role", "paid_amount", "assigned_driver", "notes", "created_at", "updated_at"
+  ];
+  var sanitizedPayload = {};
+  for (var key in p) {
+    if (allowedCols.indexOf(key) > -1) {
+      sanitizedPayload[key] = p[key];
+    }
+  }
+
+  headers = _ensureColumnsExist(sheet, headers, sanitizedPayload);
 
   var sIdx = _findHeaderCol(headers, "id", ["專屬碼"]);
   var uIdx = _findHeaderCol(headers, "line_user_id", ["系統識別碼"]);
@@ -597,36 +647,151 @@ function _syncSignupToSheet(ss, p, action) {
     }
   }
 
-  // 1. 處理 DELETE 刪除事件
+  // 3. 處理 DELETE 刪除事件
   if (action === "DELETE") {
     if (targetRow > -1) {
       sheet.deleteRow(targetRow);
       Logger.log("🗑️ 已從 event_signups 表刪除報名紀錄: " + (p.id || (p.line_user_id + "_" + p.event_id)));
     }
+    // 同步取消活動專屬獨立試算表
+    if (typeof _syncCancelToEventSpreadsheet === "function") {
+      _syncCancelToEventSpreadsheet(p.event_id, p.line_user_id, p.id, p.notes || "系統同步取消");
+    }
     return;
   }
 
-  // 2. 處理既有列 UPDATE
+  // 4. 處理既有列 UPDATE
   if (targetRow > -1) {
-    for (var k in p) {
+    for (var k in sanitizedPayload) {
       var cIdx = _findHeaderCol(headers, k);
-      if (cIdx > -1 && p[k] !== undefined) {
-        var val = p[k];
+      if (cIdx > -1 && sanitizedPayload[k] !== undefined) {
+        var val = sanitizedPayload[k];
         sheet.getRange(targetRow, cIdx + 1).setValue((typeof val === "object" && val !== null) ? JSON.stringify(val) : val);
       }
     }
   } else {
-    // 3. 處理 INSERT 新增分支
+    // 5. 處理 INSERT 新增分支 (防呆：必須具備有效 id 或 line_user_id 才允許 appendRow，避免幽靈空白列)
+    if (!p.id && !p.line_user_id) {
+      Logger.log("⚠️ 略過無效之報名資料 (缺少 id 與 line_user_id)");
+      return;
+    }
     var newRow = new Array(headers.length).fill("");
-    for (var k in p) {
+    for (var k in sanitizedPayload) {
       var cIdx = _findHeaderCol(headers, k);
       if (cIdx > -1) {
-        var val = p[k];
+        var val = sanitizedPayload[k];
         newRow[cIdx] = (typeof val === "object" && val !== null) ? JSON.stringify(val) : (val !== undefined && val !== null ? val : "");
       }
     }
     sheet.appendRow(newRow);
     Logger.log("➕ 已新增報名紀錄至 event_signups 表: " + (p.id || p.line_user_id));
+  }
+
+  // 6. ⚡ 異步同步至該活動專屬獨立試算表 (依 events.spreadsheet_id)
+  _syncSignupToEventSpecificSheet(p);
+}
+
+/**
+ * ⚡ 將 Supabase 異動之報名紀錄同步更新至該活動的專屬獨立試算表
+ */
+function _syncSignupToEventSpecificSheet(p) {
+  if (!p || !p.event_id) return;
+  try {
+    var eventId = p.event_id;
+    var ssId = "";
+    var evts = (typeof _supabaseGet === "function") 
+      ? _supabaseGet("events", { id: "eq." + eventId, select: "title,spreadsheet_id,spreadsheet_url" })
+      : [];
+    if (evts && evts.length > 0) {
+      if (evts[0].spreadsheet_id && typeof _extractSpreadsheetId === "function") {
+        ssId = _extractSpreadsheetId(evts[0].spreadsheet_id);
+      }
+      if (!ssId && evts[0].spreadsheet_url && typeof _extractSpreadsheetId === "function") {
+        ssId = _extractSpreadsheetId(evts[0].spreadsheet_url);
+      }
+    }
+    if (!ssId) return;
+
+    var eventSS = SpreadsheetApp.openById(ssId);
+    var sheet = eventSS.getSheetByName("報名名冊") || eventSS.getSheets()[0];
+    if (!sheet) return;
+
+    var sData = sheet.getDataRange().getValues();
+    var sHeaders = (sData.length > 0) ? sData[0] : [];
+    if (sHeaders.length === 0) return;
+
+    var targetRow = -1;
+    var codeIdx = _findHeaderCol(sHeaders, "id", ["專屬碼", "報名編號"]);
+    var uidIdx = _findHeaderCol(sHeaders, "line_user_id", ["系統識別碼", "userId"]);
+
+    for (var r = 1; r < sData.length; r++) {
+      var rCode = codeIdx > -1 ? String(sData[r][codeIdx]).trim() : "";
+      var rUid = uidIdx > -1 ? String(sData[r][uidIdx]).trim() : "";
+      if ((p.id && rCode === String(p.id).trim()) ||
+          (p.line_user_id && rUid === String(p.line_user_id).trim())) {
+        targetRow = r + 1;
+        break;
+      }
+    }
+
+    // 取得欄位索引
+    var statusIdx = _findHeaderCol(sHeaders, "review_status", ["審核結果", "錄取狀態"]);
+    var payStatusIdx = _findHeaderCol(sHeaders, "payment_status", ["繳費狀態"]);
+    var notesIdx = _findHeaderCol(sHeaders, "notes", ["備註"]);
+    var driverIdx = _findHeaderCol(sHeaders, "assigned_driver", ["車手分派", "車手", "司機"]);
+
+    if (targetRow > -1) {
+      if (statusIdx > -1 && p.status !== undefined) {
+        sheet.getRange(targetRow, statusIdx + 1).setValue(p.status);
+      }
+      if (payStatusIdx > -1 && p.payment_status !== undefined) {
+        sheet.getRange(targetRow, payStatusIdx + 1).setValue(p.payment_status);
+      }
+      if (notesIdx > -1 && p.notes !== undefined) {
+        sheet.getRange(targetRow, notesIdx + 1).setValue(p.notes);
+      }
+      if (driverIdx > -1 && p.assigned_driver !== undefined) {
+        sheet.getRange(targetRow, driverIdx + 1).setValue(p.assigned_driver);
+      }
+      Logger.log("⚡ [EventSheet] 成功同步報名紀錄至獨立試算表 " + ssId + " 第 " + targetRow + " 列");
+    } else {
+      // 獨立試算表尚無此人列，若具備完整資訊或能從 Supabase 補齊則追加
+      if (typeof _appendToEventSpreadsheet === "function") {
+        var signupData = {
+          signupCode: p.id,
+          userId: p.line_user_id,
+          reviewStatus: p.status || "審核中",
+          paymentStatus: p.payment_status || "未繳費",
+          notes: p.notes || ""
+        };
+        // 嘗試撈取 member 補齊基本資料
+        if (p.line_user_id && typeof _supabaseGet === "function") {
+          var mems = _supabaseGet("members", { line_user_id: "eq." + p.line_user_id, select: "*" });
+          if (mems && mems.length > 0) {
+            var m = mems[0];
+            signupData.name = m.name;
+            signupData.gender = m.gender;
+            signupData.phone = m.phone;
+            signupData.email = m.email;
+            signupData.realLineId = m.line_id;
+            signupData.birthday = m.birthday;
+            signupData.idNumber = m.id_card;
+            signupData.studentAddr = m.address;
+            signupData.emerName = m.emergency_contact_name;
+            signupData.emerPhone = m.emergency_contact_phone;
+            signupData.emerAddr = m.emergency_contact_address;
+            signupData.emerRel = m.emergency_contact_rel;
+            signupData.exp = m.outdoor_experience;
+            signupData.strength = m.fitness_desc;
+            signupData.strengthProof = m.proof_urls;
+            signupData.isMember = m.is_official_member;
+          }
+        }
+        _appendToEventSpreadsheet(eventId, signupData, (evts && evts[0] && evts[0].title) || "");
+      }
+    }
+  } catch (err) {
+    Logger.log("⚠️ [EventSheet] 同步至獨立試算表異常: " + err.toString());
   }
 }
 

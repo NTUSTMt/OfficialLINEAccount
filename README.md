@@ -3,11 +3,45 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.110` (v0.1.110)
+- **當前版本**：`0.1.111` (v0.1.111)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 211. 獨立試算表異步同步、sync_queue 去重防擴表、Email 單鍵核銷連動與個人主頁狀態解耦 (v0.1.111)
+- **需求背景與根本原因排查 (Problem Identification & Root Causes)**：
+  1. **活動專屬獨立試算表未隨 Supabase 更新同步**：
+     - 先前系統僅在報名送出當下執行試算表寫入，後續審核狀態（正取/備取）或繳費狀態變更時，並未非同步更新活動專屬獨立試算表（依 `events.spreadsheet_id` 識別）。
+  2. **主試算表短時間內重複抓取多次，且表尾自創 N, O, P, Q 欄（`signupId`, `eventId`, `reviewResult`, `updatedBy`）**：
+     - Supabase `update_signup_status_rpc` 先前手動寫入未經規範的 camelCase 鍵名至 `sync_queue`，導致背景 Worker 比對不到標準 `id` 欄位，判定為新列而重複 `appendRow`，且動態比對表頭時把這四個 camelCase 欄位追加至試算表最右端。
+     - 短時間內同筆資料被連續編輯時，`sync_queue` 缺乏批次去重（Deduplication）機制。
+  3. **個人主頁報名狀態錯置**：
+     - 申報繳費後，已審核正取的測試活動顯示「正取 未繳費」，未審核活動卻顯示「審核中 待確認」。
+     - 根本原因在於 `get_my_dashboard` RPC 使用 `s.status::text LIKE '%Checking%'` 判斷繳費狀態（`payStatus`），而 `event_signup_status_enum` 預設審核中即包含 `'審核中 Checking'`，導致任何未審核活動被誤判為繳費待確認；正取不含 Checking 則直接掉入未繳費。
+  4. **個人主頁裝備租借缺乏繳費狀態標籤**：
+     - 舊版 `get_my_dashboard` 未在 `v_equipments` 聚合輸出 `loans.payment_status`，使用者無法確認裝備租借是否已完成繳費或待繳費。
+  5. **Email 核銷訊息缺乏單鍵確認與連動更新**：
+     - 幹部收到繳費申報 Email 需一鍵點擊確認無誤；點擊完成核銷後，系統需自動連動將對應的活動報名、社費、裝備租借更新為「已繳費 Paid」，並主動推播通知幹部管理群組 (`ADMIN_GROUP_ID`)。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  1. **個人主頁 Dashboard 繳費狀態解耦與裝備租借標籤 ([supabase/fix_dashboard_and_sync_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_dashboard_and_sync_rpc.sql), [src/pages/Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx), [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts))**：
+     - 升級 `get_my_dashboard` RPC：報名繳費狀態直接依真實欄位 `s.payment_status` 判定（`已繳費 Paid`、`待確認 Checking`、`未繳費 Unpaid`），與審核狀態徹底解耦。
+     - `v_equipments` 增加輸出 `payStatus`（來自 `loans.payment_status`）。
+     - 前端裝備卡片支援顯示繳費狀態標籤，並於未繳費時呈現「前往繳費」快速導航按鈕。
+  2. **sync_queue 批次去重與試算表欄位防擴展守衛 ([gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - `syncPendingQueueFromSupabase` 導入批次按 `table_name + ':' + record_id` 去重演算法，短時間內多次異動只對試算表寫入最新一筆，所有舊 queue ID 一併標記為 `completed`。
+     - `_ensureColumnsExist` 增加正則守衛 `/^[a-z]+([A-Z][a-z0-9]+)+$/`，嚴格禁止 camelCase 暫存欄位擴展試算表表頭。
+     - `_syncSignupToSheet` 支援欄位別名正規化 (`signupId -> id` 等)，並設置防呆機制杜絕幽靈空白列。
+  3. **活動專屬獨立試算表異步同步 ([gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 實作 `_syncSignupToEventSpecificSheet(p)`：同步更新主試算表後，自動依據 `events.spreadsheet_id` 定位活動專屬試算表，精確更新對應列的審核狀態、繳費狀態與車手分派。
+  4. **Email HTML「確認無誤」按鈕與核銷全自動連動 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - `sendAdminEmail` 自動解析單鍵核銷連結並生成 HTML 綠色單鍵核銷大按鈕「✅ 確認無誤（點擊完成核銷）」。
+     - `_processPaymentVerification`：在將 `payments` 標記為 `已核銷 Confirmed` 後，自動連動更新對應之活動報名 (`event_signups.payment_status` 為 `已繳費 Paid`，正取則升級為 `正取（已繳費）Confirmed (Paid)`)、社費 (`members.payment_status` 為 `已繳費 Paid`，`is_official_member` 為 `true`)、裝備租借 (`loans.payment_status` 為 `已繳費 Paid`)。
+     - 核銷成功後，同步推播即時通知至幹部管理群組 (`ADMIN_GROUP_ID`)。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **138/138 項測試全數通過（35 suites passed, 0 failures）**（新增 Suite 53 覆蓋去重、防擴表、獨立試算表同步、核銷連動與 Dashboard 狀態）。
+  - 語法檢驗：`node -c` 檢驗全模組 0 錯誤。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
 
 ### 210. 報名名冊個資生日標準格式化、GAS 幹部鑑權修復與 Supabase 審核狀態 Enum 轉型 (v0.1.110)
 - **需求背景與根本原因排查 (Problem Identification & Root Causes)**：

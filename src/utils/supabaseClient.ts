@@ -236,6 +236,7 @@ export interface DashboardEquipmentData {
   pickupDate: string;
   returnDate: string;
   status: string;
+  payStatus?: string;
 }
 
 export interface SupabaseDashboardData {

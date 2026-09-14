@@ -45,6 +45,7 @@ interface EquipmentData {
   pickupDate: string;
   returnDate: string;
   status: string;
+  payStatus?: string;
 }
 
 interface DashboardData {
@@ -758,18 +759,31 @@ function Dashboard({ userId }: { userId: string }) {
                       <FileText size={12} color="#64748b" />
                       <span>{t('dashboard.equipment.orderId', { id: eq.orderId })}</span>
                     </span>
-                    <span 
-                      style={{
-                        fontSize: '11px',
-                        padding: '3px 8px',
-                        borderRadius: '6px',
-                        fontWeight: 'bold',
-                        color: eq.status.indexOf('待退款') > -1 ? '#c2410c' : eq.status.indexOf('已歸還') > -1 ? '#047857' : eq.status.indexOf('使用中') > -1 ? '#2563eb' : '#b45309',
-                        backgroundColor: eq.status.indexOf('待退款') > -1 ? '#ffedd5' : eq.status.indexOf('已歸還') > -1 ? '#d1fae5' : eq.status.indexOf('使用中') > -1 ? '#dbeafe' : '#fef3c7'
-                      }}
-                    >
-                      {getEquipmentStatusText(eq.status)}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <span 
+                        style={{
+                          fontSize: '11px',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontWeight: 'bold',
+                          color: eq.status.indexOf('待退款') > -1 ? '#c2410c' : eq.status.indexOf('已歸還') > -1 ? '#047857' : eq.status.indexOf('使用中') > -1 ? '#2563eb' : '#b45309',
+                          backgroundColor: eq.status.indexOf('待退款') > -1 ? '#ffedd5' : eq.status.indexOf('已歸還') > -1 ? '#d1fae5' : eq.status.indexOf('使用中') > -1 ? '#dbeafe' : '#fef3c7'
+                        }}
+                      >
+                        {getEquipmentStatusText(eq.status)}
+                      </span>
+                      {eq.payStatus && (
+                        <span 
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            color: (eq.payStatus.includes('已繳') || eq.payStatus.includes('Paid')) ? '#047857' : (eq.payStatus.includes('待確認') || eq.payStatus.includes('Checking')) ? '#2563eb' : '#ef4444'
+                          }}
+                        >
+                          {getPayStatusText(eq.payStatus)}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <h4 style={{ margin: '4px 0 6px 0', fontSize: '15px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
@@ -784,34 +798,53 @@ function Dashboard({ userId }: { userId: string }) {
                     </span>
                   </div>
 
-                  {eq.status === '待領取 To Be Collected' && (
-                    <button
-                      onClick={() => handleCancelLoan(eq.orderId)}
-                      disabled={isCanceling}
-                      style={{
-                        backgroundColor: 'transparent',
-                        color: '#ef4444',
-                        border: '1px solid #fca5a5',
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        fontWeight: 'bold',
-                        fontSize: '12px',
-                        cursor: isCanceling ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.2s',
-                        alignSelf: 'flex-end',
-                        marginTop: '4px',
-                        opacity: isCanceling ? 0.6 : 1
-                      }}
-                      onMouseOver={(e) => {
-                        if (!isCanceling) e.currentTarget.style.backgroundColor = '#fef2f2';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      {t('dashboard.equipment.cancelBtn')}
-                    </button>
-                  )}
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                    {eq.payStatus && (eq.payStatus.includes('未繳') || eq.payStatus.includes('Unpaid')) && eq.status.indexOf('已取消') === -1 && (
+                      <button
+                        onClick={() => navigate('/payment')}
+                        style={{
+                          backgroundColor: '#059669',
+                          color: 'white',
+                          border: 'none',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontWeight: 'bold',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {t('dashboard.action.pay', '前往繳費')}
+                      </button>
+                    )}
+
+                    {eq.status === '待領取 To Be Collected' && (
+                      <button
+                        onClick={() => handleCancelLoan(eq.orderId)}
+                        disabled={isCanceling}
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: '#ef4444',
+                          border: '1px solid #fca5a5',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontWeight: 'bold',
+                          fontSize: '12px',
+                          cursor: isCanceling ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s',
+                          opacity: isCanceling ? 0.6 : 1
+                        }}
+                        onMouseOver={(e) => {
+                          if (!isCanceling) e.currentTarget.style.backgroundColor = '#fef2f2';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                      >
+                        {t('dashboard.equipment.cancelBtn')}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

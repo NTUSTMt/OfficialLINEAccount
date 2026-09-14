@@ -47,7 +47,7 @@ BEGIN
         );
     END IF;
 
-    -- 2. 查詢該社員所報名的歷史與近期活動
+    -- 2. 查詢該社員所報名的歷史與近期活動 (直接由 s.payment_status 判定繳費狀態)
     SELECT COALESCE(jsonb_agg(act), '[]'::jsonb)
     INTO v_activities
     FROM (
@@ -57,8 +57,9 @@ BEGIN
             'date', to_char(e.start_date, 'YYYY/MM/DD') || CASE WHEN e.end_date != e.start_date THEN ' ~ ' || to_char(e.end_date, 'YYYY/MM/DD') ELSE '' END,
             'reviewStatus', s.status,
             'payStatus', CASE 
+                WHEN COALESCE(s.payment_status, '')::text LIKE '%已繳費%' OR COALESCE(s.payment_status, '')::text LIKE '%Paid%' THEN '已繳費 Paid'
+                WHEN COALESCE(s.payment_status, '')::text LIKE '%待確認%' OR COALESCE(s.payment_status, '')::text LIKE '%Checking%' THEN '待確認 Checking'
                 WHEN s.status::text LIKE '%已繳費%' OR s.status::text LIKE '%Paid%' THEN '已繳費 Paid'
-                WHEN s.status::text LIKE '%待確認%' OR s.status::text LIKE '%Checking%' THEN '待確認 Checking'
                 ELSE '未繳費'
             END,
             'code', s.id
@@ -69,7 +70,7 @@ BEGIN
         ORDER BY e.start_date DESC
     ) t;
 
-    -- 3. 查詢該社員的所有裝備租借紀錄 (由 loans 與 loan_items, equipments 聚合)
+    -- 3. 查詢該社員的所有裝備租借紀錄 (由 loans 與 loan_items, equipments 聚合，包含 payStatus)
     SELECT COALESCE(jsonb_agg(eq), '[]'::jsonb)
     INTO v_equipments
     FROM (
@@ -86,7 +87,12 @@ BEGIN
             ),
             'pickupDate', to_char(l.start_date, 'YYYY/MM/DD'),
             'returnDate', to_char(l.end_date, 'YYYY/MM/DD'),
-            'status', l.status
+            'status', l.status,
+            'payStatus', CASE 
+                WHEN COALESCE(l.payment_status, '')::text LIKE '%已繳費%' OR COALESCE(l.payment_status, '')::text LIKE '%Paid%' THEN '已繳費 Paid'
+                WHEN COALESCE(l.payment_status, '')::text LIKE '%待確認%' OR COALESCE(l.payment_status, '')::text LIKE '%Checking%' THEN '待確認 Checking'
+                ELSE '未繳費'
+            END
         ) AS eq
         FROM loans l
         WHERE l.line_user_id = p_line_user_id

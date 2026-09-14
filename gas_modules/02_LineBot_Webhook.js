@@ -307,6 +307,69 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
       muteHttpExceptions: true
     });
 
+    // 2.5 連動更新 Supabase 對應子項目繳費狀態 (活動報名、社費、裝備租借)
+    var selTypes = payment.selected_types || [];
+    if (typeof selTypes === 'string') {
+      try { selTypes = JSON.parse(selTypes); } catch (e) { selTypes = [selTypes]; }
+    }
+    var itemsStr = String(payment.items || "") + " " + String(payment.selected_names || "");
+
+    // A. 活動報名連動 (若含有活動 ID 或申報項目包含活動)
+    var targetEvtId = payment.target_event_id || payment.event_id;
+    if (targetUserId) {
+      var signupQuery = { line_user_id: "eq." + targetUserId };
+      if (targetEvtId) {
+        signupQuery.event_id = "eq." + targetEvtId;
+      }
+      var signups = (typeof _supabaseGet === "function") ? _supabaseGet("event_signups", signupQuery) : [];
+      if (signups && signups.length > 0) {
+        for (var s = 0; s < signups.length; s++) {
+          var curStatus = signups[s].status || "";
+          var newStatus = curStatus;
+          // 若原本為正取，繳費核銷後同步升級為「正取（已繳費）Confirmed (Paid)」
+          if (curStatus.indexOf("正取") > -1 && curStatus.indexOf("已繳費") === -1) {
+            newStatus = "正取（已繳費）Confirmed (Paid)";
+          }
+          if (typeof _supabasePatch === "function") {
+            _supabasePatch("event_signups", { id: "eq." + signups[s].id }, {
+              payment_status: "已繳費 Paid",
+              status: newStatus,
+              updated_at: nowIso
+            });
+          }
+        }
+      }
+    }
+
+    // B. 社費連動 (若 selected_types 包含 membership，或申報包含社費)
+    var isMembership = (Array.isArray(selTypes) && selTypes.indexOf("membership") > -1) ||
+      itemsStr.indexOf("社費") > -1 || itemsStr.indexOf("Membership") > -1;
+    if (isMembership && targetUserId && typeof _supabasePatch === "function") {
+      _supabasePatch("members", { line_user_id: "eq." + targetUserId }, {
+        payment_status: "已繳費 Paid",
+        is_official_member: true,
+        updated_at: nowIso
+      });
+    }
+
+    // C. 裝備租借連動 (若含有 loan_id 或申報包含租借/裝備)
+    var targetLoanId = payment.target_loan_id || payment.loan_id;
+    var isLoan = (Array.isArray(selTypes) && (selTypes.indexOf("equipment") > -1 || selTypes.indexOf("loan") > -1)) ||
+      itemsStr.indexOf("租借") > -1 || itemsStr.indexOf("裝備") > -1 || !!targetLoanId;
+    if (isLoan && targetUserId && typeof _supabasePatch === "function") {
+      if (targetLoanId) {
+        _supabasePatch("loans", { id: "eq." + targetLoanId }, {
+          payment_status: "已繳費 Paid",
+          updated_at: nowIso
+        });
+      } else {
+        _supabasePatch("loans", { line_user_id: "eq." + targetUserId, payment_status: "neq.已繳費 Paid" }, {
+          payment_status: "已繳費 Paid",
+          updated_at: nowIso
+        });
+      }
+    }
+
     // 3. 自動主動推播【🎉 繳費成功通知】至該社員個人 LINE
     var targetUserId = payment.line_user_id;
     var targetUserName = payment.name || "社員";
@@ -341,6 +404,25 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
         "• 核銷狀態：已核銷 Confirmed\n" +
         "• 系統已自動發送【繳費成功通知】至該社員個人 LINE！";
       _replyMessage(replyToken, replyText);
+    }
+
+    // 5. 發送推播訊息至幹部管理群組 (確保所有幹部即時掌握核銷動態)
+    var adminGroupId = (typeof PropertiesService !== "undefined" && PropertiesService.getScriptProperties)
+      ? (PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID') || (typeof ADMIN_GROUP_ID !== 'undefined' ? ADMIN_GROUP_ID : ""))
+      : (typeof ADMIN_GROUP_ID !== 'undefined' ? ADMIN_GROUP_ID : "");
+
+    if (adminGroupId) {
+      var groupNotifyMsg = "✅ 繳費單已完成核銷通知\n" +
+        "─────────────\n" +
+        "• 核銷人員：" + (officerName || "幹部團隊") + "\n" +
+        "• 繳費單號：" + paymentId + "\n" +
+        "• 繳費社員：" + targetUserName + "\n" +
+        "• 核銷金額：$" + totalAmount + " 元\n" +
+        "• 申報項目：" + selectedItems + "\n" +
+        "• 核銷狀態：已核銷 Confirmed\n" +
+        "• 系統已自動通知社員個人 LINE，並已同步更新資料庫各項狀態！";
+
+      _pushMessage(adminGroupId, groupNotifyMsg);
     }
 
     return { success: true, message: "已成功核銷繳費單 " + paymentId, payment: payment };
@@ -405,11 +487,12 @@ function _pushMessage(userId, text) {
 }
 
 /**
- * 幹部通知信件發送函式 (Gmail / MailApp)
+ * 幹部通知信件發送函式 (Gmail / MailApp，支援包含 HTML「確認無誤」核銷按鈕)
  * @param {string} subject 信件主旨
  * @param {string} body 信件純文字內文
+ * @param {object|string} [optionsOrHtml] 選填參數或自訂 htmlBody
  */
-function sendAdminEmail(subject, body) {
+function sendAdminEmail(subject, body, optionsOrHtml) {
   try {
     var recipient = (typeof getAdminEmail === 'function') ? getAdminEmail() : (typeof ADMIN_EMAIL !== 'undefined' ? ADMIN_EMAIL : 'ntustmountain@gmail.com');
     if (!recipient) {
@@ -421,20 +504,60 @@ function sendAdminEmail(subject, body) {
       return false;
     }
 
+    var html = "";
+    if (typeof optionsOrHtml === 'string') {
+      html = optionsOrHtml;
+    } else if (optionsOrHtml && typeof optionsOrHtml === 'object' && optionsOrHtml.htmlBody) {
+      html = optionsOrHtml.htmlBody;
+    }
+
+    // 若未主動提供 htmlBody，但內文包含 confirm_payment_web 連結，自動生成精美的 HTML 綠色單鍵核銷按鈕
+    if (!html && body) {
+      var linkMatch = body.match(/(https?:\/\/[^\s]+action=confirm_payment_web[^\s]*)/);
+      var escapedBody = body
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+
+      if (linkMatch) {
+        var vUrl = linkMatch[1];
+        var buttonHtml = '<div style="margin: 24px 0; text-align: center;">' +
+          '<a href="' + vUrl + '" target="_blank" style="background-color: #059669; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">' +
+          '✅ 確認無誤（點擊完成核銷）' +
+          '</a>' +
+          '</div>';
+
+        html = '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
+          '<h2 style="color: #0f172a; margin-top: 0; font-size: 18px; border-bottom: 2px solid #059669; padding-bottom: 8px;">' + subject + '</h2>' +
+          buttonHtml +
+          '<div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; font-size: 14px; border: 1px solid #e2e8f0;">' +
+          escapedBody +
+          '</div>' +
+          '<p style="color: #64748b; font-size: 12px; margin-top: 16px; text-align: center;">台科登山社小岳助理 • 自動發送</p>' +
+          '</div>';
+      }
+    }
+
+    var mailOptions = {
+      to: recipient,
+      subject: subject,
+      body: body,
+      name: "台科登山社小岳助理"
+    };
+    if (html) {
+      mailOptions.htmlBody = html;
+    }
+
     if (typeof MailApp !== 'undefined' && MailApp.sendEmail) {
-      MailApp.sendEmail({
-        to: recipient,
-        subject: subject,
-        body: body,
-        name: "台科登山社小岳助理"
-      });
-      console.log("sendAdminEmail 成功寄出至: " + recipient + ", 主旨: " + subject);
+      MailApp.sendEmail(mailOptions);
+      console.log("sendAdminEmail 成功寄出至: " + recipient + ", 主旨: " + subject + (html ? " (含 HTML 核銷按鈕)" : ""));
       return true;
     } else if (typeof GmailApp !== 'undefined' && GmailApp.sendEmail) {
-      GmailApp.sendEmail(recipient, subject, body, {
-        name: "台科登山社小岳助理"
-      });
-      console.log("GmailApp sendAdminEmail 成功寄出至: " + recipient + ", 主旨: " + subject);
+      var gmailAdvOptions = { name: "台科登山社小岳助理" };
+      if (html) gmailAdvOptions.htmlBody = html;
+      GmailApp.sendEmail(recipient, subject, body, gmailAdvOptions);
+      console.log("GmailApp sendAdminEmail 成功寄出至: " + recipient + ", 主旨: " + subject + (html ? " (含 HTML 核銷按鈕)" : ""));
       return true;
     } else {
       console.warn("MailApp 與 GmailApp 皆不可用 (可能是本機測試環境)");

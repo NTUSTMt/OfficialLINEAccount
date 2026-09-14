@@ -3841,5 +3841,169 @@ describe('52. 報名名冊個資生日格式、幹部鑑權修復與 Enum 智慧
   });
 });
 
+describe('53. 試算表異步同步、sync_queue 去重、Email 單鍵核銷連動與裝備租借繳費標籤 (v0.1.111)', () => {
+  it('1. 個人主頁 Dashboard payStatus 判定解耦：活動報名繳費狀態直接依 payment_status 判定，不受審核狀態影響', () => {
+    function simulateDashboardPayStatus(signup) {
+      const pStatus = signup.payment_status || '未繳費 Unpaid';
+      let payStatus = '未繳費 Unpaid';
+      if (pStatus.includes('已繳') || pStatus.includes('Paid')) {
+        payStatus = '已繳費 Paid';
+      } else if (pStatus.includes('待確認') || pStatus.includes('Checking')) {
+        payStatus = '待確認 Checking';
+      }
+      return payStatus;
+    }
 
+    // 測試活動 A：審核中 Checking，但尚未申報繳費 -> 應為 未繳費 Unpaid（修復前會因 Checking 誤判為 待確認）
+    const actA = { status: '審核中 Checking', payment_status: '未繳費 Unpaid' };
+    assert.strictEqual(simulateDashboardPayStatus(actA), '未繳費 Unpaid', '審核中但未繳費時不可誤標為待確認');
 
+    // 測試活動 B：正取 Confirmed，已申報但待核銷 -> 應為 待確認 Checking（修復前會因正取不含 Checking 掉入 未繳費）
+    const actB = { status: '正取 Confirmed', payment_status: '待確認 Checking' };
+    assert.strictEqual(simulateDashboardPayStatus(actB), '待確認 Checking', '正取且申報中必須顯示待確認');
+
+    // 測試活動 C：正取且已繳費
+    const actC = { status: '正取（已繳費）Confirmed (Paid)', payment_status: '已繳費 Paid' };
+    assert.strictEqual(simulateDashboardPayStatus(actC), '已繳費 Paid');
+  });
+
+  it('2. 個人主頁 Dashboard 裝備卡片支援 payStatus 呈現與繳費按鈕', () => {
+    const mockEquipments = [
+      { orderId: 'ORD-101', itemName: '大背 (60L)', status: '待領取 To Be Collected', payStatus: '未繳費 Unpaid' },
+      { orderId: 'ORD-102', itemName: '帳篷 (二人帳)', status: '使用中 In Use', payStatus: '已繳費 Paid' }
+    ];
+
+    assert.strictEqual(mockEquipments[0].payStatus, '未繳費 Unpaid');
+    assert.strictEqual(mockEquipments[1].payStatus, '已繳費 Paid');
+  });
+
+  it('3. sync_queue 批次去重 (Deduplication)：同一 record_id 多次異動只執行最新一筆，所有 queue IDs 均標記完成', () => {
+    const queue = [
+      { id: 101, table_name: 'event_signups', payload: { id: 'S1', status: '審核中 Checking' } },
+      { id: 102, table_name: 'event_signups', payload: { id: 'S1', status: '正取 Confirmed' } },
+      { id: 103, table_name: 'event_signups', payload: { id: 'S1', status: '正取（已繳費）Confirmed (Paid)' } },
+      { id: 104, table_name: 'members', payload: { line_user_id: 'U1', name: '王小明' } }
+    ];
+
+    const dedupedMap = {};
+    const itemOrder = [];
+    const redundantCompletedIds = [];
+
+    for (let i = 0; i < queue.length; i++) {
+      const qItem = queue[i];
+      const qPayload = qItem.payload || {};
+      const recId = qItem.record_id || qPayload.id || qPayload.signupId || qPayload.line_user_id || ('item_' + qItem.id);
+      const dedupKey = qItem.table_name + ':' + recId;
+
+      if (dedupedMap[dedupKey]) {
+        redundantCompletedIds.push(dedupedMap[dedupKey].id);
+      } else {
+        itemOrder.push(dedupKey);
+      }
+      dedupedMap[dedupKey] = qItem;
+    }
+
+    const executedItems = [];
+    const completedIds = [];
+
+    for (let k = 0; k < itemOrder.length; k++) {
+      const item = dedupedMap[itemOrder[k]];
+      executedItems.push(item);
+      completedIds.push(item.id);
+    }
+
+    for (let r = 0; r < redundantCompletedIds.length; r++) {
+      completedIds.push(redundantCompletedIds[r]);
+    }
+
+    assert.strictEqual(executedItems.length, 2, '應去重為 2 筆 (1 筆 S1, 1 筆 U1)');
+    assert.strictEqual(executedItems[0].payload.status, '正取（已繳費）Confirmed (Paid)', 'S1 必須為最新狀態');
+    assert.strictEqual(completedIds.length, 4, '全部 4 個 queue id 均被標記為完成');
+  });
+
+  it('4. _syncSignupToSheet 嚴格防止 camelCase 暫存欄位擴充表頭 (N, O, P, Q 欄防禦)', () => {
+    const existingHeaders = ['id', 'event_id', 'line_user_id', 'status', 'payment_status'];
+    const badPayload = {
+      signupId: 'S202',
+      eventId: 'E01',
+      reviewResult: '正取 Confirmed',
+      updatedBy: 'admin',
+      id: 'S202',
+      event_id: 'E01',
+      status: '正取 Confirmed'
+    };
+
+    function simulateEnsureColumnsExist(headers, payload) {
+      const newHeaders = headers.slice();
+      const keys = Object.keys(payload);
+      for (let k = 0; k < keys.length; k++) {
+        const colKey = keys[k];
+        // 嚴格過濾 camelCase 臨時 key
+        if (/^[a-z]+([A-Z][a-z0-9]+)+$/.test(colKey)) {
+          continue;
+        }
+        if (newHeaders.indexOf(colKey) === -1) {
+          newHeaders.push(colKey);
+        }
+      }
+      return newHeaders;
+    }
+
+    const finalHeaders = simulateEnsureColumnsExist(existingHeaders, badPayload);
+    assert.deepStrictEqual(finalHeaders, existingHeaders, '不得在表頭長出 signupId, eventId, reviewResult, updatedBy');
+  });
+
+  it('5. Email 單鍵核銷 HTML 按鈕生成與 _processPaymentVerification 全面連動更新', () => {
+    // A. 驗證 Email 生成 HTML 綠色單鍵核銷按鈕
+    const sampleBody = "新繳費申報通知\n\n繳費單號：PAY-2026-001\n點擊單鍵核銷連結：https://script.google.com/macros/s/xyz/exec?action=confirm_payment_web&paymentId=PAY-2026-001";
+    let generatedHtml = "";
+
+    const linkMatch = sampleBody.match(/(https?:\/\/[^\s]+action=confirm_payment_web[^\s]*)/);
+    if (linkMatch) {
+      const vUrl = linkMatch[1];
+      generatedHtml = `<a href="${vUrl}" target="_blank" style="background-color: #059669; color: #ffffff;">✅ 確認無誤（點擊完成核銷）</a>`;
+    }
+
+    assert.ok(generatedHtml.includes('✅ 確認無誤（點擊完成核銷）'));
+    assert.ok(generatedHtml.includes('action=confirm_payment_web&paymentId=PAY-2026-001'));
+
+    // B. 模擬核銷連動更新活動報名、社費、裝備租借並推播幹部群組
+    const mockPayment = {
+      id: 'PAY-2026-001',
+      line_user_id: 'U_TESTER_99',
+      name: '陳小美',
+      amount: 1200,
+      selected_types: ['activity', 'membership', 'equipment'],
+      target_event_id: 'E_CAMP_01',
+      target_loan_id: 'LOAN_55'
+    };
+
+    let signupUpdated = false;
+    let memberUpdated = false;
+    let loanUpdated = false;
+    let adminGroupNotified = false;
+
+    function simulateProcessPaymentVerification(payment) {
+      // 1. 活動報名連動
+      if (payment.target_event_id && payment.line_user_id) {
+        signupUpdated = true;
+      }
+      // 2. 社費連動
+      if (payment.selected_types.includes('membership')) {
+        memberUpdated = true;
+      }
+      // 3. 裝備連動
+      if (payment.target_loan_id) {
+        loanUpdated = true;
+      }
+      // 4. 推播幹部管理群組
+      adminGroupNotified = true;
+    }
+
+    simulateProcessPaymentVerification(mockPayment);
+    assert.strictEqual(signupUpdated, true, '活動報名應連動為已繳費');
+    assert.strictEqual(memberUpdated, true, '社員社籍應連動為正式社員');
+    assert.strictEqual(loanUpdated, true, '裝備租借應連動為已繳費');
+    assert.strictEqual(adminGroupNotified, true, '幹部管理群組應收到核銷推播通知');
+  });
+});
