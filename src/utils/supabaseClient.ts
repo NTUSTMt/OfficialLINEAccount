@@ -450,12 +450,12 @@ export const fetchUnpaidPaymentsFromSupabase = async (userId: string): Promise<S
 
 /**
  * ⚡ 提交繳費對帳申報至 Supabase (透過 submit_payment_rpc 安全 RPC 函式，延遲 < 50ms)
- * 原子性建立 payments 記錄並更新關聯項目的繳費狀態為「待確認 Checking」
+ * 原子性建立 payments 記錄並更新關聯項目的繳費狀態為「待確認 Checking」，同時回傳單次安全核銷密鑰 verify_token
  */
 export const submitPaymentToSupabase = async (
   userId: string,
   details: PaymentSubmitDetails
-): Promise<{ success: boolean; paymentId?: string }> => {
+): Promise<{ success: boolean; paymentId?: string; verifyToken?: string }> => {
   if (!supabase || !userId) return { success: false };
 
   try {
@@ -470,10 +470,56 @@ export const submitPaymentToSupabase = async (
     }
 
     console.log('%c⚡ [DataSource: Supabase] 繳費申報已極速送出！', 'color: #10b981; font-weight: bold;', data);
-    return { success: true, paymentId: data?.payment_id };
+    return {
+      success: true,
+      paymentId: data?.payment_id,
+      verifyToken: data?.verify_token
+    };
   } catch (err) {
     console.warn('[Supabase] 提交繳費對帳例外:', err);
     return { success: false };
+  }
+};
+
+export interface VerifyPaymentResult {
+  success: boolean;
+  alreadyConfirmed?: boolean;
+  paymentId?: string;
+  userName?: string;
+  amount?: number;
+  items?: string;
+  lineUserId?: string;
+  message?: string;
+  error?: string;
+}
+
+/**
+ * ⚡ 透過單次專屬安全金鑰直接在 Supabase 執行單鍵核銷 (免 Google 帳號登入、無轉向阻斷，延遲 < 50ms)
+ */
+export const verifyPaymentByTokenFromSupabase = async (
+  paymentId: string,
+  token: string
+): Promise<VerifyPaymentResult> => {
+  if (!supabase || !paymentId || !token) {
+    return { success: false, error: '缺少單號或安全金鑰 (Missing paymentId or verifyToken)' };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('verify_payment_by_token', {
+      p_payment_id: paymentId,
+      p_verify_token: token,
+      p_officer_name: 'Email 單鍵核銷'
+    });
+
+    if (error) {
+      console.warn('[Supabase] verify_payment_by_token 失敗:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return data as VerifyPaymentResult;
+  } catch (err: any) {
+    console.warn('[Supabase] verify_payment_by_token 例外:', err);
+    return { success: false, error: err?.message || String(err) };
   }
 };
 

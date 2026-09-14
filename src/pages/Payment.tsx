@@ -393,7 +393,7 @@ function Payment({ userId }: { userId: string }) {
       };
 
       // ⚡ 1. 100% 直連 Supabase 繳費申報 (< 50ms)
-      let sbResult: { success: boolean; paymentId?: string } = { success: false };
+      let sbResult: { success: boolean; paymentId?: string; verifyToken?: string } = { success: false };
       if (userId && userId !== 'TEST_USER_ID') {
         try {
           sbResult = await submitPaymentToSupabase(userId, detailsPayload);
@@ -403,11 +403,11 @@ function Payment({ userId }: { userId: string }) {
         }
       } else {
         sbSubmitted = true;
-        sbResult = { success: true, paymentId: 'PAY_TEST_001' };
+        sbResult = { success: true, paymentId: 'PAY_TEST_001', verifyToken: 'test_token_123' };
       }
 
       if (sbSubmitted) {
-        // 2. 發送 LINE 幹部審核推播與個人保底推播 (確實等待 GAS 完成，避免關閉視窗中斷連線)
+        // 2. 發送 LINE 幹部審核推播與個人保底推播 (包含 verifyToken，供 Email 單鍵安全核銷)
         try {
           const response = await fetch(GAS_API_URL, {
             method: 'POST',
@@ -416,9 +416,11 @@ function Payment({ userId }: { userId: string }) {
               action: 'notify_officers_payment',
               userId,
               paymentId: sbResult.paymentId,
+              verifyToken: sbResult.verifyToken,
               details: {
                 ...detailsPayload,
-                paymentId: sbResult.paymentId
+                paymentId: sbResult.paymentId,
+                verifyToken: sbResult.verifyToken
               }
             }))
           });

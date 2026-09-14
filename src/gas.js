@@ -3513,6 +3513,11 @@ function handleLiffHelperApi(json) {
     return _handleNotifyReflectionSubmitted(json);
   }
 
+  // 12. 繳費單核銷完成推播 Helper (純發訊息通知社員與幹部群組)
+  if (action === "notify_payment_confirmed") {
+    return _handleNotifyPaymentConfirmed(json);
+  }
+
   return _errorResponse("未支援的 Helper Action: " + action);
 }
 
@@ -3795,6 +3800,14 @@ function _handleNotifyOfficersPayment(json) {
     var itemsZh = selectedNames.length > 0 ? selectedNames.map(function (n) { return "  - " + n; }).join("\n") : "  - 無項目";
     var itemsEn = selectedNames.length > 0 ? selectedNames.map(function (n) { return "  - " + n; }).join("\n") : "  - None";
 
+    var verifyToken = details.verifyToken || json.verifyToken || "";
+
+    // ⭐️ 免 Google 帳號登入衝突：優先採用社團專屬 Web / LIFF 單鍵核銷連結 (完全不需要登入任何 Google 帳號)
+    var liffChannelId = (typeof LIFF_CHANNEL_ID !== 'undefined' ? LIFF_CHANNEL_ID : '2009217429');
+    var liffVerifyLink = paymentId
+      ? ("https://liff.line.me/" + liffChannelId + "-jvj3ydDT?liff.state=" + encodeURIComponent("/confirm-payment?paymentId=" + paymentId + (verifyToken ? "&token=" + verifyToken : "")))
+      : "";
+
     var webServiceUrl = "";
     try {
       if (typeof ScriptApp !== 'undefined' && ScriptApp.getServiceUrl) {
@@ -3809,9 +3822,12 @@ function _handleNotifyOfficersPayment(json) {
       } catch (e2) {}
     }
 
-    var verifyLink = (webServiceUrl && paymentId)
-      ? (webServiceUrl + "?action=confirm_payment_web&paymentId=" + encodeURIComponent(paymentId))
+    // 備用 GAS 網址 (僅在 LIFF 網址不可用時作為備援)
+    var gasVerifyLink = (webServiceUrl && paymentId)
+      ? (webServiceUrl + "?action=confirm_payment_web&paymentId=" + encodeURIComponent(paymentId) + (verifyToken ? "&token=" + encodeURIComponent(verifyToken) : ""))
       : "";
+
+    var verifyLink = liffVerifyLink || gasVerifyLink;
 
     // 1. 推播給幹部管理群組
     var adminMsg = "【💳 幹部通知：新繳費申報】\n\n" +
@@ -3827,7 +3843,7 @@ function _handleNotifyOfficersPayment(json) {
       (verifyLink ? "2. 點擊單鍵核銷連結：" + verifyLink + "\n" : "2. 至管理後台更新對帳狀態\n") +
       "\n⚡ 資料已安全記錄於 Supabase，請幹部核對網銀後核銷！";
 
-    // ⭐️ 精緻 HTML Email 樣板 (內建 100% 保證可見的翡翠綠單鍵核銷大按鈕)
+    // ⭐️ 精緻 HTML Email 樣板 (內建 100% 保證可見的翡翠綠單鍵核銷大按鈕，免 Google 登入)
     var paymentHtml = "";
     if (verifyLink) {
       var escapedItems = itemsZh.replace(/\n/g, '<br>');
@@ -3835,7 +3851,7 @@ function _handleNotifyOfficersPayment(json) {
       paymentHtml = '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
         '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
         '<h2 style="color: #065f46; margin: 0; font-size: 20px;">💳 台科登山社 • 新繳費申報通知</h2>' +
-        '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">請幹部核對網銀款項後，點擊下方綠色按鈕即可一鍵完成核銷</p>' +
+        '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">請幹部核對網銀款項後，點擊下方綠色按鈕即可一鍵完成核銷 (免切換 Google 帳號)</p>' +
         '</div>' +
         '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 15px;">' +
         '<table style="width: 100%; border-collapse: collapse;">' +
@@ -3890,6 +3906,56 @@ function _handleNotifyOfficersPayment(json) {
     return _successResponse({ message: "繳費申報幹部與個人推播已成功送出" });
   } catch (err) {
     console.warn("繳費申報幹部推播失敗:", err);
+    return _errorResponse(err.toString());
+  }
+}
+
+/**
+ * 繳費單核銷完成推播 Helper (由 Web 端核銷成功後發送通知給社員個人與幹部群組)
+ */
+function _handleNotifyPaymentConfirmed(json) {
+  try {
+    var paymentId = json.paymentId || "";
+    var userName = json.userName || "社員";
+    var amount = json.amount || 0;
+    var items = json.items || "社團相關費用";
+    var lineUserId = json.lineUserId || "";
+    var confirmedBy = json.confirmedBy || "Email 單鍵核銷";
+
+    // 1. 推播給社員個人 LINE
+    if (lineUserId && lineUserId.indexOf("U") === 0) {
+      var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
+        "親愛的 " + userName + " 您好：\n" +
+        "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
+        "• 繳費單號：" + paymentId + "\n" +
+        "• 核銷金額：$" + amount + " 元\n" +
+        "• 核銷項目：" + items + "\n\n" +
+        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
+        "─────────────\n" +
+        "Dear " + userName + ",\n" +
+        "Your payment has been successfully confirmed by the officers!\n\n" +
+        "• Payment ID: " + paymentId + "\n" +
+        "• Amount: $" + amount + " TWD\n" +
+        "• Items: " + items + "\n\n" +
+        "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
+      _pushMessage(lineUserId, successMsg);
+    }
+
+    // 2. 推播給幹部管理群組
+    var adminMsg = "【💳 幹部通知：繳費單已完成核銷】\n" +
+      "─────────────\n" +
+      "• 繳費單號：" + paymentId + "\n" +
+      "• 申報人：" + userName + "\n" +
+      "• 核銷金額：$" + amount + " 元\n" +
+      "• 核銷項目：" + items + "\n" +
+      "• 核銷途徑：" + confirmedBy + "\n" +
+      "• 系統狀態：已成功更新 Supabase 資料庫";
+    var adminSubject = "【台科登山社】繳費單已完成核銷 - " + paymentId + " (" + userName + ")";
+    pushAdminMessage(adminMsg, adminSubject);
+
+    return _successResponse({ message: "核銷通知推播已成功送出" });
+  } catch (err) {
+    console.warn("_handleNotifyPaymentConfirmed 異常:", err);
     return _errorResponse(err.toString());
   }
 }

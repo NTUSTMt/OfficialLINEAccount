@@ -3,11 +3,41 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.113` (v0.1.113)
+- **當前版本**：`0.1.114` (v0.1.114)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 214. 徹底解決 Google 帳號多重登入衝突：社團專屬 Web 免登入安全單鍵核銷系統 (v0.1.114)
+- **問題回報與根因排查 (Problem Identification & Root Causes)**：
+  - 幹部反映在 Email 點擊核銷按鈕時，畫面跳出 Google 的 **「很抱歉，目前無法開啟這個檔案」** 錯誤。
+  - **根本原因**：
+    - Email 原先連結指向 Google Apps Script Web App (`script.google.com/macros/s/.../exec`)。
+    - 幹部在手機或電腦瀏覽器中通常同時登入多個 Google 帳號（例如個人 Gmail 與學校帳號等），Google Apps Script 面臨多帳號 Cookie 衝突或權限判定時，極易噴出「很抱歉，目前無法開啟這個檔案」，強迫幹部切換 Google 帳號，體驗極差。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  1. **免 Google 登入衝突：直連社團專屬 Web / LIFF 單鍵核銷頁面 ([src/pages/ConfirmPayment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/ConfirmPayment.tsx), [src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx))**：
+     - Email 綠色單鍵核銷大按鈕直接導向社團專屬網頁：
+       `https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fconfirm-payment%3FpaymentId%3D{paymentId}%26token%3D{verifyToken}`
+     - 幹部點擊後直接在任何手機/電腦瀏覽器或 LINE 內秒開，**完全不需要登入任何 Google 帳號**，徹底杜絕帳號切換衝突！
+  2. **單次隨機防偽安全金鑰 (verify_token) ([supabase/verify_payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/verify_payment_rpc.sql))**：
+     - 在 `payments` 資料表加入 `verify_token TEXT` 欄位與索引。
+     - 申報繳費時由 Supabase `submit_payment_rpc` 自動生成 32 字元隨機 hex 安全金鑰，核銷時比對金鑰相符才允許變更狀態，安全防止猜測單號惡意攻擊。
+  3. **Supabase 直連 RPC 單鍵核銷與全自動連動 ([supabase/verify_payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/verify_payment_rpc.sql), [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts))**：
+     - 建立 `verify_payment_by_token(paymentId, token)` 安全 RPC。
+     - 幹部開啟網頁立即自動直通 Supabase 完成核銷：
+       - `payments.status` 更新為 `已核銷 Confirmed`。
+       - 自動連動更新 `event_signups` 繳費狀態為 `已繳費 Paid`（正取升級為 `正取（已繳費）Confirmed (Paid)`）。
+       - 自動連動更新 `members` 社費狀態為 `已繳費 Paid`，`is_official_member = true`。
+       - 自動連動更新 `loans` 裝備租借狀態為 `已繳費 Paid`。
+       - 具備冪等性：先前已核銷過自動提示已核銷，不重複觸發。
+  4. **核銷成功雙向 LINE 推播通知 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 網頁核銷完成後，自動呼叫 GAS `notify_payment_confirmed` API：
+       - 自動發送【🎉 繳費成功通知】至該社員個人 LINE 聊天室。
+       - 自動發送【💳 幹部通知：繳費單已完成核銷】至幹部管理群組 (`ADMIN_GROUP_ID`)。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **143/143 項測試全數通過（37 suites passed, 0 failures）**（新增 Suite 55 測試免 Google 登入 LIFF 核銷連結與 verify_token 安全校驗）。
+  - 前端打包：`pnpm run build` 成功完成，ConfirmPayment 模組打包正常。
 
 ### 213. 完善 Email 核銷按鈕直接渲染、pushAdminMessage 選項轉傳與核銷連動變數作用域修復 (v0.1.113)
 - **問題回報與根因排查 (Problem Identification & Root Causes)**：

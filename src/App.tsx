@@ -17,6 +17,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const History = lazy(() => import('./pages/History'));
 const Achievements = lazy(() => import('./pages/Achievements'));
 const AdminEvents = lazy(() => import('./pages/AdminEvents'));
+const ConfirmPayment = lazy(() => import('./pages/ConfirmPayment'));
 
 // 解析 LIFF 傳入的初始路徑 (解決 liff.state 傳參導致重定向遺失的問題)
 const getInitialRedirectPath = () => {
@@ -29,7 +30,7 @@ const getInitialRedirectPath = () => {
   }
 
   // 確保路徑為合法子路徑且不重複導向
-  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history') || statePath.startsWith('/achievements') || statePath.startsWith('/admin'))) {
+  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history') || statePath.startsWith('/achievements') || statePath.startsWith('/admin') || statePath.startsWith('/confirm-payment'))) {
     return statePath;
   }
 
@@ -68,6 +69,9 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
     }
     if (path.includes('/dashboard')) {
       return { title: t('nav.dashboard.title'), subtitle: t('nav.dashboard.subtitle'), icon: <User size={24} color="#059669" /> };
+    }
+    if (path.includes('/confirm-payment')) {
+      return { title: '繳費單核銷', subtitle: '線上對帳審核系統', icon: <CreditCard size={24} color="#059669" /> };
     }
     // 預設為裝備租借
     return { title: t('nav.borrow.title'), subtitle: t('nav.borrow.subtitle'), icon: <Compass size={24} color="#059669" /> };
@@ -518,6 +522,8 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
           } />
           <Route path="/admin/events" element={<AdminEvents userId={liffInit.userId} />} />
           <Route path="/admin" element={<Navigate to="/admin/events" replace />} />
+          {/* 免 Google/LINE 登入之單鍵安全核銷頁面 */}
+          <Route path="/confirm-payment" element={<ConfirmPayment />} />
           {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
           <Route path="*" element={<Navigate to="/borrow" replace />} />
         </Routes>
@@ -562,7 +568,7 @@ function App() {
           liffId = '2009217429-FRB6rjph';
         } else if (path.includes('/admin') || statePath.includes('/admin')) {
           liffId = '2009217429-DSYjXqNK';
-        } else if (path.includes('/dashboard') || statePath.includes('/dashboard') || path.includes('/achievements') || statePath.includes('/achievements')) {
+        } else if (path.includes('/dashboard') || statePath.includes('/dashboard') || path.includes('/achievements') || statePath.includes('/achievements') || path.includes('/confirm-payment') || statePath.includes('/confirm-payment')) {
           liffId = '2009217429-jvj3ydDT';
         }
 
@@ -577,8 +583,8 @@ function App() {
           displayName = profile.displayName;
           pictureUrl = profile.pictureUrl || '';
         } else {
-          // 若在 LINE 內部但未登入，強制導向 LINE 登入
-          if (liff.isInClient()) {
+          // 若在 LINE 內部但未登入，且非 /confirm-payment，強制導向 LINE 登入
+          if (liff.isInClient() && !path.includes('/confirm-payment') && !statePath.includes('/confirm-payment')) {
             liff.login({ redirectUri: window.location.href });
             return; // 登入會跳轉，直接 return
           }

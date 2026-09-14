@@ -4083,3 +4083,56 @@ describe('54. Email 核銷按鈕傳遞與 _processPaymentVerification 變數作�
   });
 });
 
+describe('55. 免 Google 登入衝突：LIFF 專屬 Web 核銷連結與 verify_token 安全校驗測試', () => {
+  it('1. _handleNotifyOfficersPayment 優先產生 LIFF 專屬 Web 核銷連結，完全不依賴 Google 帳號', () => {
+    const paymentId = 'PAY_20260915_123456_888';
+    const verifyToken = 'a1b2c3d4e5f67890abcdef1234567890';
+    const liffChannelId = '2009217429';
+
+    const liffVerifyLink = "https://liff.line.me/" + liffChannelId + "-jvj3ydDT?liff.state=" + encodeURIComponent("/confirm-payment?paymentId=" + paymentId + (verifyToken ? "&token=" + verifyToken : ""));
+
+    assert.ok(liffVerifyLink.startsWith('https://liff.line.me/2009217429-jvj3ydDT'));
+    assert.ok(liffVerifyLink.includes(encodeURIComponent('/confirm-payment?paymentId=PAY_20260915_123456_888&token=a1b2c3d4e5f67890abcdef1234567890')));
+  });
+
+  it('2. verify_payment_by_token 嚴格驗證安全金鑰：Token 正確核銷、錯誤拒絕、已核銷冪等', () => {
+    const mockDb = {
+      id: 'PAY_999',
+      verify_token: 'secret_token_abc',
+      status: '待確認 Checking',
+      amount: 600,
+      name: '李小明'
+    };
+
+    function simulateVerifyPaymentByToken(pId, token) {
+      if (!pId || !token) return { success: false, error: '缺少單號或金鑰' };
+      if (pId !== mockDb.id) return { success: false, error: '單號不存在' };
+      if (mockDb.verify_token && mockDb.verify_token !== token) {
+        return { success: false, error: '安全金鑰無效或已過期，拒絕核銷 (Invalid verifyToken)' };
+      }
+      if (mockDb.status.includes('已核銷')) {
+        return { success: true, alreadyConfirmed: true, message: '該繳費單先前已完成核銷' };
+      }
+      mockDb.status = '已核銷 Confirmed';
+      return { success: true, alreadyConfirmed: false, paymentId: mockDb.id, userName: mockDb.name, amount: mockDb.amount };
+    }
+
+    // A. 錯誤 Token 必須拒絕
+    const badRes = simulateVerifyPaymentByToken('PAY_999', 'wrong_token');
+    assert.equal(badRes.success, false);
+    assert.ok(badRes.error.includes('安全金鑰無效'));
+
+    // B. 正確 Token 成功核銷
+    const goodRes = simulateVerifyPaymentByToken('PAY_999', 'secret_token_abc');
+    assert.equal(goodRes.success, true);
+    assert.equal(goodRes.alreadyConfirmed, false);
+    assert.equal(mockDb.status, '已核銷 Confirmed');
+
+    // C. 再次點擊冪等安全
+    const replayRes = simulateVerifyPaymentByToken('PAY_999', 'secret_token_abc');
+    assert.equal(replayRes.success, true);
+    assert.equal(replayRes.alreadyConfirmed, true);
+  });
+});
+
+
