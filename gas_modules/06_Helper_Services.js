@@ -353,6 +353,13 @@ function _handleNotifyOfficersPayment(json) {
       }
     } catch (e) {}
 
+    if (!webServiceUrl) {
+      try {
+        var props = (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties) ? PropertiesService.getScriptProperties() : null;
+        webServiceUrl = (props ? props.getProperty('WEB_APP_URL') : null) || (typeof WEB_APP_URL !== 'undefined' ? WEB_APP_URL : "") || (typeof DEFAULT_WEB_APP_URL !== 'undefined' ? DEFAULT_WEB_APP_URL : "");
+      } catch (e2) {}
+    }
+
     var verifyLink = (webServiceUrl && paymentId)
       ? (webServiceUrl + "?action=confirm_payment_web&paymentId=" + encodeURIComponent(paymentId))
       : "";
@@ -371,8 +378,42 @@ function _handleNotifyOfficersPayment(json) {
       (verifyLink ? "2. 點擊單鍵核銷連結：" + verifyLink + "\n" : "2. 至管理後台更新對帳狀態\n") +
       "\n⚡ 資料已安全記錄於 Supabase，請幹部核對網銀後核銷！";
 
+    // ⭐️ 精緻 HTML Email 樣板 (內建 100% 保證可見的翡翠綠單鍵核銷大按鈕)
+    var paymentHtml = "";
+    if (verifyLink) {
+      var escapedItems = itemsZh.replace(/\n/g, '<br>');
+      var escapedNote = noteZh ? ('<p style="margin: 8px 0; color: #475569;">' + noteZh.replace(/\n/g, '<br>') + '</p>') : '';
+      paymentHtml = '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
+        '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
+        '<h2 style="color: #065f46; margin: 0; font-size: 20px;">💳 台科登山社 • 新繳費申報通知</h2>' +
+        '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">請幹部核對網銀款項後，點擊下方綠色按鈕即可一鍵完成核銷</p>' +
+        '</div>' +
+        '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 15px;">' +
+        '<table style="width: 100%; border-collapse: collapse;">' +
+        (userName ? '<tr><td style="padding: 6px 0; color: #64748b; width: 100px;">申報人：</td><td style="padding: 6px 0; font-weight: bold; color: #0f172a;">' + userName + '</td></tr>' : '') +
+        (paymentId ? '<tr><td style="padding: 6px 0; color: #64748b;">繳費單號：</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' : '') +
+        '<tr><td style="padding: 6px 0; color: #64748b;">申報金額：</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + totalAmount + ' 元</td></tr>' +
+        '<tr><td style="padding: 6px 0; color: #64748b;">帳號末五碼：</td><td style="padding: 6px 0; font-weight: bold; color: #0f172a;">' + last5Digits + '</td></tr>' +
+        '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">申報項目：</td><td style="padding: 6px 0; color: #334155;">' + escapedItems + '</td></tr>' +
+        '</table>' +
+        escapedNote +
+        '</div>' +
+        '<div style="text-align: center; margin: 28px 0;">' +
+        '<a href="' + verifyLink + '" target="_blank" style="background-color: #059669; color: #ffffff; padding: 16px 36px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 18px; display: inline-block; box-shadow: 0 4px 10px rgba(5,150,105,0.3); letter-spacing: 0.5px;">' +
+        '✅ 確認無誤（點擊完成核銷）' +
+        '</a>' +
+        '<p style="color: #64748b; font-size: 12px; margin-top: 10px;">點擊後系統將自動更新 Supabase 狀態為【已核銷 Confirmed】，並推播通知該社員與幹部群組！</p>' +
+        '</div>' +
+        '<div style="border-top: 1px dashed #cbd5e1; padding-top: 16px; font-size: 13px; color: #64748b;">' +
+        '<strong>備用核銷方式：</strong><br>' +
+        '1. LINE 幹部群組輸入：<code>@小岳助理 核銷 ' + paymentId + '</code><br>' +
+        '2. 直接複製核銷網址：<a href="' + verifyLink + '" style="color: #2563eb; word-break: break-all;">' + verifyLink + '</a>' +
+        '</div>' +
+        '</div>';
+    }
+
     var paymentSubject = "【台科登山社】新繳費申報 - $" + totalAmount + " (" + (userName || "未知社員") + "，末5碼 " + last5Digits + ")";
-    pushAdminMessage(adminMsg, paymentSubject);
+    pushAdminMessage(adminMsg, paymentSubject, { htmlBody: paymentHtml });
 
     // 2. ⭐️ 同步保底推播給使用者個人 LINE 聊天室 (個人繳費收據)
     if (userId && userId !== "TEST_USER_ID") {

@@ -5,7 +5,7 @@
 -- 說明：請至 Supabase 控制台 > SQL Editor 貼上執行此腳本即可一鍵完成修復
 -- ==============================================================================
 
--- 1. 確保 event_signup_status_enum 列舉型別完整存在與全域隱式轉換
+-- 1. 確保 event_signup_status_enum 與 payment_status_enum 列舉型別完整存在與全域隱式轉換
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'event_signup_status_enum') THEN
@@ -18,12 +18,21 @@ BEGIN
             '已取消 Cancelled'
         );
     END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status_enum') THEN
+        CREATE TYPE payment_status_enum AS ENUM (
+            '已繳費 Paid',
+            '待確認 Checking',
+            '未繳費 Unpaid'
+        );
+    END IF;
 END $$;
 
+-- 1.1 event_signup_status_enum 隱式轉換
 CREATE OR REPLACE FUNCTION text_to_event_signup_status_enum(val text)
 RETURNS event_signup_status_enum AS $cast$
 BEGIN
-    IF val IS NULL THEN
+    IF val IS NULL OR trim(val) = '' THEN
         RETURN '審核中 Checking'::event_signup_status_enum;
     END IF;
 
@@ -49,9 +58,32 @@ DROP CAST IF EXISTS (text AS event_signup_status_enum);
 CREATE CAST (text AS event_signup_status_enum)
 WITH FUNCTION text_to_event_signup_status_enum(text) AS IMPLICIT;
 
+-- 1.2 payment_status_enum 隱式轉換 (徹底防禦空字串與未知字串轉型報錯)
+CREATE OR REPLACE FUNCTION text_to_payment_status_enum(val text)
+RETURNS payment_status_enum AS $cast$
+BEGIN
+    IF val IS NULL OR trim(val) = '' THEN
+        RETURN '未繳費 Unpaid'::payment_status_enum;
+    ELSIF val LIKE '%已繳費%' OR val = 'Paid' OR val LIKE '%已繳費 Paid%' THEN
+        RETURN '已繳費 Paid'::payment_status_enum;
+    ELSIF val LIKE '%待確認%' OR val LIKE '%Checking%' THEN
+        RETURN '待確認 Checking'::payment_status_enum;
+    ELSE
+        RETURN '未繳費 Unpaid'::payment_status_enum;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    RETURN '未繳費 Unpaid'::payment_status_enum;
+END;
+$cast$ LANGUAGE plpgsql IMMUTABLE;
+
+DROP CAST IF EXISTS (text AS payment_status_enum);
+CREATE CAST (text AS payment_status_enum)
+WITH FUNCTION text_to_payment_status_enum(text) AS IMPLICIT;
+
 -- 2. 重建個人主頁 RPC 函式 (get_my_dashboard)
 -- 修正：活動繳費狀態由 event_signups.payment_status 獨立判定，杜絕「審核中 Checking」誤判為「待確認」
 -- 新增：裝備租借輸出 payStatus，呈現租借款項繳費狀態
+-- 核心修復：嚴格使用 payment_status::text 轉型，絕不將空字串直接作為 enum 傳入 COALESCE
 CREATE OR REPLACE FUNCTION get_my_dashboard(p_line_user_id TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -98,8 +130,8 @@ BEGIN
             'date', to_char(e.start_date, 'YYYY/MM/DD') || CASE WHEN e.end_date != e.start_date THEN ' ~ ' || to_char(e.end_date, 'YYYY/MM/DD') ELSE '' END,
             'reviewStatus', s.status,
             'payStatus', CASE 
-                WHEN COALESCE(s.payment_status, '')::text LIKE '%已繳費%' OR COALESCE(s.payment_status, '')::text LIKE '%Paid%' THEN '已繳費 Paid'
-                WHEN COALESCE(s.payment_status, '')::text LIKE '%待確認%' OR COALESCE(s.payment_status, '')::text LIKE '%Checking%' THEN '待確認 Checking'
+                WHEN COALESCE(s.payment_status::text, '') LIKE '%已繳費%' OR COALESCE(s.payment_status::text, '') LIKE '%Paid%' THEN '已繳費 Paid'
+                WHEN COALESCE(s.payment_status::text, '') LIKE '%待確認%' OR COALESCE(s.payment_status::text, '') LIKE '%Checking%' THEN '待確認 Checking'
                 WHEN s.status::text LIKE '%已繳費%' OR s.status::text LIKE '%Paid%' THEN '已繳費 Paid'
                 ELSE '未繳費'
             END,
@@ -130,8 +162,8 @@ BEGIN
             'returnDate', to_char(l.end_date, 'YYYY/MM/DD'),
             'status', l.status,
             'payStatus', CASE 
-                WHEN COALESCE(l.payment_status, '')::text LIKE '%已繳費%' OR COALESCE(l.payment_status, '')::text LIKE '%Paid%' THEN '已繳費 Paid'
-                WHEN COALESCE(l.payment_status, '')::text LIKE '%待確認%' OR COALESCE(l.payment_status, '')::text LIKE '%Checking%' THEN '待確認 Checking'
+                WHEN COALESCE(l.payment_status::text, '') LIKE '%已繳費%' OR COALESCE(l.payment_status::text, '') LIKE '%Paid%' THEN '已繳費 Paid'
+                WHEN COALESCE(l.payment_status::text, '') LIKE '%待確認%' OR COALESCE(l.payment_status::text, '') LIKE '%Checking%' THEN '待確認 Checking'
                 ELSE '未繳費'
             END
         ) AS eq

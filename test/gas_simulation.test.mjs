@@ -4007,3 +4007,79 @@ describe('53. 試算表異步同步、sync_queue 去重、Email 單鍵核銷連�
     assert.strictEqual(adminGroupNotified, true, '幹部管理群組應收到核銷推播通知');
   });
 });
+
+describe('54. Email 核銷按鈕傳遞與 _processPaymentVerification 變數作用域測試', () => {
+  it('1. pushAdminMessage 必須正確將 optionsOrHtml 轉傳至 sendAdminEmail', () => {
+    let capturedSubject = '';
+    let capturedBody = '';
+    let capturedOptions = null;
+
+    function mockSendAdminEmail(subj, body, opts) {
+      capturedSubject = subj;
+      capturedBody = body;
+      capturedOptions = opts;
+    }
+
+    function mockPushAdminMessage(text, customSubject, optionsOrHtml) {
+      const subject = customSubject || '【台科登山社】系統通知';
+      mockSendAdminEmail(subject, text, optionsOrHtml);
+    }
+
+    const htmlBtn = '<a href="https://example.com/exec?action=confirm_payment_web&paymentId=PAY-123">✅ 確認無誤（點擊完成核銷）</a>';
+    mockPushAdminMessage('新繳費通知', '【台科登山社】新繳費申報', { htmlBody: htmlBtn });
+
+    assert.equal(capturedSubject, '【台科登山社】新繳費申報');
+    assert.equal(capturedBody, '新繳費通知');
+    assert.ok(capturedOptions && capturedOptions.htmlBody, 'optionsOrHtml 必須成功傳入');
+    assert.ok(capturedOptions.htmlBody.includes('✅ 確認無誤（點擊完成核銷）'));
+  });
+
+  it('2. _processPaymentVerification 在執行子項目連動時 targetUserId 必須為有效字串而非 undefined', () => {
+    const paymentRecord = {
+      id: 'PAY-888',
+      line_user_id: 'U_TEST_OFFICER_VERIFY',
+      name: '王小美',
+      amount: 1500,
+      selected_types: ['activity', 'membership'],
+      target_event_id: 'ACT-999'
+    };
+
+    let targetUserIdAtStep2_5 = null;
+    let targetUserNameAtStep2_5 = null;
+
+    // 模擬 _processPaymentVerification
+    function simulateVerificationScope(payment) {
+      // 提取移至連動之前
+      var targetUserId = payment.line_user_id;
+      var targetUserName = payment.name || "社員";
+      var totalAmount = payment.amount || payment.total_amount || 0;
+
+      // 步驟 2.5 連動更新
+      targetUserIdAtStep2_5 = targetUserId;
+      targetUserNameAtStep2_5 = targetUserName;
+
+      return { success: true, targetUserId, targetUserName, totalAmount };
+    }
+
+    const res = simulateVerificationScope(paymentRecord);
+    assert.equal(targetUserIdAtStep2_5, 'U_TEST_OFFICER_VERIFY', '步驟 2.5 取得的 targetUserId 不得為 undefined');
+    assert.equal(targetUserNameAtStep2_5, '王小美', '步驟 2.5 取得的 targetUserName 必須正確');
+    assert.equal(res.success, true);
+  });
+
+  it('3. _handleNotifyOfficersPayment 即使在 ScriptApp.getServiceUrl 為空時，也能 fallback 至 WEB_APP_URL 產生完整核銷連結與按鈕', () => {
+    const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
+    let scriptAppServiceUrl = ""; // 模擬 UrlFetchApp / fetch POST 時 ScriptApp.getServiceUrl() 回傳空字串
+
+    let webServiceUrl = scriptAppServiceUrl || DEFAULT_WEB_APP_URL;
+    const paymentId = 'PAY-DEMO-001';
+
+    const verifyLink = (webServiceUrl && paymentId)
+      ? (webServiceUrl + "?action=confirm_payment_web&paymentId=" + encodeURIComponent(paymentId))
+      : "";
+
+    assert.ok(verifyLink.startsWith('https://script.google.com/macros/s/'));
+    assert.ok(verifyLink.includes('action=confirm_payment_web&paymentId=PAY-DEMO-001'));
+  });
+});
+

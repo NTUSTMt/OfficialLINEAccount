@@ -3,11 +3,53 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.111` (v0.1.111)
+- **當前版本**：`0.1.113` (v0.1.113)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 213. 完善 Email 核銷按鈕直接渲染、pushAdminMessage 選項轉傳與核銷連動變數作用域修復 (v0.1.113)
+- **問題回報與根因排查 (Problem Identification & Root Causes)**：
+  1. **Email 核銷按鈕未直接呈現**：
+     - 幹部收到的繳費申報 Email 未顯示預期的「✅ 確認無誤（點擊完成核銷）」顯眼按鈕。
+     - 根本原因：
+       - `pushAdminMessage(text, customSubject)` 未接收或轉傳第三個參數 `optionsOrHtml` 至 `sendAdminEmail`。
+       - `ScriptApp.getServiceUrl()` 在 GAS 被外部 HTTP POST 呼叫時回傳空字串 `""`，導致產生出的連結為空。
+  2. **核銷完成後 Supabase 未連動更新**：
+     - 點擊單鍵核銷後，Supabase 中的活動報名、社費、裝備租借狀態未被標記為「已繳費 Paid」。
+     - 根本原因：
+       - 在 `_processPaymentVerification` 中，`var targetUserId = payment.line_user_id;` 等關鍵資訊的提取宣告位於步驟 2.5（連動更新）之後。
+       - 由於 JavaScript 變數提升（Hoisting）機制，執行到步驟 2.5 時 `targetUserId` 變數存在但其值為 `undefined`，導致 `if (targetUserId)` 判斷永遠為 `false`，活動、社費、裝備三個子系統的狀態連動全數被跳過。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  1. **修正 `targetUserId` 變數作用域 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js) & [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 將 `targetUserId`、`targetUserName`、`totalAmount`、`selectedItems` 的宣告提前至步驟 2.5 之前，確保活動報名、社費與裝備租借連動時能正確取得使用者的 LINE User ID，成功連動更新為「已繳費 Paid」。
+  2. **擴充 `pushAdminMessage` 支援 HTML 郵件轉傳 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js) & [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 擴充簽名為 `pushAdminMessage(text, customSubject, optionsOrHtml)`，並在內部轉傳 `sendAdminEmail(subject, text, optionsOrHtml)`。
+  3. **健全 Web App URL Fallback 與精美 HTML 核銷郵件 ([gas_modules/01_Config_Auth.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/01_Config_Auth.js), [gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 全域定義 `DEFAULT_WEB_APP_URL`，在 `ScriptApp.getServiceUrl()` 為空時自動 fallback。
+     - 在 `_handleNotifyOfficersPayment` 內建現代化 HTML 翡翠綠單鍵核銷按鈕 (`paymentHtml`)，透過 `{ htmlBody: paymentHtml }` 傳入 `pushAdminMessage`。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **141/141 項測試全數通過（36 suites passed, 0 failures）**（新增 Suite 54 驗證 optionsOrHtml 轉傳、targetUserId 提前宣告與 fallback URL）。
+  - 前端建置：`pnpm run build` 成功完成，0 錯誤。
+
+### 212. 修復 get_my_dashboard RPC 之 payment_status_enum 轉型錯誤與全域 IMPLICIT CAST 防護 (v0.1.112)
+- **問題回報與根因排查 (Problem Identification & Root Causes)**：
+  - 個人主頁報錯：`[Supabase RPC 錯誤]: invalid input value for enum payment_status_enum: ""`。
+  - **根本原因**：
+    - 在 `get_my_dashboard` RPC 中，先前寫法為 `COALESCE(s.payment_status, '')::text` 與 `COALESCE(l.payment_status, '')::text`。
+    - PostgreSQL 的 `COALESCE(val1, val2)` 會嘗試將第 2 個參數的型別隱式轉換為第 1 個參數的型別。由於 `s.payment_status` 與 `l.payment_status` 為 `payment_status_enum` 列舉型別，PostgreSQL 在內部嘗試將第 2 個參數 `''`（空字串）轉為 `payment_status_enum`（即 `''::payment_status_enum`）。
+    - 由於枚舉值中並不存在空字串 `""`，PostgreSQL 嚴格阻斷並拋出 `invalid input value for enum payment_status_enum: ""` 錯誤，導致個人主頁無法載入。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  1. **修正 COALESCE 型別順序 ([supabase/get_my_dashboard.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/get_my_dashboard.sql) & [supabase/fix_dashboard_and_sync_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_dashboard_and_sync_rpc.sql))**：
+     - 將 `COALESCE(s.payment_status, '')::text` 改為 `COALESCE(s.payment_status::text, '')`；裝備 `loans` 亦改為 `COALESCE(l.payment_status::text, '')`。
+     - 先將枚舉轉為 `text` 再與空字串 `''` 進行 COALESCE，徹底杜絕空字串被作為 enum 解析。
+  2. **強化 `payment_status_enum` 全域隱式轉型防護 ([supabase/fix_dashboard_and_sync_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_dashboard_and_sync_rpc.sql))**：
+     - 於 SQL 腳本中建立 `text_to_payment_status_enum` 函式與 `CREATE CAST (text AS payment_status_enum) AS IMPLICIT`。
+     - 遇到 `NULL`、空字串 `""` 或未匹配之字串，自動安全回退為 `'未繳費 Unpaid'`，並加上 `EXCEPTION WHEN OTHERS` 守衛，提供 100% 容錯保護。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **138/138 項測試全數通過（35 suites passed, 0 failures）**。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
 
 ### 211. 獨立試算表異步同步、sync_queue 去重防擴表、Email 單鍵核銷連動與個人主頁狀態解耦 (v0.1.111)
 - **需求背景與根本原因排查 (Problem Identification & Root Causes)**：

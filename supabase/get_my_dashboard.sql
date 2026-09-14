@@ -57,8 +57,8 @@ BEGIN
             'date', to_char(e.start_date, 'YYYY/MM/DD') || CASE WHEN e.end_date != e.start_date THEN ' ~ ' || to_char(e.end_date, 'YYYY/MM/DD') ELSE '' END,
             'reviewStatus', s.status,
             'payStatus', CASE 
-                WHEN COALESCE(s.payment_status, '')::text LIKE '%已繳費%' OR COALESCE(s.payment_status, '')::text LIKE '%Paid%' THEN '已繳費 Paid'
-                WHEN COALESCE(s.payment_status, '')::text LIKE '%待確認%' OR COALESCE(s.payment_status, '')::text LIKE '%Checking%' THEN '待確認 Checking'
+                WHEN COALESCE(s.payment_status::text, '') LIKE '%已繳費%' OR COALESCE(s.payment_status::text, '') LIKE '%Paid%' THEN '已繳費 Paid'
+                WHEN COALESCE(s.payment_status::text, '') LIKE '%待確認%' OR COALESCE(s.payment_status::text, '') LIKE '%Checking%' THEN '待確認 Checking'
                 WHEN s.status::text LIKE '%已繳費%' OR s.status::text LIKE '%Paid%' THEN '已繳費 Paid'
                 ELSE '未繳費'
             END,
@@ -89,8 +89,8 @@ BEGIN
             'returnDate', to_char(l.end_date, 'YYYY/MM/DD'),
             'status', l.status,
             'payStatus', CASE 
-                WHEN COALESCE(l.payment_status, '')::text LIKE '%已繳費%' OR COALESCE(l.payment_status, '')::text LIKE '%Paid%' THEN '已繳費 Paid'
-                WHEN COALESCE(l.payment_status, '')::text LIKE '%待確認%' OR COALESCE(l.payment_status, '')::text LIKE '%Checking%' THEN '待確認 Checking'
+                WHEN COALESCE(l.payment_status::text, '') LIKE '%已繳費%' OR COALESCE(l.payment_status::text, '') LIKE '%Paid%' THEN '已繳費 Paid'
+                WHEN COALESCE(l.payment_status::text, '') LIKE '%待確認%' OR COALESCE(l.payment_status::text, '') LIKE '%Checking%' THEN '待確認 Checking'
                 ELSE '未繳費'
             END
         ) AS eq

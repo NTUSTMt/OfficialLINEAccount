@@ -22,6 +22,8 @@ var GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI
 var LIFF_CHANNEL_ID = PropertiesService.getScriptProperties().getProperty('LIFF_CHANNEL_ID') || '2009217429';
 var SUPABASE_URL = PropertiesService.getScriptProperties().getProperty('SUPABASE_URL');
 var SUPABASE_SERVICE_ROLE_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_ROLE_KEY');
+var DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
+var WEB_APP_URL = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL') || DEFAULT_WEB_APP_URL;
 
 // 🛡️ LINE ID Token (JWT) 數位簽章驗證核心
 function verifyLineIdToken(idToken, expectedUserId) {

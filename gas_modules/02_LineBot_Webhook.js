@@ -307,6 +307,12 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
       muteHttpExceptions: true
     });
 
+    // 2.1 提取繳費與社員核心資訊 (確保後續子項目連動與推播均能正常存取)
+    var targetUserId = payment.line_user_id || payment.userId || "";
+    var targetUserName = payment.name || "社員";
+    var totalAmount = payment.amount || payment.total_amount || 0;
+    var selectedItems = payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團相關費用");
+
     // 2.5 連動更新 Supabase 對應子項目繳費狀態 (活動報名、社費、裝備租借)
     var selTypes = payment.selected_types || [];
     if (typeof selTypes === 'string') {
@@ -573,8 +579,9 @@ function sendAdminEmail(subject, body, optionsOrHtml) {
  * 幹部雙軌通知 (LINE 群組 Push + Gmail 同步發送)
  * @param {string} text 通知內文
  * @param {string} [customSubject] 自訂郵件主旨 (若無則自動提取)
+ * @param {string|object} [optionsOrHtml] 郵件選項或 HTML 內文
  */
-function pushAdminMessage(text, customSubject) {
+function pushAdminMessage(text, customSubject, optionsOrHtml) {
   if (!text) return;
 
   // ⭐️ 1. 自動推導 Email 主旨
@@ -596,7 +603,7 @@ function pushAdminMessage(text, customSubject) {
   }
 
   // ⭐️ 2. Gmail 雙軌發送 (保底 100% 送達，不受 LINE 免費額度耗盡影響)
-  sendAdminEmail(subject, text);
+  sendAdminEmail(subject, text, optionsOrHtml);
 
   // ⭐️ 3. LINE 官方帳號 Push 嘗試發送 (若額度用完被拒絕不影響 Gmail)
   var adminGroupId = PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID') || ADMIN_GROUP_ID;
