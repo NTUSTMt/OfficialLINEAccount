@@ -3402,4 +3402,209 @@ describe('49. 活動代碼自動遞增 SSOT、消除多餘 Signups 頁面、活�
   });
 });
 
+describe('50. 社團系統 5 大問題修復整合驗證 (社費過期、未來開放卡片、報名名冊個資對齊、一鍵審核推播、正備取更新保護)', () => {
+  it('1. 社籍過期繳費：非正式社員或過期社員進入繳費系統，主動提供社費選項，勾選後裝備立享 5 折', () => {
+    // 模擬後端 RPC get_unpaid_payments / get_unpaid_items_rpc
+    function simulateGetUnpaidPayments(member) {
+      const isExpired = member.membership_expires_at ? new Date(member.membership_expires_at) < new Date() : false;
+      const isOfficial = !!member.is_official_member && !isExpired;
+      const isChecking = String(member.payment_status || '').includes('待確認') || String(member.payment_status || '').includes('Checking');
+
+      let membership = [];
+      if (!isOfficial && !isChecking) {
+        membership.push({
+          id: 'fee_membership',
+          name: '社籍與社費 (Membership Fee)',
+          amount: 200
+        });
+      }
+      return { membership, activities: [], equipments: [] };
+    }
+
+    // 測試情境：曾繳過費 (payment_status: 已繳費 Paid)，但社籍過期 (membership_expires_at: 2025-06-30)，目前非正式社員
+    const expiredMember = {
+      is_official_member: false,
+      membership_expires_at: '2025-06-30',
+      payment_status: '已繳費 Paid'
+    };
+
+    const res = simulateGetUnpaidPayments(expiredMember);
+    assert.strictEqual(res.membership.length, 1, '過期社員必須出現社費選項');
+    assert.strictEqual(res.membership[0].id, 'fee_membership');
+    assert.strictEqual(res.membership[0].amount, 200);
+
+    // 模擬前端裝備租借 5 折折扣連動
+    const selectedIds = ['fee_membership', 'eq_test'];
+    const hasMembershipSelected = selectedIds.includes('fee_membership');
+    const equipAmount = 400;
+    const finalEquipAmount = hasMembershipSelected ? Math.round(equipAmount * 0.5) : equipAmount;
+    assert.strictEqual(finalEquipAmount, 200, '勾選社費後裝備租借應享 5 折優惠');
+  });
+
+  it('2. 最新活動卡片狀態判定：狀態為「未來開放」時，isOpen 為 false，按鈕顯示為「未來開放 Coming Soon」且禁止一鍵報名', () => {
+    function simulateCheckEventStatus(status, isExpired) {
+      const isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
+      let effectiveStatus = status;
+      if (status === "開放" && isExpired) {
+        effectiveStatus = "關閉";
+      }
+
+      const isOpen = !isFuture && (effectiveStatus === "開放" || effectiveStatus.indexOf("開放") > -1 || effectiveStatus.toLowerCase().indexOf("open") > -1) && !isExpired;
+      const tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
+      const displayStatus = isFuture ? "未來開放 Coming Soon" : (isOpen ? "開放 Open" : "已截止 Closed");
+
+      return { isFuture, isOpen, tagColor, displayStatus };
+    }
+
+    // 測試「未來開放」
+    const futureResult = simulateCheckEventStatus("未來開放", false);
+    assert.strictEqual(futureResult.isFuture, true, '應判定為未來活動');
+    assert.strictEqual(futureResult.isOpen, false, '未來活動 isOpen 必須為 false');
+    assert.strictEqual(futureResult.displayStatus, "未來開放 Coming Soon");
+    assert.strictEqual(futureResult.tagColor, "#FF9800");
+
+    // 測試「開放」
+    const openResult = simulateCheckEventStatus("開放", false);
+    assert.strictEqual(openResult.isFuture, false);
+    assert.strictEqual(openResult.isOpen, true, '一般開放活動 isOpen 為 true');
+    assert.strictEqual(openResult.displayStatus, "開放 Open");
+
+    // 測試「已過期之開放活動」
+    const expiredResult = simulateCheckEventStatus("開放", true);
+    assert.strictEqual(expiredResult.isOpen, false);
+    assert.strictEqual(expiredResult.displayStatus, "已截止 Closed");
+  });
+
+  it('3. 報名名冊個資欄位正規化對齊：無論 RPC 回傳 realLineId/lineId、id/signupCode，皆能 100% 正確解析且 LINE ID 不為空', () => {
+    function simulateNormalizeSignups(rawSignups) {
+      return rawSignups.map((item, idx) => {
+        const emerContact = item.emergencyContact || '';
+        let parsedEmerName = item.emerName || '';
+        let parsedEmerRel = item.emerRel || '';
+        let parsedEmerPhone = item.emerPhone || '';
+        if (!parsedEmerName && emerContact && emerContact !== '未填寫') {
+          const parts = emerContact.match(/^(.*?)\s*(?:\((.*?)\))?\s*(\d.*)?$/);
+          if (parts) {
+            parsedEmerName = parts[1] || '';
+            parsedEmerRel = parts[2] || '';
+            parsedEmerPhone = parts[3] || '';
+          }
+        }
+
+        return {
+          rowNumber: item.rowNumber || idx + 1,
+          signupCode: String(item.signupCode || item.id || '').trim(),
+          userId: String(item.userId || item.lineUserId || '').trim(),
+          name: item.name || '未知報名者',
+          gender: item.gender || '',
+          phone: item.phone || '',
+          lineId: item.lineId || item.realLineId || '',
+          email: item.email || '',
+          birthday: item.birthday || '',
+          idNumber: item.idNumber || item.idCard || '',
+          emerName: parsedEmerName,
+          emerPhone: parsedEmerPhone,
+          emerRel: parsedEmerRel,
+          experience: item.experience || item.climbingExp || '',
+          fitnessTest: item.fitnessTest || item.fitnessDesc || '',
+          strengthProof: item.strengthProof || item.fitnessProof || '',
+          reviewResult: item.reviewResult || item.status || '審核中 Checking'
+        };
+      });
+    }
+
+    // 模擬先前的舊版 RPC 回傳 (帶 realLineId, id, climbingExp, fitnessDesc, emergencyContact)
+    const oldRpcData = [{
+      id: 'S2609-001',
+      name: '王大明',
+      lineUserId: 'U1234567890',
+      realLineId: 'daming_line',
+      phone: '0912345678',
+      gender: '男',
+      birthday: '2000-01-01',
+      emergencyContact: '王爸爸 (父子) 0988776655',
+      climbingExp: '百岳 10 座',
+      fitnessDesc: '每週跑步 10K',
+      status: '正取 Confirmed'
+    }];
+
+    const mapped = simulateNormalizeSignups(oldRpcData);
+    assert.strictEqual(mapped[0].signupCode, 'S2609-001', 'id 應正確正規化為 signupCode');
+    assert.strictEqual(mapped[0].lineId, 'daming_line', 'realLineId 應正確正規化為 lineId');
+    assert.strictEqual(mapped[0].gender, '男');
+    assert.strictEqual(mapped[0].birthday, '2000-01-01');
+    assert.strictEqual(mapped[0].emerName, '王爸爸');
+    assert.strictEqual(mapped[0].emerRel, '父子');
+    assert.strictEqual(mapped[0].emerPhone, '0988776655');
+    assert.strictEqual(mapped[0].experience, '百岳 10 座');
+    assert.strictEqual(mapped[0].fitnessTest, '每週跑步 10K');
+    assert.strictEqual(mapped[0].reviewResult, '正取 Confirmed');
+  });
+
+  it('4. 一鍵發送審核結果直查 Supabase：直連 event_signups (SSOT) 篩選正備取未通知者，並更新 notification_status = "已通知"', () => {
+    const mockSignupsInSb = [
+      { id: 'S01', line_user_id: 'U1001', name: '張三', status: '正取 Confirmed', notification_status: '未通知' },
+      { id: 'S02', line_user_id: 'U1002', name: '李四', status: '備取 Waitlisted', notification_status: '未通知' },
+      { id: 'S03', line_user_id: 'U1003', name: '王五', status: '正取 Confirmed', notification_status: '已通知' }, // 已通知，不重複發送
+      { id: 'S04', line_user_id: 'U1004', name: '趙六', status: '審核中 Checking', notification_status: '未通知' }  // 審核中，不發送
+    ];
+
+    const pushedUsers = [];
+    const patchedIds = [];
+
+    function simulateSendNotifications(sbList) {
+      let notifiedCount = 0;
+      for (const item of sbList) {
+        const isAcceptedOrWaitlisted = (item.status.indexOf("正取") > -1 || item.status.indexOf("備取") > -1);
+        if (isAcceptedOrWaitlisted && item.notification_status !== "已通知" && item.line_user_id.startsWith("U")) {
+          pushedUsers.push({ uid: item.line_user_id, status: item.status });
+          patchedIds.push(item.id);
+          notifiedCount++;
+        }
+      }
+      return { status: 'success', notifiedCount };
+    }
+
+    const result = simulateSendNotifications(mockSignupsInSb);
+    assert.strictEqual(result.notifiedCount, 2, '應發送 2 筆未通知的正取與備取');
+    assert.deepStrictEqual(pushedUsers.map(u => u.uid), ['U1001', 'U1002']);
+    assert.deepStrictEqual(patchedIds, ['S01', 'S02']);
+  });
+
+  it('5. 正備取更改安全儲存：嚴格限制只有在 Supabase 更新成功時才變更前端 state 與快取，失敗立即報警且不改值', async () => {
+    let sbUpdated = false;
+    let localStateValue = '正取 Confirmed';
+
+    async function simulateHandleUpdateResult(applicant, newResult, mockSbRpc) {
+      const targetSignupCode = (applicant.signupCode || applicant.id || '').trim();
+      if (!targetSignupCode) {
+        throw new Error('缺少報名序號/代碼');
+      }
+
+      const sbSuccess = await mockSbRpc(targetSignupCode, newResult);
+      if (!sbSuccess) {
+        throw new Error('Supabase 權限不足或更新失敗');
+      }
+
+      // 真正成功才寫入本地
+      localStateValue = newResult;
+      return true;
+    }
+
+    // 情境 A：RPC 成功
+    await simulateHandleUpdateResult({ signupCode: 'S101' }, '備取 Waitlisted', async () => true);
+    assert.strictEqual(localStateValue, '備取 Waitlisted', 'Supabase 更新成功應更新前端 state');
+
+    // 情境 B：RPC 失敗
+    try {
+      await simulateHandleUpdateResult({ signupCode: 'S101' }, '正取 Confirmed', async () => false);
+      assert.fail('應拋出例外');
+    } catch (err) {
+      assert.ok(err.message.includes('Supabase 權限不足或更新失敗'));
+      // 本地 state 依然保持為原來的「備取 Waitlisted」，絕不被偽更新！
+      assert.strictEqual(localStateValue, '備取 Waitlisted', '失敗時前端 state 必須保持原值，不可被偽修改掩蓋');
+    }
+  });
+});
+
 

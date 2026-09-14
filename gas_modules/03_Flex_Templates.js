@@ -82,17 +82,19 @@ function sendEventList(replyToken) {
     var deadlineStr = ev.deadline || "";
     var isExpired = _isEventExpired(deadlineStr);
 
+    // 判斷是否為未來開放或已過期
+    var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
     if (status === "開放" && isExpired) {
       status = "關閉";
     }
 
     // 僅顯示「開放」或「未來開放」之活動
-    if (status === "開放" || status === "未來開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1) {
+    if (isFuture || status === "開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1) {
       var eventId = ev.id || "";
       var eventName = ev.title || "未命名活動";
-      var isOpen = (status === "開放" || status.indexOf("開放") > -1) && !isExpired;
-      var tagColor = isOpen ? "#1DB446" : "#FF9800";
-      var displayStatus = isOpen ? "開放 Open" : "未來開放 Coming Soon";
+      var isOpen = !isFuture && (status === "開放" || status.indexOf("開放") > -1) && !isExpired;
+      var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
+      var displayStatus = isFuture ? "未來開放 Coming Soon" : (isOpen ? "開放 Open" : "已截止 Closed");
       var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
       var startFormatted = _formatEventDate(ev.start_date);
       var endFormatted = _formatEventDate(ev.end_date);
@@ -231,6 +233,7 @@ function sendEventDetail(replyToken, eventId) {
   var deadlineStr = ev.deadline || "";
   var isExpired = _isEventExpired(deadlineStr);
 
+  var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
   if (status === "開放" && isExpired) {
     status = "關閉";
   }
@@ -246,7 +249,7 @@ function sendEventDetail(replyToken, eventId) {
   }
 
   var buttonBox;
-  if (status === "開放" && !isExpired) {
+  if (!isFuture && status === "開放" && !isExpired) {
     buttonBox = {
       "type": "button",
       "style": "primary",
@@ -259,7 +262,7 @@ function sendEventDetail(replyToken, eventId) {
       }
     };
   } else {
-    var closedLabel = isExpired ? "報名已截止 Closed" : "尚未開放 Not Open";
+    var closedLabel = isFuture ? "即將開放 Coming Soon" : (isExpired ? "報名已截止 Closed" : "尚未開放 Not Open");
     buttonBox = {
       "type": "button",
       "style": "secondary",

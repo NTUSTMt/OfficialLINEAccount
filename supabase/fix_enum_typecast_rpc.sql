@@ -335,18 +335,39 @@ BEGIN
     INTO v_signups
     FROM (
         SELECT jsonb_build_object(
+            'rowNumber', ROW_NUMBER() OVER (ORDER BY s.created_at ASC),
+            'signupCode', s.id,
             'id', s.id,
-            'name', COALESCE(m.name, s.name, '未命名'),
+            'userId', s.line_user_id,
             'lineUserId', s.line_user_id,
-            'realLineId', COALESCE(m.line_id, ''),
+            'name', COALESCE(s.name, m.name, '未知報名者'),
+            'gender', COALESCE(m.gender, ''),
             'phone', COALESCE(m.phone, ''),
+            'lineId', COALESCE(m.line_id, ''),
+            'realLineId', COALESCE(m.line_id, ''),
+            'email', COALESCE(m.email, ''),
+            'address', COALESCE(m.address, ''),
+            'birthday', COALESCE(m.birthday, ''),
+            'idNumber', COALESCE(m.id_card, ''),
+            'idCard', COALESCE(m.id_card, ''),
+            'emerName', COALESCE(m.emergency_contact_name, ''),
+            'emerRel', COALESCE(m.emergency_contact_rel, ''),
+            'emerPhone', COALESCE(m.emergency_contact_phone, ''),
+            'emerAddr', COALESCE(m.emergency_contact_address, ''),
             'emergencyContact', CASE 
                 WHEN m.emergency_contact_name IS NOT NULL AND m.emergency_contact_name != '' THEN
                     m.emergency_contact_name || ' (' || COALESCE(m.emergency_contact_rel, '未填關係') || ') ' || COALESCE(m.emergency_contact_phone, '')
                 ELSE '未填寫'
             END,
+            'experience', COALESCE(m.outdoor_experience, ''),
             'climbingExp', COALESCE(m.outdoor_experience, ''),
+            'fitnessTest', COALESCE(m.fitness_desc, ''),
             'fitnessDesc', COALESCE(m.fitness_desc, ''),
+            'strengthProof', CASE 
+                WHEN jsonb_typeof(m.proof_urls) = 'array' THEN 
+                    (SELECT string_agg(elem::text, E'\n') FROM jsonb_array_elements_text(m.proof_urls) AS elem)
+                ELSE COALESCE(m.proof_urls#>>'{}', '')
+            END,
             'fitnessProof', CASE 
                 WHEN jsonb_typeof(m.proof_urls) = 'array' THEN 
                     (SELECT string_agg(elem::text, E'\n') FROM jsonb_array_elements_text(m.proof_urls) AS elem)
@@ -357,7 +378,7 @@ BEGIN
             'medicalHistory', COALESCE(m.medical_history, ''),
             'isOfficial', CASE WHEN COALESCE(m.is_official_member, FALSE) THEN '是' ELSE '否' END,
             'reviewResult', s.status,
-            'notifyStatus', '',
+            'notifyStatus', COALESCE(s.notification_status, ''),
             'payStatus', CASE 
                 WHEN s.status::text LIKE '%已繳費%' OR s.status::text LIKE '%Paid%' THEN '已繳費 Paid'
                 WHEN s.status::text LIKE '%待確認%' OR s.status::text LIKE '%Checking%' THEN '待確認 Checking'
@@ -391,7 +412,6 @@ DECLARE
     v_member members%ROWTYPE;
     v_is_expired BOOLEAN := FALSE;
     v_is_unpaid BOOLEAN := FALSE;
-    v_has_intent BOOLEAN := FALSE;
     v_membership JSONB := '[]'::jsonb;
     v_activities JSONB := '[]'::jsonb;
     v_equipments JSONB := '[]'::jsonb;
@@ -413,21 +433,14 @@ BEGIN
             v_is_expired := TRUE;
         END IF;
 
-        IF v_member.payment_status IS NULL 
-           OR (v_member.payment_status::text NOT LIKE '%已繳費%' AND v_member.payment_status::text NOT LIKE '%Paid%') THEN
-            v_is_unpaid := TRUE;
-        END IF;
+        v_is_official := COALESCE(v_member.is_official_member, FALSE) AND NOT v_is_expired;
 
-        IF v_member.join_membership_intent IS TRUE 
-           OR v_member.join_membership_intent ILIKE '%是%' 
-           OR v_member.join_membership_intent ILIKE '%意願%' 
-           OR v_member.membership_expires_at IS NOT NULL THEN
-            v_has_intent := TRUE;
-        END IF;
-
-        -- 只要不是「待確認 Checking」且（未繳費或過期）且有加入意願
-        IF (v_member.payment_status IS NULL OR (v_member.payment_status::text NOT LIKE '%待確認%' AND v_member.payment_status::text NOT LIKE '%Checking%')) THEN
-            IF (v_is_unpaid OR v_is_expired) AND v_has_intent THEN
+        -- 只要不是有效正式社員（尚未入社或社籍已過期），且目前無待審核社費單，即提供繳社交費選項
+        IF NOT v_is_official THEN
+            IF (v_member.payment_status IS NULL OR (
+                v_member.payment_status::text NOT LIKE '%待確認%' 
+                AND v_member.payment_status::text NOT LIKE '%Checking%'
+            )) THEN
                 v_membership := jsonb_build_array(
                     jsonb_build_object(
                         'id', 'fee_membership',
@@ -437,8 +450,15 @@ BEGIN
                 );
             END IF;
         END IF;
-
-        v_is_official := COALESCE(v_member.is_official_member, FALSE) AND NOT v_is_expired;
+    ELSE
+        -- members 表中尚無該使用者，肯定非社員，提供繳社交費選項
+        v_membership := jsonb_build_array(
+            jsonb_build_object(
+                'id', 'fee_membership',
+                'name', '社籍與社費 (Membership Fee)',
+                'amount', 200
+            )
+        );
     END IF;
 
     -- 2. 查詢正取活動欠款 (從 event_signups 與 events 關聯)

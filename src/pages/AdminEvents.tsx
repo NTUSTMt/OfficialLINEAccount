@@ -436,12 +436,13 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const cachedSignups = getCache<SignupApplicant[]>(cacheKey);
       if (cachedSignups && cachedSignups.length > 0) {
         setSignupsList(cachedSignups);
-        setLoadingSignups(false);
-        return;
+        // 先顯示快取以提供極速體驗，但不阻斷後續從 Supabase 取得最新權威名單
+      } else {
+        setLoadingSignups(true);
       }
+    } else {
+      setLoadingSignups(true);
     }
-
-    setLoadingSignups(true);
     let loadedFromSb = false;
     try {
       if (!forceRefresh) {
@@ -504,71 +505,76 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const handleUpdateApplicantResult = async (applicant: SignupApplicant, newResult: string) => {
     const applicantKey = String(applicant.rowNumber);
     setUpdatingSignupCode(applicantKey);
+    const targetSignupCode = (applicant.signupCode || (applicant as any).id || '').trim();
+
     try {
-      // ⚡ 1. 優先極速更新 Supabase (< 30ms)
-      let sbSuccess = false;
-      if (applicant.signupCode) {
-        sbSuccess = await updateSignupStatusInSupabase(
-          userId || 'TEST_USER_ID',
-          selectedEventForSignups?.id || '',
-          applicant.signupCode,
-          newResult
-        );
+      if (!targetSignupCode) {
+        throw new Error('缺少報名序號/代碼 (Missing Signup Code)');
       }
 
-      // 2. 審核狀態已極速更新至 Supabase (並由 Triggers 自動排入 sync_queue 供試算表背景同步)
-      if (sbSuccess || !applicant.signupCode) {
-        const oldResult = applicant.reviewResult || '';
-        const getCategory = (res: string) => {
-          if (res.indexOf('正取') > -1) return 'accepted';
-          if (res.indexOf('備取') > -1) return 'waitlisted';
-          return 'pending';
-        };
-        const oldCat = getCategory(oldResult);
-        const newCat = getCategory(newResult);
+      // ⚡ 1. 優先極速更新 Supabase (< 30ms)
+      const sbSuccess = await updateSignupStatusInSupabase(
+        userId || 'TEST_USER_ID',
+        selectedEventForSignups?.id || '',
+        targetSignupCode,
+        newResult
+      );
 
-        setSignupsList((prev) => {
-          const updated = prev.map((s) => {
-            const isMatch = s.rowNumber === applicant.rowNumber;
-            return isMatch ? { ...s, reviewResult: newResult, notifyStatus: '' } : s;
-          });
-          if (selectedEventForSignups?.id) {
-            setCache(CACHE_KEY_SIGNUPS_PREFIX + selectedEventForSignups.id, updated, 120);
-          }
-          return updated;
+      if (!sbSuccess) {
+        const lastErr = getLastSupabaseError() || 'Supabase RPC 審核狀態寫入被拒絕或失敗';
+        throw new Error(lastErr);
+      }
+
+      // 2. 審核狀態已成功寫入 Supabase (並由 Triggers 自動排入 sync_queue 供試算表背景同步)
+      const oldResult = applicant.reviewResult || '';
+      const getCategory = (res: string) => {
+        if (res.indexOf('正取') > -1) return 'accepted';
+        if (res.indexOf('備取') > -1) return 'waitlisted';
+        return 'pending';
+      };
+      const oldCat = getCategory(oldResult);
+      const newCat = getCategory(newResult);
+
+      setSignupsList((prev) => {
+        const updated = prev.map((s) => {
+          const isMatch = s.rowNumber === applicant.rowNumber || s.signupCode === targetSignupCode;
+          return isMatch ? { ...s, reviewResult: newResult, notifyStatus: '' } : s;
         });
-
-        if (profileModalApplicant && profileModalApplicant.rowNumber === applicant.rowNumber) {
-          setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: newResult } : null);
+        if (selectedEventForSignups?.id) {
+          setCache(CACHE_KEY_SIGNUPS_PREFIX + selectedEventForSignups.id, updated, 120);
         }
+        return updated;
+      });
 
-        if (oldCat !== newCat && selectedEventForSignups?.id) {
-          setEvents((prevEvents) => {
-            const nextEvents = prevEvents.map((e) => {
-              if (e.id !== selectedEventForSignups.id) return e;
-              const nextStats = { ...e.stats };
-              if (nextStats[oldCat] > 0) nextStats[oldCat]--;
-              nextStats[newCat] = (nextStats[newCat] || 0) + 1;
-              return { ...e, stats: nextStats };
-            });
-            setCache(CACHE_KEY_ADMIN_EVENTS, nextEvents, 180);
-            return nextEvents;
-          });
+      if (profileModalApplicant && (profileModalApplicant.rowNumber === applicant.rowNumber || profileModalApplicant.signupCode === targetSignupCode)) {
+        setProfileModalApplicant((prev) => prev ? { ...prev, reviewResult: newResult } : null);
+      }
 
-          setSelectedEventForSignups((prev) => {
-            if (!prev) return prev;
-            const nextStats = { ...prev.stats };
+      if (oldCat !== newCat && selectedEventForSignups?.id) {
+        setEvents((prevEvents) => {
+          const nextEvents = prevEvents.map((e) => {
+            if (e.id !== selectedEventForSignups.id) return e;
+            const nextStats = { ...e.stats };
             if (nextStats[oldCat] > 0) nextStats[oldCat]--;
             nextStats[newCat] = (nextStats[newCat] || 0) + 1;
-            return { ...prev, stats: nextStats };
+            return { ...e, stats: nextStats };
           });
-        }
-      } else {
-        alert(t('adminEvents.alerts.error', { message: '更新失敗' }));
+          setCache(CACHE_KEY_ADMIN_EVENTS, nextEvents, 180);
+          return nextEvents;
+        });
+
+        setSelectedEventForSignups((prev) => {
+          if (!prev) return prev;
+          const nextStats = { ...prev.stats };
+          if (nextStats[oldCat] > 0) nextStats[oldCat]--;
+          nextStats[newCat] = (nextStats[newCat] || 0) + 1;
+          return { ...prev, stats: nextStats };
+        });
       }
-    } catch (err) {
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
       console.error('更新審核狀態失敗:', err);
-      alert(t('adminEvents.alerts.error', { message: err instanceof Error ? err.message : '網路連線失敗或後端未回應' }));
+      alert(`更新審核狀態失敗: ${errMsg}`);
     } finally {
       setUpdatingSignupCode(null);
     }

@@ -965,17 +965,19 @@ function sendEventList(replyToken) {
     var deadlineStr = ev.deadline || "";
     var isExpired = _isEventExpired(deadlineStr);
 
+    // 判斷是否為未來開放或已過期
+    var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
     if (status === "開放" && isExpired) {
       status = "關閉";
     }
 
     // 僅顯示「開放」或「未來開放」之活動
-    if (status === "開放" || status === "未來開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1) {
+    if (isFuture || status === "開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1) {
       var eventId = ev.id || "";
       var eventName = ev.title || "未命名活動";
-      var isOpen = (status === "開放" || status.indexOf("開放") > -1) && !isExpired;
-      var tagColor = isOpen ? "#1DB446" : "#FF9800";
-      var displayStatus = isOpen ? "開放 Open" : "未來開放 Coming Soon";
+      var isOpen = !isFuture && (status === "開放" || status.indexOf("開放") > -1) && !isExpired;
+      var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
+      var displayStatus = isFuture ? "未來開放 Coming Soon" : (isOpen ? "開放 Open" : "已截止 Closed");
       var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
       var startFormatted = _formatEventDate(ev.start_date);
       var endFormatted = _formatEventDate(ev.end_date);
@@ -1114,6 +1116,7 @@ function sendEventDetail(replyToken, eventId) {
   var deadlineStr = ev.deadline || "";
   var isExpired = _isEventExpired(deadlineStr);
 
+  var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
   if (status === "開放" && isExpired) {
     status = "關閉";
   }
@@ -1129,7 +1132,7 @@ function sendEventDetail(replyToken, eventId) {
   }
 
   var buttonBox;
-  if (status === "開放" && !isExpired) {
+  if (!isFuture && status === "開放" && !isExpired) {
     buttonBox = {
       "type": "button",
       "style": "primary",
@@ -1142,7 +1145,7 @@ function sendEventDetail(replyToken, eventId) {
       }
     };
   } else {
-    var closedLabel = isExpired ? "報名已截止 Closed" : "尚未開放 Not Open";
+    var closedLabel = isFuture ? "即將開放 Coming Soon" : (isExpired ? "報名已截止 Closed" : "尚未開放 Not Open");
     buttonBox = {
       "type": "button",
       "style": "secondary",
@@ -5392,152 +5395,191 @@ function _handleSendEventNotifications(json) {
     }
 
     var notifiedCount = 0;
+    var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
+    var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
 
-    // 1. 優先嘗試由 Google Sheets 查詢與更新
-    if (ss) {
-      var sSheet = _getSheetByTableName(ss, "event_signups");
-      var eventSheet = _getSheetByTableName(ss, "events");
-      if (sSheet && eventSheet) {
-        var sData = sSheet.getDataRange().getValues();
-        var eData = eventSheet.getDataRange().getDisplayValues();
-        var eIdIdx = _findHeaderCol(eData[0], "id", ["活動編號"]);
-        var eNameIdx = _findHeaderCol(eData[0], "title", ["活動名稱"]);
+    // ⚡ 1. 優先直接由 Supabase event_signups (SSOT) 撈取活動報名者與推播
+    var sbSuccessNotified = false;
+    if (sbUrl && sbKey && targetEventId) {
+      try {
+        // 取得活動名稱
+        var evRes = _supabaseGet("events", { id: "eq." + targetEventId, select: "id,title" });
+        var targetEventTitle = (evRes && evRes[0] && evRes[0].title) ? evRes[0].title : targetEventId;
 
-        var sysIdx = sData[0].findIndex(function (h) {
-          var s = String(h).toLowerCase();
-          return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
-        });
-        var nameIdx = _fi(sData[0], "姓名");
-        var evtIdx = _fi(sData[0], "活動編號");
-        var resultIdx = sData[0].findIndex(function (h) {
-          return String(h).includes("審核") || String(h).includes("結果");
-        });
-        var notifyIdx = sData[0].findIndex(function (h) {
-          return String(h).includes("通知");
+        // 查詢該活動之所有報名者
+        var signupsUrl = sbUrl + "/rest/v1/event_signups?event_id=eq." + encodeURIComponent(targetEventId) + "&select=id,event_id,line_user_id,name,status,notification_status";
+        var res = UrlFetchApp.fetch(signupsUrl, {
+          method: "get",
+          headers: {
+            "apikey": sbKey,
+            "Authorization": "Bearer " + sbKey
+          },
+          muteHttpExceptions: true
         });
 
-        for (var i = 1; i < sData.length; i++) {
-          var rowEventId = (evtIdx > -1) ? String(sData[i][evtIdx] || "").trim() : "";
-          if (targetEventId && rowEventId !== targetEventId) continue;
+        if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
+          var sbSignups = JSON.parse(res.getContentText());
+          if (Array.isArray(sbSignups) && sbSignups.length > 0) {
+            sbSuccessNotified = true;
+            for (var k = 0; k < sbSignups.length; k++) {
+              var sItem = sbSignups[k];
+              var statusStr = String(sItem.status || "").trim();
+              var notifyStr = String(sItem.notification_status || "").trim();
+              var targetUid = String(sItem.line_user_id || "").trim();
+              var applicantName = String(sItem.name || "社員").trim();
 
-          var result = (resultIdx > -1) ? String(sData[i][resultIdx] || "") : "";
-          var notifyStatus = (notifyIdx > -1) ? String(sData[i][notifyIdx] || "") : "";
-          var targetUid = (sysIdx > -1) ? String(sData[i][sysIdx] || "").trim() : "";
-          var name = (nameIdx > -1 && sData[i][nameIdx]) ? String(sData[i][nameIdx]) : "社員";
+              var isAcceptedOrWaitlisted = (statusStr.indexOf("正取") > -1 || statusStr.indexOf("備取") > -1);
+              if (isAcceptedOrWaitlisted && notifyStr !== "已通知" && statusStr.indexOf("取消") === -1 && targetUid.startsWith("U")) {
+                if (statusStr.indexOf("正取") > -1) {
+                  var acceptedFlex = {
+                    type: "bubble",
+                    body: {
+                      type: "box",
+                      layout: "vertical",
+                      contents: [
+                        { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#1DB446", size: "sm" },
+                        { type: "text", text: "活動正取通知", weight: "bold", size: "xl", margin: "md" },
+                        { type: "text", text: "哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:", margin: "md", size: "sm", wrap: true },
+                        { type: "text", text: targetEventTitle, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
+                        { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
+                        { type: "text", text: "【 " + statusStr + " 】", weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
+                        { type: "separator", margin: "md" },
+                        { type: "text", text: "恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入出隊群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                      ]
+                    },
+                    footer: {
+                      type: "box",
+                      layout: "vertical",
+                      contents: [{
+                        type: "button",
+                        style: "primary",
+                        color: "#1DB446",
+                        action: {
+                          type: "uri",
+                          label: "前往繳費系統 Pay",
+                          uri: "https://liff.line.me/" + (LIFF_CHANNEL_ID || "2009217429") + "-u7OCkmQO"
+                        }
+                      }]
+                    }
+                  };
+                  pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
+                } else {
+                  var waitlistFlex = {
+                    type: "bubble",
+                    body: {
+                      type: "box",
+                      layout: "vertical",
+                      contents: [
+                        { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#FF9800", size: "sm" },
+                        { type: "text", text: "活動備取通知", weight: "bold", size: "xl", margin: "md" },
+                        { type: "text", text: "哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:", margin: "md", size: "sm", wrap: true },
+                        { type: "text", text: targetEventTitle, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
+                        { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
+                        { type: "text", text: "【 " + statusStr + " 】", weight: "bold", color: "#FF9800", size: "lg", align: "center", margin: "md" },
+                        { type: "separator", margin: "md" },
+                        { type: "text", text: "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                      ]
+                    },
+                    footer: {
+                      type: "box",
+                      layout: "vertical",
+                      contents: [{
+                        type: "button",
+                        style: "primary",
+                        color: "#FF9800",
+                        action: {
+                          type: "postback",
+                          label: "確認備取意願 Confirm Waitlist",
+                          data: "action=confirm_waitlist&eventId=" + encodeURIComponent(targetEventId) + "&userId=" + encodeURIComponent(targetUid)
+                        }
+                      }]
+                    }
+                  };
+                  pushFlexMessage(targetUid, "【活動備取通知 Waitlist】", waitlistFlex);
+                }
 
-          var isAcceptedOrWaitlisted = (result.indexOf("正取") > -1 || result.indexOf("備取") > -1);
-          if (isAcceptedOrWaitlisted && notifyStatus !== "已通知" && result.indexOf("取消") === -1 && targetUid.startsWith("U")) {
-            var eventName = rowEventId;
-            for (var e = 1; e < eData.length; e++) {
-              if (eData[e][eIdIdx > -1 ? eIdIdx : 0] === rowEventId) {
-                eventName = eData[e][eNameIdx > -1 ? eNameIdx : 1];
-                break;
+                // 立即以 PATCH 更新 Supabase event_signups 表的 notification_status 為已通知
+                var patchItemUrl = sbUrl + "/rest/v1/event_signups?id=eq." + encodeURIComponent(sItem.id);
+                UrlFetchApp.fetch(patchItemUrl, {
+                  method: "patch",
+                  contentType: "application/json",
+                  headers: {
+                    "apikey": sbKey,
+                    "Authorization": "Bearer " + sbKey,
+                    "Prefer": "return=minimal"
+                  },
+                  payload: JSON.stringify({ notification_status: "已通知", updated_at: new Date().toISOString() }),
+                  muteHttpExceptions: true
+                });
+
+                notifiedCount++;
               }
             }
-
-            if (result.indexOf("正取") > -1) {
-              var acceptedFlex = {
-                type: "bubble",
-                body: {
-                  type: "box",
-                  layout: "vertical",
-                  contents: [
-                    { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#1DB446", size: "sm" },
-                    { type: "text", text: "活動正取通知", weight: "bold", size: "xl", margin: "md" },
-                    { type: "text", text: "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", margin: "md", size: "sm", wrap: true },
-                    { type: "text", text: eventName, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
-                    { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
-                    { type: "text", text: "【 " + result + " 】", weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
-                    { type: "separator", margin: "md" },
-                    { type: "text", text: "恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入出隊群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!", wrap: true, margin: "md", size: "xs", color: "#666666" }
-                  ]
-                },
-                footer: {
-                  type: "box",
-                  layout: "vertical",
-                  contents: [{
-                    type: "button",
-                    style: "primary",
-                    color: "#1DB446",
-                    action: {
-                      type: "uri",
-                      label: "前往繳費系統 Pay",
-                      uri: "https://liff.line.me/" + (LIFF_CHANNEL_ID || "2009217429") + "-u7OCkmQO"
-                    }
-                  }]
-                }
-              };
-              pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
-            } else {
-              var waitlistFlex = {
-                type: "bubble",
-                body: {
-                  type: "box",
-                  layout: "vertical",
-                  contents: [
-                    { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#FF9800", size: "sm" },
-                    { type: "text", text: "活動備取通知", weight: "bold", size: "xl", margin: "md" },
-                    { type: "text", text: "哈囉 " + name + "！您報名的活動：\nHello " + name + "! For the event:", margin: "md", size: "sm", wrap: true },
-                    { type: "text", text: eventName, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
-                    { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
-                    { type: "text", text: "【 " + result + " 】", weight: "bold", color: "#FF9800", size: "lg", align: "center", margin: "md" },
-                    { type: "separator", margin: "md" },
-                    { type: "text", text: "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!", wrap: true, margin: "md", size: "xs", color: "#666666" }
-                  ]
-                },
-                footer: {
-                  type: "box",
-                  layout: "vertical",
-                  contents: [{
-                    type: "button",
-                    style: "primary",
-                    color: "#FF9800",
-                    action: {
-                      type: "postback",
-                      label: "確認備取意願 Confirm Waitlist",
-                      data: "action=confirm_waitlist&eventId=" + rowEventId + "&userId=" + targetUid
-                    }
-                  }]
-                }
-              };
-              pushFlexMessage(targetUid, "【活動備取通知 Waitlist】", waitlistFlex);
-            }
-
-            if (notifyIdx > -1) {
-              sSheet.getRange(i + 1, notifyIdx + 1).setValue("已通知");
-            }
-            // ⚡ 同步更新該活動專屬獨立試算表之審核結果
-            try {
-              var sCodeCol = _findHeaderCol(sData[0], "id", ["專屬碼", "報名編號"]);
-              var sCode = (sCodeCol > -1) ? String(sData[i][sCodeCol] || "").trim() : "";
-              if (sCode) _syncReviewToEventSpreadsheet(rowEventId, sCode, result);
-            } catch (evSheetErr) { }
-
-            notifiedCount++;
           }
         }
+      } catch (sbPushErr) {
+        console.warn("由 Supabase 發送活動審核推播例外:", sbPushErr);
       }
     }
 
-    // 2. 同步更新 Supabase event_signups 表的 notify_status
-    var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
-    var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
-    if (sbUrl && sbKey && targetEventId) {
+    // 2. 備援或同步更新 Google Sheets
+    if (ss) {
       try {
-        var patchUrl = sbUrl + "/rest/v1/event_signups?event_id=eq." + encodeURIComponent(targetEventId) + "&review_status=in.(正取,備取)&notify_status=neq.已通知";
-        UrlFetchApp.fetch(patchUrl, {
-          method: "patch",
-          contentType: "application/json",
-          headers: {
-            "apikey": sbKey,
-            "Authorization": "Bearer " + sbKey,
-            "Prefer": "return=minimal"
-          },
-          payload: JSON.stringify({ notify_status: "已通知" }),
-          muteHttpExceptions: true
-        });
-      } catch (sbErr) {
-        console.warn("同步 Supabase 報名通知狀態警告:", sbErr);
+        var sSheet = _getSheetByTableName(ss, "event_signups");
+        var eventSheet = _getSheetByTableName(ss, "events");
+        if (sSheet && eventSheet) {
+          var sData = sSheet.getDataRange().getValues();
+          var eData = eventSheet.getDataRange().getDisplayValues();
+          var eIdIdx = _findHeaderCol(eData[0], "id", ["活動編號"]);
+          var eNameIdx = _findHeaderCol(eData[0], "title", ["活動名稱"]);
+
+          var sysIdx = sData[0].findIndex(function (h) {
+            var s = String(h).toLowerCase();
+            return s.includes("系統識別碼") || s.includes("userid") || s.includes("識別碼");
+          });
+          var nameIdx = _fi(sData[0], "姓名");
+          var evtIdx = _fi(sData[0], "活動編號");
+          var resultIdx = sData[0].findIndex(function (h) {
+            return String(h).includes("審核") || String(h).includes("結果");
+          });
+          var notifyIdx = sData[0].findIndex(function (h) {
+            return String(h).includes("通知");
+          });
+
+          for (var i = 1; i < sData.length; i++) {
+            var rowEventId = (evtIdx > -1) ? String(sData[i][evtIdx] || "").trim() : "";
+            if (targetEventId && rowEventId !== targetEventId) continue;
+
+            var result = (resultIdx > -1) ? String(sData[i][resultIdx] || "") : "";
+            var notifyStatus = (notifyIdx > -1) ? String(sData[i][notifyIdx] || "") : "";
+            var targetUid = (sysIdx > -1) ? String(sData[i][sysIdx] || "").trim() : "";
+            var name = (nameIdx > -1 && sData[i][nameIdx]) ? String(sData[i][nameIdx]) : "社員";
+
+            var isAcceptedOrWaitlisted = (result.indexOf("正取") > -1 || result.indexOf("備取") > -1);
+            if (isAcceptedOrWaitlisted && notifyStatus !== "已通知" && result.indexOf("取消") === -1 && targetUid.startsWith("U")) {
+              if (!sbSuccessNotified) {
+                var eventName = rowEventId;
+                for (var e = 1; e < eData.length; e++) {
+                  if (eData[e][eIdIdx > -1 ? eIdIdx : 0] === rowEventId) {
+                    eventName = eData[e][eNameIdx > -1 ? eNameIdx : 1];
+                    break;
+                  }
+                }
+                if (result.indexOf("正取") > -1) {
+                  pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
+                } else {
+                  pushFlexMessage(targetUid, "【活動備取通知 Waitlist】", waitlistFlex);
+                }
+                notifiedCount++;
+              }
+              if (notifyIdx > -1) {
+                sSheet.getRange(i + 1, notifyIdx + 1).setValue("已通知");
+              }
+            }
+          }
+        }
+      } catch (sheetErr) {
+        console.warn("更新試算表審核通知標記失敗:", sheetErr);
       }
     }
 
@@ -5633,24 +5675,55 @@ function _handleGetEventSignups(eventId, userId) {
 
     // 1. 優先直接由 Supabase event_signups 查詢 (SSOT)
     try {
-      var query = { order: "created_at.desc" };
+      var query = {
+        order: "created_at.asc",
+        select: "id,event_id,line_user_id,name,status,notification_status,payment_status,members(name,gender,line_id,email,phone,address,birthday,id_card,emergency_contact_name,emergency_contact_phone,emergency_contact_address,emergency_contact_rel,outdoor_experience,fitness_desc,proof_urls,department,student_id,medical_history,is_official_member)"
+      };
       if (eventId) query.event_id = "eq." + eventId;
       var sbSignups = _supabaseGet("event_signups", query);
       if (sbSignups && Array.isArray(sbSignups) && sbSignups.length > 0) {
         var sList = sbSignups.map(function(s, idx) {
+          var m = s.members || {};
+          var proofUrlStr = "";
+          if (Array.isArray(m.proof_urls)) {
+            proofUrlStr = m.proof_urls.join("\n");
+          } else if (typeof m.proof_urls === "string") {
+            proofUrlStr = m.proof_urls;
+          }
+
           return {
             rowNumber: idx + 2,
-            eventId: s.event_id || "",
             signupCode: s.id || "",
-            name: s.name || "社員",
-            gender: s.gender || "",
-            email: s.email || "",
-            phone: s.phone || "",
-            experience: s.experience || "",
-            fitnessProof: s.fitness_proof || "",
-            reviewResult: s.review_status || "審核中",
-            notifyStatus: s.notify_status || "未通知",
-            paymentStatus: s.payment_status || "未繳費"
+            id: s.id || "",
+            userId: s.line_user_id || "",
+            lineUserId: s.line_user_id || "",
+            name: s.name || m.name || "社員",
+            gender: m.gender || "",
+            phone: m.phone || "",
+            lineId: m.line_id || "",
+            realLineId: m.line_id || "",
+            email: m.email || "",
+            address: m.address || "",
+            birthday: m.birthday || "",
+            idNumber: m.id_card || "",
+            emerName: m.emergency_contact_name || "",
+            emerPhone: m.emergency_contact_phone || "",
+            emerRel: m.emergency_contact_rel || "",
+            emerAddr: m.emergency_contact_address || "",
+            experience: m.outdoor_experience || "",
+            climbingExp: m.outdoor_experience || "",
+            fitnessTest: m.fitness_desc || "",
+            fitnessDesc: m.fitness_desc || "",
+            strengthProof: proofUrlStr,
+            fitnessProof: proofUrlStr,
+            department: m.department || "",
+            studentId: m.student_id || "",
+            medicalHistory: m.medical_history || "",
+            isOfficial: m.is_official_member ? "是" : "否",
+            reviewResult: s.status || "審核中 Checking",
+            notifyStatus: s.notification_status || "",
+            payStatus: s.payment_status || "未繳費",
+            remark: s.notes || ""
           };
         });
         return _jsonResponse({ status: "success", signups: sList });
@@ -5666,13 +5739,24 @@ function _handleGetEventSignups(eventId, userId) {
         var sData = sSheet.getDataRange().getDisplayValues();
         var headers = sData[0];
         var evtIdx = _findHeaderCol(headers, "event_id", ["活動編號"]);
-        var codeIdx = _findHeaderCol(headers, "id", ["專屬碼"]);
+        var codeIdx = _findHeaderCol(headers, "id", ["專屬碼", "報名編號"]);
+        var uidIdx = _findHeaderCol(headers, "line_user_id", ["系統識別碼", "userid"]);
         var nameIdx = _findHeaderCol(headers, "name", ["姓名"]);
         var genderIdx = _findHeaderCol(headers, "gender", ["性別"]);
-        var emailIdx = _findHeaderCol(headers, "email", ["聯絡信箱"]);
-        var phoneIdx = _findHeaderCol(headers, "phone", ["聯絡電話"]);
-        var expIdx = _findHeaderCol(headers, "experience", ["爬山經驗"]);
-        var proofIdx = _findHeaderCol(headers, "fitness_proof", ["體能證明"]);
+        var lineIdx = _findHeaderCol(headers, "line_id", ["LINE ID", "Line ID", "真實 LINE ID"]);
+        var emailIdx = _findHeaderCol(headers, "email", ["聯絡信箱", "Email"]);
+        var phoneIdx = _findHeaderCol(headers, "phone", ["聯絡電話", "電話"]);
+        var bdayIdx = _findHeaderCol(headers, "birthday", ["生日"]);
+        var idCardIdx = _findHeaderCol(headers, "id_card", ["證件號碼", "身分證號"]);
+        var addrIdx = _findHeaderCol(headers, "address", ["聯絡地址", "地址"]);
+        var expIdx = _findHeaderCol(headers, "experience", ["爬山經驗", "爬山經歷"]);
+        var fitnessIdx = _findHeaderCol(headers, "fitness_test", ["體能測驗", "體能紀錄"]);
+        var proofIdx = _findHeaderCol(headers, "fitness_proof", ["體能證明", "體能證明照片"]);
+        var emerNameIdx = _findHeaderCol(headers, "emer_name", ["緊急聯絡人姓名", "緊急聯絡人"]);
+        var emerPhoneIdx = _findHeaderCol(headers, "emer_phone", ["緊急聯絡人電話"]);
+        var emerRelIdx = _findHeaderCol(headers, "emer_rel", ["與緊急聯絡人關係", "關係"]);
+        var emerAddrIdx = _findHeaderCol(headers, "emer_addr", ["緊急聯絡人聯絡地址", "緊急聯絡人地址"]);
+        var offIdx = _findHeaderCol(headers, "is_official", ["是否為社員", "身分資格"]);
         var resultIdx = _findHeaderCol(headers, "review_status", ["審核結果", "結果"]);
         var notifyIdx = _findHeaderCol(headers, "notify_status", ["通知狀態", "通知"]);
         var payIdx = _findHeaderCol(headers, "payment_status", ["繳費狀態", "繳費"]);
@@ -5685,12 +5769,24 @@ function _handleGetEventSignups(eventId, userId) {
           signups.push({
             rowNumber: i + 1,
             signupCode: (codeIdx > -1) ? sData[i][codeIdx] : "",
+            id: (codeIdx > -1) ? sData[i][codeIdx] : "",
+            userId: (uidIdx > -1) ? sData[i][uidIdx] : "",
             name: (nameIdx > -1) ? sData[i][nameIdx] : "",
             gender: (genderIdx > -1) ? sData[i][genderIdx] : "",
+            lineId: (lineIdx > -1) ? sData[i][lineIdx] : "",
             email: (emailIdx > -1) ? sData[i][emailIdx] : "",
             phone: (phoneIdx > -1) ? sData[i][phoneIdx] : "",
+            birthday: (bdayIdx > -1) ? sData[i][bdayIdx] : "",
+            idNumber: (idCardIdx > -1) ? sData[i][idCardIdx] : "",
+            address: (addrIdx > -1) ? sData[i][addrIdx] : "",
+            emerName: (emerNameIdx > -1) ? sData[i][emerNameIdx] : "",
+            emerPhone: (emerPhoneIdx > -1) ? sData[i][emerPhoneIdx] : "",
+            emerRel: (emerRelIdx > -1) ? sData[i][emerRelIdx] : "",
+            emerAddr: (emerAddrIdx > -1) ? sData[i][emerAddrIdx] : "",
             experience: (expIdx > -1) ? sData[i][expIdx] : "",
-            fitnessProof: (proofIdx > -1) ? sData[i][proofIdx] : "",
+            fitnessTest: (fitnessIdx > -1) ? sData[i][fitnessIdx] : "",
+            strengthProof: (proofIdx > -1) ? sData[i][proofIdx] : "",
+            isOfficial: (offIdx > -1) ? sData[i][offIdx] : "否",
             reviewResult: (resultIdx > -1) ? sData[i][resultIdx] : "未審核",
             notifyStatus: (notifyIdx > -1) ? sData[i][notifyIdx] : "未通知",
             paymentStatus: (payIdx > -1) ? sData[i][payIdx] : "未繳費"

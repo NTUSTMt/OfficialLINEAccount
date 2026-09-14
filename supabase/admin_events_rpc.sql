@@ -51,8 +51,16 @@ BEGIN
         RETURN TRUE;
     END IF;
 
+    -- 雙軌鑑權：同時檢查 officers 表與 members 表 (is_officer 旗標或幹部職務角色)
     RETURN EXISTS (
         SELECT 1 FROM officers WHERE line_user_id = trim(p_line_user_id)
+    ) OR EXISTS (
+        SELECT 1 FROM members 
+        WHERE line_user_id = trim(p_line_user_id) 
+          AND (
+              COALESCE(is_officer, FALSE) = TRUE 
+              OR COALESCE(officer_role, '') IN ('幹部', '社長', '副社長', '管理員', '嚮導', '嚮導長', '裝備長', '活動長', '總務')
+          )
     );
 END;
 $$;
@@ -60,7 +68,7 @@ $$;
 -- 3. 自動/手動同步幹部快取 (sync_officer_cache_rpc)
 -- 當使用者首次於前端經由 GAS 通過幹部驗證時，自動登錄至 Supabase officers 表
 CREATE OR REPLACE FUNCTION sync_officer_cache_rpc(
-    p_officer_line_user_id TEXT,
+    p_line_user_id TEXT,
     p_name TEXT DEFAULT '',
     p_role TEXT DEFAULT '幹部'
 )
@@ -70,13 +78,13 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-    IF p_officer_line_user_id IS NULL OR trim(p_officer_line_user_id) = '' OR trim(p_officer_line_user_id) = 'TEST_USER_ID' THEN
-        RETURN jsonb_build_object('success', true, 'message', '測試帳號不寫入');
+    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
+        RETURN jsonb_build_object('success', false, 'message', '缺少 LINE User ID');
     END IF;
 
     INSERT INTO officers (line_user_id, name, role, updated_at)
     VALUES (
-        trim(p_officer_line_user_id),
+        trim(p_line_user_id),
         COALESCE(NULLIF(trim(p_name), ''), '幹部成員'),
         COALESCE(NULLIF(trim(p_role), ''), '幹部'),
         NOW()
@@ -185,22 +193,38 @@ BEGIN
         SELECT jsonb_build_object(
             'rowNumber', ROW_NUMBER() OVER (ORDER BY s.created_at ASC),
             'signupCode', s.id,
+            'id', s.id,
             'userId', s.line_user_id,
+            'lineUserId', s.line_user_id,
             'name', COALESCE(s.name, m.name, '未知報名者'),
             'gender', COALESCE(m.gender, ''),
             'phone', COALESCE(m.phone, ''),
             'lineId', COALESCE(m.line_id, ''),
+            'realLineId', COALESCE(m.line_id, ''),
             'email', COALESCE(m.email, ''),
             'address', COALESCE(m.address, ''),
             'birthday', COALESCE(m.birthday, ''),
             'idNumber', COALESCE(m.id_card, ''),
+            'idCard', COALESCE(m.id_card, ''),
             'emerName', COALESCE(m.emergency_contact_name, ''),
             'emerRel', COALESCE(m.emergency_contact_rel, ''),
             'emerPhone', COALESCE(m.emergency_contact_phone, ''),
             'emerAddr', COALESCE(m.emergency_contact_address, ''),
+            'emergencyContact', CASE 
+                WHEN m.emergency_contact_name IS NOT NULL AND m.emergency_contact_name != '' THEN
+                    m.emergency_contact_name || ' (' || COALESCE(m.emergency_contact_rel, '未填關係') || ') ' || COALESCE(m.emergency_contact_phone, '')
+                ELSE '未填寫'
+            END,
             'experience', COALESCE(m.outdoor_experience, ''),
+            'climbingExp', COALESCE(m.outdoor_experience, ''),
             'fitnessTest', COALESCE(m.fitness_desc, ''),
+            'fitnessDesc', COALESCE(m.fitness_desc, ''),
             'strengthProof', CASE 
+                WHEN jsonb_typeof(m.proof_urls) = 'array' THEN 
+                    (SELECT string_agg(elem::text, E'\n') FROM jsonb_array_elements_text(m.proof_urls) AS elem)
+                ELSE COALESCE(m.proof_urls#>>'{}', '')
+            END,
+            'fitnessProof', CASE 
                 WHEN jsonb_typeof(m.proof_urls) = 'array' THEN 
                     (SELECT string_agg(elem::text, E'\n') FROM jsonb_array_elements_text(m.proof_urls) AS elem)
                 ELSE COALESCE(m.proof_urls#>>'{}', '')
@@ -210,7 +234,7 @@ BEGIN
             'medicalHistory', COALESCE(m.medical_history, ''),
             'isOfficial', CASE WHEN COALESCE(m.is_official_member, FALSE) THEN '是' ELSE '否' END,
             'reviewResult', s.status,
-            'notifyStatus', '',
+            'notifyStatus', COALESCE(s.notification_status, ''),
             'payStatus', CASE 
                 WHEN s.status::text LIKE '%已繳費%' OR s.status::text LIKE '%Paid%' THEN '已繳費 Paid'
                 WHEN s.status::text LIKE '%待確認%' OR s.status::text LIKE '%Checking%' THEN '待確認 Checking'
@@ -243,22 +267,40 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+    v_status_val event_signup_status_enum;
+    v_status_text TEXT;
 BEGIN
     IF NOT is_officer(p_officer_line_user_id) THEN
-        RETURN jsonb_build_object('status', 'error', 'message', '權限不足');
+        RETURN jsonb_build_object('status', 'error', 'message', '權限不足，非幹部無法審核');
     END IF;
 
     IF p_signup_id IS NULL OR trim(p_signup_id) = '' THEN
         RETURN jsonb_build_object('status', 'error', 'message', '缺少報名專屬碼');
     END IF;
 
+    v_status_text := trim(p_review_result);
+    IF v_status_text LIKE '%正取（已繳費）%' OR v_status_text LIKE '%Confirmed (Paid)%' THEN
+        v_status_val := '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+    ELSIF v_status_text LIKE '%備取（有意願）%' OR v_status_text LIKE '%Waitlisted (Interested)%' THEN
+        v_status_val := '備取（有意願）Waitlisted (Interested)'::event_signup_status_enum;
+    ELSIF v_status_text LIKE '%正取%' OR v_status_text LIKE '%Confirmed%' THEN
+        v_status_val := '正取 Confirmed'::event_signup_status_enum;
+    ELSIF v_status_text LIKE '%備取%' OR v_status_text LIKE '%Waitlisted%' THEN
+        v_status_val := '備取 Waitlisted'::event_signup_status_enum;
+    ELSIF v_status_text LIKE '%取消%' OR v_status_text LIKE '%Cancelled%' THEN
+        v_status_val := '已取消 Cancelled'::event_signup_status_enum;
+    ELSE
+        v_status_val := '審核中 Checking'::event_signup_status_enum;
+    END IF;
+
     UPDATE event_signups
-    SET status = trim(p_review_result),
+    SET status = v_status_val,
         updated_at = NOW()
     WHERE id = trim(p_signup_id);
 
     IF NOT FOUND THEN
-        RETURN jsonb_build_object('status', 'error', 'message', '找不到該筆報名紀錄');
+        RETURN jsonb_build_object('status', 'error', 'message', '找不到該筆報名紀錄 (' || trim(p_signup_id) || ')');
     END IF;
 
     -- 排入 sync_queue 異步同步至 Google Sheets

@@ -752,9 +752,57 @@ export const fetchAdminEventSignupsFromSupabase = async (
     }
 
     console.log(`%c⚡ [DataSource: Supabase] 活動 (${eventId}) 報名名冊秒開成功！共 ${data.signups.length} 筆 (連線延遲 < 50ms)`, 'color: #10b981; font-weight: bold;');
-    return data.signups as SignupApplicant[];
-  } catch (err) {
-    console.warn('[Supabase] 讀取報名名冊例外，啟用 GAS fallback:', err);
+    
+    // 🛡️ 欄位防禦性正規化：全面相容 realLineId/lineId、id/signupCode、climbingExp/experience 等舊版/新版 RPC 鍵名
+    const mappedSignups: SignupApplicant[] = (data.signups as any[]).map((item, idx) => {
+      const emerContact = item.emergencyContact || '';
+      let parsedEmerName = item.emerName || '';
+      let parsedEmerRel = item.emerRel || '';
+      let parsedEmerPhone = item.emerPhone || '';
+      if (!parsedEmerName && emerContact && emerContact !== '未填寫') {
+        const parts = emerContact.match(/^(.*?)\s*(?:\((.*?)\))?\s*(\d.*)?$/);
+        if (parts) {
+          parsedEmerName = parts[1] || '';
+          parsedEmerRel = parts[2] || '';
+          parsedEmerPhone = parts[3] || '';
+        }
+      }
+
+      return {
+        rowNumber: item.rowNumber || idx + 1,
+        signupCode: String(item.signupCode || item.id || '').trim(),
+        userId: String(item.userId || item.lineUserId || '').trim(),
+        name: item.name || '未知報名者',
+        gender: item.gender || '',
+        phone: item.phone || '',
+        lineId: item.lineId || item.realLineId || '',
+        email: item.email || '',
+        address: item.address || '',
+        birthday: item.birthday || '',
+        idNumber: item.idNumber || item.idCard || '',
+        emerName: parsedEmerName,
+        emerPhone: parsedEmerPhone,
+        emerRel: parsedEmerRel,
+        emerAddr: item.emerAddr || '',
+        experience: item.experience || item.climbingExp || '',
+        fitnessTest: item.fitnessTest || item.fitnessDesc || '',
+        strengthProof: item.strengthProof || item.fitnessProof || '',
+        department: item.department || '',
+        studentId: item.studentId || '',
+        medicalHistory: item.medicalHistory || '',
+        isOfficial: (item.isOfficial === true || item.isOfficial === '是') ? '是' : '否',
+        reviewResult: item.reviewResult || item.status || '審核中 Checking',
+        notifyStatus: item.notifyStatus || item.notification_status || '',
+        payStatus: item.payStatus || '未繳費',
+        remark: item.remark || item.notes || ''
+      };
+    });
+
+    return mappedSignups;
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.warn('[Supabase] 讀取報名名冊例外，啟用 GAS fallback:', errMsg);
+    lastSupabaseError = errMsg;
     return null;
   }
 };
@@ -779,14 +827,18 @@ export const updateSignupStatusInSupabase = async (
     });
 
     if (error || data?.status !== 'success') {
-      console.warn('[Supabase] 審核狀態更新失敗:', error?.message || data?.message);
+      const errMsg = error?.message || data?.message || '審核狀態更新失敗';
+      console.warn('[Supabase] 審核狀態更新失敗:', errMsg);
+      lastSupabaseError = errMsg;
       return false;
     }
 
     console.log('%c⚡ [DataSource: Supabase] 審核狀態已秒級更新！', 'color: #10b981; font-weight: bold;', signupId, reviewResult);
     return true;
-  } catch (err) {
-    console.warn('[Supabase] 審核狀態更新例外:', err);
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.warn('[Supabase] 審核狀態更新例外:', errMsg);
+    lastSupabaseError = errMsg;
     return false;
   }
 };

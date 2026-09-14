@@ -3,11 +3,49 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.107` (v0.1.107)
+- **當前版本**：`0.1.108` (v0.1.108)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 208. 修復社團系統 5 大問題：社費過期繳費補底、活動未來開放按鈕狀態分離、幹部名冊完整個資與欄位對齊、一鍵發送審核結果直查直推、正備取修改 Supabase 儲存與快取修正 (v0.1.108)
+- **需求背景與核心問題排查 (Problem Identification & Root Causes)**：
+  1. **已繳過社費但社籍過期時，繳費系統缺少社費選項**：
+     - `Payment.tsx` 與 SQL RPC `get_unpaid_items_rpc` 原先僅在社員完全未曾繳過社費（無紀錄）時才提供社費選項。當社員過往繳過社費但到期日已過（`is_active = false` 或過期）時，系統誤判為已繳過而不顯示繳社費項目，導致社員無法續繳社費，也無法享受裝備租借 5 折優惠。
+  2. **Supabase 活動狀態為「未來開放」，LINE 活動卡片誤顯示為「開放報名」**：
+     - `gas_modules/03_Flex_Templates.js` 中的 `sendEventList` 與 `sendEventDetail` 對狀態之判斷邏輯寬鬆（`status === "開放" || status === "開放中"`），在面對「未來開放」或「即將開放」時，按鈕依然呈現綠色「馬上報名」，且使用者點擊後仍送出報名訊息。
+  3. **幹部系統活動報名詳細名冊顯示無資料/缺失重要個資（LINE ID 等）**：
+     - 經排查並非權限問題，而是前端與後端 RPC 欄位名稱錯配：後端 RPC `get_admin_event_signups_rpc` 原回傳之屬性名稱為 `id`、`realLineId`、`climbingExp`、`emergencyContactPhone` 等，而前端 `AdminEvents.tsx` 與介面型別期待的是 `signupCode`、`lineId`、`experience`、`gender`、`birthday`、`idNumber` 等。且 RPC 原本漏 join `members` 表的個資欄位，導致 LINE ID 與個人基本資料全部落空顯示為「未填」。
+  4. **一鍵發送審核結果未推播**：
+     - GAS 後端 `_handleSendEventNotifications` 原本依賴試算表資料列進行篩選，在遷移至 Supabase (SSOT) 後未直連 `event_signups` 表；且推播後未將 `notification_status` 更新回 Supabase，造成推播失敗或重複推播判斷混亂。
+  5. **更改正備取未存入 Supabase，且頁面快取顯示修改值造成「已修改假象」**：
+     - 在 `AdminEvents.tsx` 中，因 RPC 回傳的是 `id` 而非 `signupCode`，導致前端判斷 `if (applicant.signupCode)` 為假，略過了直寫 Supabase 的步驟！
+     - 接著前端在 `if (sbSuccess || !applicant.signupCode)` 下，誤將本地 state 與 `sessionStorage` 快取強制更新為幹部選擇的值。導致刷新頁面時從本地快取讀取呈現幹部修改的狀態，給人「有儲存」的假象；但關閉瀏覽器重開時快取清空，重新由 Supabase 載入時才發現根本沒變更。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  - **1. 社費過期自動補底與續費支援 ([src/pages/Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx) & [supabase/admin_events_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql))**：
+    - 前端在 `fetchUnpaidItems` 回傳後加入社員到期狀態主動補底防護：若社員非有效正式社員（社籍到期或過期）且目前未有待審核之社費單，自動於 `unpaidList.membership` 補入當學期社費項目。
+    - 勾選續繳社費後，即時重新計算裝備租借費用享社員 5 折優惠。
+    - 同步修正 Supabase SQL `get_unpaid_items_rpc` 與 `get_unpaid_payments`，確保後端 RPC 同樣支援過期社員自動回傳社費。
+  - **2. 未來開放狀態嚴格分離與防呆 ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js))**：
+    - `sendEventList` 與 `sendEventDetail` 嚴格區分「未來開放 (Coming Soon)」、「開放中 (Open)」、「已額滿 (Full)」、「已截止 (Closed)」四大狀態。
+    - 若狀態包含「未來」或「即將」，按鈕以灰色 Disabled 呈現，文字標示「即將開放報名」，避免社員提前報名造成資料錯亂。
+  - **3. 個資完整 JOIN 與前後端欄位相容正規化 ([supabase/admin_events_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql) & [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts))**：
+    - `get_admin_event_signups_rpc` 深度 JOIN `members` 表，完整提取 `line_id`、`gender`、`birthday`、`id_number`、`emergency_contact_name`、`emergency_contact_phone` 等關鍵個資。
+    - 同時回傳雙向相容欄位名（`signupCode` 與 `id`、`lineId` 與 `realLineId`、`experience` 與 `climbingExp`）。
+    - 前端 `fetchAdminEventSignupsFromSupabase` 實作防禦性正規化映射層，無痛對齊所有欄位，徹底解決 LINE ID 與個資空白問題。
+  - **4. 一鍵發送審核結果直通 Supabase 與雙向更新 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js))**：
+    - `_handleSendEventNotifications` 直查 Supabase `event_signups` (SSOT)，精準篩選 `event_id` 符合、審核狀態非待審核（正取/備取/未錄取）且未通知的申請者。
+    - 發送 LINE Flex 審核結果訊息，並以 PATCH API 即時將 Supabase `notification_status` 更新為「已通知」，同時雙向備援同步活動專屬獨立試算表。
+  - **5. 徹底消滅正備取修改假更新與快取問題 ([src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx))**：
+    - `handleOpenSignupsModal` 實作 Stale-While-Revalidate，不再被 `sessionStorage` 舊快取阻擋，背景即時向 Supabase 重新拉取最新報名名冊。
+    - `handleUpdateApplicantResult` 綁定正規化後之 `targetSignupCode`，嚴格限制只有在 Supabase 真正更新成功（`sbSuccess === true`）時才同步更新本地 state 與快取；若更新失敗立即跳出 Alert 印出完整具體錯誤原因，絕不偽更新。
+    - `update_signup_status_rpc` SQL 函式加入字串至 `event_signup_status_enum` 之智慧型別轉換，避免 enum 型別不相容之寫入失敗。
+  - **6. 單檔同步與驗證 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+    - 完整打包至單檔 `src/gas.js`，通過 `node -c` 語法檢驗。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **125/125 項測試全數通過**（新增 Suite 50，包含社費過期續費補底、未來開放狀態隔離、個資欄位正規化對齊、一鍵發送審核直查直推、正備取修改防偽儲存與快取防呆測試）。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
 
 ### 207. 修復社團系統 4 大核心問題：活動代號防覆蓋、消除多餘 Signups 頁籤、活動專屬試算表雙向同步、詳細行程簡介排版與全面直通 Supabase (v0.1.107)
 - **需求背景與核心問題排查 (Problem Identification & Root Causes)**：
