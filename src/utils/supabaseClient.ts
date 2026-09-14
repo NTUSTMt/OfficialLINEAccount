@@ -454,8 +454,8 @@ export const fetchUnpaidPaymentsFromSupabase = async (userId: string): Promise<S
 export const submitPaymentToSupabase = async (
   userId: string,
   details: PaymentSubmitDetails
-): Promise<boolean> => {
-  if (!supabase || !userId) return false;
+): Promise<{ success: boolean; paymentId?: string }> => {
+  if (!supabase || !userId) return { success: false };
 
   try {
     const { data, error } = await supabase.rpc('submit_payment_rpc', {
@@ -465,14 +465,14 @@ export const submitPaymentToSupabase = async (
 
     if (error) {
       console.warn('[Supabase] 提交繳費對帳失敗:', error.message);
-      return false;
+      return { success: false };
     }
 
     console.log('%c⚡ [DataSource: Supabase] 繳費申報已極速送出！', 'color: #10b981; font-weight: bold;', data);
-    return true;
+    return { success: true, paymentId: data?.payment_id };
   } catch (err) {
     console.warn('[Supabase] 提交繳費對帳例外:', err);
-    return false;
+    return { success: false };
   }
 };
 

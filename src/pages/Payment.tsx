@@ -367,14 +367,17 @@ function Payment({ userId }: { userId: string }) {
       };
 
       // ⚡ 1. 100% 直連 Supabase 繳費申報 (< 50ms)
+      let sbResult: { success: boolean; paymentId?: string } = { success: false };
       if (userId && userId !== 'TEST_USER_ID') {
         try {
-          sbSubmitted = await submitPaymentToSupabase(userId, detailsPayload);
+          sbResult = await submitPaymentToSupabase(userId, detailsPayload);
+          sbSubmitted = sbResult.success;
         } catch (sbErr) {
           console.warn('[Payment] Supabase 提交例外:', sbErr);
         }
       } else {
         sbSubmitted = true;
+        sbResult = { success: true, paymentId: 'PAY_TEST_001' };
       }
 
       if (sbSubmitted) {
@@ -386,7 +389,11 @@ function Payment({ userId }: { userId: string }) {
             body: JSON.stringify(withAuthPayload({
               action: 'notify_officers_payment',
               userId,
-              details: detailsPayload
+              paymentId: sbResult.paymentId,
+              details: {
+                ...detailsPayload,
+                paymentId: sbResult.paymentId
+              }
             }))
           });
           await response.json().catch(() => ({}));

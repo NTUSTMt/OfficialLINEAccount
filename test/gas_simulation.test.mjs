@@ -117,12 +117,12 @@ describe('2. 繳費申報 postback 與幹部對帳確認型態測試', () => {
     const itemsText = "🔸 活動：初級攀岩訓練營";
     const pType = "活動：初級攀岩訓練營";
 
-    const hasMembershipFee = itemsText 
+    const hasMembershipFee = itemsText
       ? (itemsText.indexOf("社籍") > -1 || itemsText.indexOf("社費") > -1 || itemsText.indexOf("Membership") > -1)
       : (pType === "繳交社費" || pType === "combined");
 
-    const hasActivity = itemsText 
-      ? (itemsText.indexOf("活動") > -1) 
+    const hasActivity = itemsText
+      ? (itemsText.indexOf("活動") > -1)
       : (pType === "activity" || pType === "combined" || String(pType).startsWith("活動："));
 
     assert.equal(hasMembershipFee, false);
@@ -625,7 +625,7 @@ describe('11. 歷史繳費紀錄金額智慧推算與工作表自癒修復測試
           throw new Error("Exception: The data you entered in cell J1 violates the data validation rules set on this cell.");
         }
         return {
-          setValue: () => {}
+          setValue: () => { }
         };
       }
     };
@@ -2591,7 +2591,7 @@ describe('39. 裝備租借通知幹部 (含 LINE ID) 與使用者確認訊息 (�
     }
 
     const msg = "【🎒 幹部通知：新裝備租借申請】\n" +
-      "────────────────────\n" +
+      "─────────────\n" +
       "• 訂單編號：" + loanId + "\n" +
       "• 申請人：" + borrowerName + " (" + identityDesc + ")\n" +
       "• LINE ID：" + borrowerLineId + "\n" +
@@ -2617,7 +2617,7 @@ describe('39. 裝備租借通知幹部 (含 LINE ID) 與使用者確認訊息 (�
     const itemsListText = orderInfo.cartDetails.map(item => `• ${item.name} x ${item.quantity}`).join('\n');
 
     return `【🎒 我的裝備租借預訂單】\n` +
-      `────────────────────\n` +
+      `─────────────\n` +
       `• 訂單編號：${orderInfo.loanId}\n` +
       `• 借用人：${orderInfo.borrowerName} (${identityText})\n` +
       `• 預計領取：${orderInfo.pickupDate}\n` +
@@ -2626,7 +2626,7 @@ describe('39. 裝備租借通知幹部 (含 LINE ID) 與使用者確認訊息 (�
       `📦 預約裝備清單：\n` +
       `${itemsListText}\n\n` +
       `💰 預估總租金：$${orderInfo.totalRent} 元\n` +
-      `────────────────────\n` +
+      `─────────────\n` +
       `📌 提醒事項：\n` +
       `1. 幹部已收到您的預約申請，將為您備齊裝備。\n` +
       `2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n` +
@@ -2716,5 +2716,359 @@ describe('39. 裝備租借通知幹部 (含 LINE ID) 與使用者確認訊息 (�
   });
 });
 
+describe('46. 幹部通知全面改用 Gmail (MailApp) 雙軌發送模擬測試', () => {
+  // 模擬 Gmail 寄件
+  function simulateSendAdminEmail(subject, body, options = {}) {
+    const adminEmail = options.adminEmail || 'ntustmountain@gmail.com';
+    const sentEmails = options.sentEmails || [];
+    if (!adminEmail || !subject || !body) return false;
 
+    sentEmails.push({
+      to: adminEmail,
+      subject: subject,
+      body: body,
+      senderName: '台科登山社小岳助理'
+    });
+    return true;
+  }
+
+  // 模擬雙軌推播：LINE Push 額度耗盡時，Gmail 依然 100% 送達
+  function simulatePushAdminMessage(text, customSubject, env = {}) {
+    const sentEmails = env.sentEmails || [];
+    let linePushSuccess = false;
+    let linePushError = null;
+
+    // 1. 自動推導 Email 主旨
+    let subject = customSubject;
+    if (!subject) {
+      const lines = text.split('\n');
+      const firstLine = lines[0] ? lines[0].trim() : '';
+      if (firstLine.includes('【') && firstLine.includes('】')) {
+        subject = firstLine;
+      } else if (text.includes('新裝備租借申請')) {
+        subject = '【台科登山社】新裝備租借申請通知';
+      } else if (text.includes('新繳費申報')) {
+        subject = '【台科登山社】新繳費申報通知';
+      } else {
+        subject = '【台科登山社】幹部系統通知';
+      }
+    }
+
+    // 2. Gmail 雙軌保底發送
+    const emailSuccess = simulateSendAdminEmail(subject, text, {
+      adminEmail: env.adminEmail,
+      sentEmails: sentEmails
+    });
+
+    // 3. LINE Push 嘗試發送 (模擬額度耗盡回傳 429)
+    if (env.lineQuotaExceeded) {
+      linePushError = 'Monthly limit reached (429)';
+    } else {
+      linePushSuccess = true;
+    }
+
+    return {
+      emailSuccess,
+      linePushSuccess,
+      linePushError,
+      subject,
+      sentEmails
+    };
+  }
+
+  it('LINE 免費額度耗盡 (429) 時，Gmail 依然 100% 成功送達幹部信箱', () => {
+    const sentEmails = [];
+    const text = '【🎒 幹部通知：新裝備租借申請】\n• 訂單編號：ORD_20260914_001\n• 申請人：王大明\n• 預估總租金：$200 元';
+    const res = simulatePushAdminMessage(text, null, {
+      adminEmail: 'ntustmountain@gmail.com',
+      sentEmails: sentEmails,
+      lineQuotaExceeded: true
+    });
+
+    // LINE Push 失敗，但 Email 寄送成功
+    assert.strictEqual(res.linePushSuccess, false);
+    assert.strictEqual(res.linePushError, 'Monthly limit reached (429)');
+    assert.strictEqual(res.emailSuccess, true);
+    assert.strictEqual(sentEmails.length, 1);
+    assert.strictEqual(sentEmails[0].to, 'ntustmountain@gmail.com');
+    assert.strictEqual(sentEmails[0].subject, '【🎒 幹部通知：新裝備租借申請】');
+    assert.ok(sentEmails[0].body.includes('ORD_20260914_001'));
+  });
+
+  it('租借與繳費推播能正確指定具體明確的信件主旨', () => {
+    const sentEmails = [];
+    const loanSubject = '【台科登山社】新裝備租借申請 - ORD_20260914_002 (張小華)';
+    const loanBody = '【🎒 幹部通知：新裝備租借申請】\n• 訂單編號：ORD_20260914_002\n• 申請人：張小華';
+
+    const res1 = simulatePushAdminMessage(loanBody, loanSubject, {
+      adminEmail: 'ntustmountain@gmail.com',
+      sentEmails: sentEmails,
+      lineQuotaExceeded: true
+    });
+
+    assert.strictEqual(res1.subject, '【台科登山社】新裝備租借申請 - ORD_20260914_002 (張小華)');
+    assert.strictEqual(sentEmails[0].subject, '【台科登山社】新裝備租借申請 - ORD_20260914_002 (張小華)');
+
+    const paymentSubject = '【台科登山社】新繳費申報 - $500 (林志明，末5碼 12345)';
+    const paymentBody = '【💳 幹部通知：新繳費申報】\n申報人：林志明\n申報金額：$500 元\n帳號末五碼：12345';
+
+    const res2 = simulatePushAdminMessage(paymentBody, paymentSubject, {
+      adminEmail: 'custom_admin@example.com',
+      sentEmails: sentEmails,
+      lineQuotaExceeded: false
+    });
+
+    assert.strictEqual(res2.subject, '【台科登山社】新繳費申報 - $500 (林志明，末5碼 12345)');
+    assert.strictEqual(sentEmails[1].to, 'custom_admin@example.com');
+  });
+});
+
+describe('47. 裝備取消、活動棄權、幹部核銷與每日自動巡檢機制測試', () => {
+  it('裝備租借取消推播：未繳費回補庫存 vs 已繳費需退款，幹部收到雙軌通知且使用者收到取消收據', () => {
+    const sentEmails = [];
+    const userPushes = [];
+
+    function simulateLoanCancel(loanData) {
+      const isPaid = !!loanData.isPaid;
+      const loanId = loanData.loanId;
+      const borrowerName = loanData.borrowerName;
+      const itemsText = Array.isArray(loanData.itemsSummary) ? loanData.itemsSummary.join('\n') : '• 無品項';
+
+      let adminSubject = '';
+      let adminBody = '';
+      if (isPaid) {
+        adminSubject = '【台科登山社】裝備預約取消（⚠️需安排退款）- ' + loanId + ' (' + borrowerName + ')';
+        adminBody = '🔔 【幹部通知：裝備預約取消（需安排退款）】\n• 訂單編號：' + loanId + '\n• 申請人：' + borrowerName + '\n' + itemsText;
+      } else {
+        adminSubject = '【台科登山社】裝備預約取消通知 - ' + loanId + ' (' + borrowerName + ')';
+        adminBody = '【🎒 幹部通知：裝備預約取消】\n• 訂單編號：' + loanId + '\n• 申請人：' + borrowerName + '\n' + itemsText;
+      }
+
+      sentEmails.push({ to: 'ntustmountain@gmail.com', subject: adminSubject, body: adminBody });
+
+      if (loanData.userId && loanData.userId.startsWith('U')) {
+        userPushes.push({
+          userId: loanData.userId,
+          text: '【🎒 裝備租借取消成功憑證】\n• 訂單編號：' + loanId + (isPaid ? '\n⚠️ 幹部將聯繫退款' : '')
+        });
+      }
+
+      return { success: true };
+    }
+
+    // 1. 測試未繳費取消
+    simulateLoanCancel({
+      loanId: 'ORD_20260914_010',
+      borrowerName: '王小美',
+      userId: 'U11111111111111111111111111111111',
+      itemsSummary: ['• 帳篷 x 1'],
+      isPaid: false
+    });
+
+    assert.strictEqual(sentEmails.length, 1);
+    assert.strictEqual(sentEmails[0].subject, '【台科登山社】裝備預約取消通知 - ORD_20260914_010 (王小美)');
+    assert.ok(sentEmails[0].body.includes('裝備預約取消'));
+    assert.strictEqual(userPushes.length, 1);
+    assert.strictEqual(userPushes[0].userId, 'U11111111111111111111111111111111');
+
+    // 2. 測試已繳費取消 (需退款)
+    simulateLoanCancel({
+      loanId: 'ORD_20260914_011',
+      borrowerName: '林大華',
+      userId: 'U22222222222222222222222222222222',
+      itemsSummary: ['• 睡袋 x 2', '• 攻頂包 x 1'],
+      isPaid: true
+    });
+
+    assert.strictEqual(sentEmails.length, 2);
+    assert.strictEqual(sentEmails[1].subject, '【台科登山社】裝備預約取消（⚠️需安排退款）- ORD_20260914_011 (林大華)');
+    assert.ok(sentEmails[1].body.includes('需安排退款'));
+    assert.strictEqual(userPushes.length, 2);
+    assert.ok(userPushes[1].text.includes('退款'));
+  });
+
+  it('活動報名取消推播：正取棄權緊急通知幹部聯繫備取；備取或審核中取消不發幹部通知防洗版', () => {
+    const adminAlerts = [];
+    const userPushes = [];
+
+    function simulateEventCancel(evtData) {
+      const isConfirmed = evtData.reviewStatus.includes('正取');
+      const eventName = evtData.eventName;
+      const userName = evtData.userName;
+      const isPaid = !!evtData.isPaid;
+
+      if (isConfirmed) {
+        adminAlerts.push({
+          subject: '【台科登山社】正取棄權緊急通知 - ' + eventName + ' (' + userName + ')',
+          body: '🔔 【幹部通知：正取取消】\n• 活動：' + eventName + '\n• 棄權社員：' + userName + '\n' + (isPaid ? '⚠️ 需退費' : '⚡ 請聯繫備取遞補')
+        });
+      }
+
+      if (evtData.userId && evtData.userId.startsWith('U')) {
+        userPushes.push({
+          userId: evtData.userId,
+          text: '【🏕️ 活動報名取消確認】\n• 活動：' + eventName + '\n• 姓名：' + userName
+        });
+      }
+    }
+
+    // 正取取消 -> 幹部收到緊急通知 + 使用者收到確認
+    simulateEventCancel({
+      eventId: 'EVT_001',
+      eventName: '合歡北西峰二日',
+      userName: '張小敬',
+      userId: 'U33333333333333333333333333333333',
+      reviewStatus: '正取 Confirmed',
+      cancelReason: '臨時因公出差',
+      isPaid: false
+    });
+
+    assert.strictEqual(adminAlerts.length, 1);
+    assert.strictEqual(adminAlerts[0].subject, '【台科登山社】正取棄權緊急通知 - 合歡北西峰二日 (張小敬)');
+    assert.ok(adminAlerts[0].body.includes('請聯繫備取遞補'));
+    assert.strictEqual(userPushes.length, 1);
+
+    // 備取取消 -> 幹部不收到通知（防洗版），但使用者收到取消確認
+    simulateEventCancel({
+      eventId: 'EVT_001',
+      eventName: '合歡北西峰二日',
+      userName: '李四',
+      userId: 'U44444444444444444444444444444444',
+      reviewStatus: '備取 Waitlisted',
+      cancelReason: '行程有衝突',
+      isPaid: false
+    });
+
+    assert.strictEqual(adminAlerts.length, 1); // 幹部通知數量未增加
+    assert.strictEqual(userPushes.length, 2); // 使用者個人收據增加
+  });
+
+  it('幹部核銷指令與狀態標籤：核銷後標記為「已核銷 Confirmed」，並自動推播【繳費成功通知】給社員', () => {
+    const userPushes = [];
+    const dbPayments = [
+      {
+        id: 'PAY_20260914_999',
+        line_user_id: 'U55555555555555555555555555555555',
+        name: '陳健行',
+        amount: 800,
+        status: '待確認 Checking',
+        selected_names: ['活動費用 (合歡山)']
+      }
+    ];
+
+    function simulateProcessPaymentVerification(paymentId, officerName) {
+      const payment = dbPayments.find(p => p.id === paymentId);
+      if (!payment) return { success: false, message: '找不到繳費單' };
+
+      if (payment.status.includes('已核銷')) {
+        return { success: true, message: '先前已完成核銷', alreadyConfirmed: true };
+      }
+
+      // 更新為標準標籤「已核銷 Confirmed」
+      payment.status = '已核銷 Confirmed';
+      payment.confirmed_by = officerName;
+      payment.confirmed_at = new Date().toISOString();
+
+      // 主動推播給社員
+      userPushes.push({
+        userId: payment.line_user_id,
+        text: '🎉 繳費成功通知 / Payment Confirmed\n\n親愛的 ' + payment.name + ' 您好：\n幹部已確認收到您的款項囉！\n• 繳費單號：' + payment.id + '\n• 核銷金額：$' + payment.amount + ' 元\n• 狀態：已核銷 Confirmed'
+      });
+
+      return { success: true, payment };
+    }
+
+    const res = simulateProcessPaymentVerification('PAY_20260914_999', '小岳助理');
+    assert.strictEqual(res.success, true);
+    assert.strictEqual(dbPayments[0].status, '已核銷 Confirmed');
+    assert.strictEqual(dbPayments[0].confirmed_by, '小岳助理');
+    assert.strictEqual(userPushes.length, 1);
+    assert.strictEqual(userPushes[0].userId, 'U55555555555555555555555555555555');
+    assert.ok(userPushes[0].text.includes('已核銷 Confirmed'));
+  });
+
+  it('每日自動巡檢 (dailyPatrol)：活動過期自動關閉、社籍逾期轉未繳費並發送期滿祝福，僅有變更時發送報告', () => {
+    const adminReports = [];
+    const memberBlessings = [];
+
+    const mockEvents = [
+      { id: 'E1', name: '陽明山縱走', deadline: '2026-09-10', status: '開放' }, // 已過期
+      { id: 'E2', name: '雪山主東', deadline: '2026-10-01', status: '開放' }    // 尚未過期
+    ];
+    const mockMembers = [
+      { line_user_id: 'U777', name: '老社員阿強', expire_date: '2026-09-01', fee_status: '已繳費 Paid', is_member: true }, // 已到期
+      { line_user_id: 'U888', name: '新社員小美', expire_date: '2027-09-01', fee_status: '已繳費 Paid', is_member: true }  // 未到期
+    ];
+    const mockLoans = [
+      { id: 'L1', borrower_name: '張同學', return_date: '2026-09-05', status: '使用中 Using' } // 逾期未還
+    ];
+
+    function simulateDailyPatrol(todayStr) {
+      const closedEvents = [];
+      const expiredMembers = [];
+      const overdueLoans = [];
+
+      // 1. 活動截止
+      mockEvents.forEach(evt => {
+        if (evt.status === '開放' && evt.deadline < todayStr) {
+          evt.status = '關閉';
+          closedEvents.push(evt.name + ' (截止: ' + evt.deadline + ')');
+        }
+      });
+
+      // 2. 社籍到期
+      mockMembers.forEach(mem => {
+        if (mem.fee_status === '已繳費 Paid' && mem.expire_date < todayStr) {
+          mem.fee_status = '未繳費 Unpaid';
+          mem.is_member = false;
+          expiredMembers.push(mem.name + ' (到期: ' + mem.expire_date + ')');
+          memberBlessings.push({
+            userId: mem.line_user_id,
+            text: '【社籍期滿溫馨祝福 / Club Membership Milestone】\n親愛的 ' + mem.name + ' 您好：感謝您這段時間的陪伴！'
+          });
+        }
+      });
+
+      // 3. 逾期裝備
+      mockLoans.forEach(ln => {
+        if (ln.status.includes('使用中') && ln.return_date < todayStr) {
+          overdueLoans.push(ln.id + ': ' + ln.borrower_name + ' (應還: ' + ln.return_date + ')');
+        }
+      });
+
+      // 4. 有變更時發送報告
+      if (closedEvents.length > 0 || expiredMembers.length > 0 || overdueLoans.length > 0) {
+        adminReports.push({
+          subject: '【台科登山社】系統每日自動巡檢報告 - ' + todayStr,
+          closedCount: closedEvents.length,
+          expiredCount: expiredMembers.length,
+          overdueCount: overdueLoans.length
+        });
+      }
+
+      return { closedCount: closedEvents.length, expiredCount: expiredMembers.length, overdueCount: overdueLoans.length };
+    }
+
+    const patrolResult = simulateDailyPatrol('2026-09-14');
+    assert.strictEqual(patrolResult.closedCount, 1);
+    assert.strictEqual(mockEvents[0].status, '關閉');
+    assert.strictEqual(mockEvents[1].status, '開放');
+
+    assert.strictEqual(patrolResult.expiredCount, 1);
+    assert.strictEqual(mockMembers[0].fee_status, '未繳費 Unpaid');
+    assert.strictEqual(mockMembers[0].is_member, false);
+    assert.strictEqual(memberBlessings.length, 1);
+    assert.strictEqual(memberBlessings[0].userId, 'U777');
+
+    assert.strictEqual(patrolResult.overdueCount, 1);
+    assert.strictEqual(adminReports.length, 1);
+    assert.strictEqual(adminReports[0].subject, '【台科登山社】系統每日自動巡檢報告 - 2026-09-14');
+
+    // 再次巡檢（已無新異動）-> 不重複發送報告
+    const secondResult = simulateDailyPatrol('2026-09-14');
+    assert.strictEqual(secondResult.closedCount, 0);
+    assert.strictEqual(secondResult.expiredCount, 0);
+    assert.strictEqual(secondResult.overdueCount, 1); // 逾期未還仍會提醒直到歸還
+  });
+});
 

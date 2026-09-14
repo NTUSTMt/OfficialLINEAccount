@@ -3,11 +3,66 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.103` (v0.1.103)
+- **當前版本**：`0.1.105` (v0.1.105)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 205. 逐行比對歷史版本補齊取消通知雙軌串接、幹部核銷推播與每日自動巡檢機制 (v0.1.105)
+- **需求背景與比對分析 (Requirements & Historical Diff Analysis)**：
+  - 使用者指定深入逐行比對 `src/gas.backup.js` 與現行系統的功能與通知差異（如：取消裝備租借、活動報名棄權、幹部核銷繳費單、心得回饋提交，以及每日排程維護等）。
+  - **經比對查出之關鍵差異與缺失**：
+    1. **裝備租借取消無通知**：舊版或前端僅執行資料庫狀態變更，幹部完全不知道裝備已被取消（特別是已繳費需退款或庫存需回補）；社員本人亦無明確的取消收據存證。
+    2. **活動報名取消無通知**：社員在個人儀表板取消活動時，幹部群未獲知「正取名額已釋出」，無法及時通知備取遞補；退費事宜亦無法即時追蹤。
+    3. **幹部核銷繳費缺乏雙向推播與標準標籤**：幹部查帳核銷後，系統未自動推播「🎉 繳費成功通知」給社員，社員無法確認款項是否已被認領；且資料庫狀態欄位若未精確匹配 `已核銷 Confirmed` 會導致個人帳單與後台統計過濾錯誤。
+    4. **心得回饋提交無通知**：社員填寫心得感想後，幹部無法即時獲悉並進行審閱或回饋。
+    5. **缺乏每日自動巡檢排程**：舊版具備定時維護邏輯，但新架構中尚未建立每日自動巡檢（活動過期關閉、社籍過期狀態更新與期滿提醒、逾期租借提醒）。
+- **架構設計與實作細節 (Architecture & Implementation)**：
+  - **1. 裝備租借取消通知雙軌串接 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js) & [src/pages/Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx))**：
+    - 前端於 Supabase RPC 完成裝備取消後，接續呼叫 GAS `notify_loan_cancelled`。
+    - 後端區分「已繳費（需進行退款處理）」與「未繳費（系統已回補庫存）」，透過 Gmail + LINE Push 雙軌通報幹部，並推播中英雙語取消收據憑證給社員個人 LINE。
+  - **2. 活動報名取消規則分流 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js) & [src/pages/Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx))**：
+    - 前端於取消活動後呼叫 GAS `notify_event_cancelled`。
+    - 若取消者為「正取 (accepted)」：立即以【🚨 緊急：正取名額釋出】雙軌通知幹部盡速聯絡備取遞補與退費；若為備取 (waitlist) 或審核中 (pending)，則僅推播給社員本人，嚴防幹部群組洗版。
+  - **3. 幹部核銷雙通道與社員推播 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js) & [gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js))**：
+    - 支援 LINE 群組文字指令 `@小岳助理 核銷 {繳費單號}`（走 Reply API，零額度消耗防 429）與 Gmail 單鍵核銷 Webhook (`doGet?action=confirm_payment_web&paymentId=...`)。
+    - 核銷後將 Supabase `payments` 狀態更新為嚴格標準標籤 `已核銷 Confirmed`。
+    - 自動推播【🎉 繳費成功通知】至社員個人 LINE，載明已核銷單號、金額與核銷幹部。
+  - **4. 每日自動巡檢排程 ([gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js))**：
+    - 實作 `dailyPatrol()` 與定時觸發器安裝函式 `setupDailyPatrolTrigger()`（每日凌晨 02:00 定時執行）。
+    - 自動檢查報名截止日並將活動狀態變更為「關閉 (closed)」；檢查社籍有效期限，逾期者標記為「未繳費」並推播期滿感謝祝福與續會引導；檢查裝備逾期未還並標記催收。
+    - 採智慧日報機制：僅當當日「有狀態變更或逾期事件」時才發送巡檢日報至幹部公務信箱，避免無意義空信打擾。
+  - **5. 心得回饋通知整合 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js) & [src/pages/Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx))**：
+    - 實作 `notify_reflection_submitted`，在社員提交心得後即時雙軌通知幹部閱讀。
+  - **6. 單檔版整合與同步 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+    - 將全數 6 個子模組完整串接編譯至單檔版 `src/gas.js`，並通過 `node -c` 語法校驗。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 111/111 項測試全數通過（Suite 46、Suite 47 包含裝備取消、活動棄權、幹部核銷與每日巡檢測試）。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
+
+### 204. 幹部通知全面改用 Gmail (MailApp) 雙軌發送機制（克服 LINE 免費額度耗盡問題）(v0.1.104)
+- **問題回報與核心根因 (Problem & Root Cause)**：
+  - 使用者回報：「幹部群收不到通知是因為免費額度用完了，請改使用 gmail 傳送」。
+  - **真相分析**：LINE Messaging API 免費方案（Free Plan）每帳號每月僅有 200 則 Push Message 額度。一旦額度用罄，所有後端主動推播（`/v2/bot/message/push`）皆會被 LINE 拒絕（回傳 HTTP 429 或 quota exceeded）。而 `@小岳助理 綁定幹部群組` 是透過無額度限制的 Reply API 回覆，因此綁定成功但後續 Push 訊息全數無法送達。
+- **經 `/grill-me` 訪談確認之架構方案**：
+  1. **收件信箱**：預設寄至社團官方公務信箱 `ntustmountain@gmail.com`，並支援在 GAS 指令碼屬性設定 `ADMIN_EMAIL` 隨時覆蓋或以逗點設定多個收件信箱。
+  2. **發送通道**：採「雙軌並行（LINE Push + Gmail 並行）」機制。LINE Push 繼續呼叫（有額度時群組依然可見）；而 Gmail 發信則提供 100% 必達保底（GAS 內建免費每日 100~1500 封，不受任何 LINE 額度限制）。
+  3. **會員通知**：個人維持現況（LINE Push + LIFF 頁面即時成功反饋）。
+  4. **郵件格式**：結構化清晰純文字排版，主旨明確標示類別與申請人/單號，排版整齊不跑版。
+- **實作與技術細節 (Implementation Details)**：
+  - **1. 環境屬性配置 ([gas_modules/01_Config_Auth.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/01_Config_Auth.js))**：
+    - 新增 `ADMIN_EMAIL` 與 `getAdminEmail()` 函式，預設為 `ntustmountain@gmail.com`，可隨時自訂。
+  - **2. 幹部郵件發送與雙軌推播 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js))**：
+    - 實作 `sendAdminEmail(subject, body)`：支援 `MailApp.sendEmail` 與 `GmailApp.sendEmail`，具備完善異常攔截。
+    - 升級 `pushAdminMessage(text, customSubject)`：雙軌發送，即使 LINE Push 因額度用完回傳 429 錯誤，Gmail 依然 100% 成功送達！
+  - **3. 語意化主旨整合 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js))**：
+    - 租借申請主旨：`【台科登山社】新裝備租借申請 - ORD_xxx (王大明)`。
+    - 繳費申報主旨：`【台科登山社】新繳費申報 - $500 (林志明，末5碼 12345)`。
+    - 幹部登記主旨：`【台科登山社】幹部意願登記 - 陳小美 (電子系)`。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` 107/107 項測試全數通過（新增雙軌推播與額度耗盡保底測試）。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
 
 ### 203. 參照原始設計重構裝備租借為後端保底雙向推播與前端安全等待機制 (v0.1.103)
 - **問題回報與根本原因分析 (Problem & Root Cause)**：

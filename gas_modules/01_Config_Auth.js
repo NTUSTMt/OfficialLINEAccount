@@ -5,6 +5,16 @@
 // ⭐️ 1. 全域變數與環境設定
 var SPREADSHEET_ID = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
 var ADMIN_GROUP_ID = PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID');
+var DEFAULT_ADMIN_EMAIL = 'ntustmountain@gmail.com';
+var ADMIN_EMAIL = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL') || DEFAULT_ADMIN_EMAIL;
+
+function getAdminEmail() {
+  try {
+    return PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL') || ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL;
+  } catch (e) {
+    return DEFAULT_ADMIN_EMAIL;
+  }
+}
 
 var MEMBER_BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('MEMBER_BOT_TOKEN');
 var ADMIN_BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('ADMIN_BOT_TOKEN');

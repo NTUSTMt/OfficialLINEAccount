@@ -4842,12 +4842,12 @@ function onFeedbackSubmit(e) {
     var subject = "【社團意見回饋】收到來自 " + name + " 的新訊息";
     var body = "幹部您好，\n\n" +
       "系統剛剛收到了一筆新的意見與回饋，詳細內容如下：\n" +
-      "──────────────────────\n" +
+      "───────────────\n" +
       "姓名：" + name + "\n" +
       "聯絡信箱：" + email + "\n" +
       "想說的話：\n" + feedback + "\n\n" +
       "附檔連結：" + fileUrl + "\n" +
-      "──────────────────────\n\n" +
+      "───────────────\n\n" +
       "請幹部盡快查閱並評估是否需要回覆喔！🏕️\n" +
       "(此信件由系統自動發送)";
 
@@ -5520,8 +5520,8 @@ function processPaymentSubmit(payload) {
   // 4. 發送推播通知幹部對帳 Flex Message
   var altText = "收到一筆新對帳申報！";
   var hasMembership = selectedIds.indexOf("fee_membership") > -1;
-  var actIds = selectedIds.filter(function(id) { return id.startsWith("act_"); });
-  var eqIds = selectedIds.filter(function(id) { return id.startsWith("eq_"); });
+  var actIds = selectedIds.filter(function (id) { return id.startsWith("act_"); });
+  var eqIds = selectedIds.filter(function (id) { return id.startsWith("eq_"); });
 
   var determinedType = "combined";
   if (hasMembership && actIds.length === 0 && eqIds.length === 0) {
@@ -5707,7 +5707,7 @@ function getMemberProfileAPI(ss, userId) {
 
       // 智慧檢查並回補 Google Drive 系統圖庫/體能登山證明 中的歷史證明檔案
       try {
-        var existingProofList = String(profile.strengthProof).split(/[\n,，;\s]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.startsWith("http"); });
+        var existingProofList = String(profile.strengthProof).split(/[\n,，;\s]+/).map(function (u) { return u.trim(); }).filter(function (u) { return u.startsWith("http"); });
         if (existingProofList.length < 5 && profile.name) {
           var rootFolders = DriveApp.getFoldersByName("系統圖庫");
           if (!rootFolders.hasNext()) {
@@ -6100,11 +6100,11 @@ function processSaveProfile(payload) {
       // 合併舊有證明與新上傳證明，去重並最多保留最新 5 張
       var combinedProofList = [];
       if (oldValues[strengthProofIdx]) {
-        combinedProofList = String(oldValues[strengthProofIdx]).split(/[\n,，;\s]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.startsWith("http"); });
+        combinedProofList = String(oldValues[strengthProofIdx]).split(/[\n,，;\s]+/).map(function (u) { return u.trim(); }).filter(function (u) { return u.startsWith("http"); });
       }
       if (data.strengthProof) {
-        var newProofList = String(data.strengthProof).split(/[\n,，;\s]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.startsWith("http"); });
-        newProofList.forEach(function(u) {
+        var newProofList = String(data.strengthProof).split(/[\n,，;\s]+/).map(function (u) { return u.trim(); }).filter(function (u) { return u.startsWith("http"); });
+        newProofList.forEach(function (u) {
           if (combinedProofList.indexOf(u) === -1) {
             combinedProofList.push(u);
           }
@@ -6429,7 +6429,7 @@ function uploadFileToDrive(base64Str, fileName, folderPath) {
       var legacyFolders = DriveApp.getFoldersByName("LINE_Uploads");
       if (legacyFolders.hasNext()) {
         currentFolder = legacyFolders.next();
-        try { currentFolder.setName("系統圖庫"); } catch (e) {}
+        try { currentFolder.setName("系統圖庫"); } catch (e) { }
       } else {
         currentFolder = DriveApp.createFolder("系統圖庫");
       }
@@ -7600,7 +7600,7 @@ function _syncEventDriveUrlsToSupabase(eventId, driveFolderUrl, spreadsheetUrl, 
       if (res.getResponseCode() === 200) {
         updated = JSON.parse(res.getContentText());
       }
-    } catch (parseErr) {}
+    } catch (parseErr) { }
 
     // 若 PATCH 發現無此 row (更新筆數為 0，尚未建立該活動)，改用 POST upsert 自動補齊
     if (!updated || updated.length === 0) {

@@ -49,6 +49,21 @@ function handleLiffHelperApi(json) {
     return _handleSendEventNotifications(json);
   }
 
+  // 9. 裝備租借取消推播 Helper (雙軌幹部通知 + 個人取消憑證)
+  if (action === "notify_loan_cancelled") {
+    return _handleNotifyLoanCancelled(json);
+  }
+
+  // 10. 活動報名取消推播 Helper (正取緊急遞補通知 + 個人取消憑證)
+  if (action === "notify_event_cancelled") {
+    return _handleNotifyEventCancelled(json);
+  }
+
+  // 11. 社員心得評價提交推播 Helper (幹部評價通知)
+  if (action === "notify_reflection_submitted") {
+    return _handleNotifyReflectionSubmitted(json);
+  }
+
   return _errorResponse("未支援的 Helper Action: " + action);
 }
 
@@ -210,7 +225,7 @@ function _handleNotifyOfficersLoan(json) {
     }
 
     var msg = "【🎒 幹部通知：新裝備租借申請】\n" +
-      "────────────────────\n" +
+      "─────────────\n" +
       "• 訂單編號：" + loanId + "\n" +
       "• 申請人：" + borrowerName + " (" + identityDesc + ")\n" +
       "• LINE ID：" + borrowerLineId + "\n" +
@@ -222,12 +237,13 @@ function _handleNotifyOfficersLoan(json) {
       (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") + "\n\n" +
       "⚡ 本資料已安全寫入 Supabase，請至幹部後台確認備用！";
 
-    pushAdminMessage(msg);
+    var loanSubject = "【台科登山社】新裝備租借申請 - " + loanId + " (" + borrowerName + ")";
+    pushAdminMessage(msg, loanSubject);
 
     // ⭐️ 2. 同步保底推播給使用者個人 LINE 聊天室 (預約成功憑證)
     if (userId && userId !== "TEST_USER_ID") {
       var userLoanMsg = "【🎒 我的裝備租借預訂單】\n" +
-        "────────────────────\n" +
+        "\n" +
         "• 訂單編號：" + loanId + "\n" +
         "• 借用人：" + borrowerName + " (" + identityDesc + ")\n" +
         "• 預計領取：" + (details.pickupDate || "") + "\n" +
@@ -236,14 +252,14 @@ function _handleNotifyOfficersLoan(json) {
         "📦 預約裝備清單：\n" +
         (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") + "\n\n" +
         "💰 預估總租金：$" + totalRent + " 元\n" +
-        "────────────────────\n" +
+        "\n" +
         "📌 提醒事項：\n" +
         "1. 幹部已收到您的預約申請，將為您備齊裝備。\n" +
         "2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n" +
         "3. 將有幹部主動聯繫你，確認領取時間以及地點。\n" +
         "─────────────\n" +
         "【🎒 Equipment Loan Reservation Confirmed】\n" +
-        "────────────────────\n" +
+        "\n" +
         "• Order ID: " + loanId + "\n" +
         "• Borrower: " + borrowerName + " (" + identityDesc + ")\n" +
         "• Pickup Date: " + (details.pickupDate || "") + "\n" +
@@ -252,7 +268,7 @@ function _handleNotifyOfficersLoan(json) {
         "📦 Items:\n" +
         (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• None") + "\n\n" +
         "💰 Estimated Total: $" + totalRent + " TWD\n" +
-        "────────────────────\n" +
+        "\n" +
         "📌 Notes:\n" +
         "1. Officers have received your request and will prepare the gear.\n" +
         "2. If fees apply, please complete payment in 'Payment Center' before pickup.\n" +
@@ -264,6 +280,68 @@ function _handleNotifyOfficersLoan(json) {
     return _successResponse({ message: "幹部推播與個人推播已成功送出" });
   } catch (err) {
     console.warn("裝備租借推播失敗:", err);
+    return _errorResponse(err.toString());
+  }
+}
+
+/**
+ * 裝備租借取消推播通知 (幹部 Gmail/LINE 雙軌 + 使用者個人憑證)
+ */
+function _handleNotifyLoanCancelled(json) {
+  try {
+    var loanId = json.loanId || "";
+    var userId = json.userId || "";
+    var borrowerName = json.borrowerName || "社員";
+    var borrowerLineId = json.borrowerLineId || "";
+    var isPaid = !!json.isPaid;
+    var itemsSummary = json.itemsSummary || [];
+    var itemsText = Array.isArray(itemsSummary) ? (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") : String(itemsSummary || "• 無品項");
+
+    // 1. 幹部雙軌通知 (Gmail + LINE Push)
+    var adminSubject = "";
+    var adminBody = "";
+    if (isPaid) {
+      adminSubject = "【台科登山社】裝備預約取消（⚠️需安排退款）- " + loanId + " (" + borrowerName + ")";
+      adminBody = "🔔 【幹部通知：裝備預約取消（需安排退款）】\n" +
+        "─────────────\n" +
+        "• 訂單編號：" + loanId + "\n" +
+        "• 申請人：" + borrowerName + "\n" +
+        (borrowerLineId ? "• LINE ID：" + borrowerLineId + "\n" : "") +
+        "• 取消裝備品項：\n" + itemsText + "\n\n" +
+        "⚠️ 該租借預約已繳費／待確認，請幹部依社團退費規範安排退款事宜！（庫存已由 Supabase 自動釋放回補）";
+    } else {
+      adminSubject = "【台科登山社】裝備預約取消通知 - " + loanId + " (" + borrowerName + ")";
+      adminBody = "【🎒 幹部通知：裝備預約取消】\n" +
+        "─────────────\n" +
+        "• 訂單編號：" + loanId + "\n" +
+        "• 申請人：" + borrowerName + "\n" +
+        (borrowerLineId ? "• LINE ID：" + borrowerLineId + "\n" : "") +
+        "• 取消裝備品項：\n" + itemsText + "\n\n" +
+        "⚡ 裝備庫存已由 Supabase 自動釋放回補！";
+    }
+
+    pushAdminMessage(adminBody, adminSubject);
+
+    // 2. 使用者個人 LINE 推播 (取消成功憑證)
+    if (userId && userId !== "TEST_USER_ID") {
+      var userMsg = "【🎒 裝備租借取消成功憑證】\n\n" +
+        "• 訂單編號：" + loanId + "\n" +
+        "• 借用人：" + borrowerName + "\n" +
+        "• 取消裝備明細：\n" + itemsText + "\n\n" +
+        (isPaid ? "⚠️ 您已完成此訂單之繳費，社團幹部將主動與您聯繫辦理退款事宜！\n\n" : "您的裝備租借預約已成功取消，庫存已歸還系統。\n\n") +
+        "─────────────\n" +
+        "【🎒 Equipment Loan Cancellation Confirmed】\n\n" +
+        "• Order ID: " + loanId + "\n" +
+        "• Borrower: " + borrowerName + "\n" +
+        "• Items:\n" + itemsText + "\n\n" +
+        (isPaid ? "⚠️ You have paid for this reservation. Officers will contact you regarding the refund process.\n" : "Your equipment loan reservation has been successfully cancelled.");
+
+      _pushMessage(userId, userMsg);
+    }
+
+    return _successResponse({ message: "裝備取消幹部與個人推播已成功送出" });
+  } catch (err) {
+    console.warn("_handleNotifyLoanCancelled 失敗:", err);
     return _errorResponse(err.toString());
   }
 }
@@ -281,10 +359,11 @@ function _handleNotifyOfficersPayment(json) {
     var noteEn = details.note ? "\n• Note: " + details.note : "";
     var userName = details.userName || "";
     var selectedNames = details.selectedNames || [];
+    var paymentId = details.paymentId || details.id || json.paymentId || "";
 
     // 若未傳入 selectedNames，根據 selectedIds 自動轉換品項名稱
     if ((!selectedNames || selectedNames.length === 0) && details.selectedIds && Array.isArray(details.selectedIds)) {
-      selectedNames = details.selectedIds.map(function(id) {
+      selectedNames = details.selectedIds.map(function (id) {
         if (id === 'fee_membership') return '社籍與社費 (Membership Fee)';
         if (id.indexOf('act_') === 0) return '活動費用 (' + id + ')';
         if (id.indexOf('eq_') === 0) return '裝備租借 (' + id + ')';
@@ -292,25 +371,42 @@ function _handleNotifyOfficersPayment(json) {
       });
     }
 
-    var itemsZh = selectedNames.length > 0 ? selectedNames.map(function(n) { return "  - " + n; }).join("\n") : "  - 無項目";
-    var itemsEn = selectedNames.length > 0 ? selectedNames.map(function(n) { return "  - " + n; }).join("\n") : "  - None";
+    var itemsZh = selectedNames.length > 0 ? selectedNames.map(function (n) { return "  - " + n; }).join("\n") : "  - 無項目";
+    var itemsEn = selectedNames.length > 0 ? selectedNames.map(function (n) { return "  - " + n; }).join("\n") : "  - None";
+
+    var webServiceUrl = "";
+    try {
+      if (typeof ScriptApp !== 'undefined' && ScriptApp.getServiceUrl) {
+        webServiceUrl = ScriptApp.getServiceUrl();
+      }
+    } catch (e) {}
+
+    var verifyLink = (webServiceUrl && paymentId)
+      ? (webServiceUrl + "?action=confirm_payment_web&paymentId=" + encodeURIComponent(paymentId))
+      : "";
 
     // 1. 推播給幹部管理群組
     var adminMsg = "【💳 幹部通知：新繳費申報】\n\n" +
       (userName ? "申報人：" + userName + "\n" : "") +
       "申報人 ID：" + userId + "\n" +
+      (paymentId ? "繳費單號：" + paymentId + "\n" : "") +
       "申報金額：$" + totalAmount + " 元\n" +
       "帳號末五碼：" + last5Digits + "\n" +
       "申報項目：\n" + itemsZh +
       noteZh + "\n\n" +
-      "⚡ 資料已安全記錄於 Supabase，請幹部核對網銀後至系統核銷！";
+      "👉 幹部核銷方式（任選一種）：\n" +
+      (paymentId ? "1. LINE 群組輸入：@小岳助理 核銷 " + paymentId + "\n" : "") +
+      (verifyLink ? "2. 點擊單鍵核銷連結：" + verifyLink + "\n" : "2. 至管理後台更新對帳狀態\n") +
+      "\n⚡ 資料已安全記錄於 Supabase，請幹部核對網銀後核銷！";
 
-    pushAdminMessage(adminMsg);
+    var paymentSubject = "【台科登山社】新繳費申報 - $" + totalAmount + " (" + (userName || "未知社員") + "，末5碼 " + last5Digits + ")";
+    pushAdminMessage(adminMsg, paymentSubject);
 
     // 2. ⭐️ 同步保底推播給使用者個人 LINE 聊天室 (個人繳費收據)
     if (userId && userId !== "TEST_USER_ID") {
       var userMsg = "【💳 繳費申報已成功送出】\n\n" +
         "您好" + (userName ? " " + userName : "") + "！系統已成功收到您的繳費申報資訊：\n\n" +
+        (paymentId ? "• 繳費單號：" + paymentId + "\n" : "") +
         "• 申報金額：$" + totalAmount + " 元\n" +
         "• 帳號末五碼：" + last5Digits + "\n" +
         "• 申報項目：\n" + itemsZh +
@@ -319,6 +415,7 @@ function _handleNotifyOfficersPayment(json) {
         "─────────────\n" +
         "【💳 Payment Report Submitted】\n\n" +
         "Hello" + (userName ? " " + userName : "") + "! Your payment report has been submitted:\n\n" +
+        (paymentId ? "• Payment ID: " + paymentId + "\n" : "") +
         "• Amount: $" + totalAmount + " TWD\n" +
         "• Last 5 Digits: " + last5Digits + "\n" +
         "• Items:\n" + itemsEn +
@@ -627,13 +724,132 @@ function _handleNotifyProfileSaved(json) {
         "• 聯絡電話：" + contactPhone + "\n" +
         "• LINE ID：" + lineContact + "\n\n" +
         "💡 幹部團隊可主動與該社員聯繫，歡迎新夥伴加入！";
-      pushAdminMessage(adminNotice);
+      var cadreSubject = "【台科登山社】幹部意願登記 - " + name + " (" + (dept || "登山夥伴") + ")";
+      pushAdminMessage(adminNotice, cadreSubject);
     }
 
     return _successResponse({ message: "資料更新推播已成功發送" });
   } catch (err) {
     console.warn("個人資料更新推播失敗:", err);
     return _errorResponse(err.toString());
+  }
+}
+
+/**
+ * 活動報名取消推播通知 (正取緊急遞補 + 使用者個人憑證)
+ */
+function _handleNotifyEventCancelled(json) {
+  try {
+    var eventId = json.eventId || "";
+    var eventName = json.eventName || "社團活動";
+    var userId = json.userId || "";
+    var userName = json.userName || "社員";
+    var reviewStatus = String(json.reviewStatus || "");
+    var cancelReason = json.cancelReason || "自願取消";
+    var isPaid = !!json.isPaid;
+
+    var isConfirmedUser = reviewStatus.indexOf("正取") > -1;
+
+    // 1. 僅當「正取」人員取消時發送幹部緊急通知 (避免備取取消群組洗版)
+    if (isConfirmedUser) {
+      var adminSubject = "【台科登山社】正取棄權緊急通知 - " + eventName + " (" + userName + ")";
+      var adminBody = "🔔 【幹部通知：正取取消（" + (isPaid ? "需安排替補與退費" : "需安排備取遞補") + "）】\n" +
+        "─────────────\n" +
+        "• 活動名稱：" + eventName + " (" + eventId + ")\n" +
+        "• 棄權社員：" + userName + "\n" +
+        "• 審核狀態：正取 (棄權)\n" +
+        "• 取消原因：" + cancelReason + "\n\n" +
+        (isPaid
+          ? "⚠️ 該正取者已完成繳費／待對帳，請幹部安排備取遞補與退費事宜！"
+          : "⚡ 正取名額已釋出，請幹部儘速檢視備取名單，聯繫有遞補意願之社員！");
+
+      pushAdminMessage(adminBody, adminSubject);
+    }
+
+    // 2. 使用者個人 LINE 推播 (取消報名確認)
+    if (userId && userId !== "TEST_USER_ID") {
+      var userMsg = "【🏕️ 活動報名取消確認】\n\n" +
+        "親愛的 " + userName + " 您好：\n" +
+        "您所報名的活動【" + eventName + "】已成功取消！\n\n" +
+        "• 原審核狀態：" + (reviewStatus || "已報名") + "\n" +
+        (cancelReason ? "• 取消原因：" + cancelReason + "\n" : "") +
+        (isPaid ? "\n⚠️ 若您已繳交活動費用，社團幹部將依退費規範主動聯絡您安排退費！\n" : "\n期待未來在其他山林活動中與您同行！🏔️\n") +
+        "─────────────\n" +
+        "【🏕️ Event Registration Cancellation Confirmed】\n\n" +
+        "Dear " + userName + ",\n" +
+        "Your registration for [" + eventName + "] has been successfully cancelled." +
+        (isPaid ? "\n⚠️ If you have already paid the activity fee, officers will contact you for refund arrangements." : "\nHope to see you on the trails in future events! 🏔️");
+
+      _pushMessage(userId, userMsg);
+    }
+
+    return _successResponse({ message: "活動取消推播已成功送出" });
+  } catch (err) {
+    console.warn("_handleNotifyEventCancelled 失敗:", err);
+    return _errorResponse(err.toString());
+  }
+}
+
+/**
+ * 社員心得評分提交推播通知 (幹部通知)
+ */
+function _handleNotifyReflectionSubmitted(json) {
+  try {
+    var userId = json.userId || "";
+    var userName = json.userName || "社員";
+    var eventName = json.eventName || "社團活動";
+    var difficulty = parseInt(json.difficulty, 10) || 3;
+    var beauty = parseInt(json.beauty, 10) || 5;
+    var content = json.content || "";
+    var photoUrls = json.photoUrls || [];
+    var photosText = Array.isArray(photoUrls) ? photoUrls.join("\n• ") : String(photoUrls || "");
+
+    var diffStars = "★".repeat(Math.min(5, Math.max(1, difficulty)));
+    var beautyStars = "★".repeat(Math.min(5, Math.max(1, beauty)));
+
+    var adminSubject = "【台科登山社】新活動心得分享 - " + eventName + " (" + userName + ")";
+    var adminBody = "【📝 幹部通知：社員活動心得回饋】\n" +
+      "─────────────\n" +
+      "• 發表社員：" + userName + "\n" +
+      "• 活動名稱：" + eventName + "\n" +
+      "• 路線難度：" + diffStars + " (" + difficulty + "/5)\n" +
+      "• 風景推薦：" + beautyStars + " (" + beauty + "/5)\n\n" +
+      "💬 心得內容：\n" + (content || "(無文字心得)") +
+      (photosText ? "\n\n📷 登頂相片：\n• " + photosText : "");
+
+    pushAdminMessage(adminBody, adminSubject);
+    return _successResponse({ message: "心得提交推播已成功送出" });
+  } catch (err) {
+    console.warn("_handleNotifyReflectionSubmitted 失敗:", err);
+    return _errorResponse(err.toString());
+  }
+}
+
+/**
+ * 網頁單鍵核銷繳費 (供 Gmail 郵件直接點擊核銷)
+ */
+function _handleWebConfirmPayment(paymentId) {
+  if (!paymentId) {
+    return HtmlService.createHtmlOutput("<h2 style='color:#e11d48;font-family:sans-serif;'>❌ 缺少繳費單號參數</h2>");
+  }
+
+  var res = (typeof _processPaymentVerification === 'function')
+    ? _processPaymentVerification(paymentId, "Gmail 網頁核銷", false)
+    : { success: false, message: "核銷引擎未載入" };
+
+  if (res.success) {
+    var html = "<div style='font-family:system-ui,-apple-system,sans-serif;max-width:500px;margin:40px auto;padding:24px;border:1px solid #10b981;border-radius:12px;background:#f0fdf4;'>" +
+      "<h2 style='color:#059669;margin-top:0;'>✅ 繳費單核銷成功！</h2>" +
+      "<p style='color:#374151;line-height:1.6;'>單號：<strong>" + paymentId + "</strong><br>" +
+      "狀態已成功更新為：<span style='color:#059669;font-weight:bold;'>已核銷 Confirmed</span><br>" +
+      "系統已自動發送【🎉 繳費成功通知】給該社員之個人 LINE 聊天室！</p>" +
+      "<p style='color:#6b7280;font-size:13px;'>您可以關閉此分頁。</p></div>";
+    return HtmlService.createHtmlOutput(html);
+  } else {
+    var errHtml = "<div style='font-family:system-ui,-apple-system,sans-serif;max-width:500px;margin:40px auto;padding:24px;border:1px solid #ef4444;border-radius:12px;background:#fef2f2;'>" +
+      "<h2 style='color:#dc2626;margin-top:0;'>❌ 核銷失敗</h2>" +
+      "<p style='color:#374151;'>單號：<strong>" + paymentId + "</strong><br>原因：" + res.message + "</p></div>";
+    return HtmlService.createHtmlOutput(errHtml);
   }
 }
 
@@ -668,6 +884,12 @@ function _handleCheckOfficerStatus(json) {
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
   var userId = (e && e.parameter && e.parameter.userId) ? e.parameter.userId : "";
+
+  // 0. 網頁單鍵核銷繳費 (GET action=confirm_payment_web&paymentId=...)
+  if (action === "confirm_payment_web") {
+    var webPayId = (e && e.parameter && e.parameter.paymentId) ? e.parameter.paymentId : "";
+    return _handleWebConfirmPayment(webPayId);
+  }
 
   // 1. 幹部身分初檢 (GET 備援)
   if (action === "check_officer_status") {

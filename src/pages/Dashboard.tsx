@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { appendAuthToken } from '../utils/api';
+import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
 import { fetchDashboardFromSupabase, cancelEquipmentLoanInSupabase, cancelEventSignupInSupabase, getLastSupabaseError } from '../utils/supabaseClient';
 import {
@@ -194,6 +194,33 @@ function Dashboard({ userId }: { userId: string }) {
       const result = await cancelEquipmentLoanInSupabase(userId || 'TEST_USER_ID', orderId);
 
       if (result.success) {
+        // ⭐️ 發送取消裝備雙軌推播 (幹部 Gmail/LINE + 個人取消憑證)
+        const targetEq = data?.equipments.find(e => e.orderId === orderId);
+        const isPaid = targetEq ? (targetEq.status.includes('已繳費') || targetEq.status.includes('Paid') || targetEq.status.includes('待退款')) : false;
+        const borrowerName = data?.profile?.name || lineProfile?.displayName || '社員';
+
+        try {
+          const payload = withAuthPayload({
+            action: 'notify_loan_cancelled',
+            loanId: orderId,
+            userId: userId || 'TEST_USER_ID',
+            borrowerName: borrowerName,
+            borrowerLineId: '',
+            itemsSummary: targetEq?.itemName ? [targetEq.itemName] : [],
+            isPaid: isPaid,
+            pickupDate: targetEq?.pickupDate || '',
+            returnDate: targetEq?.returnDate || ''
+          });
+          fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload),
+            mode: 'no-cors'
+          }).catch(e => console.warn('通知取消裝備失敗:', e));
+        } catch (notifyErr) {
+          console.warn('組裝裝備取消通知酬載失敗:', notifyErr);
+        }
+
         alert(t('dashboard.alert.cancelLoanSuccess'));
         setRefreshKey(k => k + 1);
       } else {
@@ -238,6 +265,35 @@ function Dashboard({ userId }: { userId: string }) {
       const result = await cancelEventSignupInSupabase(userId || 'TEST_USER_ID', code);
 
       if (result.success) {
+        // ⭐️ 發送活動取消推播通知 (個人憑證)
+        const targetAct = data?.activities.find(a => (a.code === code || a.eventId === code));
+        const eventName = targetAct?.eventName || '社團活動';
+        const eventId = targetAct?.eventId || code;
+        const reviewStatus = targetAct?.reviewStatus || '備取/審核中';
+        const isPaid = targetAct ? (targetAct.payStatus.includes('已繳') || targetAct.payStatus.includes('Paid')) : false;
+        const userName = data?.profile?.name || lineProfile?.displayName || '社員';
+
+        try {
+          const payload = withAuthPayload({
+            action: 'notify_event_cancelled',
+            eventId: eventId,
+            eventName: eventName,
+            userId: userId || 'TEST_USER_ID',
+            userName: userName,
+            reviewStatus: reviewStatus,
+            cancelReason: '自願取消',
+            isPaid: isPaid
+          });
+          fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload),
+            mode: 'no-cors'
+          }).catch(e => console.warn('通知取消活動失敗:', e));
+        } catch (notifyErr) {
+          console.warn('組裝活動取消通知酬載失敗:', notifyErr);
+        }
+
         alert(t('dashboard.alert.cancelActivitySuccess'));
         setRefreshKey(k => k + 1);
       } else {
@@ -269,6 +325,34 @@ function Dashboard({ userId }: { userId: string }) {
       );
 
       if (result.success) {
+        // ⭐️ 發送正取取消推播通知 (正取緊急遞補通知 + 個人憑證)
+        const targetAct = data?.activities.find(a => (a.code === targetActivity.code || a.eventId === targetActivity.code));
+        const eventName = targetActivity.eventName || targetAct?.eventName || '社團活動';
+        const eventId = targetAct?.eventId || targetActivity.code;
+        const isPaid = targetAct ? (targetAct.payStatus.includes('已繳') || targetAct.payStatus.includes('Paid')) : false;
+        const userName = data?.profile?.name || lineProfile?.displayName || '社員';
+
+        try {
+          const payload = withAuthPayload({
+            action: 'notify_event_cancelled',
+            eventId: eventId,
+            eventName: eventName,
+            userId: userId || 'TEST_USER_ID',
+            userName: userName,
+            reviewStatus: '正取',
+            cancelReason: cancelReason.trim(),
+            isPaid: isPaid
+          });
+          fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload),
+            mode: 'no-cors'
+          }).catch(e => console.warn('通知正取取消失敗:', e));
+        } catch (notifyErr) {
+          console.warn('組裝正取取消通知酬載失敗:', notifyErr);
+        }
+
         alert(t('dashboard.alert.cancelConfirmedSuccess'));
         setShowCancelReasonModal(false);
         setTargetActivity(null);

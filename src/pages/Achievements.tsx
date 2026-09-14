@@ -318,6 +318,30 @@ function Achievements({ userId }: { userId: string }) {
         }
 
         if (sbSuccess) {
+          // ⭐️ 發送心得提交推播通知給幹部群組
+          try {
+            const finalImg = detailsPayload.imageUrl || '';
+            const photoList = finalImg ? finalImg.split(',') : [];
+            const payload = withAuthPayload({
+              action: 'notify_reflection_submitted',
+              userId: userId,
+              userName: '社員',
+              eventName: selectedActivity.title,
+              difficulty: difficulty,
+              beauty: beauty,
+              content: content,
+              photoUrls: photoList
+            });
+            fetch(GAS_API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(payload),
+              mode: 'no-cors'
+            }).catch(e => console.warn('通知心得失敗:', e));
+          } catch (notifErr) {
+            console.warn('發送心得推播例外:', notifErr);
+          }
+
           alert(t('achievements.alert.submitSuccess'));
           closeForm();
           setRefreshKey(k => k + 1); // 重新整理

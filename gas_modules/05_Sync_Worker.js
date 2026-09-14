@@ -974,3 +974,189 @@ function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus, eve
     return false;
   }
 }
+
+/**
+ * 🏔️ 系統每日自動巡檢核心 (dailyPatrol)
+ * 1. 活動截止自動關閉
+ * 2. 社員社籍到期自動重置為未繳費並發送期滿溫馨祝福
+ * 3. 裝備借用逾期未歸還催收提醒
+ * 4. 彙整巡檢報告雙軌推播 (Gmail + LINE Push)
+ */
+function dailyPatrol() {
+  var props = PropertiesService.getScriptProperties();
+  var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
+  var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!sbUrl || !sbKey) {
+    Logger.log("❌ dailyPatrol 缺少 Supabase 設定");
+    return { status: "error", message: "缺少 Supabase 設定" };
+  }
+
+  var now = new Date();
+  var todayStr = Utilities.formatDate(now, "Asia/Taipei", "yyyy-MM-dd");
+
+  var closedEvents = [];
+  var expiredMembers = [];
+  var overdueLoans = [];
+
+  // ==============================================================================
+  // 1. 活動截止巡檢：若超過報名截止日且狀態仍為「開放」，自動切換為「關閉」
+  // ==============================================================================
+  try {
+    var evUrl = sbUrl + "/rest/v1/events?status=eq.開放&deadline=lt." + todayStr + "&select=id,name,deadline";
+    var evRes = UrlFetchApp.fetch(evUrl, {
+      method: "get",
+      headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
+      muteHttpExceptions: true
+    });
+    if (evRes.getResponseCode() === 200) {
+      var expEvents = JSON.parse(evRes.getContentText()) || [];
+      for (var i = 0; i < expEvents.length; i++) {
+        var evt = expEvents[i];
+        // 切換為關閉
+        var patchEvtUrl = sbUrl + "/rest/v1/events?id=eq." + encodeURIComponent(evt.id);
+        UrlFetchApp.fetch(patchEvtUrl, {
+          method: "patch",
+          contentType: "application/json",
+          headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey, "Prefer": "return=minimal" },
+          payload: JSON.stringify({ status: "關閉", updated_at: new Date().toISOString() }),
+          muteHttpExceptions: true
+        });
+        closedEvents.push("• " + (evt.name || evt.id) + " (截止日: " + evt.deadline + ")");
+      }
+    }
+  } catch (errEv) {
+    console.warn("巡檢活動截止異常:", errEv);
+  }
+
+  // ==============================================================================
+  // 2. 社員社籍期滿巡檢：到期日小於今日者，轉為未繳費並發送期滿祝福
+  // ==============================================================================
+  try {
+    var memUrl = sbUrl + "/rest/v1/members?fee_status=eq.已繳費 Paid&expire_date=lt." + todayStr + "&select=line_user_id,name,expire_date";
+    var memRes = UrlFetchApp.fetch(memUrl, {
+      method: "get",
+      headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
+      muteHttpExceptions: true
+    });
+    if (memRes.getResponseCode() === 200) {
+      var expMems = JSON.parse(memRes.getContentText()) || [];
+      for (var j = 0; j < expMems.length; j++) {
+        var mem = expMems[j];
+        // 重置為未繳費
+        var patchMemUrl = sbUrl + "/rest/v1/members?line_user_id=eq." + encodeURIComponent(mem.line_user_id);
+        UrlFetchApp.fetch(patchMemUrl, {
+          method: "patch",
+          contentType: "application/json",
+          headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey, "Prefer": "return=minimal" },
+          payload: JSON.stringify({
+            fee_status: "未繳費 Unpaid",
+            is_member: false,
+            updated_at: new Date().toISOString()
+          }),
+          muteHttpExceptions: true
+        });
+        expiredMembers.push("• " + (mem.name || "社員") + " (到期日: " + mem.expire_date + ")");
+
+        // 推播期滿溫馨祝福至該社員個人 LINE
+        if (mem.line_user_id && mem.line_user_id.indexOf("U") === 0) {
+          var blessingMsg = "【社籍期滿溫馨祝福 / Club Membership Milestone】\n\n" +
+            "親愛的 " + (mem.name || "山友") + " 您好：\n\n" +
+            "您的登山社社員資格已於 " + mem.expire_date + " 圓滿告一段落。\n\n" +
+            "非常感謝您這段時間以來對登山社的陪伴與熱情參與，與大家一同在山林與步道間留下了許多珍貴美好的回憶！\n\n" +
+            "山一直在那裡，夥伴的情誼也始終常在。\n" +
+            "無論未來您走向哪一座山頭、開啟怎樣的新冒險，登山社都由衷祝福您平安順遂、每一步都有美麗的風景相伴！🏔️✨\n\n" +
+            "若想念山林或想再與大家聚聚，隨時都歡迎回到登山社這個溫暖大家庭！\n" +
+            "─────────────\n" +
+            "Dear " + (mem.name || "Member") + ",\n\n" +
+            "Your club membership period has concluded on " + mem.expire_date + ".\n\n" +
+            "Thank you so much for being an essential part of our mountaineering journey. You are always welcome back to our club family!";
+
+          _pushMessage(mem.line_user_id, blessingMsg);
+        }
+      }
+    }
+  } catch (errMem) {
+    console.warn("巡檢社員社籍異常:", errMem);
+  }
+
+  // ==============================================================================
+  // 3. 裝備逾期巡檢：狀態為「使用中 Using」或「待領取」且預計歸還日小於今日
+  // ==============================================================================
+  try {
+    var loanUrl = sbUrl + "/rest/v1/loans?status=in.(使用中 Using,待領取 To Be Collected)&return_date=lt." + todayStr + "&select=id,borrower_name,borrower_line_id,phone,return_date,status";
+    var loanRes = UrlFetchApp.fetch(loanUrl, {
+      method: "get",
+      headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
+      muteHttpExceptions: true
+    });
+    if (loanRes.getResponseCode() === 200) {
+      var ovLoans = JSON.parse(loanRes.getContentText()) || [];
+      for (var k = 0; k < ovLoans.length; k++) {
+        var ln = ovLoans[k];
+        overdueLoans.push("• 單號 " + ln.id + "：" + (ln.borrower_name || "借用人") + " (應還日期: " + ln.return_date + "，電話: " + (ln.phone || "無") + ")");
+      }
+    }
+  } catch (errLn) {
+    console.warn("巡檢逾期裝備異常:", errLn);
+  }
+
+  // ==============================================================================
+  // 4. 彙整巡檢報告並推播給幹部 (僅在有項目異動或逾期時才發信，杜絕洗版)
+  // ==============================================================================
+  var noticeSections = [];
+  if (closedEvents.length > 0) {
+    noticeSections.push("【活動截止自動關閉】\n系統已自動將下列 " + closedEvents.length + " 場已過截止日之活動狀態切換為「關閉」：\n\n" +
+      closedEvents.join("\n") +
+      "\n\n社員將無法再進行報名，幹部可於管理中心進行後續名冊審核。");
+  }
+  if (expiredMembers.length > 0) {
+    noticeSections.push("【社籍到期自動轉未繳費】\n系統巡檢偵測到下列 " + expiredMembers.length + " 位社員之社籍已逾期，已將繳費狀態自動重置為「未繳費 Unpaid」並發送期滿祝福：\n\n" +
+      expiredMembers.join("\n") +
+      "\n\n社員若欲續約登入繳費系統即可繳納新學期社費。");
+  }
+  if (overdueLoans.length > 0) {
+    noticeSections.push("【⚠️ 裝備逾期未歸還催收提醒】\n系統偵測到下列 " + overdueLoans.length + " 筆裝備租借單已逾預計歸還日：\n\n" +
+      overdueLoans.join("\n") +
+      "\n\n請幹部主動與借用人聯繫確認歸還或續借狀況。");
+  }
+
+  if (noticeSections.length > 0) {
+    var reportSubject = "【台科登山社】系統每日自動巡檢報告 - " + todayStr;
+    var reportBody = "【系統每日自動巡檢報告】\n" +
+      "─────────────\n\n" +
+      noticeSections.join("\n\n────────────────────\n\n") +
+      "\n\n⚡ 巡檢時間：" + Utilities.formatDate(now, "Asia/Taipei", "yyyy-MM-dd HH:mm:ss");
+
+    pushAdminMessage(reportBody, reportSubject);
+    Logger.log("✅ 每日巡檢完成並發送報告：" + reportSubject);
+  } else {
+    Logger.log("ℹ️ 每日巡檢完成，今日無過期活動、無到期社員、無逾期裝備。");
+  }
+
+  return {
+    status: "success",
+    date: todayStr,
+    closedEventsCount: closedEvents.length,
+    expiredMembersCount: expiredMembers.length,
+    overdueLoansCount: overdueLoans.length
+  };
+}
+
+/**
+ * 安裝每日定時巡檢觸發器 (每天凌晨 02:00 執行)
+ */
+function setupDailyPatrolTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === "dailyPatrol") {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  ScriptApp.newTrigger("dailyPatrol")
+    .timeBased()
+    .everyDays(1)
+    .atHour(2)
+    .create();
+  Logger.log("✅ 已成功設定每日凌晨 02:00 執行 dailyPatrol 巡檢觸發器！");
+}

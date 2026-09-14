@@ -132,6 +132,18 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
+  // 2. 幹部核銷指令（支援「核銷 PAY_xxx」或「@小岳助理 核銷 PAY_xxx」）
+  if (queryText.indexOf("核銷") === 0 || queryText.indexOf("確認核銷") === 0) {
+    var paymentId = queryText.replace(/^(確認核銷|核銷)\s*/, "").trim();
+    if (paymentId) {
+      _processPaymentVerification(paymentId, "幹部指令核銷", true, replyToken);
+      return;
+    } else {
+      _replyMessageSmart(replyToken, "請輸入欲核銷的繳費單號，例如：\n@小岳助理 核銷 PAY_20260914_001", true);
+      return;
+    }
+  }
+
   // 3. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
   if (queryText.indexOf("最新活動") > -1 || lowerQueryText.indexOf("activities") > -1 || queryText.indexOf("報名活動") > -1 || lowerQueryText === "events") {
     sendEventList(replyToken);
@@ -206,6 +218,139 @@ function _handlePostback(replyToken, userId, postbackData) {
     }
     return;
   }
+  if (action === "admin_confirm" || action === "confirm_payment") {
+    var payId = params.paymentId || params.id || eventId;
+    if (payId) {
+      _processPaymentVerification(payId, "幹部點擊確認", true, replyToken);
+      return;
+    }
+  }
+}
+
+/**
+ * 核心繳費核銷處理函式 (供 LINE 文字指令、LINE Postback、Gmail 網頁核銷共用)
+ * @param {string} paymentId 繳費單號
+ * @param {string} officerName 核銷幹部姓名/識別
+ * @param {boolean} sendOfficerReply 是否回覆幹部
+ * @param {string} [replyToken] 若有 LINE replyToken
+ */
+function _processPaymentVerification(paymentId, officerName, sendOfficerReply, replyToken) {
+  if (!paymentId) {
+    if (sendOfficerReply && replyToken) {
+      _replyMessage(replyToken, "⚠️ 缺少欲核銷的繳費單號！");
+    }
+    return { success: false, message: "缺少繳費單號" };
+  }
+
+  var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
+  var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!sbUrl || !sbKey) {
+    if (sendOfficerReply && replyToken) {
+      _replyMessage(replyToken, "⚠️ 系統尚未設定 SUPABASE_URL 或金鑰，無法完成核銷。");
+    }
+    return { success: false, message: "缺少 Supabase 設定" };
+  }
+
+  try {
+    // 1. 查詢該筆繳費紀錄
+    var queryUrl = sbUrl + "/rest/v1/payments?id=eq." + encodeURIComponent(paymentId) + "&select=*";
+    var res = UrlFetchApp.fetch(queryUrl, {
+      method: "get",
+      headers: {
+        "apikey": sbKey,
+        "Authorization": "Bearer " + sbKey
+      },
+      muteHttpExceptions: true
+    });
+
+    if (res.getResponseCode() !== 200) {
+      var fetchErr = "查詢繳費單失敗 (HTTP " + res.getResponseCode() + ")";
+      if (sendOfficerReply && replyToken) _replyMessage(replyToken, "❌ " + fetchErr);
+      return { success: false, message: fetchErr };
+    }
+
+    var records = JSON.parse(res.getContentText());
+    if (!records || records.length === 0) {
+      if (sendOfficerReply && replyToken) {
+        _replyMessage(replyToken, "⚠️ 找不到繳費單號【" + paymentId + "】，請確認單號是否正確！");
+      }
+      return { success: false, message: "找不到繳費單號：" + paymentId };
+    }
+
+    var payment = records[0];
+    var currentStatus = String(payment.status || "");
+    if (currentStatus.indexOf("已核銷") > -1 || currentStatus.indexOf("Confirmed") > -1) {
+      if (sendOfficerReply && replyToken) {
+        _replyMessage(replyToken, "ℹ️ 繳費單【" + paymentId + "】先前已完成核銷，狀態為已核銷 Confirmed。");
+      }
+      return { success: true, message: "該單號先前已完成核銷", alreadyConfirmed: true };
+    }
+
+    // 2. 更新狀態為標準標籤「已核銷 Confirmed」
+    var nowIso = new Date().toISOString();
+    var patchUrl = sbUrl + "/rest/v1/payments?id=eq." + encodeURIComponent(paymentId);
+    UrlFetchApp.fetch(patchUrl, {
+      method: "patch",
+      contentType: "application/json",
+      headers: {
+        "apikey": sbKey,
+        "Authorization": "Bearer " + sbKey,
+        "Prefer": "return=minimal"
+      },
+      payload: JSON.stringify({
+        status: "已核銷 Confirmed",
+        confirmed_by: officerName || "幹部團隊",
+        confirmed_at: nowIso,
+        updated_at: nowIso
+      }),
+      muteHttpExceptions: true
+    });
+
+    // 3. 自動主動推播【🎉 繳費成功通知】至該社員個人 LINE
+    var targetUserId = payment.line_user_id;
+    var targetUserName = payment.name || "社員";
+    var totalAmount = payment.amount || payment.total_amount || 0;
+    var selectedItems = payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團相關費用");
+
+    if (targetUserId && targetUserId.indexOf("U") === 0) {
+      var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
+        "親愛的 " + targetUserName + " 您好：\n" +
+        "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
+        "• 繳費單號：" + paymentId + "\n" +
+        "• 核銷金額：$" + totalAmount + " 元\n" +
+        "• 核銷項目：" + selectedItems + "\n\n" +
+        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
+        "─────────────\n" +
+        "Dear " + targetUserName + ",\n" +
+        "Your payment has been successfully confirmed by the officers!\n\n" +
+        "• Payment ID: " + paymentId + "\n" +
+        "• Amount: $" + totalAmount + " TWD\n" +
+        "• Items: " + selectedItems + "\n\n" +
+        "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
+
+      _pushMessage(targetUserId, successMsg);
+    }
+
+    // 4. 若有 LINE replyToken，回覆幹部成功
+    if (sendOfficerReply && replyToken) {
+      var replyText = "✅ 繳費單【" + paymentId + "】已成功核銷！\n" +
+        "─────────────\n" +
+        "• 繳費社員：" + targetUserName + "\n" +
+        "• 金額：$" + totalAmount + " 元\n" +
+        "• 核銷狀態：已核銷 Confirmed\n" +
+        "• 系統已自動發送【繳費成功通知】至該社員個人 LINE！";
+      _replyMessage(replyToken, replyText);
+    }
+
+    return { success: true, message: "已成功核銷繳費單 " + paymentId, payment: payment };
+  } catch (err) {
+    console.error("_processPaymentVerification 異常:", err);
+    if (sendOfficerReply && replyToken) {
+      _replyMessage(replyToken, "❌ 核銷失敗: " + err.toString());
+    }
+    return { success: false, message: err.toString() };
+  }
 }
 
 /**
@@ -259,15 +404,86 @@ function _pushMessage(userId, text) {
   });
 }
 
-function pushAdminMessage(text) {
+/**
+ * 幹部通知信件發送函式 (Gmail / MailApp)
+ * @param {string} subject 信件主旨
+ * @param {string} body 信件純文字內文
+ */
+function sendAdminEmail(subject, body) {
+  try {
+    var recipient = (typeof getAdminEmail === 'function') ? getAdminEmail() : (typeof ADMIN_EMAIL !== 'undefined' ? ADMIN_EMAIL : 'ntustmountain@gmail.com');
+    if (!recipient) {
+      console.warn("sendAdminEmail 略過: 未設定管理員 Email (recipient 為空)");
+      return false;
+    }
+    if (!subject || !body) {
+      console.warn("sendAdminEmail 略過: 主旨或內文為空");
+      return false;
+    }
+
+    if (typeof MailApp !== 'undefined' && MailApp.sendEmail) {
+      MailApp.sendEmail({
+        to: recipient,
+        subject: subject,
+        body: body,
+        name: "台科登山社小岳助理"
+      });
+      console.log("sendAdminEmail 成功寄出至: " + recipient + ", 主旨: " + subject);
+      return true;
+    } else if (typeof GmailApp !== 'undefined' && GmailApp.sendEmail) {
+      GmailApp.sendEmail(recipient, subject, body, {
+        name: "台科登山社小岳助理"
+      });
+      console.log("GmailApp sendAdminEmail 成功寄出至: " + recipient + ", 主旨: " + subject);
+      return true;
+    } else {
+      console.warn("MailApp 與 GmailApp 皆不可用 (可能是本機測試環境)");
+      return false;
+    }
+  } catch (err) {
+    console.error("sendAdminEmail 寄信失敗: " + err.toString());
+    return false;
+  }
+}
+
+/**
+ * 幹部雙軌通知 (LINE 群組 Push + Gmail 同步發送)
+ * @param {string} text 通知內文
+ * @param {string} [customSubject] 自訂郵件主旨 (若無則自動提取)
+ */
+function pushAdminMessage(text, customSubject) {
+  if (!text) return;
+
+  // ⭐️ 1. 自動推導 Email 主旨
+  var subject = customSubject;
+  if (!subject) {
+    var lines = text.split("\n");
+    var firstLine = lines[0] ? lines[0].trim() : "";
+    if (firstLine.indexOf("【") !== -1 && firstLine.indexOf("】") !== -1) {
+      subject = firstLine;
+    } else if (text.indexOf("新裝備租借申請") !== -1) {
+      subject = "【台科登山社】新裝備租借申請通知";
+    } else if (text.indexOf("新繳費申報") !== -1) {
+      subject = "【台科登山社】新繳費申報通知";
+    } else if (text.indexOf("幹部意願登記") !== -1) {
+      subject = "【台科登山社】新幹部意願登記通知";
+    } else {
+      subject = "【台科登山社】幹部系統通知";
+    }
+  }
+
+  // ⭐️ 2. Gmail 雙軌發送 (保底 100% 送達，不受 LINE 免費額度耗盡影響)
+  sendAdminEmail(subject, text);
+
+  // ⭐️ 3. LINE 官方帳號 Push 嘗試發送 (若額度用完被拒絕不影響 Gmail)
   var adminGroupId = PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID') || ADMIN_GROUP_ID;
-  if (!adminGroupId || !text) {
-    console.warn("pushAdminMessage 略過: ADMIN_GROUP_ID 未設定或內容為空 (adminGroupId: " + adminGroupId + ")");
+  if (!adminGroupId) {
+    console.warn("pushAdminMessage LINE 略過: ADMIN_GROUP_ID 未設定 (adminGroupId 為空)");
     return;
   }
   var token = ADMIN_BOT_TOKEN || MEMBER_BOT_TOKEN;
   if (!token) {
-    console.warn("pushAdminMessage 略過: ADMIN_BOT_TOKEN 與 MEMBER_BOT_TOKEN 皆未設定");
+    console.warn("pushAdminMessage LINE 略過: ADMIN_BOT_TOKEN 與 MEMBER_BOT_TOKEN 皆未設定");
     return;
   }
   try {
@@ -277,7 +493,7 @@ function pushAdminMessage(text) {
     });
     var code = res ? res.getResponseCode() : 0;
     var content = res ? res.getContentText() : "";
-    console.log("pushAdminMessage 送出結果 (HTTP " + code + "): " + content);
+    console.log("pushAdminMessage LINE 送出結果 (HTTP " + code + "): " + content);
 
     // 若使用 ADMIN_BOT_TOKEN 失敗 (如 400, 404 群組未邀請該機器人)，嘗試使用 MEMBER_BOT_TOKEN 備援
     if (code !== 200 && ADMIN_BOT_TOKEN && MEMBER_BOT_TOKEN && token !== MEMBER_BOT_TOKEN) {
@@ -289,6 +505,7 @@ function pushAdminMessage(text) {
       console.log("MEMBER_BOT_TOKEN 備援推播結果: (HTTP " + (fbRes ? fbRes.getResponseCode() : 0) + "): " + (fbRes ? fbRes.getContentText() : ""));
     }
   } catch (err) {
-    console.error("pushAdminMessage 例外拋出: " + err.toString());
+    console.error("pushAdminMessage LINE 例外拋出: " + err.toString());
   }
 }
+

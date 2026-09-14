@@ -450,7 +450,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
       const userMessageText =
         `【🎒 我的裝備租借預訂單 / Equipment Loan Order】\n` +
-        `────────────────────\n` +
+        `─────────────\n` +
         `• 訂單編號 (Order ID)：${result.loanId || '已建立 Created'}\n` +
         `• 借用人 (Borrower)：${userProfile.name || '社員'} (${identityText})\n` +
         `• 預計領取 (Pickup Date)：${form.pickupDate}\n` +
@@ -459,7 +459,7 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         `📦 預約裝備清單 (Items)：\n` +
         `${itemsListText}\n\n` +
         `💰 預估總租金 (Estimated Total)：$${totalRentValue} 元\n` +
-        `────────────────────\n` +
+        `─────────────\n` +
         `📌 提醒事項 / Important Notes：\n` +
         `1. 幹部已收到您的預約申請，將為您備齊裝備。\n` +
         `   Officers have received your request and will prepare the gear.\n` +
