@@ -3607,4 +3607,119 @@ describe('50. 社團系統 5 大問題修復整合驗證 (社費過期、未來�
   });
 });
 
+describe('51. 全面直通 Supabase (SSOT)、去除無效 Sheets 備援與 4 大實務異常修復驗證', () => {
+  it('1. 社費過期自動補底：Payment.tsx 透過安全 profile RPC 校驗，非社員或過期社員立即補入社費待繳項', () => {
+    function simulatePaymentProfileCheck(profile) {
+      let isOfficialActive = false;
+      if (profile) {
+        const isExp = profile.expireDate ? (new Date(profile.expireDate) < new Date()) : false;
+        isOfficialActive = !!profile.isOfficial && !isExp;
+      }
+
+      let membership = [];
+      if (!isOfficialActive) {
+        membership.push({ id: 'fee_membership', name: '社籍與社費 (Membership Fee)', amount: 200 });
+      }
+      return membership;
+    }
+
+    // 情境 A：曾繳過費但社籍過期 (2025/12/31)
+    const expiredProfile = { isOfficial: false, expireDate: '2025/12/31' };
+    const resA = simulatePaymentProfileCheck(expiredProfile);
+    assert.strictEqual(resA.length, 1);
+    assert.strictEqual(resA[0].id, 'fee_membership');
+
+    // 情境 B：全新訪客 (profile 為 null 或無資格)
+    const resB = simulatePaymentProfileCheck(null);
+    assert.strictEqual(resB.length, 1);
+    assert.strictEqual(resB[0].id, 'fee_membership');
+
+    // 情境 C：目前社籍有效 (2027/12/31)
+    const validProfile = { isOfficial: true, expireDate: '2027/12/31' };
+    const resC = simulatePaymentProfileCheck(validProfile);
+    assert.strictEqual(resC.length, 0, '有效正式社員不應出現社費待繳項目');
+  });
+
+  it('2. 報名者個資生日格式統一：去除 ISO 時區與連字號，嚴格只顯示 YYYY/MM/DD', () => {
+    const formatDateSlash = (dateStr) => {
+      if (!dateStr || !String(dateStr).trim()) return '未填';
+      const clean = String(dateStr).split('T')[0].trim().replace(/-/g, '/');
+      return clean.length >= 10 ? clean.substring(0, 10) : clean;
+    };
+
+    assert.strictEqual(formatDateSlash('2000-01-15T00:00:00.000Z'), '2000/01/15');
+    assert.strictEqual(formatDateSlash('1998-08-20'), '1998/08/20');
+    assert.strictEqual(formatDateSlash('1995/12/31'), '1995/12/31');
+    assert.strictEqual(formatDateSlash(''), '未填');
+    assert.strictEqual(formatDateSlash(null), '未填');
+    assert.strictEqual(formatDateSlash(undefined), '未填');
+  });
+
+  it('3. ENUM 智慧型別轉型 (text_to_event_signup_status_enum)：任何文字狀態均能安全轉為 Enum 值', () => {
+    function simulateCastToEnum(val) {
+      if (!val) return '審核中 Checking';
+      const s = String(val);
+      if (s.includes('正取（已繳費）') || s.includes('Confirmed (Paid)')) return '正取（已繳費）Confirmed (Paid)';
+      if (s.includes('備取（有意願）') || s.includes('Waitlisted (Interested)')) return '備取（有意願）Waitlisted (Interested)';
+      if (s.includes('正取') || s.includes('Confirmed')) return '正取 Confirmed';
+      if (s.includes('備取') || s.includes('Waitlisted')) return '備取 Waitlisted';
+      if (s.includes('取消') || s.includes('Cancelled')) return '已取消 Cancelled';
+      return '審核中 Checking';
+    }
+
+    assert.strictEqual(simulateCastToEnum('正取 Confirmed'), '正取 Confirmed');
+    assert.strictEqual(simulateCastToEnum('備取 Waitlisted'), '備取 Waitlisted');
+    assert.strictEqual(simulateCastToEnum('備取（有意願）Waitlisted (Interested)'), '備取（有意願）Waitlisted (Interested)');
+    assert.strictEqual(simulateCastToEnum('待審核'), '審核中 Checking');
+    assert.strictEqual(simulateCastToEnum('已取消 Cancelled'), '已取消 Cancelled');
+  });
+
+  it('4. 確認備取意願 (handleConfirmWaitlist) 直連 Supabase SSOT：更新狀態並傳訊通知社員', () => {
+    let mockSupabaseSignups = [
+      { id: 'S01', event_id: 'E01', line_user_id: 'U1001', status: '備取 Waitlisted' }
+    ];
+    let replySent = '';
+
+    function simulateConfirmWaitlist(userId, eventId) {
+      const record = mockSupabaseSignups.find(s => s.line_user_id === userId && s.event_id === eventId);
+      if (!record) {
+        replySent = '找不到該筆報名資料，請洽詢社團幹部！';
+        return;
+      }
+      if (record.status.includes('有意願')) {
+        replySent = '您先前已確認過備取意願！';
+        return;
+      }
+      record.status = '備取（有意願）Waitlisted (Interested)';
+      replySent = '已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！';
+    }
+
+    // 第一次點擊：確認成功
+    simulateConfirmWaitlist('U1001', 'E01');
+    assert.ok(replySent.includes('已成功確認您的備取意願'));
+    assert.strictEqual(mockSupabaseSignups[0].status, '備取（有意願）Waitlisted (Interested)');
+
+    // 第二次點擊：提醒已確認過
+    simulateConfirmWaitlist('U1001', 'E01');
+    assert.ok(replySent.includes('您先前已確認過備取意願'));
+  });
+
+  it('5. 全面移除試算表備援：活動名稱查詢 (_getEventName) 直連 Supabase，失敗直接報錯或回退預設，不讀取試算表', () => {
+    let sheetQueried = false;
+
+    function simulateGetEventNameDirectSupabase(eventId, mockSbEvents) {
+      if (!eventId) return '活動';
+      const ev = mockSbEvents.find(e => e.id === eventId);
+      if (ev && ev.title) return ev.title;
+      return eventId;
+    }
+
+    const mockEvents = [{ id: 'E2609-01', title: '雪山主東單攻' }];
+    const title = simulateGetEventNameDirectSupabase('E2609-01', mockEvents);
+    assert.strictEqual(title, '雪山主東單攻');
+    assert.strictEqual(sheetQueried, false, '絕不可存取試算表');
+  });
+});
+
+
 

@@ -61,7 +61,7 @@ function _handleGeminiChat(userId, userQuery) {
  */
 function _fetchOpenEventsContext() {
   try {
-    // 1. 優先直通 Supabase events (SSOT)
+    // 100% 直通 Supabase events (SSOT)，杜絕試算表依賴
     if (typeof _supabaseGet === "function") {
       var sbEvents = _supabaseGet("events", { status: "eq.開放", select: "title,fee,start_date,summary,itinerary" });
       if (Array.isArray(sbEvents) && sbEvents.length > 0) {
@@ -74,30 +74,10 @@ function _fetchOpenEventsContext() {
         }).join("\n");
       }
     }
-
-    // 2. 備援讀取試算表
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "events") : (ss.getSheetByName("events") || ss.getSheetByName("Events"));
-    if (!sheet) return "目前無活動資料。";
-
-    var data = sheet.getDataRange().getValues();
-    var headers = data[0];
-    var summaryArr = [];
-
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var status = String(row[_fi(headers, "報名狀態")] || "").trim();
-      if (status === "開放" || status === "Open") {
-        var title = row[_fi(headers, "活動名稱")] || "";
-        var fee = row[_fi(headers, "費用")] || 0;
-        var start = row[_fi(headers, "開始日期")] || "";
-        var desc = row[_fi(headers, "簡介")] || "";
-        summaryArr.push("• " + title + " (開始日：" + start + "，費用：$" + fee + ")：" + desc);
-      }
-    }
-    return summaryArr.join("\n");
+    return "目前無開放報名中的活動資料。";
   } catch (e) {
-    return "無法讀取活動清單。";
+    console.error("[_fetchOpenEventsContext] 直查 Supabase 失敗:", e);
+    return "無法讀取活動清單：" + (e.message || e);
   }
 }
 

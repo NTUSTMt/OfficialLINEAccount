@@ -256,20 +256,30 @@ function _getEmerRelValue(headers, row) {
   return bestVal || fallbackVal;
 }
 
-// 跨表查詢活動名稱 (從 Events 表根據活動編號取得名稱)
+// 查詢活動名稱 (直查 Supabase events 單一信任源，出錯直接印出錯誤，杜絕試算表依賴)
 function _getEventName(ss, eventId) {
-  if (!ss) ss = _getSpreadsheet();
-  if (!ss || !eventId) return eventId || "活動";
-  var eventSheet = ss.getSheetByName("Events");
-  if (!eventSheet) return eventId;
-  var eData = eventSheet.getDataRange().getDisplayValues();
-  if (eData.length <= 1) return eventId;
-  var eIdIdx = _fi(eData[0], "活動編號");
-  var eNameIdx = _fi(eData[0], "活動名稱");
-  for (var i = 1; i < eData.length; i++) {
-    if (eIdIdx > -1 && String(eData[i][eIdIdx]).trim() === String(eventId).trim()) {
-      return (eNameIdx > -1 && eData[i][eNameIdx]) ? eData[i][eNameIdx] : eventId;
+  if (!eventId) return "活動";
+  try {
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      var res = UrlFetchApp.fetch(
+        SUPABASE_URL + "/rest/v1/events?id=eq." + encodeURIComponent(eventId) + "&select=title",
+        {
+          method: "get",
+          headers: _getSupabaseHeaders(),
+          muteHttpExceptions: true
+        }
+      );
+      if (res.getResponseCode() === 200) {
+        var data = JSON.parse(res.getContentText());
+        if (Array.isArray(data) && data.length > 0 && data[0].title) {
+          return data[0].title;
+        }
+      } else {
+        console.error("[_getEventName] Supabase 查詢活動失敗:", res.getResponseCode(), res.getContentText());
+      }
     }
+  } catch (err) {
+    console.error("[_getEventName] 直查 Supabase 例外:", err.message || err);
   }
   return eventId;
 }

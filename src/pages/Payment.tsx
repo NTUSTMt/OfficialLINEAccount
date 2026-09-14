@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle2, AlertCircle, Copy, Check, Building2 } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
-import { fetchUnpaidPaymentsFromSupabase, submitPaymentToSupabase, supabase } from '../utils/supabaseClient';
+import { fetchUnpaidPaymentsFromSupabase, submitPaymentToSupabase, fetchDashboardFromSupabase } from '../utils/supabaseClient';
 import '../App.css';
 
 interface UnpaidItem {
@@ -156,31 +156,26 @@ function Payment({ userId }: { userId: string }) {
             }
           }
 
-          // 🛡️ 社籍狀態主動校驗補底：若使用者非有效正式社員（未入社、已過期），且目前無待審核社費單，自動補齊社費待繳選項
-          if (!ignore && supabase) {
+          // 🛡️ 社籍狀態主動校驗補底：若使用者非有效正式社員（未入社、已過期），自動補齊社費待繳選項
+          if (!ignore) {
             try {
-              const { data: mData } = await supabase
-                .from('members')
-                .select('is_official_member, membership_expires_at, payment_status')
-                .eq('line_user_id', userId)
-                .maybeSingle();
+              const dash = await fetchDashboardFromSupabase(userId);
+              let isOfficialActive = false;
+              if (dash && dash.profile) {
+                const isExp = dash.profile.expireDate ? (new Date(dash.profile.expireDate) < new Date()) : false;
+                isOfficialActive = !!dash.profile.isOfficial && !isExp;
+              }
 
-              if (mData) {
-                const isExp = mData.membership_expires_at ? new Date(mData.membership_expires_at) < new Date() : false;
-                const isOfficialActive = !!mData.is_official_member && !isExp;
-                const isChecking = String(mData.payment_status || '').includes('待確認') || String(mData.payment_status || '').includes('Checking');
-
-                if (!isOfficialActive && !isChecking) {
-                  setUnpaidList((prev) => {
-                    if (prev.membership.length === 0) {
-                      return {
-                        ...prev,
-                        membership: [{ id: 'fee_membership', name: '社籍與社費 (Membership Fee)', amount: 200 }]
-                      };
-                    }
-                    return prev;
-                  });
-                }
+              if (!isOfficialActive) {
+                setUnpaidList((prev) => {
+                  if (prev.membership.length === 0) {
+                    return {
+                      ...prev,
+                      membership: [{ id: 'fee_membership', name: '社籍與社費 (Membership Fee)', amount: 200 }]
+                    };
+                  }
+                  return prev;
+                });
               }
             } catch (mErr) {
               console.warn('[Payment] 社籍補底檢查例外:', mErr);

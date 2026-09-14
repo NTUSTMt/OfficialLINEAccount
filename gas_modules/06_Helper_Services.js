@@ -129,35 +129,7 @@ function _getMemberContactInfo(userId) {
       }
     }
   } catch (e) {
-    console.warn("_getMemberContactInfo Supabase 例外:", e);
-  }
-
-  try {
-    if (typeof SpreadsheetApp !== "undefined" && typeof SPREADSHEET_ID !== "undefined") {
-      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-      var sheet = ss ? ss.getSheetByName("Members") : null;
-      if (sheet) {
-        var data = sheet.getDataRange().getValues();
-        var headers = data[0];
-        var idIdx = _fi(headers, "系統識別碼");
-        for (var i = 1; i < data.length; i++) {
-          if (idIdx > -1 && data[i][idIdx] === userId) {
-            var nameIdx = _fi(headers, "姓名");
-            var lineIdx = _fi(headers, "LINE");
-            var phoneIdx = _fi(headers, "聯絡電話");
-            var payIdx = _fi(headers, "繳費狀態");
-            return {
-              name: nameIdx > -1 ? data[i][nameIdx] : "",
-              realLineId: lineIdx > -1 ? data[i][lineIdx] : "",
-              phone: phoneIdx > -1 ? data[i][phoneIdx] : "",
-              isOfficial: payIdx > -1 && String(data[i][payIdx]).trim() === "已繳費 Paid"
-            };
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("_getMemberContactInfo Sheet 例外:", e);
+    console.error("[_getMemberContactInfo] Supabase 例外:", e);
   }
   return null;
 }
@@ -1170,95 +1142,42 @@ function _handleUpdateEquipmentImages(payload) {
 }
 
 /**
- * 內部輔助：檢驗使用者是否為登山社幹部 (支援 Google Sheets Officers 工作表 + Supabase members 表雙軌校驗)
+ * 內部輔助：檢驗使用者是否為登山社幹部 (100% 直連 Supabase members 表 SSOT)
  */
 function checkOfficerInternal(ss, userId, userName) {
   if (!userId && !userName) return { isOfficer: false, role: "", name: "" };
   if (userId === "TEST_USER_ID") return { isOfficer: true, role: "管理員", name: "測試管理員" };
 
   try {
-    // 1. 優先直通 Supabase members 表 (SSOT)
     var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
     var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
     if (sbUrl && sbKey && (userId || userName)) {
-      try {
-        var orConds = [];
-        if (userId) {
-          orConds.push("user_id.eq." + encodeURIComponent(userId));
-          orConds.push("line_user_id.eq." + encodeURIComponent(userId));
-        }
-        if (userName) {
-          orConds.push("name.eq." + encodeURIComponent(userName.trim()));
-        }
-        var queryUrl = sbUrl + "/rest/v1/members?or=(" + orConds.join(",") + ")&select=name,role,is_officer&limit=1";
-        var sbRes = UrlFetchApp.fetch(queryUrl, {
-          method: "get",
-          headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
-          muteHttpExceptions: true
-        });
-        if (sbRes.getResponseCode() === 200) {
-          var members = JSON.parse(sbRes.getContentText());
-          if (members && members.length > 0) {
-            var m = members[0];
-            if (m.is_officer === true || m.role === "幹部" || m.role === "管理員" || m.role === "社長") {
-              return { isOfficer: true, role: m.role || "幹部", name: m.name || "" };
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("Supabase 幹部身分檢查例外:", e);
+      var orConds = [];
+      if (userId) {
+        orConds.push("user_id.eq." + encodeURIComponent(userId));
+        orConds.push("line_user_id.eq." + encodeURIComponent(userId));
       }
-    }
-
-    // 2. 備援搜尋試算表 Officers 工作表
-    if (ss) {
-      var oSheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "officers") : (ss.getSheetByName("officers") || ss.getSheetByName("Officers"));
-      if (oSheet) {
-        var oData = oSheet.getDataRange().getDisplayValues();
-        if (oData.length > 1) {
-          var oH = oData[0];
-          var nameIdx = oH.findIndex(function (h) { return String(h).includes("姓名") || String(h).includes("名字"); });
-          var roleIdx = oH.findIndex(function (h) { return String(h).includes("職稱") || String(h).includes("職位"); });
-          var sysIdx = oH.findIndex(function (h) {
-            var s = String(h).toLowerCase();
-            return s.includes("識別碼") || s.includes("userid") || s.includes("user id") || s.includes("uid") || s.includes("幹部 id") || s.includes("幹部id");
-          });
-          var lineIdx = oH.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
-
-          // (1) 以 userId 比對識別碼或 LINE ID
-          if (userId) {
-            var cleanUserId = String(userId).trim();
-            for (var i = 1; i < oData.length; i++) {
-              var rowSysId = (sysIdx > -1 && oData[i][sysIdx]) ? String(oData[i][sysIdx]).trim() : "";
-              var rowLineId = (lineIdx > -1 && oData[i][lineIdx]) ? String(oData[i][lineIdx]).trim() : "";
-
-              if ((rowSysId && (rowSysId === cleanUserId || cleanUserId.indexOf(rowSysId) > -1 || rowSysId.indexOf(cleanUserId) > -1)) ||
-                (rowLineId && rowLineId === cleanUserId)) {
-                var role = (roleIdx > -1 && oData[i][roleIdx]) ? String(oData[i][roleIdx]).trim() : "幹部";
-                return { isOfficer: true, role: role, name: (nameIdx > -1) ? String(oData[i][nameIdx]).trim() : "" };
-              }
-            }
-          }
-
-          // (2) 以 userName 比對姓名
-          if (userName && nameIdx > -1) {
-            var cleanUserName = userName.trim();
-            for (var j = 1; j < oData.length; j++) {
-              var oName = oData[j][nameIdx].trim();
-              if (oName !== "" && (oName === cleanUserName || cleanUserName.indexOf(oName) > -1 || oName.indexOf(cleanUserName) > -1)) {
-                var officerRole = (roleIdx > -1) ? oData[j][roleIdx].trim() : "幹部";
-                if (userId && sysIdx > -1 && !oData[j][sysIdx]) {
-                  try { oSheet.getRange(j + 1, sysIdx + 1).setValue(userId); } catch (e) { }
-                }
-                return { isOfficer: true, role: officerRole, name: oName };
-              }
-            }
+      if (userName) {
+        orConds.push("name.eq." + encodeURIComponent(userName.trim()));
+      }
+      var queryUrl = sbUrl + "/rest/v1/members?or=(" + orConds.join(",") + ")&select=name,role,is_officer&limit=1";
+      var sbRes = UrlFetchApp.fetch(queryUrl, {
+        method: "get",
+        headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
+        muteHttpExceptions: true
+      });
+      if (sbRes.getResponseCode() === 200) {
+        var members = JSON.parse(sbRes.getContentText());
+        if (members && members.length > 0) {
+          var m = members[0];
+          if (m.is_officer === true || m.role === "幹部" || m.role === "管理員" || m.role === "社長") {
+            return { isOfficer: true, role: m.role || "幹部", name: m.name || "" };
           }
         }
       }
     }
   } catch (err) {
-    console.warn("幹部身分檢查例外:", err);
+    console.error("[checkOfficerInternal] Supabase 幹部身分檢查例外:", err);
   }
 
   return { isOfficer: false, role: "", name: "" };
@@ -2154,66 +2073,51 @@ function _handleSendEventNotifications(json) {
 }
 
 /**
- * API: 活動列表唯讀備援 (GET action=get_admin_events)
+ * API: 幹部活動列表 (GET action=get_admin_events) - 100% 直連 Supabase (SSOT)
  */
 function _handleGetAdminEvents(userId) {
   try {
-    var ss = null;
-    try {
-      if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    } catch (e) { }
-
-    var officerCheck = checkOfficerInternal(ss, userId);
+    var officerCheck = checkOfficerInternal(null, userId);
     if (!officerCheck.isOfficer) {
-      return _errorResponse("權限不足");
+      return _errorResponse("權限不足，非登山社幹部無法存取");
     }
 
-    if (ss) {
-      var eSheet = ss.getSheetByName("Events");
-      if (eSheet) {
-        var eData = eSheet.getDataRange().getDisplayValues();
-        var headers = eData[0];
-        var idIdx = _fi(headers, "活動編號");
-        var nameIdx = _fi(headers, "活動名稱");
-        var startIdx = _fi(headers, "活動開始日期");
-        var endIdx = _fi(headers, "活動結束日期");
-        var deadIdx = _fi(headers, "報名截止日期");
-        var costIdx = _fi(headers, "預計費用");
-        var statIdx = _fi(headers, "報名狀態");
-        var shortIdx = _fi(headers, "簡介");
-        var fullIdx = _fi(headers, "詳細行程");
-        var imgIdx = _fi(headers, "封面圖網址");
-        var driveIdx = _fi(headers, "雲端資料夾網址");
-        var sheetUrlIdx = _fi(headers, "報名名冊網址");
-        var sheetIdIdx = _fi(headers, "試算表ID");
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,start_date,end_date,deadline,fee,status,summary,itinerary,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id&order=start_date.desc";
+      var res = UrlFetchApp.fetch(url, {
+        method: "get",
+        headers: _getSupabaseHeaders(),
+        muteHttpExceptions: true
+      });
 
-        var events = [];
-        for (var i = 1; i < eData.length; i++) {
-          var id = (idIdx > -1) ? eData[i][idIdx] : "";
-          if (!id) continue;
-          events.push({
-            id: id,
-            name: (nameIdx > -1) ? eData[i][nameIdx] : "",
-            startDate: (startIdx > -1) ? eData[i][startIdx] : "",
-            endDate: (endIdx > -1) ? eData[i][endIdx] : "",
-            deadline: (deadIdx > -1) ? eData[i][deadIdx] : "",
-            cost: (costIdx > -1) ? eData[i][costIdx] : "0",
-            status: (statIdx > -1) ? eData[i][statIdx] : "開放",
-            shortDesc: (shortIdx > -1) ? eData[i][shortIdx] : "",
-            fullDesc: (fullIdx > -1) ? eData[i][fullIdx] : "",
-            imageUrl: (imgIdx > -1) ? eData[i][imgIdx] : "",
-            driveFolderUrl: (driveIdx > -1) ? eData[i][driveIdx] : "",
-            spreadsheetUrl: (sheetUrlIdx > -1) ? eData[i][sheetUrlIdx] : "",
-            spreadsheetId: (sheetIdIdx > -1) ? eData[i][sheetIdIdx] : ""
-          });
-        }
+      if (res.getResponseCode() === 200) {
+        var sbEvents = JSON.parse(res.getContentText());
+        var events = (sbEvents || []).map(function(e) {
+          return {
+            id: e.id || "",
+            name: e.title || "",
+            startDate: e.start_date || "",
+            endDate: e.end_date || "",
+            deadline: e.deadline || "",
+            cost: e.fee !== undefined ? String(e.fee) : "0",
+            status: e.status || "開放",
+            shortDesc: e.summary || "",
+            fullDesc: e.itinerary || "",
+            imageUrl: e.image_url || "",
+            driveFolderUrl: e.drive_folder_url || "",
+            spreadsheetUrl: e.spreadsheet_url || "",
+            spreadsheetId: e.spreadsheet_id || ""
+          };
+        });
         return _jsonResponse({ status: "success", events: events });
+      } else {
+        return _errorResponse("Supabase 讀取活動失敗: " + res.getContentText());
       }
     }
-
-    return _jsonResponse({ status: "success", events: [] });
+    return _errorResponse("缺少 Supabase 連線設定");
   } catch (err) {
-    return _errorResponse("取得活動列表例外: " + err.toString());
+    console.error("[_handleGetAdminEvents] 例外:", err);
+    return _errorResponse("系統讀取活動失敗: " + (err.message || err));
   }
 }
 

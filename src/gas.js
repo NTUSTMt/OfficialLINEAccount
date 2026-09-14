@@ -256,20 +256,30 @@ function _getEmerRelValue(headers, row) {
   return bestVal || fallbackVal;
 }
 
-// 跨表查詢活動名稱 (從 Events 表根據活動編號取得名稱)
+// 查詢活動名稱 (直查 Supabase events 單一信任源，出錯直接印出錯誤，杜絕試算表依賴)
 function _getEventName(ss, eventId) {
-  if (!ss) ss = _getSpreadsheet();
-  if (!ss || !eventId) return eventId || "活動";
-  var eventSheet = ss.getSheetByName("Events");
-  if (!eventSheet) return eventId;
-  var eData = eventSheet.getDataRange().getDisplayValues();
-  if (eData.length <= 1) return eventId;
-  var eIdIdx = _fi(eData[0], "活動編號");
-  var eNameIdx = _fi(eData[0], "活動名稱");
-  for (var i = 1; i < eData.length; i++) {
-    if (eIdIdx > -1 && String(eData[i][eIdIdx]).trim() === String(eventId).trim()) {
-      return (eNameIdx > -1 && eData[i][eNameIdx]) ? eData[i][eNameIdx] : eventId;
+  if (!eventId) return "活動";
+  try {
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      var res = UrlFetchApp.fetch(
+        SUPABASE_URL + "/rest/v1/events?id=eq." + encodeURIComponent(eventId) + "&select=title",
+        {
+          method: "get",
+          headers: _getSupabaseHeaders(),
+          muteHttpExceptions: true
+        }
+      );
+      if (res.getResponseCode() === 200) {
+        var data = JSON.parse(res.getContentText());
+        if (Array.isArray(data) && data.length > 0 && data[0].title) {
+          return data[0].title;
+        }
+      } else {
+        console.error("[_getEventName] Supabase 查詢活動失敗:", res.getResponseCode(), res.getContentText());
+      }
     }
+  } catch (err) {
+    console.error("[_getEventName] 直查 Supabase 例外:", err.message || err);
   }
   return eventId;
 }
@@ -1353,134 +1363,10 @@ function sendOfficerMenu(replyToken, ss) {
         return;
       }
     }
+    _replyMessage(replyToken, "目前還沒有建立幹部資料喔！敬請期待。\n─────────────\nOfficer data not set up yet. Stay tuned!");
   } catch (sbErr) {
-    console.warn("從 Supabase 取得幹部名冊失敗，降級至試算表:", sbErr);
-  }
-
-  // 2. 備援讀取試算表
-  if (!ss) ss = _getSpreadsheet();
-  if (!ss) return;
-  try {
-    var sheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "officers") : (ss.getSheetByName("Officers") || ss.getSheetByName("officers"));
-    if (!sheet) {
-      _replyMessage(replyToken, "目前幹部名冊維護中。\n─────────────\nOfficer directory is currently undergoing maintenance.");
-      return;
-    }
-    var data = sheet.getDataRange().getDisplayValues();
-    if (data.length <= 1) {
-      _replyMessage(replyToken, "目前還沒有建立幹部資料喔！敬請期待。\n─────────────\nOfficer data not set up yet. Stay tuned!");
-      return;
-    }
-
-    var headers = data[0];
-    var roleIdx = headers.findIndex(function (h) {
-      return String(h).includes("職稱") || String(h).includes("職位") || String(h).includes("role") || String(h).includes("title");
-    });
-    var nameIdx = headers.findIndex(function (h) {
-      return String(h).includes("姓名") || String(h).includes("名字") || String(h).includes("name");
-    });
-    var photoIdx = headers.findIndex(function (h) {
-      return String(h).includes("照片") || String(h).includes("圖片") || String(h).includes("頭像");
-    });
-    var dutyIdx = headers.findIndex(function (h) {
-      return String(h).includes("負責業務") || String(h).includes("負責") || String(h).includes("業務");
-    });
-    var quoteIdx = headers.findIndex(function (h) {
-      return String(h).includes("給社員的話") || String(h).includes("介紹") || String(h).includes("備註");
-    });
-
-    var bubbles = [];
-
-    if (nameIdx === -1) {
-      _replyMessage(replyToken, "⚠️ 幹部名單的「姓名」欄位遺失了，請通知管理員檢查試算表！\n─────────────\n⚠️ 'Name' column is missing in the Officer sheet!");
-      return;
-    }
-
-    for (var i = 1; i < data.length; i++) {
-      var name = String(data[i][nameIdx]).trim();
-      if (name !== "") {
-        var role = (roleIdx > -1 && data[i][roleIdx]) ? String(data[i][roleIdx]).trim() : "幹部 Officer";
-        var photoUrl = (photoIdx > -1 && data[i][photoIdx]) ? String(data[i][photoIdx]).trim() : "";
-        var duty = (dutyIdx > -1 && data[i][dutyIdx]) ? String(data[i][dutyIdx]).trim() : "協助社團事務 Assist with club affairs";
-        var quote = (quoteIdx > -1 && data[i][quoteIdx]) ? String(data[i][quoteIdx]).trim() : "歡迎加入登山社！ Welcome to the club!";
-        var themeColor = (role.indexOf("社長") > -1) ? "#FF9800" : "#0367D3";
-
-        var bubble = {
-          "type": "bubble",
-          "size": "micro",
-          "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [{
-              "type": "text",
-              "text": role,
-              "weight": "bold",
-              "color": themeColor,
-              "size": "sm"
-            }, {
-              "type": "text",
-              "text": name,
-              "weight": "bold",
-              "size": "xl",
-              "margin": "sm"
-            }, {
-              "type": "separator",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": "📌 負責業務 Duties",
-              "size": "xxs",
-              "color": "#999999",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": duty,
-              "size": "xs",
-              "color": "#333333",
-              "wrap": true,
-              "margin": "xs"
-            }, {
-              "type": "separator",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": "💬 " + quote,
-              "size": "xs",
-              "color": "#666666",
-              "wrap": true,
-              "margin": "md",
-              "style": "italic"
-            }]
-          }
-        };
-
-        if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) && !photoUrl.includes("drive.google.com")) {
-          bubble.hero = {
-            "type": "image",
-            "url": photoUrl,
-            "size": "full",
-            "aspectRatio": "1:1",
-            "aspectMode": "cover"
-          };
-        }
-
-        bubbles.push(bubble);
-        if (bubbles.length === 10) break;
-      }
-    }
-
-    if (bubbles.length === 0) {
-      _replyMessage(replyToken, "目前還沒有建立幹部資料喔！敬請期待。\n─────────────\nOfficer data not set up yet. Stay tuned!");
-    } else {
-      _replyFlexMessage(replyToken, "來認識一下登山社幹部吧！ / Meet the club officers!", {
-        "type": "carousel",
-        "contents": bubbles
-      });
-    }
-
-  } catch (err) {
-    console.error("幹部名單載入失敗:", err);
-    _replyMessage(replyToken, "⚠️ 讀取幹部名單時發生錯誤，請稍後再試。\n─────────────\n⚠️ Error loading officer list, please try again later.");
+    console.error("[sendOfficerMenu] 直查 Supabase 幹部名冊失敗:", sbErr);
+    _replyMessage(replyToken, "查詢幹部名冊失敗：" + (sbErr.message || sbErr) + "\n─────────────\nFailed to fetch officers: " + (sbErr.message || sbErr));
   }
 }
 
@@ -1572,9 +1458,9 @@ function _checkProfileComplete(userId, ss, type) {
     exp: "", strength: "", strengthProof: "", medicalHistory: "", isOfficial: "否"
   };
 
-  // 1. 優先直查 Supabase members 表（SSOT）
+  // 1. 直查 Supabase members 表（SSOT）
   var sbMembers = _supabaseGet("members", { line_user_id: "eq." + userId });
-  if (sbMembers !== null) {
+  if (sbMembers !== null && Array.isArray(sbMembers)) {
     if (sbMembers.length === 0) {
       return { missingFields: ["NOT_FOUND"], p: null };
     }
@@ -1599,63 +1485,7 @@ function _checkProfileComplete(userId, ss, type) {
     p.medicalHistory = m.medical_history || "";
     p.isOfficial = m.is_official_member ? "是" : "否";
   } else {
-    // 2. 若 Supabase 連線異常，備援讀取試算表 Members 表
-    if (!ss) ss = _getSpreadsheet();
-    var memberSheet = ss ? ((typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "members") : (ss.getSheetByName("members") || ss.getSheetByName("Members"))) : null;
-    if (!memberSheet) {
-      return { missingFields: ["NOT_FOUND"], p: null };
-    }
-    var mData = memberSheet.getDataRange().getValues();
-    var mH = mData.length > 0 ? mData[0] : [];
-    var mSysIdx = _fi(mH, "系統識別碼");
-    var isMember = false;
-
-    for (var i = mData.length - 1; i >= 1; i--) {
-      if (mSysIdx > -1 && String(mData[i][mSysIdx]).trim() === String(userId).trim()) {
-        isMember = true;
-        p.name = mData[i][_fi(mH, "姓名")] || "";
-        p.gender = mData[i][_fi(mH, "性別")] || "";
-        p.realLineId = mData[i][mH.findIndex(function (h) {
-          return String(h).toUpperCase().includes("LINE");
-        })] || "";
-        p.email = mData[i][mH.findIndex(function (h) {
-          return String(h).toUpperCase().includes("EMAIL") || String(h).includes("信箱");
-        })] || "";
-        p.phone = mData[i][mH.findIndex(function (h) {
-          return String(h).includes("電話") && !String(h).includes("緊急");
-        })] || "";
-        p.department = mData[i][_fi(mH, "系所")] || "";
-        p.studentId = mData[i][_fi(mH, "學號")] || "";
-        p.birthday = mData[i][_fi(mH, "生日")] || "";
-        p.idNumber = mData[i][_fi(mH, "證件")] || "";
-        p.studentAddr = mData[i][mH.findIndex(function (h) {
-          return String(h).includes("地址") && !String(h).includes("緊急");
-        })] || "";
-        p.emerName = mData[i][mH.findIndex(function (h) {
-          return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
-        })] || "";
-        p.emerRel = mData[i][_findEmerRelColIdx(mH)] || "";
-        p.emerPhone = mData[i][mH.findIndex(function (h) {
-          return String(h).includes("電話") && String(h).includes("緊急");
-        })] || "";
-        p.emerAddr = mData[i][mH.findIndex(function (h) {
-          return String(h).includes("地址") && String(h).includes("緊急");
-        })] || "";
-        p.exp = mData[i][_fi(mH, "經驗")] || "";
-        p.strength = mData[i][_fi(mH, "體能")] || "";
-        p.strengthProof = mData[i][_fi(mH, "證明")] || "";
-        p.medicalHistory = mData[i][_fi(mH, "病史")] || "";
-        var memberStatusCol = _fi(mH, "社員狀態");
-        if (memberStatusCol > -1) {
-          p.isOfficial = String(mData[i][memberStatusCol]).indexOf("已繳費") > -1 ? "是" : "否";
-        }
-        break;
-      }
-    }
-
-    if (!isMember) {
-      return { missingFields: ["NOT_FOUND"], p: null };
-    }
+    return { missingFields: ["NOT_FOUND"], p: null };
   }
 
   // 3. 必填欄位清單 (依據 signup / loan 檢查)
@@ -1704,34 +1534,9 @@ function handleSignup(replyToken, userId, eventId, ss) {
         _replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (ev.deadline || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration is closed.");
         return;
       }
-    } else if (ss) {
-      // 備援檢查 Sheets Events 表
-      var eventSheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "events") : (ss.getSheetByName("events") || ss.getSheetByName("Events"));
-      if (eventSheet) {
-        var eData = eventSheet.getDataRange().getDisplayValues();
-        if (eData.length > 1) {
-          var eHeaders = eData[0];
-          var eIdCol = _fi(eHeaders, "活動編號");
-          var eNameCol = _fi(eHeaders, "活動名稱");
-          var eStatusCol = eHeaders.findIndex(function (h) {
-            return String(h).includes("報名狀態") || String(h).includes("狀態");
-          });
-          var eDeadCol = _fi(eHeaders, "報名截止日期");
-
-          for (var row = 1; row < eData.length; row++) {
-            if (String(eData[row][eIdCol > -1 ? eIdCol : 0]).trim() === String(eventId).trim()) {
-              var evStatus = eStatusCol > -1 ? String(eData[row][eStatusCol]).trim() : "";
-              var evDead = eDeadCol > -1 ? String(eData[row][eDeadCol]).trim() : "";
-              if (eNameCol > -1 && eData[row][eNameCol]) evName = eData[row][eNameCol];
-              if (_isEventExpired(evDead) || evStatus === "關閉" || evStatus === "已截止") {
-                _replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (evDead || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️");
-                return;
-              }
-              break;
-            }
-          }
-        }
-      }
+    } else {
+      _replyMessage(replyToken, "⚠️ 報名失敗：查無活動代號【" + eventId + "】，請確認活動代號是否正確！\n─────────────\n⚠️ Event not found for code: " + eventId);
+      return;
     }
 
     // 2. 執行個人資料完整性檢查 (100% 直查 Supabase)
@@ -1800,91 +1605,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
       console.warn("同步至活動專屬試算表例外:", evSSErr);
     }
 
-    // 5. 備援寫入主試算表 event_signups 表（若試算表有該表則覆蓋或追加，絕不新建 Signups 表）
-    if (ss) {
-      var signupSheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "event_signups") : (ss.getSheetByName("event_signups") || ss.getSheetByName("Signups"));
-      if (signupSheet) {
-        var sheetHeaders = signupSheet.getRange(1, 1, 1, signupSheet.getLastColumn()).getValues()[0];
-        var relColIdx = _findEmerRelColIdx(sheetHeaders);
 
-        var rowData = new Array(sheetHeaders.length).fill("");
-        function placeData(keyword, value) {
-          var idx = _fi(sheetHeaders, keyword);
-          if (idx > -1) rowData[idx] = value;
-        }
-
-      placeData("活動編號", eventId);
-      placeData("系統識別碼", userId);
-      placeData("專屬碼", signupCode);
-      placeData("活動名稱", evName);
-      placeData("姓名", p.name);
-      placeData("性別", p.gender);
-      placeData("LINE", p.realLineId);
-      placeData("Email", p.email);
-
-      var phoneIdx = sheetHeaders.findIndex(function (h) {
-        return String(h).includes("電話") && !String(h).includes("緊急");
-      });
-      if (phoneIdx > -1) rowData[phoneIdx] = p.phone ? "'" + String(p.phone) : "";
-
-      placeData("生日", p.birthday);
-      placeData("證件", p.idNumber);
-
-      var studentAddrIdx = sheetHeaders.findIndex(function (h) {
-        return String(h).includes("地址") && !String(h).includes("緊急");
-      });
-      if (studentAddrIdx > -1) rowData[studentAddrIdx] = p.studentAddr;
-
-      var emerNameIdx = sheetHeaders.findIndex(function (h) {
-        return String(h).includes("緊急聯絡人") && !String(h).includes("關係") && !String(h).includes("地址") && !String(h).includes("電話");
-      });
-      if (emerNameIdx > -1) rowData[emerNameIdx] = p.emerName;
-
-      if (relColIdx > -1) rowData[relColIdx] = p.emerRel;
-
-      var emerAddrIdx = sheetHeaders.findIndex(function (h) {
-        return String(h).includes("地址") && String(h).includes("緊急");
-      });
-      if (emerAddrIdx > -1) rowData[emerAddrIdx] = p.emerAddr;
-
-      var emerPhoneIdx = sheetHeaders.findIndex(function (h) {
-        return String(h).includes("電話") && String(h).includes("緊急");
-      });
-      if (emerPhoneIdx > -1) rowData[emerPhoneIdx] = p.emerPhone ? "'" + String(p.emerPhone) : "";
-
-      placeData("經驗", p.exp);
-      placeData("體能", p.strength);
-      placeData("證明", p.strengthProof);
-      placeData("是否為社員", p.isOfficial);
-      placeData("審核結果", "審核中 Checking");
-      placeData("通知狀態", "");
-      placeData("繳費狀態", "未繳費 Unpaid");
-      placeData("系所", p.department);
-      placeData("學號", p.studentId);
-      placeData("病史", p.medicalHistory);
-
-      // 檢查試算表中是否有歷史舊列需要覆蓋
-      var existingData = signupSheet.getDataRange().getValues();
-      var foundRow = -1;
-      if (existingData.length > 1) {
-        var eSysIdx = _fi(sheetHeaders, "系統識別碼");
-        var eEvtIdx = _fi(sheetHeaders, "活動編號");
-        for (var s = 1; s < existingData.length; s++) {
-          if (eSysIdx > -1 && String(existingData[s][eSysIdx]).trim() === String(userId).trim() &&
-              eEvtIdx > -1 && String(existingData[s][eEvtIdx]).trim() === String(eventId).trim()) {
-            foundRow = s + 1;
-            break;
-          }
-        }
-      }
-
-      if (foundRow > -1) {
-        signupSheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);
-      } else {
-        signupSheet.appendRow(rowData);
-      }
-    }
-  }
 
     // 6. 回傳確認收據
     _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n活動 (Event)：\n" + evName + "\n活動代號 (Event ID)：" + eventId + "\n報名專屬碼 (Signup Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的報名資料。\n\n⚠️ 【重要提醒 / Important Reminder】\n由於部分戶外行程有人數安全限制，此階段為「報名登記」。幹部將進行體能評估與審核，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n─────────────\nDue to safety and team size limits, this stage is registration review. Officers will assess fitness qualifications, and confirmed/waitlisted rosters will be announced via this LINE account!");
@@ -1898,43 +1619,59 @@ function handleSignup(replyToken, userId, eventId, ss) {
 }
 
 /**
- * 處理備取意願確認 (Postback)
+ * 處理備取意願確認 (Postback) - 100% 直連 Supabase (SSOT)，杜絕試算表錯誤
  */
 function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
-  if (!ss) ss = _getSpreadsheet();
-  if (!ss) return;
   var eventId = paramsMap["eventId"] || "";
   var targetUid = paramsMap["userId"] || userId;
-  var sSheet = ss.getSheetByName("Signups");
-  if (!sSheet) {
-    _replyMessage(replyToken, "系統錯誤：找不到報名資料表。\n─────────────\nSystem Error: Signups sheet not found.");
+  var targetCode = paramsMap["signupCode"] || paramsMap["targetId"] || "";
+
+  if (!targetUid) {
+    _replyMessage(replyToken, "系統錯誤：缺少使用者識別碼。\n─────────────\nSystem Error: Missing user identifier.");
     return;
   }
-  var sData = sSheet.getDataRange().getValues();
-  var sH = sData[0];
-  var sSysIdx = _fi(sH, "系統識別碼");
-  var sEventIdIdx = _fi(sH, "活動編號");
-  var sStatusIdx = _fi(sH, "審核結果");
 
-  for (var i = 1; i < sData.length; i++) {
-    var rowUser = sSysIdx > -1 ? String(sData[i][sSysIdx]).trim() : "";
-    var rowEvtId = sEventIdIdx > -1 ? String(sData[i][sEventIdIdx]).trim() : "";
-
-    if (rowUser === targetUid && (!eventId || rowEvtId === eventId)) {
-      var currentStatus = sStatusIdx > -1 ? String(sData[i][sStatusIdx]) : "";
-      if (currentStatus.indexOf("備取（有意願）") > -1 || currentStatus.indexOf("有意願") > -1) {
-        _replyMessage(replyToken, "您先前已確認過備取意願！若有名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist preference! Officers will contact you if a spot opens up!");
-        return;
-      }
-      if (sStatusIdx > -1) {
-        sSheet.getRange(i + 1, sStatusIdx + 1).setValue("備取（有意願）Waitlisted (Interested)");
-        SpreadsheetApp.flush();
-        _replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nSuccessfully confirmed waitlist preference! Status updated to: [Waitlisted (Interested)]. We will contact you if a spot opens up!");
-        return;
-      }
+  try {
+    // 1. 直查 Supabase event_signups
+    var queryParams = {
+      line_user_id: "eq." + targetUid,
+      select: "id,event_id,status"
+    };
+    if (targetCode) {
+      queryParams = { id: "eq." + targetCode, select: "id,event_id,status" };
+    } else if (eventId) {
+      queryParams.event_id = "eq." + eventId;
     }
+
+    var signups = _supabaseGet("event_signups", queryParams);
+    if (!signups || signups.length === 0) {
+      _replyMessage(replyToken, "找不到該筆報名資料，請洽詢社團幹部！\n─────────────\nRegistration record not found, please contact club officers!");
+      return;
+    }
+
+    var signup = signups[0];
+    var currentStatus = String(signup.status || "");
+
+    if (currentStatus.indexOf("備取（有意願）") > -1 || currentStatus.indexOf("有意願") > -1) {
+      _replyMessage(replyToken, "您先前已確認過備取意願！若有名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist preference! Officers will contact you if a spot opens up!");
+      return;
+    }
+
+    // 2. 直寫 Supabase event_signups 狀態為 備取（有意願）Waitlisted (Interested)
+    var patchSuccess = _supabasePatch("event_signups", { id: "eq." + signup.id }, {
+      status: "備取（有意願）Waitlisted (Interested)",
+      updated_at: new Date().toISOString()
+    });
+
+    if (patchSuccess) {
+      _replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nSuccessfully confirmed waitlist preference! Status updated to: [Waitlisted (Interested)]. We will contact you if a spot opens up!");
+    } else {
+      _replyMessage(replyToken, "⚠️ 更新備取意願失敗，請稍後再試或洽詢幹部！\n─────────────\n⚠️ Failed to update waitlist preference, please try again later or contact officers!");
+    }
+  } catch (err) {
+    console.error("[handleConfirmWaitlist] 例外:", err);
+    _replyMessage(replyToken, "系統發生錯誤：" + (err.message || err) + "\n─────────────\nSystem error: " + (err.message || err));
   }
-  _replyMessage(replyToken, "找不到該筆報名資料，請洽詢社團幹部！\n─────────────\nRegistration record not found, please contact club officers!");
 }
 
 
@@ -2001,7 +1738,7 @@ function _handleGeminiChat(userId, userQuery) {
  */
 function _fetchOpenEventsContext() {
   try {
-    // 1. 優先直通 Supabase events (SSOT)
+    // 100% 直通 Supabase events (SSOT)，杜絕試算表依賴
     if (typeof _supabaseGet === "function") {
       var sbEvents = _supabaseGet("events", { status: "eq.開放", select: "title,fee,start_date,summary,itinerary" });
       if (Array.isArray(sbEvents) && sbEvents.length > 0) {
@@ -2014,30 +1751,10 @@ function _fetchOpenEventsContext() {
         }).join("\n");
       }
     }
-
-    // 2. 備援讀取試算表
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "events") : (ss.getSheetByName("events") || ss.getSheetByName("Events"));
-    if (!sheet) return "目前無活動資料。";
-
-    var data = sheet.getDataRange().getValues();
-    var headers = data[0];
-    var summaryArr = [];
-
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
-      var status = String(row[_fi(headers, "報名狀態")] || "").trim();
-      if (status === "開放" || status === "Open") {
-        var title = row[_fi(headers, "活動名稱")] || "";
-        var fee = row[_fi(headers, "費用")] || 0;
-        var start = row[_fi(headers, "開始日期")] || "";
-        var desc = row[_fi(headers, "簡介")] || "";
-        summaryArr.push("• " + title + " (開始日：" + start + "，費用：$" + fee + ")：" + desc);
-      }
-    }
-    return summaryArr.join("\n");
+    return "目前無開放報名中的活動資料。";
   } catch (e) {
-    return "無法讀取活動清單。";
+    console.error("[_fetchOpenEventsContext] 直查 Supabase 失敗:", e);
+    return "無法讀取活動清單：" + (e.message || e);
   }
 }
 
@@ -3570,35 +3287,7 @@ function _getMemberContactInfo(userId) {
       }
     }
   } catch (e) {
-    console.warn("_getMemberContactInfo Supabase 例外:", e);
-  }
-
-  try {
-    if (typeof SpreadsheetApp !== "undefined" && typeof SPREADSHEET_ID !== "undefined") {
-      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-      var sheet = ss ? ss.getSheetByName("Members") : null;
-      if (sheet) {
-        var data = sheet.getDataRange().getValues();
-        var headers = data[0];
-        var idIdx = _fi(headers, "系統識別碼");
-        for (var i = 1; i < data.length; i++) {
-          if (idIdx > -1 && data[i][idIdx] === userId) {
-            var nameIdx = _fi(headers, "姓名");
-            var lineIdx = _fi(headers, "LINE");
-            var phoneIdx = _fi(headers, "聯絡電話");
-            var payIdx = _fi(headers, "繳費狀態");
-            return {
-              name: nameIdx > -1 ? data[i][nameIdx] : "",
-              realLineId: lineIdx > -1 ? data[i][lineIdx] : "",
-              phone: phoneIdx > -1 ? data[i][phoneIdx] : "",
-              isOfficial: payIdx > -1 && String(data[i][payIdx]).trim() === "已繳費 Paid"
-            };
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("_getMemberContactInfo Sheet 例外:", e);
+    console.error("[_getMemberContactInfo] Supabase 例外:", e);
   }
   return null;
 }
@@ -4611,95 +4300,42 @@ function _handleUpdateEquipmentImages(payload) {
 }
 
 /**
- * 內部輔助：檢驗使用者是否為登山社幹部 (支援 Google Sheets Officers 工作表 + Supabase members 表雙軌校驗)
+ * 內部輔助：檢驗使用者是否為登山社幹部 (100% 直連 Supabase members 表 SSOT)
  */
 function checkOfficerInternal(ss, userId, userName) {
   if (!userId && !userName) return { isOfficer: false, role: "", name: "" };
   if (userId === "TEST_USER_ID") return { isOfficer: true, role: "管理員", name: "測試管理員" };
 
   try {
-    // 1. 優先直通 Supabase members 表 (SSOT)
     var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
     var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
     if (sbUrl && sbKey && (userId || userName)) {
-      try {
-        var orConds = [];
-        if (userId) {
-          orConds.push("user_id.eq." + encodeURIComponent(userId));
-          orConds.push("line_user_id.eq." + encodeURIComponent(userId));
-        }
-        if (userName) {
-          orConds.push("name.eq." + encodeURIComponent(userName.trim()));
-        }
-        var queryUrl = sbUrl + "/rest/v1/members?or=(" + orConds.join(",") + ")&select=name,role,is_officer&limit=1";
-        var sbRes = UrlFetchApp.fetch(queryUrl, {
-          method: "get",
-          headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
-          muteHttpExceptions: true
-        });
-        if (sbRes.getResponseCode() === 200) {
-          var members = JSON.parse(sbRes.getContentText());
-          if (members && members.length > 0) {
-            var m = members[0];
-            if (m.is_officer === true || m.role === "幹部" || m.role === "管理員" || m.role === "社長") {
-              return { isOfficer: true, role: m.role || "幹部", name: m.name || "" };
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("Supabase 幹部身分檢查例外:", e);
+      var orConds = [];
+      if (userId) {
+        orConds.push("user_id.eq." + encodeURIComponent(userId));
+        orConds.push("line_user_id.eq." + encodeURIComponent(userId));
       }
-    }
-
-    // 2. 備援搜尋試算表 Officers 工作表
-    if (ss) {
-      var oSheet = (typeof _getSheetByTableName === "function") ? _getSheetByTableName(ss, "officers") : (ss.getSheetByName("officers") || ss.getSheetByName("Officers"));
-      if (oSheet) {
-        var oData = oSheet.getDataRange().getDisplayValues();
-        if (oData.length > 1) {
-          var oH = oData[0];
-          var nameIdx = oH.findIndex(function (h) { return String(h).includes("姓名") || String(h).includes("名字"); });
-          var roleIdx = oH.findIndex(function (h) { return String(h).includes("職稱") || String(h).includes("職位"); });
-          var sysIdx = oH.findIndex(function (h) {
-            var s = String(h).toLowerCase();
-            return s.includes("識別碼") || s.includes("userid") || s.includes("user id") || s.includes("uid") || s.includes("幹部 id") || s.includes("幹部id");
-          });
-          var lineIdx = oH.findIndex(function (h) { return String(h).toUpperCase().includes("LINE"); });
-
-          // (1) 以 userId 比對識別碼或 LINE ID
-          if (userId) {
-            var cleanUserId = String(userId).trim();
-            for (var i = 1; i < oData.length; i++) {
-              var rowSysId = (sysIdx > -1 && oData[i][sysIdx]) ? String(oData[i][sysIdx]).trim() : "";
-              var rowLineId = (lineIdx > -1 && oData[i][lineIdx]) ? String(oData[i][lineIdx]).trim() : "";
-
-              if ((rowSysId && (rowSysId === cleanUserId || cleanUserId.indexOf(rowSysId) > -1 || rowSysId.indexOf(cleanUserId) > -1)) ||
-                (rowLineId && rowLineId === cleanUserId)) {
-                var role = (roleIdx > -1 && oData[i][roleIdx]) ? String(oData[i][roleIdx]).trim() : "幹部";
-                return { isOfficer: true, role: role, name: (nameIdx > -1) ? String(oData[i][nameIdx]).trim() : "" };
-              }
-            }
-          }
-
-          // (2) 以 userName 比對姓名
-          if (userName && nameIdx > -1) {
-            var cleanUserName = userName.trim();
-            for (var j = 1; j < oData.length; j++) {
-              var oName = oData[j][nameIdx].trim();
-              if (oName !== "" && (oName === cleanUserName || cleanUserName.indexOf(oName) > -1 || oName.indexOf(cleanUserName) > -1)) {
-                var officerRole = (roleIdx > -1) ? oData[j][roleIdx].trim() : "幹部";
-                if (userId && sysIdx > -1 && !oData[j][sysIdx]) {
-                  try { oSheet.getRange(j + 1, sysIdx + 1).setValue(userId); } catch (e) { }
-                }
-                return { isOfficer: true, role: officerRole, name: oName };
-              }
-            }
+      if (userName) {
+        orConds.push("name.eq." + encodeURIComponent(userName.trim()));
+      }
+      var queryUrl = sbUrl + "/rest/v1/members?or=(" + orConds.join(",") + ")&select=name,role,is_officer&limit=1";
+      var sbRes = UrlFetchApp.fetch(queryUrl, {
+        method: "get",
+        headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
+        muteHttpExceptions: true
+      });
+      if (sbRes.getResponseCode() === 200) {
+        var members = JSON.parse(sbRes.getContentText());
+        if (members && members.length > 0) {
+          var m = members[0];
+          if (m.is_officer === true || m.role === "幹部" || m.role === "管理員" || m.role === "社長") {
+            return { isOfficer: true, role: m.role || "幹部", name: m.name || "" };
           }
         }
       }
     }
   } catch (err) {
-    console.warn("幹部身分檢查例外:", err);
+    console.error("[checkOfficerInternal] Supabase 幹部身分檢查例外:", err);
   }
 
   return { isOfficer: false, role: "", name: "" };
@@ -5595,66 +5231,51 @@ function _handleSendEventNotifications(json) {
 }
 
 /**
- * API: 活動列表唯讀備援 (GET action=get_admin_events)
+ * API: 幹部活動列表 (GET action=get_admin_events) - 100% 直連 Supabase (SSOT)
  */
 function _handleGetAdminEvents(userId) {
   try {
-    var ss = null;
-    try {
-      if (SPREADSHEET_ID) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    } catch (e) { }
-
-    var officerCheck = checkOfficerInternal(ss, userId);
+    var officerCheck = checkOfficerInternal(null, userId);
     if (!officerCheck.isOfficer) {
-      return _errorResponse("權限不足");
+      return _errorResponse("權限不足，非登山社幹部無法存取");
     }
 
-    if (ss) {
-      var eSheet = ss.getSheetByName("Events");
-      if (eSheet) {
-        var eData = eSheet.getDataRange().getDisplayValues();
-        var headers = eData[0];
-        var idIdx = _fi(headers, "活動編號");
-        var nameIdx = _fi(headers, "活動名稱");
-        var startIdx = _fi(headers, "活動開始日期");
-        var endIdx = _fi(headers, "活動結束日期");
-        var deadIdx = _fi(headers, "報名截止日期");
-        var costIdx = _fi(headers, "預計費用");
-        var statIdx = _fi(headers, "報名狀態");
-        var shortIdx = _fi(headers, "簡介");
-        var fullIdx = _fi(headers, "詳細行程");
-        var imgIdx = _fi(headers, "封面圖網址");
-        var driveIdx = _fi(headers, "雲端資料夾網址");
-        var sheetUrlIdx = _fi(headers, "報名名冊網址");
-        var sheetIdIdx = _fi(headers, "試算表ID");
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,start_date,end_date,deadline,fee,status,summary,itinerary,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id&order=start_date.desc";
+      var res = UrlFetchApp.fetch(url, {
+        method: "get",
+        headers: _getSupabaseHeaders(),
+        muteHttpExceptions: true
+      });
 
-        var events = [];
-        for (var i = 1; i < eData.length; i++) {
-          var id = (idIdx > -1) ? eData[i][idIdx] : "";
-          if (!id) continue;
-          events.push({
-            id: id,
-            name: (nameIdx > -1) ? eData[i][nameIdx] : "",
-            startDate: (startIdx > -1) ? eData[i][startIdx] : "",
-            endDate: (endIdx > -1) ? eData[i][endIdx] : "",
-            deadline: (deadIdx > -1) ? eData[i][deadIdx] : "",
-            cost: (costIdx > -1) ? eData[i][costIdx] : "0",
-            status: (statIdx > -1) ? eData[i][statIdx] : "開放",
-            shortDesc: (shortIdx > -1) ? eData[i][shortIdx] : "",
-            fullDesc: (fullIdx > -1) ? eData[i][fullIdx] : "",
-            imageUrl: (imgIdx > -1) ? eData[i][imgIdx] : "",
-            driveFolderUrl: (driveIdx > -1) ? eData[i][driveIdx] : "",
-            spreadsheetUrl: (sheetUrlIdx > -1) ? eData[i][sheetUrlIdx] : "",
-            spreadsheetId: (sheetIdIdx > -1) ? eData[i][sheetIdIdx] : ""
-          });
-        }
+      if (res.getResponseCode() === 200) {
+        var sbEvents = JSON.parse(res.getContentText());
+        var events = (sbEvents || []).map(function(e) {
+          return {
+            id: e.id || "",
+            name: e.title || "",
+            startDate: e.start_date || "",
+            endDate: e.end_date || "",
+            deadline: e.deadline || "",
+            cost: e.fee !== undefined ? String(e.fee) : "0",
+            status: e.status || "開放",
+            shortDesc: e.summary || "",
+            fullDesc: e.itinerary || "",
+            imageUrl: e.image_url || "",
+            driveFolderUrl: e.drive_folder_url || "",
+            spreadsheetUrl: e.spreadsheet_url || "",
+            spreadsheetId: e.spreadsheet_id || ""
+          };
+        });
         return _jsonResponse({ status: "success", events: events });
+      } else {
+        return _errorResponse("Supabase 讀取活動失敗: " + res.getContentText());
       }
     }
-
-    return _jsonResponse({ status: "success", events: [] });
+    return _errorResponse("缺少 Supabase 連線設定");
   } catch (err) {
-    return _errorResponse("取得活動列表例外: " + err.toString());
+    console.error("[_handleGetAdminEvents] 例外:", err);
+    return _errorResponse("系統讀取活動失敗: " + (err.message || err));
   }
 }
 

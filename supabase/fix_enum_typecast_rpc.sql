@@ -526,3 +526,244 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_unpaid_items_rpc(TEXT) TO anon, authenticated, service_role;
+
+-- ==============================================================================
+-- 7. 建立 event_signup_status_enum 全域隱式轉型 (IMPLICIT CAST)
+-- 徹底根治：column "status" is of type event_signup_status_enum but expression is of type text
+-- ==============================================================================
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'event_signup_status_enum') THEN
+        CREATE OR REPLACE FUNCTION text_to_event_signup_status_enum(val text)
+        RETURNS event_signup_status_enum AS $cast$
+        BEGIN
+            IF val LIKE '%正取（已繳費）%' OR val LIKE '%Confirmed (Paid)%' THEN
+                RETURN '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+            ELSIF val LIKE '%備取（有意願）%' OR val LIKE '%Waitlisted (Interested)%' THEN
+                RETURN '備取（有意願）Waitlisted (Interested)'::event_signup_status_enum;
+            ELSIF val LIKE '%正取%' OR val LIKE '%Confirmed%' THEN
+                RETURN '正取 Confirmed'::event_signup_status_enum;
+            ELSIF val LIKE '%備取%' OR val LIKE '%Waitlisted%' THEN
+                RETURN '備取 Waitlisted'::event_signup_status_enum;
+            ELSIF val LIKE '%取消%' OR val LIKE '%Cancelled%' THEN
+                RETURN '已取消 Cancelled'::event_signup_status_enum;
+            ELSE
+                RETURN '審核中 Checking'::event_signup_status_enum;
+            END IF;
+        EXCEPTION WHEN OTHERS THEN
+            RETURN '審核中 Checking'::event_signup_status_enum;
+        END;
+        $cast$ LANGUAGE plpgsql IMMUTABLE;
+
+        DROP CAST IF EXISTS (text AS event_signup_status_enum);
+        CREATE CAST (text AS event_signup_status_enum)
+        WITH FUNCTION text_to_event_signup_status_enum(text) AS IMPLICIT;
+    END IF;
+END $$;
+
+-- ==============================================================================
+-- 8. 取得個人待繳清單 RPC (get_unpaid_payments) - 前端主要呼叫接口
+-- 支援過期社員與非正式社員強制提供社費選項，裝備享 5 折
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION get_unpaid_payments(p_line_user_id TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_membership JSONB := '[]'::jsonb;
+    v_activities JSONB := '[]'::jsonb;
+    v_equipments JSONB := '[]'::jsonb;
+    v_member members%ROWTYPE;
+    v_is_official BOOLEAN := FALSE;
+    v_is_expired BOOLEAN := FALSE;
+BEGIN
+    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
+        RETURN jsonb_build_object(
+            'membership', '[]'::jsonb,
+            'activities', '[]'::jsonb,
+            'equipments', '[]'::jsonb
+        );
+    END IF;
+
+    -- 1. 查詢社員基本資料與社籍狀態
+    SELECT * INTO v_member FROM members WHERE line_user_id = p_line_user_id;
+    IF FOUND THEN
+        IF v_member.membership_expires_at IS NOT NULL AND v_member.membership_expires_at < CURRENT_DATE THEN
+            v_is_expired := TRUE;
+        END IF;
+
+        v_is_official := COALESCE(v_member.is_official_member, FALSE) AND NOT v_is_expired;
+
+        -- 只要不是有效正式社員（尚未入社或社籍已過期），自動提供繳社交費選項
+        IF NOT v_is_official THEN
+            v_membership := jsonb_build_array(
+                jsonb_build_object(
+                    'id', 'fee_membership',
+                    'name', '社籍與社費 (Membership Fee)',
+                    'amount', 200
+                )
+            );
+        END IF;
+    ELSE
+        -- members 表中尚無該使用者，肯定非社員，提供繳社交費選項
+        v_membership := jsonb_build_array(
+            jsonb_build_object(
+                'id', 'fee_membership',
+                'name', '社籍與社費 (Membership Fee)',
+                'amount', 200
+            )
+        );
+    END IF;
+
+    -- 2. 查詢正取活動欠款 (從 event_signups 與 events 關聯)
+    SELECT COALESCE(jsonb_agg(act), '[]'::jsonb)
+    INTO v_activities
+    FROM (
+        SELECT jsonb_build_object(
+            'id', 'act_' || e.id,
+            'name', e.title,
+            'amount', COALESCE(e.fee, 0),
+            'eventId', e.id,
+            'date', to_char(e.start_date, 'YYYY-MM-DD')
+        ) AS act
+        FROM event_signups s
+        JOIN events e ON s.event_id = e.id
+        WHERE s.line_user_id = p_line_user_id
+          AND s.status::text LIKE '%正取%'
+          AND (
+              s.payment_status IS NULL 
+              OR s.payment_status::text LIKE '%未繳費%'
+              OR s.payment_status::text LIKE '%Unpaid%'
+              OR (
+                  s.payment_status::text NOT LIKE '%已繳費%' 
+                  AND s.payment_status::text NOT LIKE '%待確認%' 
+                  AND s.payment_status::text NOT LIKE '%Checking%'
+                  AND s.payment_status::text != '已繳費 Paid'
+                  AND s.payment_status::text != 'Paid'
+              )
+          )
+        ORDER BY e.start_date ASC
+    ) t;
+
+    -- 3. 查詢裝備租借欠款 (從 loans 與 loan_items 關聯)
+    SELECT COALESCE(jsonb_agg(eq), '[]'::jsonb)
+    INTO v_equipments
+    FROM (
+        SELECT jsonb_build_object(
+            'id', 'eq_' || l.id,
+            'name', COALESCE(eq_sub.name, '裝備租借'),
+            'amount', CASE 
+                WHEN li.subtotal IS NOT NULL AND li.subtotal > 0 THEN li.subtotal
+                ELSE COALESCE(l.total_rent, 0)
+            END,
+            'orderId', l.id,
+            'qty', COALESCE(li.quantity, 1),
+            'pickupDate', to_char(l.start_date, 'YYYY-MM-DD'),
+            'returnDate', to_char(l.end_date, 'YYYY-MM-DD'),
+            'purpose', COALESCE(l.purpose, '個人使用'),
+            'isOfficial', CASE WHEN v_is_official THEN '是' ELSE '否' END
+        ) AS eq
+        FROM loans l
+        LEFT JOIN loan_items li ON l.id = li.loan_id
+        LEFT JOIN equipments eq_sub ON li.equipment_id = eq_sub.id
+        WHERE l.line_user_id = p_line_user_id
+          AND l.status::text NOT LIKE '%取消%'
+          AND l.status::text NOT LIKE '%歸還%'
+          AND (
+              l.payment_status IS NULL 
+              OR l.payment_status::text LIKE '%未繳費%'
+              OR l.payment_status::text LIKE '%Unpaid%'
+              OR (
+                  l.payment_status::text NOT LIKE '%已繳費%' 
+                  AND l.payment_status::text NOT LIKE '%Paid%'
+                  AND l.payment_status::text NOT LIKE '%待確認%'
+                  AND l.payment_status::text NOT LIKE '%Checking%'
+                  AND l.payment_status::text != '已繳費 Paid'
+                  AND l.payment_status::text != 'Paid'
+              )
+          )
+        ORDER BY l.start_date ASC
+    ) t;
+
+    RETURN jsonb_build_object(
+        'membership', v_membership,
+        'activities', v_activities,
+        'equipments', v_equipments
+    );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_unpaid_payments(TEXT) TO anon, authenticated, service_role;
+
+-- ==============================================================================
+-- 9. 審核個別社員報名狀態 RPC (update_signup_status_rpc)
+-- 包含：安全轉型為 event_signup_status_enum，徹底杜絕型別錯誤
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION update_signup_status_rpc(
+    p_officer_line_user_id TEXT,
+    p_event_id TEXT,
+    p_signup_id TEXT,
+    p_review_result TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_status_val event_signup_status_enum;
+    v_status_text TEXT;
+BEGIN
+    IF NOT is_officer(p_officer_line_user_id) THEN
+        RETURN jsonb_build_object('status', 'error', 'message', '權限不足，非幹部無法審核');
+    END IF;
+
+    IF p_signup_id IS NULL OR trim(p_signup_id) = '' THEN
+        RETURN jsonb_build_object('status', 'error', 'message', '缺少報名專屬碼');
+    END IF;
+
+    v_status_text := trim(p_review_result);
+    IF v_status_text LIKE '%正取（已繳費）%' OR v_status_text LIKE '%Confirmed (Paid)%' THEN
+        v_status_val := '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+    ELSIF v_status_text LIKE '%備取（有意願）%' OR v_status_text LIKE '%Waitlisted (Interested)%' THEN
+        v_status_val := '備取（有意願）Waitlisted (Interested)'::event_signup_status_enum;
+    ELSIF v_status_text LIKE '%正取%' OR v_status_text LIKE '%Confirmed%' THEN
+        v_status_val := '正取 Confirmed'::event_signup_status_enum;
+    ELSIF v_status_text LIKE '%備取%' OR v_status_text LIKE '%Waitlisted%' THEN
+        v_status_val := '備取 Waitlisted'::event_signup_status_enum;
+    ELSIF v_status_text LIKE '%取消%' OR v_status_text LIKE '%Cancelled%' THEN
+        v_status_val := '已取消 Cancelled'::event_signup_status_enum;
+    ELSE
+        v_status_val := '審核中 Checking'::event_signup_status_enum;
+    END IF;
+
+    UPDATE event_signups
+    SET status = v_status_val,
+        updated_at = NOW()
+    WHERE id = trim(p_signup_id);
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('status', 'error', 'message', '找不到該筆報名紀錄 (' || trim(p_signup_id) || ')');
+    END IF;
+
+    -- 排入 sync_queue 異步同步至 Google Sheets
+    INSERT INTO sync_queue (table_name, action, record_id, payload)
+    VALUES (
+        'event_signups',
+        'UPDATE',
+        trim(p_signup_id),
+        jsonb_build_object(
+            'eventId', trim(p_event_id),
+            'signupId', trim(p_signup_id),
+            'reviewResult', trim(p_review_result),
+            'updatedBy', trim(p_officer_line_user_id)
+        )
+    );
+
+    RETURN jsonb_build_object('status', 'success');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION update_signup_status_rpc(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;

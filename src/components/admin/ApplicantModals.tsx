@@ -39,6 +39,12 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
 }) => {
   const [copiedLineId, setCopiedLineId] = useState<string | null>(null);
 
+  const formatDateSlash = (dateStr?: string): string => {
+    if (!dateStr || !dateStr.trim()) return '未填';
+    const clean = String(dateStr).split('T')[0].trim().replace(/-/g, '/');
+    return clean.length >= 10 ? clean.substring(0, 10) : clean;
+  };
+
   return (
     <>
       {/* 體能證明清單 Modal */}
@@ -209,7 +215,7 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
                 <div><span style={{ color: '#64748b' }}>姓名：</span><span style={{ fontWeight: '600', color: '#0f172a' }}>{profileModalApplicant.name}</span></div>
                 <div><span style={{ color: '#64748b' }}>性別：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.gender || '未填'}</span></div>
                 <div><span style={{ color: '#64748b' }}>身分資格：</span><span style={{ fontWeight: 'bold', color: profileModalApplicant.isOfficial === '是' ? '#16a34a' : '#64748b' }}>{profileModalApplicant.isOfficial === '是' ? '正式社員' : '非社員'}</span></div>
-                <div><span style={{ color: '#64748b' }}>生日：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.birthday || '未填'}</span></div>
+                <div><span style={{ color: '#64748b' }}>生日：</span><span style={{ color: '#0f172a' }}>{formatDateSlash(profileModalApplicant.birthday)}</span></div>
                 {profileModalApplicant.studentId && (
                   <div><span style={{ color: '#64748b' }}>學號：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.studentId}</span></div>
                 )}

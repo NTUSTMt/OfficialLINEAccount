@@ -3,11 +3,38 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.108` (v0.1.108)
+- **當前版本**：`0.1.109` (v0.1.109)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 209. 全面直通 Supabase (SSOT)、徹底剔除無效 Sheets 備援與 4 大實務異常修復 (v0.1.109)
+- **需求背景與核心問題排查 (Problem Identification & Root Causes)**：
+  1. **非社員且資格過期時，繳費系統仍無社費選項**：前端 `Payment.tsx` 先前直接執行 `supabase.from('members').select(...)`，但 `members` 表啟用了 RLS 嚴格封閉防護，anon 讀取一律為 null，導致補底邏輯失效；且先前的修復 SQL 檔漏掉了 `get_unpaid_payments` 函式。
+  2. **報名者個資生日格式需統一為 YYYY/MM/DD**：`ApplicantModals.tsx` 直接顯示資料庫回傳的 ISO 8601 時區字串（如 `2000-01-01T00:00:00.000Z`），顯示雜亂。
+  3. **審核狀態修改報錯 `column "status" is of type event_signup_status_enum but expression is of type text`**：使用者執行的 SQL 檔漏掉了 `update_signup_status_rpc`，資料庫仍以舊版 text 寫入 enum 欄位被 PostgreSQL 強制阻擋。
+  4. **點擊「確認備取意願」出現「系統錯誤：找不到報名資料」**：`handleConfirmWaitlist` 寫死讀取 Google Sheets 大寫 `Signups` 分頁，全量遷移 Supabase 後找不到此分頁且未直連 `event_signups` 表。
+  5. **歷史代碼殘留大量無效試算表備援**：`_getEventName`、`sendOfficerMenu`、`sendSignupForm`、`handleSignup`、`checkOfficerInternal`、`_handleGetAdminEvents`、`_fetchOpenEventsContext` 等仍保留試算表備援，不僅掩蓋了真正的資料庫錯誤，更拖慢系統效能。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  - **1. 前端社費補底安全改造 ([src/pages/Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx))**：
+    - 改以安全 RPC 封裝函式 `fetchDashboardFromSupabase(userId)` 取得身分與社籍狀態，非正式社員或過期社員自動於 `unpaidList.membership` 補入當學期社費項目，裝備租借即刻享有 5 折優惠。
+  - **2. 生日格式化標準化 ([src/components/admin/ApplicantModals.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/ApplicantModals.tsx))**：
+    - 實作 `formatDateSlash` 工具函式，去除 ISO 時區、將 `-` 轉為 `/`，只截取前 10 碼為 `YYYY/MM/DD`，未填寫時顯示「未填」。
+  - **3. ENUM 全域隱式轉型與資料庫整合腳本 ([supabase/fix_enum_typecast_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_enum_typecast_rpc.sql))**：
+    - 建立 PostgreSQL 全域隱式轉換 `CREATE CAST (text AS event_signup_status_enum)`，徹底根治任何字串指派至 enum 欄位的型別錯誤。
+    - 整合最新 `update_signup_status_rpc`、`get_unpaid_payments`（過期或非正式社員強制提供社費選項）與 `get_admin_event_signups_rpc`。
+  - **4. 確認備取意願 100% 直連 Supabase ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js))**：
+    - `handleConfirmWaitlist` 直查 Supabase `event_signups` 表，若已確認過則提示避免重複更新；若為備取則以 REST PATCH 更新狀態為 `備取（有意願）Waitlisted (Interested)`，並發送 LINE 訊息確認，出錯直接回報具體錯誤訊息。
+  - **5. 全面掃除試算表備援，落實純 Supabase 直通 (SSOT)**：
+    - **`_getEventName` ([gas_modules/01_Config_Auth.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/01_Config_Auth.js))**：直查 Supabase `events` 表，失敗直接回退或報錯，杜絕試算表。
+    - **`sendOfficerMenu` & `sendSignupForm` & `handleSignup` ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js))**：徹底拔除試算表備援與備援寫入，直連 Supabase，失敗立即印出具體原因。
+    - **`checkOfficerInternal` & `_handleGetAdminEvents` & `_getMemberContactInfo` ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js))**：徹底拔除試算表備援，直查 Supabase，權限不足或查無活動直接具體報錯。
+    - **`_fetchOpenEventsContext` ([gas_modules/04_Ai_Gemini.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/04_Ai_Gemini.js))**：直查 Supabase `events` 表，移除試算表備援。
+    - **單檔打包同步 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：完整同步打包並通過 `node -c` 檢驗。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **130/130 項測試全數通過（33 suites passed, 0 failures）**（新增 Suite 51 驗證社費補底、生日格式統一、Enum 隱式轉換、備取意願直連、試算表備援全面移除）。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
 
 ### 208. 修復社團系統 5 大問題：社費過期繳費補底、活動未來開放按鈕狀態分離、幹部名冊完整個資與欄位對齊、一鍵發送審核結果直查直推、正備取修改 Supabase 儲存與快取修正 (v0.1.108)
 - **需求背景與核心問題排查 (Problem Identification & Root Causes)**：
