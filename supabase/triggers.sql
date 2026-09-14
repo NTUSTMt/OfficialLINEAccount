@@ -12,6 +12,11 @@ DECLARE
     target_payload JSONB;
     act TEXT;
 BEGIN
+    -- 防遞迴守衛
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+
     IF (TG_OP = 'DELETE') THEN
         act := 'DELETE';
         target_payload := to_jsonb(OLD);
@@ -81,6 +86,11 @@ FOR EACH ROW EXECUTE FUNCTION trg_fn_enqueue_sync();
 CREATE OR REPLACE FUNCTION trg_fn_auto_fill_member_name()
 RETURNS TRIGGER AS $$
 BEGIN
+    -- 防遞迴守衛
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+
     IF NEW.name IS NULL OR trim(NEW.name) = '' THEN
         SELECT name INTO NEW.name FROM members WHERE line_user_id = NEW.line_user_id;
     END IF;
@@ -114,6 +124,11 @@ FOR EACH ROW EXECUTE FUNCTION trg_fn_auto_fill_member_name();
 CREATE OR REPLACE FUNCTION trg_fn_sync_member_name_to_children()
 RETURNS TRIGGER AS $$
 BEGIN
+    -- 防遞迴守衛
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
+    END IF;
+
     IF NEW.name IS DISTINCT FROM OLD.name THEN
         UPDATE payments SET name = NEW.name WHERE line_user_id = NEW.line_user_id;
         UPDATE loans SET name = NEW.name WHERE line_user_id = NEW.line_user_id;

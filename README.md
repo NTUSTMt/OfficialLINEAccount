@@ -3,11 +3,34 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.109` (v0.1.109)
+- **當前版本**：`0.1.110` (v0.1.110)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 210. 報名名冊個資生日標準格式化、GAS 幹部鑑權修復與 Supabase 審核狀態 Enum 轉型 (v0.1.110)
+- **需求背景與根本原因排查 (Problem Identification & Root Causes)**：
+  1. **報名者個資生日欄位顯示 `Fri Jun 03` 異常**：
+     - Google Sheets 或 GAS 在傳遞日期物件時，轉換為 JS Date 字串格式（如 `Fri Jun 03 1994 00:00:00 GMT+0800`）。`ApplicantModals.tsx` 原先僅使用 `clean.substring(0, 10)` 截取前 10 碼，導致直接截斷為星期與月份 `Fri Jun 03`。
+  2. **審核頁面無法修改正備取待審，報錯 `column "status" is of type event_signup_status_enum but expression is of type text`**：
+     - Supabase 資料庫內的 `event_signups.status` 欄位為 `event_signup_status_enum` 列舉型別，但先前部署的 `update_signup_status_rpc` 函式仍以字串直接指派（`status = trim(p_review_result)`），且缺乏 PostgreSQL 全域隱式轉型（`IMPLICIT CAST`），被 PostgreSQL 引擎強制阻擋。
+  3. **點擊「一鍵發送審核結果」出現「操作失敗：權限不足，僅限幹部發送推播通知」**：
+     - 後端 GAS (`gas_modules/06_Helper_Services.js` 與 `src/gas.js`) 中的 `checkOfficerInternal` 在使用 REST API 查詢 Supabase 時，傳入了不存在的欄位名稱 `user_id` 與 `role`（正確為 `line_user_id` 與 `officer_role`），且未查詢 `officers` 表，導致 Supabase PostgREST 拋出 HTTP 400 Bad Request，使已註冊幹部被誤判為無權限。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  - **1. 個資生日格式化升級 ([src/components/admin/ApplicantModals.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/ApplicantModals.tsx))**：
+    - 全面增強 `formatDateSlash` 函式：優先使用正則比對 `YYYY-MM-DD` 與 `YYYY/MM/DD`（補零對齊），相容 JavaScript Date 字串（透過 `new Date` 解析年、月、日），杜絕時區偏移並保證格式統一為 `YYYY/MM/DD`。
+  - **2. 後端 GAS 幹部雙軌鑑權修復 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+    - 修正 `checkOfficerInternal`：精確以 `line_user_id` 查詢 `members` 表中的 `is_officer` 與 `officer_role` 欄位，並雙軌查詢 `officers` 表，徹底剔除不存在的 `user_id` / `role` 欄位，杜絕 PostgREST 400 錯誤。
+  - **3. Supabase 專屬審核狀態 Enum 一鍵修復腳本 ([supabase/fix_signup_status_enum.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_signup_status_enum.sql))**：
+    - 建立專屬 SQL 遷移檔：保證 `event_signup_status_enum` 存在，建立 `text_to_event_signup_status_enum` 與全域隱式轉換 `CREATE CAST (text AS event_signup_status_enum) ... AS IMPLICIT`。
+    - 重新定義 `update_signup_status_rpc`，將傳入狀態安全轉為 Enum 型別後寫入，授權 `anon, authenticated, service_role` 執行。
+  - **4. 觸發器防遞迴守衛加固 ([supabase/triggers.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/triggers.sql))**：
+    - 於所有相互連動的觸發器函式開頭加入 `IF pg_trigger_depth() > 1 THEN RETURN NEW; END IF;`，落實系統規範。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **133/133 項測試全數通過（34 suites passed, 0 failures）**（新增 Suite 52 驗證 JS Date 生日格式解析、幹部雙軌鑑權防 400、以及 Enum 狀態映射）。
+  - 語法檢驗：`node -c gas_modules/06_Helper_Services.js && node -c src/gas.js` 0 錯誤。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
 
 ### 209. 全面直通 Supabase (SSOT)、徹底剔除無效 Sheets 備援與 4 大實務異常修復 (v0.1.109)
 - **需求背景與核心問題排查 (Problem Identification & Root Causes)**：

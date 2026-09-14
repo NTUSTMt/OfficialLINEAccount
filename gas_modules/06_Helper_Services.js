@@ -1142,38 +1142,62 @@ function _handleUpdateEquipmentImages(payload) {
 }
 
 /**
- * 內部輔助：檢驗使用者是否為登山社幹部 (100% 直連 Supabase members 表 SSOT)
+ * 內部輔助：檢驗使用者是否為登山社幹部 (100% 直連 Supabase members 與 officers 表 SSOT)
  */
 function checkOfficerInternal(ss, userId, userName) {
   if (!userId && !userName) return { isOfficer: false, role: "", name: "" };
   if (userId === "TEST_USER_ID") return { isOfficer: true, role: "管理員", name: "測試管理員" };
 
   try {
-    var sbUrl = SUPABASE_URL || PropertiesService.getScriptProperties().getProperty("SUPABASE_URL");
-    var sbKey = SUPABASE_SERVICE_ROLE_KEY || PropertiesService.getScriptProperties().getProperty("SUPABASE_SERVICE_ROLE_KEY");
-    if (sbUrl && sbKey && (userId || userName)) {
-      var orConds = [];
-      if (userId) {
-        orConds.push("user_id.eq." + encodeURIComponent(userId));
-        orConds.push("line_user_id.eq." + encodeURIComponent(userId));
-      }
-      if (userName) {
-        orConds.push("name.eq." + encodeURIComponent(userName.trim()));
-      }
-      var queryUrl = sbUrl + "/rest/v1/members?or=(" + orConds.join(",") + ")&select=name,role,is_officer&limit=1";
-      var sbRes = UrlFetchApp.fetch(queryUrl, {
-        method: "get",
-        headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
-        muteHttpExceptions: true
+    // 1. 優先以 userId 查詢 members 表 (檢查 is_officer 或 officer_role)
+    if (userId) {
+      var members = _supabaseGet("members", {
+        line_user_id: "eq." + userId,
+        select: "name,officer_role,is_officer"
       });
-      if (sbRes.getResponseCode() === 200) {
-        var members = JSON.parse(sbRes.getContentText());
-        if (members && members.length > 0) {
-          var m = members[0];
-          if (m.is_officer === true || m.role === "幹部" || m.role === "管理員" || m.role === "社長") {
-            return { isOfficer: true, role: m.role || "幹部", name: m.name || "" };
-          }
+      if (members && members.length > 0) {
+        var m = members[0];
+        var roleStr = m.officer_role || "";
+        var isOffRole = ["幹部", "社長", "副社長", "管理員", "嚮導", "嚮導長", "裝備長", "活動長", "總務"].indexOf(roleStr) > -1;
+        if (m.is_officer === true || isOffRole) {
+          return { isOfficer: true, role: roleStr || "幹部", name: m.name || "" };
         }
+      }
+
+      // 2. 查驗 officers 表 (支援以 line_user_id 查詢)
+      var officers = _supabaseGet("officers", {
+        line_user_id: "eq." + userId,
+        select: "name,role,title"
+      });
+      if (officers && officers.length > 0) {
+        var off = officers[0];
+        return { isOfficer: true, role: off.title || off.role || "幹部", name: off.name || "" };
+      }
+    }
+
+    // 3. 備援支援以 userName 查詢 members 或 officers 表
+    if (userName) {
+      var cleanName = userName.trim();
+      var mByName = _supabaseGet("members", {
+        name: "eq." + cleanName,
+        select: "name,officer_role,is_officer"
+      });
+      if (mByName && mByName.length > 0) {
+        var mb = mByName[0];
+        var roleStrB = mb.officer_role || "";
+        var isOffRoleB = ["幹部", "社長", "副社長", "管理員", "嚮導", "嚮導長", "裝備長", "活動長", "總務"].indexOf(roleStrB) > -1;
+        if (mb.is_officer === true || isOffRoleB) {
+          return { isOfficer: true, role: roleStrB || "幹部", name: mb.name || "" };
+        }
+      }
+
+      var offByName = _supabaseGet("officers", {
+        name: "eq." + cleanName,
+        select: "name,role,title"
+      });
+      if (offByName && offByName.length > 0) {
+        var oByName = offByName[0];
+        return { isOfficer: true, role: oByName.title || oByName.role || "幹部", name: oByName.name || "" };
       }
     }
   } catch (err) {

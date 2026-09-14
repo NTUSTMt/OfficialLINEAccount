@@ -40,8 +40,27 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
   const [copiedLineId, setCopiedLineId] = useState<string | null>(null);
 
   const formatDateSlash = (dateStr?: string): string => {
-    if (!dateStr || !dateStr.trim()) return '未填';
-    const clean = String(dateStr).split('T')[0].trim().replace(/-/g, '/');
+    if (!dateStr || !String(dateStr).trim()) return '未填';
+    const str = String(dateStr).trim();
+    if (str === '未填' || str === '無') return '未填';
+
+    // 1. 若為 YYYY-MM-DD 或 YYYY/MM/DD 開頭 (避免時區偏移)
+    const isoMatch = str.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+    if (isoMatch) {
+      return `${isoMatch[1]}/${isoMatch[2].padStart(2, '0')}/${isoMatch[3].padStart(2, '0')}`;
+    }
+
+    // 2. 處理 JS Date 字串格式 (如 "Fri Jun 03 1994 00:00:00 GMT+0800")
+    const parsedDate = new Date(str);
+    if (!isNaN(parsedDate.getTime())) {
+      const y = parsedDate.getFullYear();
+      const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+      const d = String(parsedDate.getDate()).padStart(2, '0');
+      return `${y}/${m}/${d}`;
+    }
+
+    // 3. 安全回退處理
+    const clean = str.split('T')[0].replace(/-/g, '/');
     return clean.length >= 10 ? clean.substring(0, 10) : clean;
   };
 

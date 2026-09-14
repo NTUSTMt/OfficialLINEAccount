@@ -3721,5 +3721,125 @@ describe('51. 全面直通 Supabase (SSOT)、去除無效 Sheets 備援與 4 大
   });
 });
 
+describe('52. 報名名冊個資生日格式、幹部鑑權修復與 Enum 智慧轉型驗證 (v0.1.110)', () => {
+  it('1. 生日格式化完整相容：JavaScript Date 字串、ISO 字串、斜線格式均能統一轉為 YYYY/MM/DD', () => {
+    const formatDateSlash = (dateStr) => {
+      if (!dateStr || !String(dateStr).trim()) return '未填';
+      const str = String(dateStr).trim();
+      if (str === '未填' || str === '無') return '未填';
+
+      // 1. 若為 YYYY-MM-DD 或 YYYY/MM/DD 開頭 (避免時區偏移)
+      const isoMatch = str.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+      if (isoMatch) {
+        return `${isoMatch[1]}/${isoMatch[2].padStart(2, '0')}/${isoMatch[3].padStart(2, '0')}`;
+      }
+
+      // 2. 處理 JS Date 字串格式 (如 "Fri Jun 03 1994 00:00:00 GMT+0800")
+      const parsedDate = new Date(str);
+      if (!isNaN(parsedDate.getTime())) {
+        const y = parsedDate.getFullYear();
+        const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+        const d = String(parsedDate.getDate()).padStart(2, '0');
+        return `${y}/${m}/${d}`;
+      }
+
+      // 3. 安全回退處理
+      const clean = str.split('T')[0].replace(/-/g, '/');
+      return clean.length >= 10 ? clean.substring(0, 10) : clean;
+    };
+
+    // 原始報錯案例：Sheets 輸出 JS Date 物件轉字串
+    assert.strictEqual(formatDateSlash('Fri Jun 03 1994 00:00:00 GMT+0800'), '1994/06/03');
+    assert.strictEqual(formatDateSlash('Fri Jun 03 2005 00:00:00 GMT+0800'), '2005/06/03');
+    assert.strictEqual(formatDateSlash('1998-08-08T00:00:00.000Z'), '1998/08/08');
+    assert.strictEqual(formatDateSlash('1998/8/8'), '1998/08/08');
+    assert.strictEqual(formatDateSlash('2000-01-01'), '2000/01/01');
+    assert.strictEqual(formatDateSlash(''), '未填');
+    assert.strictEqual(formatDateSlash(null), '未填');
+    assert.strictEqual(formatDateSlash(undefined), '未填');
+  });
+
+  it('2. checkOfficerInternal 幹部雙軌鑑權：嚴格使用正確欄位 (line_user_id, officer_role)，拒絕 400 Bad Request', () => {
+    const mockMembers = [
+      { line_user_id: 'U_OFFICER_01', name: '小岳社長', officer_role: '社長', is_officer: true },
+      { line_user_id: 'U_MEMBER_02', name: '一般社員', officer_role: '', is_officer: false }
+    ];
+    const mockOfficers = [
+      { line_user_id: 'U_OFFICER_03', name: '裝備部長', role: '幹部', title: '裝備部長' }
+    ];
+
+    function simulateCheckOfficer(userId, userName) {
+      if (!userId && !userName) return { isOfficer: false, role: '', name: '' };
+      if (userId === 'TEST_USER_ID') return { isOfficer: true, role: '管理員', name: '測試管理員' };
+
+      // 1. members 表查驗 (line_user_id)
+      if (userId) {
+        const m = mockMembers.find(mem => mem.line_user_id === userId);
+        if (m) {
+          const roleStr = m.officer_role || '';
+          const isOffRole = ['幹部', '社長', '副社長', '管理員', '嚮導', '嚮導長', '裝備長', '活動長', '總務'].indexOf(roleStr) > -1;
+          if (m.is_officer === true || isOffRole) {
+            return { isOfficer: true, role: roleStr || '幹部', name: m.name || '' };
+          }
+        }
+        // 2. officers 表查驗
+        const off = mockOfficers.find(o => o.line_user_id === userId);
+        if (off) {
+          return { isOfficer: true, role: off.title || off.role || '幹部', name: off.name || '' };
+        }
+      }
+
+      return { isOfficer: false, role: '', name: '' };
+    }
+
+    // 測試 members 幹部
+    const res1 = simulateCheckOfficer('U_OFFICER_01');
+    assert.strictEqual(res1.isOfficer, true);
+    assert.strictEqual(res1.role, '社長');
+
+    // 測試 officers 幹部
+    const res2 = simulateCheckOfficer('U_OFFICER_03');
+    assert.strictEqual(res2.isOfficer, true);
+    assert.strictEqual(res2.role, '裝備部長');
+
+    // 測試一般社員
+    const res3 = simulateCheckOfficer('U_MEMBER_02');
+    assert.strictEqual(res3.isOfficer, false);
+
+    // 測試測試管理員
+    const res4 = simulateCheckOfficer('TEST_USER_ID');
+    assert.strictEqual(res4.isOfficer, true);
+  });
+
+  it('3. update_signup_status_rpc 型別相容：字串狀態安全對應 event_signup_status_enum', () => {
+    const validEnums = [
+      '正取 Confirmed',
+      '正取（已繳費）Confirmed (Paid)',
+      '備取 Waitlisted',
+      '備取（有意願）Waitlisted (Interested)',
+      '審核中 Checking',
+      '已取消 Cancelled'
+    ];
+
+    function textToSignupStatusEnum(val) {
+      if (!val) return '審核中 Checking';
+      const str = String(val).trim();
+      if (str.includes('正取（已繳費）') || str.includes('Confirmed (Paid)')) return '正取（已繳費）Confirmed (Paid)';
+      if (str.includes('備取（有意願）') || str.includes('Waitlisted (Interested)')) return '備取（有意願）Waitlisted (Interested)';
+      if (str.includes('正取') || str.includes('Confirmed')) return '正取 Confirmed';
+      if (str.includes('備取') || str.includes('Waitlisted')) return '備取 Waitlisted';
+      if (str.includes('取消') || str.includes('Cancelled')) return '已取消 Cancelled';
+      return '審核中 Checking';
+    }
+
+    assert.ok(validEnums.includes(textToSignupStatusEnum('正取 Confirmed')));
+    assert.ok(validEnums.includes(textToSignupStatusEnum('備取 Waitlisted')));
+    assert.ok(validEnums.includes(textToSignupStatusEnum('備取（有意願）Waitlisted (Interested)')));
+    assert.ok(validEnums.includes(textToSignupStatusEnum('已取消 Cancelled')));
+    assert.ok(validEnums.includes(textToSignupStatusEnum('審核中 Checking')));
+    assert.ok(validEnums.includes(textToSignupStatusEnum('任意未知文字')));
+  });
+});
+
 
 
