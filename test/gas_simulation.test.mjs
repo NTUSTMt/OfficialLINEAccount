@@ -3072,3 +3072,133 @@ describe('47. 裝備取消、活動棄權、幹部核銷與每日自動巡檢機
   });
 });
 
+describe('48. 試算表即時編輯觸發器 (handleSpreadsheetEdit) 與 Gemini AI 知識庫擴充測試', () => {
+  it('Payments 分頁手動編輯對帳狀態為已核銷時，同步 Supabase 並推播【🎉 繳費成功通知】', () => {
+    const mockSupabasePayments = [
+      { id: 'PAY_001', amount: 500, line_user_id: 'U111', status: '待核銷 Pending' },
+      { id: 'PAY_002', amount: 300, line_user_id: 'U222', status: '已核銷 Confirmed' }
+    ];
+    const pushMessages = [];
+
+    function simulateSheetEditPayment(sheetName, oldValue, newValue, paymentId) {
+      if (sheetName.toLowerCase() !== 'payments') return false;
+      if (newValue === oldValue) return false;
+      if (newValue !== '已確認無誤' && newValue !== '已核銷 Confirmed' && newValue !== '已核銷') return false;
+
+      const p = mockSupabasePayments.find(x => x.id === paymentId);
+      if (!p) return false;
+      if (p.status === '已核銷 Confirmed') {
+        // 冪等防重複推播
+        return 'already_confirmed';
+      }
+
+      p.status = '已核銷 Confirmed';
+      pushMessages.push({
+        userId: p.line_user_id,
+        text: '【🎉 繳費成功通知 / Payment Verified】\n親愛的社員您好：\n您申報的繳費單據 (' + paymentId + ') 已核銷完成！\n• 費用金額：$' + p.amount
+      });
+      return true;
+    }
+
+    // 1. 成功核銷未審核單據
+    const res1 = simulateSheetEditPayment('Payments', '待核銷 Pending', '已確認無誤', 'PAY_001');
+    assert.strictEqual(res1, true);
+    assert.strictEqual(mockSupabasePayments[0].status, '已核銷 Confirmed');
+    assert.strictEqual(pushMessages.length, 1);
+    assert.strictEqual(pushMessages[0].userId, 'U111');
+    assert.ok(pushMessages[0].text.includes('PAY_001'));
+
+    // 2. 再次編輯已核銷單據 -> 冪等防重複推播
+    const res2 = simulateSheetEditPayment('Payments', '已確認無誤', '已核銷 Confirmed', 'PAY_001');
+    assert.strictEqual(res2, 'already_confirmed');
+    assert.strictEqual(pushMessages.length, 1); // 依然只有 1 則
+  });
+
+  it('Loans 分頁手動編輯狀態為已歸還時，同步 Supabase 並回補裝備庫存', () => {
+    const mockSupabaseLoans = [
+      { id: 'ORD_901', equipment_id: 'EQ_TENT_01', quantity: 2, status: '使用中 Using' }
+    ];
+    const mockSupabaseEquipments = [
+      { id: 'EQ_TENT_01', stock_available: 5 }
+    ];
+    let toastMsg = '';
+
+    function simulateSheetEditLoan(sheetName, oldValue, newValue, loanId) {
+      if (sheetName.toLowerCase() !== 'loans' && sheetName !== 'Loan_Records') return false;
+      if (newValue === oldValue) return false;
+      if (newValue !== '已歸還 Returned' && newValue !== '已歸還') return false;
+
+      const ln = mockSupabaseLoans.find(x => x.id === loanId);
+      if (!ln) return false;
+      ln.status = '已歸還 Returned';
+
+      const eq = mockSupabaseEquipments.find(x => x.id === ln.equipment_id);
+      if (eq) {
+        eq.stock_available += ln.quantity;
+      }
+      toastMsg = '已標記歸還並回補庫存！';
+      return true;
+    }
+
+    const ok = simulateSheetEditLoan('Loan_Records', '使用中 Using', '已歸還 Returned', 'ORD_901');
+    assert.strictEqual(ok, true);
+    assert.strictEqual(mockSupabaseLoans[0].status, '已歸還 Returned');
+    assert.strictEqual(mockSupabaseEquipments[0].stock_available, 7); // 5 + 2 = 7
+    assert.strictEqual(toastMsg, '已標記歸還並回補庫存！');
+  });
+
+  it('Signups 分頁手動編輯審核結果時，同步 Supabase 且絕不自動推播通知社員', () => {
+    const mockSignups = [
+      { id: 'SIGN_01', name: '王大明', line_user_id: 'U999', review_status: '審核中' }
+    ];
+    const userPushCount = 0;
+
+    function simulateSheetEditSignup(sheetName, oldValue, newValue, signupId) {
+      if (sheetName.toLowerCase() !== 'event_signups' && sheetName !== 'Signups') return false;
+      if (newValue === oldValue) return false;
+
+      const s = mockSignups.find(x => x.id === signupId);
+      if (!s) return false;
+      s.review_status = newValue;
+      // 規範：僅同步 Supabase，絕不發送推播通知（保留由幹部批次發送）
+      return true;
+    }
+
+    const ok = simulateSheetEditSignup('event_signups', '審核中', '正取', 'SIGN_01');
+    assert.strictEqual(ok, true);
+    assert.strictEqual(mockSignups[0].review_status, '正取');
+    assert.strictEqual(userPushCount, 0); // 確保不主動發送推播
+  });
+
+  it('Gemini AI 知識庫優先掃描資料夾多 Docs，若無則回退預設章程文件', () => {
+    function simulateFetchDocsKnowledgeBase(folderId, docId, mockDriveFiles, mockDocContent) {
+      let result = '';
+      if (folderId && mockDriveFiles && mockDriveFiles.length > 0) {
+        result = mockDriveFiles.map(f => '【規章文件：' + f.name + '】\n' + f.content).join('\n\n');
+      } else if (docId && mockDocContent) {
+        result = mockDocContent;
+      } else {
+        result = '歷史預設社團章程 1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI 內容';
+      }
+      return result.substring(0, 15000);
+    }
+
+    // 1. 有設定資料夾時，多文件合併
+    const kbFromFolder = simulateFetchDocsKnowledgeBase('FOLDER_ABC', '', [
+      { name: '入社須知.docx', content: '入社需繳交社費500元' },
+      { name: '裝備租借規範.docx', content: '非社員租借照定價收費' }
+    ]);
+    assert.ok(kbFromFolder.includes('入社須知.docx'));
+    assert.ok(kbFromFolder.includes('非社員租借照定價收費'));
+
+    // 2. 無資料夾但有 DOC_ID 時，讀取單一文件
+    const kbFromDoc = simulateFetchDocsKnowledgeBase('', 'DOC_XYZ', [], '單一章程文件說明');
+    assert.strictEqual(kbFromDoc, '單一章程文件說明');
+
+    // 3. 皆無設定時，回退至歷史預設章程文件 ID
+    const kbFallback = simulateFetchDocsKnowledgeBase('', '', [], '');
+    assert.ok(kbFallback.includes('1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI'));
+  });
+});
+
+

@@ -320,3 +320,49 @@ function _supabaseGet(table, queryParams) {
     return null;
   }
 }
+
+// 輕量呼叫 Supabase REST API (PATCH)
+function _supabasePatch(table, queryParams, payload) {
+  var props = PropertiesService.getScriptProperties();
+  var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
+  var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!sbUrl || !sbKey) {
+    console.warn("⚠️ [Supabase] 缺少 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY");
+    return false;
+  }
+
+  var queryString = "";
+  if (queryParams && typeof queryParams === "object") {
+    var parts = [];
+    for (var k in queryParams) {
+      if (Object.prototype.hasOwnProperty.call(queryParams, k)) {
+        parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(queryParams[k]));
+      }
+    }
+    if (parts.length > 0) {
+      queryString = "?" + parts.join("&");
+    }
+  }
+
+  var url = sbUrl + "/rest/v1/" + table + queryString;
+  try {
+    var res = UrlFetchApp.fetch(url, {
+      method: "patch",
+      contentType: "application/json",
+      headers: {
+        "apikey": sbKey,
+        "Authorization": "Bearer " + sbKey,
+        "Prefer": "return=minimal"
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    return res.getResponseCode() >= 200 && res.getResponseCode() < 300;
+  } catch (err) {
+    console.warn("⚠️ [Supabase PATCH] 呼叫例外 (" + table + "): " + err.toString());
+    return false;
+  }
+}
+

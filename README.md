@@ -3,11 +3,36 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.105` (v0.1.105)
+- **當前版本**：`0.1.106` (v0.1.106)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 206. 補齊歷史架構差異：試算表可安裝編輯事件 (Installable onEdit) 雙向連動、Supabase 同步與 Gemini AI 知識庫擴充 (v0.1.106)
+- **需求背景與訪談分析 (Requirements & /grill-me Insights)**：
+  - 深入掃描 `src/gas.backup.js` 歷史程式碼發現，舊版具備 Google Sheets 儲存格即時編輯聯動（`onEdit`）以及深度 Google Docs 規章知識庫；而新版在遷移至 Supabase 單一信任源後，試算表一度僅做單向備援。
+  - 經 `/grill-me` 訪談確認：幹部日常在 Google Sheets 試算表檢視與批量調整資料極為直覺，需要能在試算表修改狀態時，即時寫回 Supabase 並處理相應業務，但必須妥善處理雙向同步可能產生的衝突。
+- **架構設計與防衝突機制 (Architecture & Anti-Conflict Mechanisms)**：
+  - **1. 突破 Google 簡單觸發器限制 ([gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js))**：
+    - Google 官方規範中，原生 `onEdit(e)` 屬於簡單觸發器，**被安全沙盒嚴格禁止呼叫外網 API (`UrlFetchApp`)**，導致無法直接連線 Supabase 或 LINE API。
+    - 本次實作 `handleSpreadsheetEdit(e)` 並搭配 `setupSpreadsheetEditTrigger()` 一鍵註冊為「可安裝觸發器 (Installable Trigger)」，取得完整外網網路連線權限。
+  - **2. 天然防迴圈與狀態冪等守衛**：
+    - **防迴圈**：Google 規範中，由 GAS 背景排程或腳本寫入試算表**絕不會**觸發 `onEdit`，只有真人手動修改儲存格才會啟動，天然杜絕自激死迴圈。
+    - **變更與主鍵防呆**：嚴格檢查 `e.oldValue !== e.value`；若無變更或缺乏有效主鍵 ID 則直接跳過。
+    - **狀態冪等**：若 Supabase 該筆紀錄已為 `已核銷 Confirmed`，自動略過不重複發送推播。
+  - **3. 試算表三大分頁即時聯動細節**：
+    - **`Payments` 繳費分頁**：對帳狀態修改為「已確認無誤」或「已核銷 Confirmed」時，調用 `_processPaymentVerification`，將 Supabase 狀態更新為 `已核銷 Confirmed`，並自動推播【🎉 繳費成功通知】至社員個人 LINE。
+    - **`Loans` / `Loan_Records` 裝備借用分頁**：狀態修改為「已歸還 Returned」時，更新 Supabase `loans.status = '已歸還 Returned'`，並自動將借用數量回補至 Supabase `equipments.stock_available` 與主試算表裝備庫存欄位。
+    - **`Signups` / `Event_Signups` 報名分頁**：修改審核結果（如正取/備取）時，**僅以 PATCH 即時更新 Supabase `event_signups.review_status`，絕不主動發送推播通知**（保留給幹部確認名冊後批次發送，避免誤觸洗版）。
+  - **4. 知識庫核心多文件與 Fallback 擴充 ([gas_modules/04_Ai_Gemini.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/04_Ai_Gemini.js))**：
+    - 實作 `_fetchDocsKnowledgeBase()`：優先讀取 `KNOWLEDGE_FOLDER_ID` 資料夾中所有 Google Docs 與純文字文件進行彙整快取；若未設定則自動回退至歷史預設章程文件 ID (`1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI`)，大幅提升 Gemini AI 問答的專業性與社規覆蓋率。
+  - **5. 輕量通用 Supabase PATCH 工具 ([gas_modules/01_Config_Auth.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/01_Config_Auth.js))**：
+    - 封裝 `_supabasePatch(table, queryParams, payload)`，提供簡潔安全的資料庫直更介面。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **115/115 項測試全數通過**（新增 Suite 48 包含試算表編輯對帳、還件庫存回補、審核不通知與知識庫多文件測試）。
+  - 前端打包：`pnpm run build` 成功完成，0 TypeScript / CSS 錯誤。
+  - 單檔校驗：`node -c src/gas.js` 通過。
 
 ### 205. 逐行比對歷史版本補齊取消通知雙軌串接、幹部核銷推播與每日自動巡檢機制 (v0.1.105)
 - **需求背景與比對分析 (Requirements & Historical Diff Analysis)**：

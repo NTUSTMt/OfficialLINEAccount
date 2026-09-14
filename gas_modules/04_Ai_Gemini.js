@@ -88,25 +88,60 @@ function _fetchOpenEventsContext() {
 
 /**
  * 讀取 Google Docs 雲端大腦知識庫
+ * 1. 優先掃描 KNOWLEDGE_FOLDER_ID 資料夾內所有 Docs/TXT 檔案
+ * 2. 次之讀取 KNOWLEDGE_DOC_ID
+ * 3. 預設回退歷史社團規章專屬文件 1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI
  */
 function _fetchDocsKnowledgeBase() {
-  var docId = PropertiesService.getScriptProperties().getProperty("KNOWLEDGE_DOC_ID");
-  if (!docId) return "社團裝備租借依社籍收費，出隊請遵守領隊指導。";
-
   var cache = CacheService.getScriptCache();
   var cached = cache.get("docs_kb_text");
   if (cached) return cached;
 
+  var props = PropertiesService.getScriptProperties();
+  var folderId = props.getProperty("KNOWLEDGE_FOLDER_ID");
+  var docId = props.getProperty("KNOWLEDGE_DOC_ID") || "1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI";
+  var allKnowledge = "";
+
   try {
-    var doc = DocumentApp.openById(docId);
-    var text = doc.getBody().getText();
-    if (text && text.length > 5000) {
-      text = text.substring(0, 5000); // 截取前 5000 字避免上下文膨脹
+    if (folderId && typeof DriveApp !== "undefined") {
+      try {
+        var folder = DriveApp.getFolderById(folderId);
+        var files = folder.getFiles();
+        while (files.hasNext()) {
+          var file = files.next();
+          var mimeType = file.getMimeType();
+          if (mimeType === MimeType.GOOGLE_DOCS && typeof DocumentApp !== "undefined") {
+            var doc = DocumentApp.openById(file.getId());
+            allKnowledge += "【規章文件：" + file.getName() + "】\n" + doc.getBody().getText() + "\n\n";
+          } else if (mimeType === MimeType.PLAIN_TEXT) {
+            allKnowledge += "【規章文件：" + file.getName() + "】\n" + file.getAs("text/plain").getDataAsString() + "\n\n";
+          }
+        }
+      } catch (folderErr) {
+        console.warn("讀取 KNOWLEDGE_FOLDER_ID 異常，嘗試讀取單一文件:", folderErr);
+      }
     }
-    cache.put("docs_kb_text", text, 1800); // 快取 30 分鐘
-    return text;
+
+    if (!allKnowledge && docId && typeof DocumentApp !== "undefined") {
+      try {
+        var singleDoc = DocumentApp.openById(docId);
+        allKnowledge = singleDoc.getBody().getText();
+      } catch (docErr) {
+        console.warn("讀取單一 Docs 知識庫失敗:", docErr);
+      }
+    }
+
+    if (allKnowledge) {
+      if (allKnowledge.length > 15000) {
+        allKnowledge = allKnowledge.substring(0, 15000);
+      }
+      try { cache.put("docs_kb_text", allKnowledge, 1800); } catch (cErr) {}
+      return allKnowledge;
+    }
   } catch (e) {
-    console.warn("讀取 Docs 知識庫失敗:", e);
-    return "社團常態運作規章。";
+    console.warn("讀取知識庫整體例外:", e);
   }
+
+  return "社團裝備租借依社籍收費，出隊請遵守領隊指導。";
 }
+

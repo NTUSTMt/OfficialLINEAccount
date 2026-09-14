@@ -321,6 +321,51 @@ function _supabaseGet(table, queryParams) {
   }
 }
 
+// 輕量呼叫 Supabase REST API (PATCH)
+function _supabasePatch(table, queryParams, payload) {
+  var props = PropertiesService.getScriptProperties();
+  var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
+  var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!sbUrl || !sbKey) {
+    console.warn("⚠️ [Supabase] 缺少 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY");
+    return false;
+  }
+
+  var queryString = "";
+  if (queryParams && typeof queryParams === "object") {
+    var parts = [];
+    for (var k in queryParams) {
+      if (Object.prototype.hasOwnProperty.call(queryParams, k)) {
+        parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(queryParams[k]));
+      }
+    }
+    if (parts.length > 0) {
+      queryString = "?" + parts.join("&");
+    }
+  }
+
+  var url = sbUrl + "/rest/v1/" + table + queryString;
+  try {
+    var res = UrlFetchApp.fetch(url, {
+      method: "patch",
+      contentType: "application/json",
+      headers: {
+        "apikey": sbKey,
+        "Authorization": "Bearer " + sbKey,
+        "Prefer": "return=minimal"
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    return res.getResponseCode() >= 200 && res.getResponseCode() < 300;
+  } catch (err) {
+    console.warn("⚠️ [Supabase PATCH] 呼叫例外 (" + table + "): " + err.toString());
+    return false;
+  }
+}
+
 // ==============================================================================
 // 🤖 台科登山社社團系統 GAS 模組 2：LINE Bot Webhook 接收與指令路由 (02_LineBot_Webhook.js)
 // ==============================================================================
@@ -1845,27 +1890,61 @@ function _fetchOpenEventsContext() {
 
 /**
  * 讀取 Google Docs 雲端大腦知識庫
+ * 1. 優先掃描 KNOWLEDGE_FOLDER_ID 資料夾內所有 Docs/TXT 檔案
+ * 2. 次之讀取 KNOWLEDGE_DOC_ID
+ * 3. 預設回退歷史社團規章專屬文件 1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI
  */
 function _fetchDocsKnowledgeBase() {
-  var docId = PropertiesService.getScriptProperties().getProperty("KNOWLEDGE_DOC_ID");
-  if (!docId) return "社團裝備租借依社籍收費，出隊請遵守領隊指導。";
-
   var cache = CacheService.getScriptCache();
   var cached = cache.get("docs_kb_text");
   if (cached) return cached;
 
+  var props = PropertiesService.getScriptProperties();
+  var folderId = props.getProperty("KNOWLEDGE_FOLDER_ID");
+  var docId = props.getProperty("KNOWLEDGE_DOC_ID") || "1MJyA7a0X5fZr-JR3sHCG1I3p1gvL0X2QkJJ1cYmVxLI";
+  var allKnowledge = "";
+
   try {
-    var doc = DocumentApp.openById(docId);
-    var text = doc.getBody().getText();
-    if (text && text.length > 5000) {
-      text = text.substring(0, 5000); // 截取前 5000 字避免上下文膨脹
+    if (folderId && typeof DriveApp !== "undefined") {
+      try {
+        var folder = DriveApp.getFolderById(folderId);
+        var files = folder.getFiles();
+        while (files.hasNext()) {
+          var file = files.next();
+          var mimeType = file.getMimeType();
+          if (mimeType === MimeType.GOOGLE_DOCS && typeof DocumentApp !== "undefined") {
+            var doc = DocumentApp.openById(file.getId());
+            allKnowledge += "【規章文件：" + file.getName() + "】\n" + doc.getBody().getText() + "\n\n";
+          } else if (mimeType === MimeType.PLAIN_TEXT) {
+            allKnowledge += "【規章文件：" + file.getName() + "】\n" + file.getAs("text/plain").getDataAsString() + "\n\n";
+          }
+        }
+      } catch (folderErr) {
+        console.warn("讀取 KNOWLEDGE_FOLDER_ID 異常，嘗試讀取單一文件:", folderErr);
+      }
     }
-    cache.put("docs_kb_text", text, 1800); // 快取 30 分鐘
-    return text;
+
+    if (!allKnowledge && docId && typeof DocumentApp !== "undefined") {
+      try {
+        var singleDoc = DocumentApp.openById(docId);
+        allKnowledge = singleDoc.getBody().getText();
+      } catch (docErr) {
+        console.warn("讀取單一 Docs 知識庫失敗:", docErr);
+      }
+    }
+
+    if (allKnowledge) {
+      if (allKnowledge.length > 15000) {
+        allKnowledge = allKnowledge.substring(0, 15000);
+      }
+      try { cache.put("docs_kb_text", allKnowledge, 1800); } catch (cErr) {}
+      return allKnowledge;
+    }
   } catch (e) {
-    console.warn("讀取 Docs 知識庫失敗:", e);
-    return "社團常態運作規章。";
+    console.warn("讀取知識庫整體例外:", e);
   }
+
+  return "社團裝備租借依社籍收費，出隊請遵守領隊指導。";
 }
 
 // ==============================================================================
@@ -1976,6 +2055,8 @@ function onOpen() {
       .addSeparator()
       .addItem("🔄 立即同步待處理佇列 (sync_queue)", "syncPendingQueueFromSupabase")
       .addItem("🧹 執行 Signups 歷史幽靈列自癒修剪", "reconcileSignupsWithSupabase")
+      .addSeparator()
+      .addItem("⚙️ 安裝試算表即時編輯觸發器", "setupSpreadsheetEditTrigger")
       .addToUi();
   } catch (e) {
     console.warn("無法取得 UI (可能在無 UI 環境中執行):", e);
@@ -3029,6 +3110,163 @@ function setupDailyPatrolTrigger() {
     .atHour(2)
     .create();
   Logger.log("✅ 已成功設定每日凌晨 02:00 執行 dailyPatrol 巡檢觸發器！");
+}
+
+/**
+ * ⚡ 試算表可安裝編輯事件處理器 (Installable onEdit)
+ * 幹部在試算表手動編輯儲存格時即時連動 Supabase 與推播通知：
+ * 1. Payments 對帳狀態 -> 已確認無誤/已核銷 Confirmed 觸發核銷與推播社員
+ * 2. Loan_Records/Loans 狀態 -> 已歸還 Returned 觸發還件與庫存回補
+ * 3. Signups/Event_Signups 審核結果 -> 同步 Supabase，不主動通知社員
+ */
+function handleSpreadsheetEdit(e) {
+  if (!e || !e.range) return;
+
+  var sheet = e.range.getSheet();
+  var sheetName = sheet.getName();
+  var row = e.range.getRow();
+  var col = e.range.getColumn();
+  if (row <= 1) return; // 忽略表頭列
+
+  var newValue = String(e.value || "").trim();
+  var oldValue = String(e.oldValue || "").trim();
+  if (!newValue || newValue === oldValue) return; // 防呆無實質變更
+
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return;
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  // 1. Payments / 繳費分頁對帳處理
+  var isPaymentsSheet = sheetName.toLowerCase() === "payments" || sheetName.indexOf("繳費") > -1;
+  if (isPaymentsSheet) {
+    var pStatusCol = _findHeaderCol(headers, "status", ["對帳狀態", "狀態", "繳費狀態"]) + 1;
+    if (pStatusCol > 0 && col === pStatusCol) {
+      var isConfirmed = (newValue === "已確認無誤" || newValue === "已核銷 Confirmed" || newValue === "已核銷");
+      if (isConfirmed) {
+        var idCol = _findHeaderCol(headers, "id", ["單號", "payment_id", "繳費單號"]) + 1;
+        var paymentId = idCol > 0 ? String(sheet.getRange(row, idCol).getValue()).trim() : "";
+
+        if (paymentId) {
+          // 檢查 Supabase 原狀態（防重複觸發）
+          var currentSb = _supabaseGet("payments", { id: "eq." + paymentId, select: "status,amount,line_user_id" });
+          if (currentSb && currentSb.length > 0 && currentSb[0].status === "已核銷 Confirmed") {
+            Logger.log("ℹ️ 該筆繳費已於 Supabase 核銷過，跳過重複推播: " + paymentId);
+            return;
+          }
+
+          // 呼叫統一核銷處理流程
+          _processPaymentVerification(paymentId, "試算表即時對帳", false, null);
+          try {
+            e.source.toast("✅ 繳費單 " + paymentId + " 已核銷並同步 Supabase！", "對帳成功", 5);
+          } catch (tErr) {}
+        }
+      }
+    }
+    return;
+  }
+
+  // 2. Loans / Loan_Records / 裝備借用分頁歸還處理
+  var isLoansSheet = sheetName.toLowerCase() === "loans" || sheetName === "Loan_Records" || sheetName.indexOf("裝備") > -1 || sheetName.indexOf("借用") > -1;
+  if (isLoansSheet) {
+    var lStatusCol = _findHeaderCol(headers, "status", ["領取/歸還", "歸還狀態", "狀態"]) + 1;
+    if (lStatusCol > 0 && col === lStatusCol) {
+      var isReturned = (newValue === "已歸還 Returned" || newValue === "已歸還");
+      if (isReturned) {
+        var loanIdCol = _findHeaderCol(headers, "id", ["租借單號", "loan_id", "訂單編號", "序號"]) + 1;
+        var loanId = loanIdCol > 0 ? String(sheet.getRange(row, loanIdCol).getValue()).trim() : "";
+        var equipIdCol = _findHeaderCol(headers, "equipment_id", ["裝備代號", "裝備編號", "器材編號"]) + 1;
+        var equipId = equipIdCol > 0 ? String(sheet.getRange(row, equipIdCol).getValue()).trim() : "";
+        var qtyCol = _findHeaderCol(headers, "quantity", ["借用數量", "數量"]) + 1;
+        var qty = qtyCol > 0 ? (parseInt(sheet.getRange(row, qtyCol).getValue(), 10) || 1) : 1;
+
+        if (loanId) {
+          // 更新 Supabase loans 狀態
+          _supabasePatch("loans", { id: "eq." + loanId }, { status: "已歸還 Returned" });
+
+          // 若有裝備代號，回補 Supabase equipments 庫存
+          if (equipId) {
+            var eqData = _supabaseGet("equipments", { id: "eq." + equipId, select: "id,stock_available" });
+            if (eqData && eqData.length > 0) {
+              var currentStock = parseInt(eqData[0].stock_available, 10) || 0;
+              var newStock = currentStock + qty;
+              _supabasePatch("equipments", { id: "eq." + equipId }, { stock_available: newStock });
+              Logger.log("✅ 已將裝備 " + equipId + " 庫存回補 " + qty + " 件至 " + newStock);
+            }
+
+            // 同步試算表 Equipments 剩餘數量分頁
+            var equipSheet = e.source.getSheetByName("Equipments") || e.source.getSheetByName("器材清單");
+            if (equipSheet) {
+              var eData = equipSheet.getDataRange().getValues();
+              var eH = eData[0];
+              var eIdIdx = _findHeaderCol(eH, "id", ["裝備代號", "裝備編號"]);
+              var eStockIdx = _findHeaderCol(eH, "stock_available", ["剩餘數量", "庫存"]);
+              if (eIdIdx > -1 && eStockIdx > -1) {
+                for (var r = 1; r < eData.length; r++) {
+                  if (String(eData[r][eIdIdx]).trim() === equipId) {
+                    var sVal = parseInt(eData[r][eStockIdx], 10) || 0;
+                    equipSheet.getRange(r + 1, eStockIdx + 1).setValue(sVal + qty);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          try {
+            e.source.toast("✅ 裝備借用單 " + loanId + " 已標記歸還並回補庫存！", "歸還成功", 5);
+          } catch (tErr) {}
+        }
+      }
+    }
+    return;
+  }
+
+  // 3. Event_Signups / Signups / 報名名冊審核處理 (同步 Supabase，不主動發送推播通知)
+  var isSignupsSheet = sheetName.toLowerCase() === "event_signups" || sheetName === "Signups" || sheetName.indexOf("報名") > -1;
+  if (isSignupsSheet) {
+    var reviewCol = _findHeaderCol(headers, "review_status", ["審核結果", "錄取狀態"]) + 1;
+    if (reviewCol > 0 && col === reviewCol) {
+      var signupIdCol = _findHeaderCol(headers, "id", ["專屬碼", "報名編號", "signup_id"]) + 1;
+      var signupId = signupIdCol > 0 ? String(sheet.getRange(row, signupIdCol).getValue()).trim() : "";
+
+      if (signupId) {
+        _supabasePatch("event_signups", { id: "eq." + signupId }, { review_status: newValue });
+        Logger.log("⚡ [試算表審核同步] 已同步報名紀錄 " + signupId + " 審核結果為: " + newValue + " (不發送推播)");
+        try {
+          e.source.toast("✅ 報名審核結果 (" + newValue + ") 已同步至 Supabase！", "審核更新", 5);
+        } catch (tErr) {}
+      }
+    }
+    return;
+  }
+}
+
+/**
+ * 安裝試算表即時編輯觸發器 (Installable Trigger)
+ */
+function setupSpreadsheetEditTrigger() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet() || _getSpreadsheet();
+  if (!ss) {
+    Logger.log("❌ 找不到主試算表，無法安裝觸發器");
+    return;
+  }
+
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === "handleSpreadsheetEdit") {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+
+  ScriptApp.newTrigger("handleSpreadsheetEdit")
+    .forSpreadsheet(ss)
+    .onEdit()
+    .create();
+
+  Logger.log("✅ 已成功安裝 handleSpreadsheetEdit 可安裝觸發器！");
+  try {
+    SpreadsheetApp.getUi().alert("安裝成功", "✅ 已成功安裝試算表即時編輯觸發器！\n未來在 Payments、Loans 或 Signups 分頁修改狀態，將自動即時同步 Supabase！", SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {}
 }
 
 // ==============================================================================
