@@ -393,13 +393,14 @@ function Payment({ userId }: { userId: string }) {
       };
 
       // ⚡ 1. 100% 直連 Supabase 繳費申報 (< 50ms)
-      let sbResult: { success: boolean; paymentId?: string; verifyToken?: string } = { success: false };
+      let sbResult: { success: boolean; paymentId?: string; verifyToken?: string; error?: string } = { success: false };
       if (userId && userId !== 'TEST_USER_ID') {
         try {
           sbResult = await submitPaymentToSupabase(userId, detailsPayload);
           sbSubmitted = sbResult.success;
-        } catch (sbErr) {
-          console.warn('[Payment] Supabase 提交例外:', sbErr);
+        } catch (sbErr: any) {
+          console.error('[Payment] Supabase 提交例外:', sbErr);
+          sbResult = { success: false, error: sbErr?.message || String(sbErr) };
         }
       } else {
         sbSubmitted = true;
@@ -475,14 +476,16 @@ function Payment({ userId }: { userId: string }) {
           }
         }
       } else {
-        alert(t('payment.alert.submitFailed', { message: t('payment.alert.contactAdmin') }));
+        const fullErrMsg = sbResult.error || '未取得具體失敗原因，請檢查 Supabase RPC 狀態';
+        console.error('[Payment] 申報失敗:', fullErrMsg);
+        alert(`❌ 申報失敗：${fullErrMsg}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('申報異常:', err);
       if (sbSubmitted) {
         setSubmitted(true);
       } else {
-        alert(t('payment.error.networkError'));
+        alert(`❌ 申報異常：${err?.message || String(err)}`);
       }
     } finally {
       setIsSubmitting(false);

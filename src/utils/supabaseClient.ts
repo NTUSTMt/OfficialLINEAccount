@@ -455,8 +455,9 @@ export const fetchUnpaidPaymentsFromSupabase = async (userId: string): Promise<S
 export const submitPaymentToSupabase = async (
   userId: string,
   details: PaymentSubmitDetails
-): Promise<{ success: boolean; paymentId?: string; verifyToken?: string }> => {
-  if (!supabase || !userId) return { success: false };
+): Promise<{ success: boolean; paymentId?: string; verifyToken?: string; error?: string }> => {
+  if (!supabase) return { success: false, error: '未初始化 Supabase Client' };
+  if (!userId) return { success: false, error: '缺少使用者 LINE ID (userId 為空)' };
 
   try {
     const { data, error } = await supabase.rpc('submit_payment_rpc', {
@@ -465,8 +466,14 @@ export const submitPaymentToSupabase = async (
     });
 
     if (error) {
-      console.warn('[Supabase] 提交繳費對帳失敗:', error.message);
-      return { success: false };
+      console.error('[Supabase] 提交繳費對帳失敗:', error);
+      return { success: false, error: `${error.message} (代碼: ${error.code || '未知'}, 細節: ${error.details || '無'})` };
+    }
+
+    if (!data || data.success === false) {
+      const dbErr = data?.error || '資料庫未回傳成功識別碼 (請確認 Supabase SQL 腳本是否已執行)';
+      console.error('[Supabase] RPC 回傳失敗狀態:', data);
+      return { success: false, error: dbErr };
     }
 
     console.log('%c⚡ [DataSource: Supabase] 繳費申報已極速送出！', 'color: #10b981; font-weight: bold;', data);
@@ -475,9 +482,9 @@ export const submitPaymentToSupabase = async (
       paymentId: data?.payment_id,
       verifyToken: data?.verify_token
     };
-  } catch (err) {
-    console.warn('[Supabase] 提交繳費對帳例外:', err);
-    return { success: false };
+  } catch (err: any) {
+    console.error('[Supabase] 提交繳費對帳例外:', err);
+    return { success: false, error: err?.message || String(err) };
   }
 };
 

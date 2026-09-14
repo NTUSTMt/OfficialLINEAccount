@@ -4,9 +4,42 @@
 -- 說明：請至 Supabase 控制台 > SQL Editor 貼上執行此腳本即可一鍵完成部署
 -- ==============================================================================
 
--- 1. 在 payments 資料表新增 verify_token 欄位與索引 (安全防偽金鑰)
+-- 1. 確保 payments 表具備 verify_token 欄位
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS verify_token TEXT;
 CREATE INDEX IF NOT EXISTS idx_payments_verify_token ON payments(verify_token);
+
+-- 1.1 確保 payment_status_enum 列舉型別與隱式轉換 (徹底防禦 text 轉型失敗)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status_enum') THEN
+        CREATE TYPE payment_status_enum AS ENUM (
+            '已繳費 Paid',
+            '待確認 Checking',
+            '未繳費 Unpaid'
+        );
+    END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION text_to_payment_status_enum(val text)
+RETURNS payment_status_enum AS $cast$
+BEGIN
+    IF val IS NULL OR trim(val) = '' THEN
+        RETURN '未繳費 Unpaid'::payment_status_enum;
+    ELSIF val LIKE '%已繳費%' OR val LIKE '%Paid%' THEN
+        RETURN '已繳費 Paid'::payment_status_enum;
+    ELSIF val LIKE '%待確認%' OR val LIKE '%Checking%' THEN
+        RETURN '待確認 Checking'::payment_status_enum;
+    ELSE
+        RETURN '未繳費 Unpaid'::payment_status_enum;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    RETURN '未繳費 Unpaid'::payment_status_enum;
+END;
+$cast$ LANGUAGE plpgsql IMMUTABLE;
+
+DROP CAST IF EXISTS (text AS payment_status_enum);
+CREATE CAST (text AS payment_status_enum)
+WITH FUNCTION text_to_payment_status_enum(text) AS IMPLICIT;
 
 -- 2. 升級 submit_payment_rpc 函式：申報時自動生成 32 字元隨機 verify_token 並回傳
 CREATE OR REPLACE FUNCTION submit_payment_rpc(
@@ -36,7 +69,7 @@ DECLARE
     i INTEGER;
 BEGIN
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
-        RAISE EXCEPTION '缺少必要的 line_user_id 參數';
+        RETURN jsonb_build_object('success', FALSE, 'error', '缺少必要的 line_user_id 參數');
     END IF;
 
     v_selected_ids := COALESCE(p_details->'selectedIds', '[]'::jsonb);
@@ -50,6 +83,12 @@ BEGIN
     IF v_member_name = '' THEN
         SELECT name INTO v_member_name FROM members WHERE line_user_id = p_line_user_id;
     END IF;
+
+    -- 🛡️ 防禦性確保 members 存在此使用者 (防止 payments_line_user_id_fkey 外鍵違規)
+    INSERT INTO members (line_user_id, name, created_at, updated_at)
+    VALUES (p_line_user_id, COALESCE(NULLIF(v_member_name, ''), '山友'), NOW(), NOW())
+    ON CONFLICT (line_user_id) DO UPDATE
+    SET name = COALESCE(NULLIF(EXCLUDED.name, ''), members.name);
 
     -- 生成唯一繳費單號 PAY_YYYYMMDD_HH24MISS_xxx
     v_payment_id := 'PAY_' || to_char(NOW(), 'YYYYMMDD_HH24MISS_') || lpad(floor(random() * 1000)::text, 3, '0');
@@ -72,7 +111,7 @@ BEGIN
         -- A. 社費
         IF v_item_id = 'fee_membership' THEN
             UPDATE members 
-            SET payment_status = '待確認 Checking',
+            SET payment_status = text_to_payment_status_enum('待確認 Checking'),
                 updated_at = NOW()
             WHERE line_user_id = p_line_user_id;
 
@@ -87,7 +126,7 @@ BEGIN
             v_event_id := substring(v_item_id from 5);
 
             UPDATE event_signups 
-            SET payment_status = '待確認 Checking',
+            SET payment_status = text_to_payment_status_enum('待確認 Checking'),
                 updated_at = NOW()
             WHERE line_user_id = p_line_user_id AND event_id = v_event_id;
 
@@ -99,7 +138,7 @@ BEGIN
             v_loan_id := substring(v_item_id from 4);
 
             UPDATE loans 
-            SET payment_status = '待確認 Checking',
+            SET payment_status = text_to_payment_status_enum('待確認 Checking'),
                 updated_at = NOW()
             WHERE line_user_id = p_line_user_id AND id = v_loan_id;
 
@@ -149,6 +188,11 @@ BEGIN
         'payment_id', v_payment_id,
         'verify_token', v_verify_token,
         'items', array_to_string(v_item_labels, ', ')
+    );
+EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object(
+        'success', FALSE,
+        'error', '資料庫處理失敗: ' || SQLERRM || ' (SQLSTATE: ' || SQLSTATE || ')'
     );
 END;
 $$;
@@ -263,6 +307,11 @@ BEGIN
         'items', COALESCE(v_payment.type, '社團相關費用'),
         'lineUserId', v_payment.line_user_id,
         'message', '核銷成功！系統已自動連動更新對應之報名與租借狀態'
+    );
+EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object(
+        'success', FALSE,
+        'error', '核銷處理失敗: ' || SQLERRM || ' (SQLSTATE: ' || SQLSTATE || ')'
     );
 END;
 $$;
