@@ -168,6 +168,32 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
+  // 5.2 小岳助理使用說明 (支援「小岳助理說明」、「小岳助理指南」、「小岳說明」、「小岳指南」、「AI Guide」)
+  if (
+    queryText.indexOf("小岳助理說明") > -1 ||
+    queryText.indexOf("小岳助理指南") > -1 ||
+    queryText.indexOf("小岳說明") > -1 ||
+    queryText.indexOf("小岳指南") > -1 ||
+    lowerQueryText.indexOf("ai guide") > -1
+  ) {
+    var aiGuideMsg = "🏔️ 【小岳助理使用指南 / AI Assistant Guide】\n" +
+      "─────────────\n" +
+      "我是台科登山社的 AI 助理「小岳」！很高興為大家服務！\n\n" +
+      "💬 【如何使用 How to Use】\n" +
+      "1. 個人 1 對 1 聊天室：\n" +
+      "   • 直接輸入任何登山相關問題即可！\n" +
+      "   • 例如：「百岳新手推薦哪座山？」、「裝備該怎麼借？」、「睡袋要怎麼選？」\n\n" +
+      "2. LINE 群組中使用：\n" +
+      "   • 在群組中請「@小岳助理」並輸入您的問題。\n" +
+      "   • 例如：「@小岳助理 請問這次活動費用多少？」\n\n" +
+      "💡 貼心提醒：\n" +
+      "若需要報名活動、租借裝備或查看個人訂單，歡迎直接點擊下方圖文選單（Rich Menu）探索各項服務喔！\n" +
+      "─────────────\n" +
+      "Feel free to ask climbing questions directly in 1-on-1 chat, or tag @小岳助理 in group chats!";
+    _replyMessage(replyToken, aiGuideMsg);
+    return;
+  }
+
   // 6. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
   if (GEMINI_API_KEY) {
     var aiReply = _handleGeminiChat(userId, queryText);
@@ -177,8 +203,22 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     }
   }
 
-  // 若無特定處理，回傳友善提示（群組中若有召喚但未辨識且 AI 未回時才提示）
-  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！\n─────────────\nHello! Please use the rich menu below to explore Events, Equipment Loan, or Dashboard. If you have any questions, feel free to leave a message for the officers!");
+  // 7. 防刷屏過濾：僅在使用者主動發送問候或詢問選單時提示，一般聊天不重複洗版
+  var isGreetingOrHelp = (
+    queryText === "嗨" || queryText === "哈囉" || queryText === "你好" || queryText === "您好" ||
+    lowerQueryText === "hi" || lowerQueryText === "hello" || lowerQueryText === "hey" ||
+    queryText === "選單" || lowerQueryText === "menu" || lowerQueryText === "help" || queryText === "說明"
+  );
+  if (isGreetingOrHelp) {
+    _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！\n─────────────\nHello! Please use the rich menu below to explore Events, Equipment Loan, or Dashboard. If you have any questions, feel free to leave a message for the officers!");
+    return;
+  }
+
+  // 群組中若已召喚 @小岳助理 但未辨識出特殊指令，給予簡潔回應；私聊一般訊息則保持靜默不洗版
+  if (isGroup && isMentioned) {
+    _replyMessage(replyToken, "小岳收到您的訊息囉！若需查詢特定功能，歡迎在群組輸入「幹部系統」或使用下方選單探索社團各項服務！");
+    return;
+  }
 }
 
 /**
@@ -307,18 +347,18 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
       muteHttpExceptions: true
     });
 
-    // 2.1 提取繳費與社員核心資訊 (確保後續子項目連動與推播均能正常存取)
+    // 2.1 提取繳費與社員核心資訊 (優先讀取 payments.type 真實欄位)
     var targetUserId = payment.line_user_id || payment.userId || "";
     var targetUserName = payment.name || "社員";
     var totalAmount = payment.amount || payment.total_amount || 0;
-    var selectedItems = payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團相關費用");
+    var selectedItems = payment.type || (payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團活動/裝備費用"));
 
     // 2.5 連動更新 Supabase 對應子項目繳費狀態 (活動報名、社費、裝備租借)
     var selTypes = payment.selected_types || [];
     if (typeof selTypes === 'string') {
       try { selTypes = JSON.parse(selTypes); } catch (e) { selTypes = [selTypes]; }
     }
-    var itemsStr = String(payment.items || "") + " " + String(payment.selected_names || "");
+    var itemsStr = String(payment.type || "") + " " + String(payment.items || "") + " " + String(payment.selected_names || "");
 
     // A. 活動報名連動 (若含有活動 ID 或申報項目包含活動)
     var targetEvtId = payment.target_event_id || payment.event_id;
@@ -380,7 +420,7 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
     var targetUserId = payment.line_user_id;
     var targetUserName = payment.name || "社員";
     var totalAmount = payment.amount || payment.total_amount || 0;
-    var selectedItems = payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團相關費用");
+    var selectedItems = payment.type || (payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團活動/裝備費用"));
 
     if (targetUserId && targetUserId.indexOf("U") === 0) {
       var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +

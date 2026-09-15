@@ -419,6 +419,9 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
 }
 
 function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown; userId: string; displayName: string; pictureUrl: string } }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // 必須用 useState 初始化：liff.init() 完成後 LIFF SDK 會清除 URL 的 liff.state 參數，需在初始化前鎖定初始路徑
   // 若每次 render 重新計算，loading→false 的重新渲染時會找不到 liff.state 而 fallback 到 /borrow
   const [redirectPath] = useState(() => getInitialRedirectPath());
@@ -427,6 +430,19 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
     const cached = getCache<boolean>(`officer_status_${liffInit.userId}`);
     return cached === true;
   });
+
+  // ⭐️ 雙平台核銷跳轉保證：若偵測到 liff.state 為 /confirm-payment，立即無條件強制導向正確路由 (防止停在 /dashboard 或 /borrow)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    let statePath = searchParams.get('liff.state');
+    if (!statePath && window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      statePath = hashParams.get('liff.state');
+    }
+    if (statePath && statePath.startsWith('/confirm-payment') && !location.pathname.startsWith('/confirm-payment')) {
+      navigate(statePath, { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     let ignore = false;
@@ -473,8 +489,8 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
 
   return (
     <div className="router-wrapper" style={{ position: 'relative' }}>
-      {/* 載入完成後渲染全域導航頭貼選單 */}
-      {liffInit.userId && (
+      {/* 載入完成後渲染全域導航頭貼選單 (核銷頁面豁免) */}
+      {!location.pathname.startsWith('/confirm-payment') && liffInit.userId && (
         <GlobalHeader pictureUrl={liffInit.pictureUrl} displayName={liffInit.displayName} isOfficer={isOfficer} />
       )}
 
@@ -558,6 +574,12 @@ function App() {
         if (!statePath && window.location.hash) {
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
           statePath = hashParams.get('liff.state') || '';
+        }
+
+        // ⭐️ 核銷專用直通通道：完全免連線 LINE LIFF，秒開渲染 (電腦、手機外部瀏覽器暢通無阻)
+        if (path.includes('/confirm-payment') || statePath.includes('/confirm-payment')) {
+          setLiffInit({ loading: false, error: null, userId: '', displayName: '', pictureUrl: '' });
+          return;
         }
 
         if (path.includes('/register') || statePath.includes('/register')) {

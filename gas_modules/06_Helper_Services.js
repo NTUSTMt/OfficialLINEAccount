@@ -353,7 +353,20 @@ function _handleNotifyOfficersPayment(json) {
 
     var verifyToken = details.verifyToken || json.verifyToken || "";
 
-    // ⭐️ 免 Google 帳號登入衝突：優先採用社團專屬 Web / LIFF 單鍵核銷連結 (完全不需要登入任何 Google 帳號)
+    // ⭐️ 免 Google/LINE 帳號登入衝突：優先採用社團專屬 Web 單鍵核銷連結 (電腦、手機瀏覽器秒開秒核銷，完全不需要登入任何帳號)
+    var frontendWebUrl = "";
+    try {
+      var props = (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties) ? PropertiesService.getScriptProperties() : null;
+      frontendWebUrl = (props ? props.getProperty('FRONTEND_WEB_URL') : null) || (typeof FRONTEND_WEB_URL !== 'undefined' ? FRONTEND_WEB_URL : "") || (typeof DEFAULT_FRONTEND_WEB_URL !== 'undefined' ? DEFAULT_FRONTEND_WEB_URL : "");
+    } catch (eFw) {}
+    if (!frontendWebUrl) {
+      frontendWebUrl = "https://equipments-seven.vercel.app";
+    }
+
+    var webVerifyLink = paymentId
+      ? (frontendWebUrl + "/confirm-payment?paymentId=" + encodeURIComponent(paymentId) + (verifyToken ? "&token=" + encodeURIComponent(verifyToken) : ""))
+      : "";
+
     var liffChannelId = (typeof LIFF_CHANNEL_ID !== 'undefined' ? LIFF_CHANNEL_ID : '2009217429');
     var liffVerifyLink = paymentId
       ? ("https://liff.line.me/" + liffChannelId + "-jvj3ydDT?liff.state=" + encodeURIComponent("/confirm-payment?paymentId=" + paymentId + (verifyToken ? "&token=" + verifyToken : "")))
@@ -373,12 +386,12 @@ function _handleNotifyOfficersPayment(json) {
       } catch (e2) {}
     }
 
-    // 備用 GAS 網址 (僅在 LIFF 網址不可用時作為備援)
+    // 備用 GAS 網址 (僅在 Web / LIFF 網址不可用時作為備援)
     var gasVerifyLink = (webServiceUrl && paymentId)
       ? (webServiceUrl + "?action=confirm_payment_web&paymentId=" + encodeURIComponent(paymentId) + (verifyToken ? "&token=" + encodeURIComponent(verifyToken) : ""))
       : "";
 
-    var verifyLink = liffVerifyLink || gasVerifyLink;
+    var verifyLink = webVerifyLink || liffVerifyLink || gasVerifyLink;
 
     // 1. 推播給幹部管理群組
     var adminMsg = "【💳 幹部通知：新繳費申報】\n\n" +
@@ -469,7 +482,7 @@ function _handleNotifyPaymentConfirmed(json) {
     var paymentId = json.paymentId || "";
     var userName = json.userName || "社員";
     var amount = json.amount || 0;
-    var items = json.items || "社團相關費用";
+    var items = json.items || json.type || "社團活動/裝備費用";
     var lineUserId = json.lineUserId || "";
     var confirmedBy = json.confirmedBy || "Email 單鍵核銷";
 

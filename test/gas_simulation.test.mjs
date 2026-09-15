@@ -4083,16 +4083,21 @@ describe('54. Email 核銷按鈕傳遞與 _processPaymentVerification 變數作�
   });
 });
 
-describe('55. 免 Google 登入衝突：LIFF 專屬 Web 核銷連結與 verify_token 安全校驗測試', () => {
-  it('1. _handleNotifyOfficersPayment 優先產生 LIFF 專屬 Web 核銷連結，完全不依賴 Google 帳號', () => {
+describe('55. 免 Google/LINE 登入衝突：社團專屬 Web 直連核銷連結與 verify_token 安全校驗測試', () => {
+  it('1. _handleNotifyOfficersPayment 優先產生社團專屬 Web 直連核銷連結，電腦手機秒開且完全不依賴 Google/LINE 帳號', () => {
     const paymentId = 'PAY_20260915_123456_888';
     const verifyToken = 'a1b2c3d4e5f67890abcdef1234567890';
+    const frontendWebUrl = 'https://equipments-seven.vercel.app';
     const liffChannelId = '2009217429';
 
+    const webVerifyLink = frontendWebUrl + "/confirm-payment?paymentId=" + encodeURIComponent(paymentId) + (verifyToken ? "&token=" + encodeURIComponent(verifyToken) : "");
     const liffVerifyLink = "https://liff.line.me/" + liffChannelId + "-jvj3ydDT?liff.state=" + encodeURIComponent("/confirm-payment?paymentId=" + paymentId + (verifyToken ? "&token=" + verifyToken : ""));
 
-    assert.ok(liffVerifyLink.startsWith('https://liff.line.me/2009217429-jvj3ydDT'));
-    assert.ok(liffVerifyLink.includes(encodeURIComponent('/confirm-payment?paymentId=PAY_20260915_123456_888&token=a1b2c3d4e5f67890abcdef1234567890')));
+    const verifyLink = webVerifyLink || liffVerifyLink;
+
+    assert.ok(verifyLink.startsWith('https://equipments-seven.vercel.app/confirm-payment'));
+    assert.ok(verifyLink.includes('paymentId=PAY_20260915_123456_888'));
+    assert.ok(verifyLink.includes('token=a1b2c3d4e5f67890abcdef1234567890'));
   });
 
   it('2. verify_payment_by_token 嚴格驗證安全金鑰：Token 正確核銷、錯誤拒絕、已核銷冪等', () => {

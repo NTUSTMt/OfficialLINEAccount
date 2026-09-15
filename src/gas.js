@@ -24,6 +24,8 @@ var SUPABASE_URL = PropertiesService.getScriptProperties().getProperty('SUPABASE
 var SUPABASE_SERVICE_ROLE_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_ROLE_KEY');
 var DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
 var WEB_APP_URL = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL') || DEFAULT_WEB_APP_URL;
+var DEFAULT_FRONTEND_WEB_URL = 'https://equipments-seven.vercel.app';
+var FRONTEND_WEB_URL = PropertiesService.getScriptProperties().getProperty('FRONTEND_WEB_URL') || DEFAULT_FRONTEND_WEB_URL;
 
 // 🛡️ LINE ID Token (JWT) 數位簽章驗證核心
 function verifyLineIdToken(idToken, expectedUserId) {
@@ -550,6 +552,32 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
+  // 5.2 小岳助理使用說明 (支援「小岳助理說明」、「小岳助理指南」、「小岳說明」、「小岳指南」、「AI Guide」)
+  if (
+    queryText.indexOf("小岳助理說明") > -1 ||
+    queryText.indexOf("小岳助理指南") > -1 ||
+    queryText.indexOf("小岳說明") > -1 ||
+    queryText.indexOf("小岳指南") > -1 ||
+    lowerQueryText.indexOf("ai guide") > -1
+  ) {
+    var aiGuideMsg = "🏔️ 【小岳助理使用指南 / AI Assistant Guide】\n" +
+      "─────────────\n" +
+      "我是台科登山社的 AI 助理「小岳」！很高興為大家服務！\n\n" +
+      "💬 【如何使用 How to Use】\n" +
+      "1. 個人 1 對 1 聊天室：\n" +
+      "   • 直接輸入任何登山相關問題即可！\n" +
+      "   • 例如：「百岳新手推薦哪座山？」、「裝備該怎麼借？」、「睡袋要怎麼選？」\n\n" +
+      "2. LINE 群組中使用：\n" +
+      "   • 在群組中請「@小岳助理」並輸入您的問題。\n" +
+      "   • 例如：「@小岳助理 請問這次活動費用多少？」\n\n" +
+      "💡 貼心提醒：\n" +
+      "若需要報名活動、租借裝備或查看個人訂單，歡迎直接點擊下方圖文選單（Rich Menu）探索各項服務喔！\n" +
+      "─────────────\n" +
+      "Feel free to ask climbing questions directly in 1-on-1 chat, or tag @小岳助理 in group chats!";
+    _replyMessage(replyToken, aiGuideMsg);
+    return;
+  }
+
   // 6. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
   if (GEMINI_API_KEY) {
     var aiReply = _handleGeminiChat(userId, queryText);
@@ -559,8 +587,22 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     }
   }
 
-  // 若無特定處理，回傳友善提示（群組中若有召喚但未辨識且 AI 未回時才提示）
-  _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！\n─────────────\nHello! Please use the rich menu below to explore Events, Equipment Loan, or Dashboard. If you have any questions, feel free to leave a message for the officers!");
+  // 7. 防刷屏過濾：僅在使用者主動發送問候或詢問選單時提示，一般聊天不重複洗版
+  var isGreetingOrHelp = (
+    queryText === "嗨" || queryText === "哈囉" || queryText === "你好" || queryText === "您好" ||
+    lowerQueryText === "hi" || lowerQueryText === "hello" || lowerQueryText === "hey" ||
+    queryText === "選單" || lowerQueryText === "menu" || lowerQueryText === "help" || queryText === "說明"
+  );
+  if (isGreetingOrHelp) {
+    _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！\n─────────────\nHello! Please use the rich menu below to explore Events, Equipment Loan, or Dashboard. If you have any questions, feel free to leave a message for the officers!");
+    return;
+  }
+
+  // 群組中若已召喚 @小岳助理 但未辨識出特殊指令，給予簡潔回應；私聊一般訊息則保持靜默不洗版
+  if (isGroup && isMentioned) {
+    _replyMessage(replyToken, "小岳收到您的訊息囉！若需查詢特定功能，歡迎在群組輸入「幹部系統」或使用下方選單探索社團各項服務！");
+    return;
+  }
 }
 
 /**
@@ -690,16 +732,16 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
     });
 
     // 2.5 連動更新 Supabase 對應子項目繳費狀態 (活動報名、社費、裝備租借)
-    var targetUserId = payment.line_user_id;
+    var targetUserId = payment.line_user_id || payment.userId || "";
     var targetUserName = payment.name || "社員";
     var totalAmount = payment.amount || payment.total_amount || 0;
-    var selectedItems = payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團相關費用");
+    var selectedItems = payment.type || (payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團活動/裝備費用"));
 
     var selTypes = payment.selected_types || [];
     if (typeof selTypes === 'string') {
       try { selTypes = JSON.parse(selTypes); } catch (e) { selTypes = [selTypes]; }
     }
-    var itemsStr = String(payment.items || "") + " " + String(payment.selected_names || "");
+    var itemsStr = String(payment.type || "") + " " + String(payment.items || "") + " " + String(payment.selected_names || "");
 
     // A. 活動報名連動 (若含有活動 ID 或申報項目包含活動)
     var targetEvtId = payment.target_event_id || payment.event_id;
@@ -1534,6 +1576,14 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
+          "label": "🤖 小岳助理說明 AI Guide",
+          "text": "小岳助理說明"
+        }
+      }, {
+        "type": "button",
+        "style": "secondary",
+        "action": {
+          "type": "message",
           "label": "👤 幹部是誰 Officers",
           "text": "幹部是誰 Officers"
         }
@@ -1733,8 +1783,17 @@ function handleSignup(replyToken, userId, eventId, ss) {
 
 
 
-    // 6. 回傳確認收據
-    _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n活動 (Event)：\n" + evName + "\n活動代號 (Event ID)：" + eventId + "\n報名專屬碼 (Signup Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的報名資料。\n\n⚠️ 【重要提醒 / Important Reminder】\n由於部分戶外行程有人數安全限制，此階段為「報名登記」。幹部將進行體能評估與審核，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n─────────────\nDue to safety and team size limits, this stage is registration review. Officers will assess fitness qualifications, and confirmed/waitlisted rosters will be announced via this LINE account!");
+    // 6. 回傳確認收據 (中英完整雙語)
+    _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n" +
+      "活動 (Event)：\n" + evName + "\n" +
+      "活動代號 (Event ID)：" + eventId + "\n" +
+      "報名專屬碼 (Signup Code)：" + signupCode + "\n\n" +
+      p.name + "，我們已收到您的報名資料。\n" +
+      "Dear " + p.name + ", we have received your application.\n\n" +
+      "⚠️ 【重要提醒 / Important Reminder】\n" +
+      "此階段為「報名登記與資格審核」，幹部將進行體能評估與篩選，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n" +
+      "─────────────\n" +
+      "This stage is registration & review. Officers will evaluate qualifications, and admission status (Confirmed/Waitlisted) will be notified to you via this LINE account!");
 
   } catch (err) {
     console.error("活動報名失敗:", err);
@@ -3802,7 +3861,20 @@ function _handleNotifyOfficersPayment(json) {
 
     var verifyToken = details.verifyToken || json.verifyToken || "";
 
-    // ⭐️ 免 Google 帳號登入衝突：優先採用社團專屬 Web / LIFF 單鍵核銷連結 (完全不需要登入任何 Google 帳號)
+    // ⭐️ 免 Google/LINE 帳號登入衝突：優先採用社團專屬 Web 單鍵核銷連結 (電腦、手機瀏覽器秒開秒核銷，完全不需要登入任何帳號)
+    var frontendWebUrl = "";
+    try {
+      var props = (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties) ? PropertiesService.getScriptProperties() : null;
+      frontendWebUrl = (props ? props.getProperty('FRONTEND_WEB_URL') : null) || (typeof FRONTEND_WEB_URL !== 'undefined' ? FRONTEND_WEB_URL : "") || (typeof DEFAULT_FRONTEND_WEB_URL !== 'undefined' ? DEFAULT_FRONTEND_WEB_URL : "");
+    } catch (eFw) {}
+    if (!frontendWebUrl) {
+      frontendWebUrl = "https://equipments-seven.vercel.app";
+    }
+
+    var webVerifyLink = paymentId
+      ? (frontendWebUrl + "/confirm-payment?paymentId=" + encodeURIComponent(paymentId) + (verifyToken ? "&token=" + encodeURIComponent(verifyToken) : ""))
+      : "";
+
     var liffChannelId = (typeof LIFF_CHANNEL_ID !== 'undefined' ? LIFF_CHANNEL_ID : '2009217429');
     var liffVerifyLink = paymentId
       ? ("https://liff.line.me/" + liffChannelId + "-jvj3ydDT?liff.state=" + encodeURIComponent("/confirm-payment?paymentId=" + paymentId + (verifyToken ? "&token=" + verifyToken : "")))
@@ -3822,12 +3894,12 @@ function _handleNotifyOfficersPayment(json) {
       } catch (e2) {}
     }
 
-    // 備用 GAS 網址 (僅在 LIFF 網址不可用時作為備援)
+    // 備用 GAS 網址 (僅在 Web / LIFF 網址不可用時作為備援)
     var gasVerifyLink = (webServiceUrl && paymentId)
       ? (webServiceUrl + "?action=confirm_payment_web&paymentId=" + encodeURIComponent(paymentId) + (verifyToken ? "&token=" + encodeURIComponent(verifyToken) : ""))
       : "";
 
-    var verifyLink = liffVerifyLink || gasVerifyLink;
+    var verifyLink = webVerifyLink || liffVerifyLink || gasVerifyLink;
 
     // 1. 推播給幹部管理群組
     var adminMsg = "【💳 幹部通知：新繳費申報】\n\n" +
@@ -3918,7 +3990,7 @@ function _handleNotifyPaymentConfirmed(json) {
     var paymentId = json.paymentId || "";
     var userName = json.userName || "社員";
     var amount = json.amount || 0;
-    var items = json.items || "社團相關費用";
+    var items = json.items || json.type || "社團活動/裝備費用";
     var lineUserId = json.lineUserId || "";
     var confirmedBy = json.confirmedBy || "Email 單鍵核銷";
 

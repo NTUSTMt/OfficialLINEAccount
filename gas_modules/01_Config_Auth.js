@@ -24,6 +24,8 @@ var SUPABASE_URL = PropertiesService.getScriptProperties().getProperty('SUPABASE
 var SUPABASE_SERVICE_ROLE_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_ROLE_KEY');
 var DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyexiWmltP2iXDFWNpxzsG33ChRmIYp8s5DeSc5P8uhfzkKW3VmcELAKDPQQ57Ei_LnTw/exec';
 var WEB_APP_URL = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL') || DEFAULT_WEB_APP_URL;
+var DEFAULT_FRONTEND_WEB_URL = 'https://equipments-seven.vercel.app';
+var FRONTEND_WEB_URL = PropertiesService.getScriptProperties().getProperty('FRONTEND_WEB_URL') || DEFAULT_FRONTEND_WEB_URL;
 
 // 🛡️ LINE ID Token (JWT) 數位簽章驗證核心
 function verifyLineIdToken(idToken, expectedUserId) {

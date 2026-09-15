@@ -3,11 +3,123 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.114` (v0.1.114)
+- **當前版本**：`0.1.120` (v0.1.120)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 220. 解決 5 大核心 Bug：小岳助理引導、消除重複刷屏、報名雙語英文化、幹部預設值修正與精確核銷項目 (v0.1.120)
+- **問題排查與根因分析 (Problem Identification & Root Cause)**：
+  1. **小岳助理指引需求**：尊重既有模型更新不更動 `04_Ai_Gemini.js`，但社員缺少召喚指引。
+  2. **LINE Bot 刷屏**：`02_LineBot_Webhook.js` 無差別對任何未辨識訊息或 AI 未回覆訊息重複噴出長文字選單提示。
+  3. **英文化不完全**：活動報名確認訊息中文語句夾雜、部分段落缺乏英文對照。
+  4. **全體社員皆為「幹部」**：`members` 表欄位設定了 `DEFAULT '幹部'`，新註冊者因未傳入 `officer_role` 自動被標記為幹部。
+  5. **核銷項目顯示「社團相關費用」**：GAS 讀取了不存在的 `payment.items`（正確為 `payment.type`），導致其永遠為 `undefined` 並 fallback 到「社團相關費用」。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  1. **更多服務擴充小岳指南 ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 在 `_buildMoreServicesFlex` 卡片新增「🤖 小岳助理說明 AI Guide」按鈕。
+     - 在 Webhook 新增 `小岳助理說明` 指令處理，回傳個人 1 對 1 與群組 `@小岳助理` 的完整雙語使用範例。
+  2. **消除無差別刷屏 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 移除每一句私聊對話無腦洗版選單文字的邏輯，改為僅在使用者主動發送問候（「嗨」、「你好」、「hello」、「menu」）時才提示。
+  3. **報名成功推播全面地道雙語 ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 重構 `handleSignup` 推播訊息，補齊 `Dear {name}, we have received your application.` 及英文版資格審核說明。
+  4. **根除 officer_role 預設幹部漏洞 ([supabase/fix_officer_role_and_items.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_officer_role_and_items.sql), [supabase/member_profile_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/member_profile_rpc.sql))**：
+     - 建立 SQL 腳本將 `members.officer_role` 預設值修正為 `NULL`，並清洗歷史非幹部成員的錯誤資料。
+     - 重寫 `save_member_profile` RPC，確保新成員註冊時 `officer_role` 嚴格為 `NULL`，僅有真正的幹部保留職稱。
+  5. **精準核銷項目聚合 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js), [supabase/verify_payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/verify_payment_rpc.sql))**：
+     - 修正欄位讀取為 `payment.type || payment.items`。
+     - 在 `submit_payment_rpc` 中將租借裝備自動自 `loan_items` 與 `equipments` 聚合名稱（例如 `🔹 裝備：雙人帳篷 x 1 (ORD_xxxx)`），徹底根除「社團相關費用」的空泛標籤。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **143/143 全數通過（37 test suites, 0 failures）**。
+  - 前端打包：`pnpm run build` 成功完成。
+
+### 219. 透過 OpenAPI Specification 全面同步 Live 資料庫真實結構與字典 (v0.1.119)
+- **需求背景與執行方式 (Background & Live Introspection)**：
+  - 為確保專案所有文件、Skills 與 Schema Dictionary 達到 100% 絕對真確，使用 `service_role` 安全權限直連 PostgREST OpenAPI Specification 端點 (`/rest/v1/`)。
+  - **嚴格落實「零資料存取（0 行數據）」原則**，純粹分析資料庫結構定義檔，保護社員個資安全。
+- **架構同步與落實細節 (Architecture Synchronization & Implementation)**：
+  1. **全面同步 [supabase/SCHEMA_DICTIONARY.md](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/SCHEMA_DICTIONARY.md)**：
+     - 正式收錄全 10 張資料表：`members` (29 欄位)、`officers` (9 欄位，確認 PK 為 `line_user_id`)、`events` (15 欄位)、`event_signups` (12 欄位，含 `notification_status`)、`equipments` (16 欄位)、`loans` (20 欄位，含 `total_fee`、`items` 快照)、`loan_items` (6 欄位)、`payments` (17 欄位，含 `verify_token`)、`reflections` (10 欄位) 與系統佇列 `sync_queue` (10 欄位)。
+     - 補充確認正式資料庫所有欄位資料型別、預設值、必填約束與自訂 ENUM 值。
+  2. **全面同步 [.agents/skills/club-business-workflows/SKILL.md](file:///Users/brianhung/Documents/OfficialLINEAccount/.agents/skills/club-business-workflows/SKILL.md)**：
+     - 更新資料表關聯與真實欄位描述（如 `officers.line_user_id` 作為主鍵、`payments.verify_token` 單鍵核銷密鑰）。
+     - 確認 `loans.status` 五大狀態與悲觀鎖扣減邏輯。
+  3. **品質檢驗 (Quality Assurance)**：
+     - 單元測試：`pnpm test` 143/143 全數通過（37 test suites, 0 failures）。
+     - 前端編譯：`pnpm run build` 成功建置。
+
+### 218. 精準校準專案 Skills 業務邏輯與資料庫 SSOT：對齊真實狀態機與列舉規範 (v0.1.118)
+- **需求背景與技術 PM 審查 (Technical PM Review)**：
+  - 依據 `/project-manager` 審查準則與使用者直接反饋，逐行核對既有程式碼（`Borrow.tsx`、`fix_equipment_loan_rpc.sql`、`cancel_rpc.sql`）與 [SCHEMA_DICTIONARY.md](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/SCHEMA_DICTIONARY.md)。
+  - 排查並修正先前草案中與現況不符之處：移除不存在的活動出席確認 (`attended`) 與活動人數上限 (`max_participants`)，並徹底對齊現行裝備借還流程與計費模型。
+- **架構校準與落實細節 (Architecture Alignment & Implementation)**：
+  1. **校準活動報名狀態機 (`club-business-workflows/SKILL.md`)**：
+     - 正式對齊 `event_signup_status_enum` 狀態流轉：`'審核中 Checking'` ➔ 幹部審核分發為 `'正取 Confirmed'` 或 `'備取 Waitlisted'` ➔ 款項核銷後推進為 `'正取（已繳費）Confirmed (Paid)'`。
+     - 明確註記活動無自動人數上限，完全由幹部依路線難度手動審核分配。
+  2. **校準裝備租借狀態機與計費模型 (`club-business-workflows/SKILL.md`)**：
+     - 狀態流轉完全對齊 `loans.status` 現實：`'待領取 To Be Collected'`（下單時悲觀鎖原子扣庫存）➔ `'租借中 Borrowed'` ➔ `'已歸還 Returned'`（驗收釋放庫存）或 `'已取消 Cancelled'` / `'已取消 (待退款)'`。
+     - 落實真實計費公式：2 天基本租金 (`price_2day`) + 續租每日加成 (`price_extra_day`)；社團出隊免租金 (0 元)，社員個人 5 折，非社員原價。
+  3. **校準資料庫列舉型別名稱 (`supabase-architecture/SKILL.md`)**：
+     - 將列舉型別精確修正為資料庫真實名稱：`event_signup_status_enum`、`payment_status_enum` 與 `equipment_category`，並提供隱式轉型函式說明。
+
+### 217. 建立專案 Agent 漸進揭露規範體系：輕量 Rules 與四大專業 Skills (v0.1.117)
+- **需求背景與目標 (Background & Objectives)**：
+  - 為使 AI Agent 在協助開發維護台科登山社專案時，能夠精確遵守專案規範（錯誤透明度、Trigger 防遞迴、WebKit 相容性），同時避免每次對話均大量消耗 Context Window Token。
+  - 經由 `/grill-me` 深入對焦，正式確立「Rules 硬性約束 + Skills 漸進揭露（Progressive Disclosure）」之雙層架構。
+- **架構設計與落實細節 (Architecture & Implementation)**：
+  1. **輕量 Rules 規範核心 (`.agents/rules/`)**：
+     - [error_handling.md](file:///Users/brianhung/Documents/OfficialLINEAccount/.agents/rules/error_handling.md)：強制透明報錯、PostgreSQL Trigger 防遞迴守衛 (`IF pg_trigger_depth() > 1`)、iOS WebKit `Load failed` 避坑原則。
+     - [development_standards.md](file:///Users/brianhung/Documents/OfficialLINEAccount/.agents/rules/development_standards.md)：明確規定檔案修改前授權原則、README 繁中同步維護、版本號遞增以及一律使用 `pnpm` 套件管理。
+     - [architecture_navigation.md](file:///Users/brianhung/Documents/OfficialLINEAccount/.agents/rules/architecture_navigation.md)：專案全局地圖與 Skills 調度指南，引導 Agent 依任務按需精準加載專業知識。
+  2. **四大專業領域知識庫 (`.agents/skills/`)**：
+     - `supabase-architecture`：涵蓋 Schema 設計、RPC 撰寫範例、Enum 類型安全轉換與交易原子性。
+     - `gas-linebot-integration`：涵蓋 GAS 六大模組架構職責、LINE Bot Webhook 快速回覆、Flex Message 樣板、Google Drive 檔案上傳與 Sync Worker 雙向同步鎖定機制。
+     - `liff-frontend-webkit`：涵蓋 React 19 + LIFF 生命週期、iOS WebKit 避坑架構（純資料直通 Supabase）、照片上傳例外處理、Mobile-First UI 與 i18n 多語系支援。
+     - `club-business-workflows`：涵蓋會員與幹部權限、活動報名候補與自動遞補、裝備借還與押金狀態機、繳費核銷與 LINE 廣播通知鏈路。
+
+### 216. Email 繳費確認無誤單鍵核銷雙平台修復：直連 Web 原生網址，電腦與手機免登入秒核銷 (v0.1.116)
+- **問題回報與根因排查 (Problem Identification & Root Causes)**：
+  1. **手機點 Email 按鈕無反應**：
+     - 使用者在手機點擊 Email 的「確認無誤」按鈕後，雖然開啟了 LINE 中的 LIFF，但「什麼事都沒發生」，幹部與使用者皆無推播訊息，Supabase 繳費狀態亦未更新。
+     - **根因**：Email 原先採用 LINE LIFF 連結 `https://liff.line.me/2009217429-jvj3ydDT?liff.state=...`。該 LIFF ID 在 LINE 後台對應之 Endpoint URL 為 `/dashboard`（個人主頁）。LINE 客戶端開啟時導向了 `/dashboard?liff.state=...`，而 React Router 的根路徑重定向邏輯僅在 `/` 觸發，導致頁面停留在 Dashboard，未進入 `/confirm-payment`，因而從未執行核銷。
+  2. **電腦開啟被擋下（出現無法瀏覽畫面）**：
+     - 使用者在電腦瀏覽器點擊 Email 按鈕時，出現被系統擋下、無法瀏覽的畫面。
+     - **根因**：LIFF 連結在電腦瀏覽器中缺少正確 LINE Client 上下文，跳轉 fallback 到預設路徑 `/borrow`（裝備租借頁面）。該頁面依社團規範設有「外部瀏覽器全螢幕鎖定防護 (`Borrow.tsx`)」，偵測到非 LINE 客戶端便直接阻擋。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  1. **Email 核銷按鈕全面改採社團專屬 Web 直連網址 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 新增 `FRONTEND_WEB_URL` 設定（預設直連 Vercel 前端：`https://equipments-seven.vercel.app`）。
+     - Email 綠色「✅ 確認無誤（點擊完成核銷）」按鈕與純文字核銷連結，全面採用：
+       `https://equipments-seven.vercel.app/confirm-payment?paymentId={paymentId}&token={verifyToken}`
+     - **100% 免登入 LINE、免登入 Google**：電腦 Chrome / Edge / Safari、手機 Safari / Chrome 或 LINE 內均可一鍵直連。
+  2. **前端路由雙重安全保護與自動轉址 ([src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx))**：
+     - **強制優先導向**：在 `AppContent` 頂層掛載檢測，若網址參數或 `liff.state` 包含 `/confirm-payment`，第一時間強制 `navigate(statePath, { replace: true })`，絕不被 `/dashboard` 或 `/borrow` 截胡。
+     - **LIFF 初始化豁免與秒開**：在 `initializeLiff` 中偵測若為 `/confirm-payment`，直接豁免 LINE LIFF 連線與登入等待（`loading: false`），電腦與手機均達到 0 毫秒極速載入。
+     - **乾淨獨立視圖**：核銷頁面豁免渲染 `GlobalHeader`，呈現專屬核銷卡片與安全驗證進度。
+  3. **核銷完成雙向推播與連動保證 ([src/pages/ConfirmPayment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/ConfirmPayment.tsx))**：
+     - 網頁直通 Supabase RPC `verify_payment_by_token` 完成驗證後，立即呼叫 GAS `notify_payment_confirmed`：
+       - 推播【🎉 繳費成功通知】至社員個人 LINE。
+       - 推播【💳 幹部通知：繳費單已完成核銷】至幹部管理群組。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **143/143 項測試全數通過（37 suites passed, 0 failures）**。
+  - 前端打包：`pnpm run build` 成功完成，ConfirmPayment 模組打包正常。
+
+### 215. 修復 PostgreSQL gen_random_bytes 擴充套件相依錯誤，改採核心內建 md5 生成安全 Token (v0.1.115)
+- **問題回報與根因排查 (Problem Identification & Root Causes)**：
+  - 前端透明印出具體錯誤：`❌ 申報失敗：資料庫處理失敗: function gen_random_bytes(integer) does not exist (SQLSTATE: 42883)`。
+  - **根本原因**：
+    - 在 [supabase/verify_payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/verify_payment_rpc.sql) 的 `submit_payment_rpc` 中，原先使用 `encode(gen_random_bytes(16), 'hex')` 來生成 32 字元的隨機核銷密鑰。
+    - `gen_random_bytes` 屬於 PostgreSQL 的 `pgcrypto` 擴充套件（Extension）。由於部分 Supabase 專案預設未開啟 `pgcrypto`，或函式位於 `extensions` schema 下而未被 `public` search_path 找到，導致 PostgreSQL 拋出 `42883`（function does not exist）異常。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  1. **零套件相依：改採 PostgreSQL 核心內建之 `md5(...)` 函式**：
+     - 將 token 生成演算法改為：
+       `v_verify_token := md5(random()::text || clock_timestamp()::text || p_line_user_id || v_payment_id);`
+     - `md5` 為 PostgreSQL 核心標準函式，100% 免安裝任何 Extension，運算極速且永遠回傳長度為 32 字元的安全隨機 hex 字串，徹底根絕 `42883` 錯誤。
+  2. **錯誤透明度驗證通過**：
+     - 正因落實規範「錯誤訊息一律直接具體印出」，使用者本次遇到問題時，直接截圖回報了 `function gen_random_bytes(integer) does not exist (SQLSTATE: 42883)`，使問題能在 1 秒內精確定位並修復。
+- **測試與驗證 (Verification)**：
+  - 單元測試：`pnpm test` **143/143 項測試全數通過（37 suites passed, 0 failures）**。
+  - 前端打包：`pnpm run build` 成功完成，0 錯誤。
 
 ### 214. 徹底解決 Google 帳號多重登入衝突：社團專屬 Web 免登入安全單鍵核銷系統 (v0.1.114)
 - **問題回報與根因排查 (Problem Identification & Root Causes)**：

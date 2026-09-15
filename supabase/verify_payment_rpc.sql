@@ -66,6 +66,7 @@ DECLARE
     v_note TEXT;
     v_expiry TEXT;
     v_member_name TEXT;
+    v_equip_names TEXT;
     i INTEGER;
 BEGIN
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
@@ -93,8 +94,8 @@ BEGIN
     -- 生成唯一繳費單號 PAY_YYYYMMDD_HH24MISS_xxx
     v_payment_id := 'PAY_' || to_char(NOW(), 'YYYYMMDD_HH24MISS_') || lpad(floor(random() * 1000)::text, 3, '0');
 
-    -- 生成 32 位元隨機安全憑證 (單次防偽核銷 Token)
-    v_verify_token := encode(gen_random_bytes(16), 'hex');
+    -- 🛡️ 生成 32 位元隨機安全憑證 (單次防偽核銷 Token，使用 PostgreSQL 核心內建 md5，免除 pgcrypto 相依性)
+    v_verify_token := md5(random()::text || clock_timestamp()::text || p_line_user_id || v_payment_id);
 
     -- 檢查是否包含社費
     FOR i IN 0 .. (jsonb_array_length(v_selected_ids) - 1) LOOP
@@ -152,7 +153,18 @@ BEGIN
                   AND total_rent > 0;
             END IF;
 
-            v_item_labels := array_append(v_item_labels, '🔹 裝備：' || v_loan_id || CASE WHEN v_has_membership THEN ' (社員5折)' ELSE '' END);
+            -- 查詢該筆租借訂單的實際裝備品項名稱與數量
+            SELECT string_agg(COALESCE(e.name, '裝備') || ' x ' || li.quantity::text, '、')
+            INTO v_equip_names
+            FROM loan_items li
+            LEFT JOIN equipments e ON e.id = li.equipment_id
+            WHERE li.loan_id = v_loan_id;
+
+            IF v_equip_names IS NOT NULL AND trim(v_equip_names) != '' THEN
+                v_item_labels := array_append(v_item_labels, '🔹 裝備：' || v_equip_names || ' (' || v_loan_id || ')' || CASE WHEN v_has_membership THEN ' (社員5折)' ELSE '' END);
+            ELSE
+                v_item_labels := array_append(v_item_labels, '🔹 裝備租借：' || v_loan_id || CASE WHEN v_has_membership THEN ' (社員5折)' ELSE '' END);
+            END IF;
         END IF;
     END LOOP;
 
@@ -244,7 +256,7 @@ BEGIN
             'paymentId', v_payment.id,
             'userName', COALESCE(v_payment.name, '社員'),
             'amount', v_payment.amount,
-            'items', COALESCE(v_payment.type, '社團相關費用'),
+            'items', COALESCE(NULLIF(v_payment.type, ''), '社團活動/裝備費用'),
             'lineUserId', v_payment.line_user_id,
             'message', '該繳費單先前已完成核銷 (Already Confirmed)'
         );
@@ -304,7 +316,7 @@ BEGIN
         'paymentId', v_payment.id,
         'userName', COALESCE(v_payment.name, '社員'),
         'amount', v_payment.amount,
-        'items', COALESCE(v_payment.type, '社團相關費用'),
+        'items', COALESCE(NULLIF(v_payment.type, ''), '社團活動/裝備費用'),
         'lineUserId', v_payment.line_user_id,
         'message', '核銷成功！系統已自動連動更新對應之報名與租借狀態'
     );

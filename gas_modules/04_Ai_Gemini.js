@@ -18,7 +18,7 @@ function _handleGeminiChat(userId, userQuery) {
       "【當前開放活動資訊】：\n" + eventsContext + "\n\n" +
       "【社團知識庫規章】：\n" + knowledgeBase + "\n";
 
-    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + GEMINI_API_KEY;
     var payload = {
       contents: [
         {

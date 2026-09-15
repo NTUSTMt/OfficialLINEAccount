@@ -515,6 +515,14 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
+          "label": "🤖 小岳助理說明 AI Guide",
+          "text": "小岳助理說明"
+        }
+      }, {
+        "type": "button",
+        "style": "secondary",
+        "action": {
+          "type": "message",
           "label": "👤 幹部是誰 Officers",
           "text": "幹部是誰 Officers"
         }
@@ -714,8 +722,17 @@ function handleSignup(replyToken, userId, eventId, ss) {
 
 
 
-    // 6. 回傳確認收據
-    _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n活動 (Event)：\n" + evName + "\n活動代號 (Event ID)：" + eventId + "\n報名專屬碼 (Signup Code)：" + signupCode + "\n\n" + p.name + "，我們已收到您的報名資料。\n\n⚠️ 【重要提醒 / Important Reminder】\n由於部分戶外行程有人數安全限制，此階段為「報名登記」。幹部將進行體能評估與審核，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n─────────────\nDue to safety and team size limits, this stage is registration review. Officers will assess fitness qualifications, and confirmed/waitlisted rosters will be announced via this LINE account!");
+    // 6. 回傳確認收據 (中英完整雙語)
+    _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n" +
+      "活動 (Event)：\n" + evName + "\n" +
+      "活動代號 (Event ID)：" + eventId + "\n" +
+      "報名專屬碼 (Signup Code)：" + signupCode + "\n\n" +
+      p.name + "，我們已收到您的報名資料。\n" +
+      "Dear " + p.name + ", we have received your application.\n\n" +
+      "⚠️ 【重要提醒 / Important Reminder】\n" +
+      "此階段為「報名登記與資格審核」，幹部將進行體能評估與篩選，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n" +
+      "─────────────\n" +
+      "This stage is registration & review. Officers will evaluate qualifications, and admission status (Confirmed/Waitlisted) will be notified to you via this LINE account!");
 
   } catch (err) {
     console.error("活動報名失敗:", err);

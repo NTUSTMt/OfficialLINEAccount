@@ -1,38 +1,48 @@
 -- ==============================================================================
--- 台科登山社社團系統：個人基本資料安全讀取與儲存 RPC 函式 (SECURITY DEFINER)
--- 目的：嚴格限定僅能讀寫本人資料，杜絕全體社員名冊與身分證/電話等機密個資外洩
+-- 🛠️ 台科登山社社團系統：修正 members.officer_role 預設值與核銷項目顯示
+-- 1. 徹底解決「任何人填完個資 officer_role 都會變成幹部」的問題
+-- 2. 清洗非幹部社員的 officer_role 歷史錯誤資料為 NULL
+-- 3. 優化 submit_payment_rpc 與 verify_payment_by_token 之裝備品項名稱聚合
 -- ==============================================================================
 
--- 1. 確保 members 資料表維持最高規格 RLS 封閉防護，禁止任何人直接 SELECT 整張表
-ALTER TABLE members ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Anon read member" ON members;
-DROP POLICY IF EXISTS "Anon insert member" ON members;
-DROP POLICY IF EXISTS "Anon update member" ON members;
+-- 1. 取消 members.officer_role 的 DEFAULT '幹部' 預設值，改為 NULL
+ALTER TABLE members ALTER COLUMN officer_role SET DEFAULT NULL;
 
--- 2. 安全讀取 RPC 函式：嚴格僅能以指定之 line_user_id 查閱本人紀錄 (查無則回傳 null，杜絕整表爬取)
-CREATE OR REPLACE FUNCTION get_member_profile(p_line_user_id TEXT)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_member members%ROWTYPE;
+-- 2. 清洗既有資料：若 is_officer 為 false 或不在 officers 名冊中，一律將 officer_role 重設為 NULL
+UPDATE members
+SET officer_role = NULL
+WHERE is_officer IS NOT TRUE 
+   OR line_user_id NOT IN (SELECT line_user_id FROM officers);
+
+-- 3. 確保幹部表同步觸發器具備嚴格守衛，僅對真正的幹部賦予 officer_role
+CREATE OR REPLACE FUNCTION public.sync_member_to_officer()
+RETURNS TRIGGER AS $$
 BEGIN
-    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' OR trim(p_line_user_id) = 'TEST_USER_ID' THEN
-        RETURN NULL;
+    IF pg_trigger_depth() > 1 THEN
+        RETURN NEW;
     END IF;
 
-    SELECT * INTO v_member FROM members WHERE line_user_id = trim(p_line_user_id);
-    IF FOUND THEN
-        RETURN to_jsonb(v_member);
-    ELSE
-        RETURN NULL;
+    -- 只有當 is_officer 為 TRUE 且確實有職稱時才更新
+    IF NEW.is_officer IS TRUE THEN
+        INSERT INTO officers (line_user_id, name, role, title, created_at, updated_at)
+        VALUES (
+            NEW.line_user_id,
+            COALESCE(NEW.name, '幹部'),
+            COALESCE(NULLIF(NEW.officer_role, ''), '幹部'),
+            COALESCE(NULLIF(NEW.officer_role, ''), '幹部'),
+            NOW(),
+            NOW()
+        )
+        ON CONFLICT (line_user_id) DO UPDATE SET
+            name = EXCLUDED.name,
+            updated_at = NOW();
     END IF;
+
+    RETURN NEW;
 END;
-$$;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 3. 安全儲存 RPC 函式：以 line_user_id 為唯一鎖定，嚴格僅能寫入本人資料
+-- 4. 重新發布 save_member_profile RPC：保證新社員註冊時 officer_role 不會被賦予「幹部」
 CREATE OR REPLACE FUNCTION save_member_profile(
     p_line_user_id TEXT,
     p_data JSONB
@@ -41,6 +51,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
+AS $$
 DECLARE
     v_is_officer BOOLEAN := FALSE;
     v_officer_role TEXT := NULL;
@@ -135,7 +146,3 @@ BEGIN
     RETURN jsonb_build_object('success', true);
 END;
 $$;
-
--- 4. 授權前端客戶端執行這兩個專屬安全函式
-GRANT EXECUTE ON FUNCTION get_member_profile(TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION save_member_profile(TEXT, JSONB) TO anon, authenticated, service_role;
