@@ -100,7 +100,7 @@ stateDiagram-v2
 
 ### (1) 繳費單核銷狀態 (`payments.status`)
 - `待確認 Checking`: 社員上傳轉帳水單照片 (`proof_image_url`) 或填寫銀行帳號末 5 碼 (`bank_last5`)。
-- `已核銷 Confirmed`: 財務幹部於管理後台或透過 Email 免登入單鍵核銷 (`verify_token`) 完成核銷。
+- `已核銷 Confirmed`: 財務幹部於管理後台或透過 Email 免登入單鍵核銷 (`verify_token`) 完成核銷（系統唯一標準值，舊稱「已確認無誤」已廢除）。
 - `退件 Rejected`: 查無帳目或相片模糊，退回並於 `officer_notes` 註明原因。
 
 ### (2) 免登入安全單鍵核銷機制 (`verify_token`)

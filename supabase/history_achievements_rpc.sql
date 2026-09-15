@@ -49,7 +49,7 @@ BEGIN
         COALESCE(jsonb_agg(h), '[]'::jsonb),
         COALESCE(SUM(
             CASE 
-                WHEN (status::text LIKE '%已確認%' OR status::text LIKE '%已核對%' OR status::text LIKE '%已繳%' OR status::text = 'Paid')
+                WHEN (status::text LIKE '%已核銷%' OR status::text LIKE '%Confirmed%' OR status::text LIKE '%已確認%' OR status::text LIKE '%已核對%' OR status::text LIKE '%已繳%' OR status::text = 'Paid')
                      AND status::text NOT LIKE '%待確認%' AND status::text NOT LIKE '%待核對%' AND status::text NOT LIKE '%Checking%'
                 THEN display_amount 
                 ELSE 0 

@@ -3,11 +3,34 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.121` (v0.1.121)
+- **當前版本**：`0.1.122` (v0.1.122)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 222. 款項核銷狀態標準化為「已核銷 Confirmed」與個人歷史紀錄對帳加總修復 (v0.1.122)
+- **問題排查與根因分析 (Problem Identification & Root Cause)**：
+  1. **歷史紀錄抓不到「已核銷 Confirmed」或呈現未核銷**：
+     - 在 [History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx)，狀態樣式判定函式 `getStatusStyle` 原先僅比對 `已確認`、`已核對`、`已繳` 或 `Paid`，遺漏了 `已核銷` 與 `Confirmed`。當資料庫為標準值 `已核銷 Confirmed` 時，前端誤判直接掉入黃色的「待確認 Checking」。
+  2. **累計支出金額 (`totalSpent`) 歸零**：
+     - 在 Supabase RPC `get_my_payment_history` ([history_achievements_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/history_achievements_rpc.sql)) 中，累計金額 `SUM(CASE WHEN ...)` 判斷僅比對 `%已確認%`，未納入 `%已核銷%` 與 `%Confirmed%`，導致使用標準核銷狀態時累計金額無法被計入。
+  3. **語系與說明文字不一致**：
+     - 語系檔 [zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json) 仍殘留舊稱「已確認無誤」。
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  1. **前端狀態判定全面標準化 ([src/pages/History.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/History.tsx), [src/utils/statusUtils.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/statusUtils.ts))**：
+     - 在 `History.tsx` 的 `getStatusStyle` 中納入 `s.includes('已核銷') || s.includes('Confirmed')`，確保以綠色徽章呈現。
+     - 在 `statusUtils.ts` 中，將核銷成功 label 統一回傳為 `已核銷 Confirmed`。
+  2. **語系標籤統一 ([src/locales/zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json))**：
+     - 將 `history.status.confirmed` 改為 `"已核銷 Confirmed"`，說明文字同步更新。
+  3. **RPC 累計金額加總修正與腳本產出 ([supabase/fix_history_payment_status.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_history_payment_status.sql))**：
+     - 更新 `get_my_payment_history` RPC 函式，累計支出金額計算正式包含 `status::text LIKE '%已核銷%' OR status::text LIKE '%Confirmed%'`。
+     - 提供一次性清洗 SQL，將歷史既有的 `已確認無誤`、`已確認` 統一更新為 `已核銷 Confirmed`。
+  4. **全規格文件對齊 ([supabase/SCHEMA_DICTIONARY.md](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/SCHEMA_DICTIONARY.md), [.agents/skills/club-business-workflows/SKILL.md](file:///Users/brianhung/Documents/OfficialLINEAccount/.agents/skills/club-business-workflows/SKILL.md))**：
+     - 明確備註 `payments.status` 唯一標準為 `已核銷 Confirmed`，廢棄舊稱。
+- **測試與驗證 (Verification)**：
+  - 單元測試：新增第 57 組測試，`pnpm test` **147/147 全數通過（39 test suites, 0 failures）**。
+  - 前端打包：`pnpm run build` 建置成功無錯誤。
 
 ### 221. 繳費申報推播雙語英文化與封閉外部瀏覽器 TEST_USER_ID 幹部越權漏洞 (v0.1.121)
 - **問題排查與根因分析 (Problem Identification & Root Cause)**：

@@ -14,7 +14,7 @@ interface HistoryItem {
   amount: number;
   last5Digits: string;
   note?: string;
-  status: string; // '已確認無誤' | '已確認' | '待確認' | '待核對' | '對帳失敗' | etc.
+  status: string; // '已核銷 Confirmed' | '待確認 Checking' | '退件 Rejected' | etc.
 }
 
 interface PaymentHistoryData {
@@ -84,7 +84,7 @@ function History({ userId }: { userId: string }) {
                   amount: 350,
                   last5Digits: '12345',
                   note: '活動與保險費',
-                  status: '已確認無誤'
+                  status: '已核銷 Confirmed'
                 },
                 {
                   id: 'row_12',
@@ -93,7 +93,7 @@ function History({ userId }: { userId: string }) {
                   title: '114-2 學期社費 (Membership Fee - Current Semester)',
                   amount: 200,
                   last5Digits: '98765',
-                  status: '已確認無誤'
+                  status: '已核銷 Confirmed'
                 },
                 {
                   id: 'row_10',
@@ -167,8 +167,8 @@ function History({ userId }: { userId: string }) {
     if (s.includes('待確認') || s.includes('待核對') || s.includes('Checking') || s.includes('審核中') || s.includes('未核對')) {
       return { bg: '#fef3c7', color: '#b45309', dot: '#f59e0b', label: t('history.status.checking') };
     }
-    // 已確認無誤 / 已確認 / 已繳費 / 已核對
-    if (s.includes('已確認') || s.includes('已核對') || s.includes('已繳') || s.includes('Paid')) {
+    // 已核銷 Confirmed / 已核銷 / Confirmed / 已確認無誤 / 已繳費 / Paid
+    if (s.includes('已核銷') || s.includes('Confirmed') || s.includes('已確認') || s.includes('已核對') || s.includes('已繳') || s.includes('Paid')) {
       return { bg: '#dcfce7', color: '#15803d', dot: '#16a34a', label: t('history.status.confirmed') };
     }
     return { bg: '#fef3c7', color: '#b45309', dot: '#f59e0b', label: t('history.status.checking') };

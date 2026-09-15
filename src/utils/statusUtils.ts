@@ -70,10 +70,10 @@ export function getPaymentStatusStyle(status: string | undefined): StatusStyle {
   if (!status) return { bg: '#f1f5f9', text: '#64748b', label: '未知' };
   const s = String(status);
   const isPending = s.includes('待確認') || s.includes('待核對') || s.includes('Checking') || s.includes('審核中');
-  const isConfirmed = !isPending && (s.includes('已確認無誤') || s.includes('已確認') || s.includes('已繳費') || s.includes('已核對') || s.includes('Confirmed') || s.includes('Paid'));
+  const isConfirmed = !isPending && (s.includes('已核銷') || s.includes('Confirmed') || s.includes('已確認無誤') || s.includes('已確認') || s.includes('已繳費') || s.includes('已核對') || s.includes('Paid'));
 
   if (isConfirmed) {
-    return { bg: '#ecfdf5', text: '#059669', label: '已確認無誤 Confirmed' };
+    return { bg: '#ecfdf5', text: '#059669', label: '已核銷 Confirmed' };
   }
   if (isPending) {
     return { bg: '#fffbeb', text: '#d97706', label: '待幹部確認 Checking' };

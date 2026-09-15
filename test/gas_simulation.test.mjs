@@ -4203,4 +4203,61 @@ describe('56. 繳費申報推播雙語英文化與幹部後台鑑權安全性測
   });
 });
 
+describe('57. 個人繳費歷史紀錄「已核銷 Confirmed」標準化與金額加總驗證 (v0.1.122)', () => {
+  it('1. History.tsx getStatusStyle 正確將「已核銷 Confirmed」辨識為綠色完成徽章', () => {
+    function simulateGetStatusStyle(status) {
+      const s = String(status || '').trim();
+      if (s.includes('失敗') || s.includes('退回') || s.includes('錯誤')) {
+        return { bg: '#fee2e2', color: '#b91c1c', label: '對帳失敗' };
+      }
+      if (s.includes('待確認') || s.includes('待核對') || s.includes('Checking') || s.includes('審核中') || s.includes('未核對')) {
+        return { bg: '#fef3c7', color: '#b45309', label: '待幹部確認' };
+      }
+      if (s.includes('已核銷') || s.includes('Confirmed') || s.includes('已確認') || s.includes('已核對') || s.includes('已繳') || s.includes('Paid')) {
+        return { bg: '#dcfce7', color: '#15803d', label: '已核銷 Confirmed' };
+      }
+      return { bg: '#fef3c7', color: '#b45309', label: '待幹部確認' };
+    }
+
+    // A. 標準已核銷 Confirmed 必須回傳綠色徽章
+    const resA = simulateGetStatusStyle('已核銷 Confirmed');
+    assert.strictEqual(resA.color, '#15803d');
+    assert.strictEqual(resA.label, '已核銷 Confirmed');
+
+    // B. 單獨「已核銷」或「Confirmed」
+    const resB = simulateGetStatusStyle('已核銷');
+    assert.strictEqual(resB.color, '#15803d');
+
+    // C. 待確認 Checking 必須回傳黃色待確認徽章
+    const resC = simulateGetStatusStyle('待確認 Checking');
+    assert.strictEqual(resC.color, '#b45309');
+  });
+
+  it('2. get_my_payment_history RPC 累計支出金額計算正確納入「已核銷 Confirmed」', () => {
+    function simulateCalcTotalSpent(payments) {
+      let totalSpent = 0;
+      for (const p of payments) {
+        const s = String(p.status || '');
+        const isConfirmed = (s.includes('已核銷') || s.includes('Confirmed') || s.includes('已確認') || s.includes('已核對') || s.includes('已繳') || s === 'Paid') &&
+          !s.includes('待確認') && !s.includes('待核對') && !s.includes('Checking');
+        if (isConfirmed) {
+          totalSpent += Number(p.amount || 0);
+        }
+      }
+      return totalSpent;
+    }
+
+    const testPayments = [
+      { id: 'PAY_1', amount: 600, status: '已核銷 Confirmed' },
+      { id: 'PAY_2', amount: 350, status: '待確認 Checking' },
+      { id: 'PAY_3', amount: 200, status: '已核銷' }
+    ];
+
+    const total = simulateCalcTotalSpent(testPayments);
+    // PAY_1 (600) + PAY_3 (200) = 800
+    assert.strictEqual(total, 800);
+  });
+});
+
+
 

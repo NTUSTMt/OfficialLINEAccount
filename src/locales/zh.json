@@ -416,7 +416,7 @@
       "empty": "目前無該類別的繳費紀錄喔！"
     },
     "status": {
-      "confirmed": "已確認無誤",
+      "confirmed": "已核銷 Confirmed",
       "failed": "對帳失敗",
       "checking": "待幹部確認"
     },
@@ -425,7 +425,7 @@
       "digitsRemarkLabel": "申報帳號末 5 碼 / 備註：",
       "none": "無",
       "descLabel": "說明：",
-      "descText": "幹部對帳完成後，狀態會自動更新為「已確認無誤」。如有疑問，請在此帳號聯繫社團幹部。"
+      "descText": "幹部對帳完成後，狀態會自動更新為「已核銷 Confirmed」。如有疑問，請在此帳號聯繫社團幹部。"
     }
   },
   "achievements": {

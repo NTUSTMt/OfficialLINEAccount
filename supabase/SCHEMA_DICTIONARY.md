@@ -222,7 +222,7 @@
 | `proof_image_url` | `TEXT` | 是 | NULL | - | **匯款證明相片網址** (Google Drive 直連) |
 | `target_type` | `TEXT` | 是 | NULL | `membership`, `event`, `loan`, `multi` | **關聯業務目標類型** |
 | `target_id` | `TEXT` | 是 | NULL | - | **目標編號** (活動 ID、租借單號或 NULL) |
-| `status` | `TEXT` | 否 | `'待確認 Checking'` | `待確認 Checking`<br>`已核銷 Confirmed`<br>`退件 Rejected` | **款項核銷審核狀態** |
+| `status` | `TEXT` | 否 | `'待確認 Checking'` | `待確認 Checking`<br>`已核銷 Confirmed`<br>`退件 Rejected` | **款項核銷審核狀態** (統一標準為 `已核銷 Confirmed`，舊稱「已確認無誤」已廢棄) |
 | `verify_token` | `TEXT` | 是 | NULL | - | **單鍵免登入核銷安全密鑰** (32位元 md5 隨機字串) |
 | `officer_notes` | `TEXT` | 是 | NULL | - | **幹部審核備註 / 退件原因** |
 | `confirmed_by` | `TEXT` | 是 | NULL | - | **核銷幹部身分 / 姓名** |

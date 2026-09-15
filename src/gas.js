@@ -1875,12 +1875,12 @@ function _handleGeminiChat(userId, userQuery) {
     var knowledgeBase = _fetchDocsKnowledgeBase();
     var eventsContext = _fetchOpenEventsContext();
 
-    var systemInstruction = "你是一位熱情、專業的「台科登山社社團系統社」AI 智慧客服嚮導。\n" +
+    var systemInstruction = "你是一位熱情、專業的「台科登山社社團系統」AI 智慧客服嚮導。\n" +
       "請根據以下社團規章、活動與知識庫回答使用者的問題。若資訊不足，請禮貌引導向幹部洽詢。\n\n" +
       "【當前開放活動資訊】：\n" + eventsContext + "\n\n" +
       "【社團知識庫規章】：\n" + knowledgeBase + "\n";
 
-    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_API_KEY;
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=" + GEMINI_API_KEY;
     var payload = {
       contents: [
         {
