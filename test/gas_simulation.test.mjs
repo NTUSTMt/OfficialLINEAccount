@@ -3770,7 +3770,8 @@ describe('52. 報名名冊個資生日格式、幹部鑑權修復與 Enum 智慧
 
     function simulateCheckOfficer(userId, userName) {
       if (!userId && !userName) return { isOfficer: false, role: '', name: '' };
-      if (userId === 'TEST_USER_ID') return { isOfficer: true, role: '管理員', name: '測試管理員' };
+      // 🛡️ 杜絕測試帳號或未授權存取在正式環境取得幹部特權
+      if (userId === 'TEST_USER_ID') return { isOfficer: false, role: '', name: '' };
 
       // 1. members 表查驗 (line_user_id)
       if (userId) {
@@ -3806,9 +3807,9 @@ describe('52. 報名名冊個資生日格式、幹部鑑權修復與 Enum 智慧
     const res3 = simulateCheckOfficer('U_MEMBER_02');
     assert.strictEqual(res3.isOfficer, false);
 
-    // 測試測試管理員
+    // 測試測試帳號 (杜絕 TEST_USER_ID 越權漏洞，必為 false)
     const res4 = simulateCheckOfficer('TEST_USER_ID');
-    assert.strictEqual(res4.isOfficer, true);
+    assert.strictEqual(res4.isOfficer, false);
   });
 
   it('3. update_signup_status_rpc 型別相容：字串狀態安全對應 event_signup_status_enum', () => {
@@ -4137,6 +4138,68 @@ describe('55. 免 Google/LINE 登入衝突：社團專屬 Web 直連核銷連結
     const replayRes = simulateVerifyPaymentByToken('PAY_999', 'secret_token_abc');
     assert.equal(replayRes.success, true);
     assert.equal(replayRes.alreadyConfirmed, true);
+  });
+});
+
+describe('56. 繳費申報推播雙語英文化與幹部後台鑑權安全性測試 (v0.1.121)', () => {
+  it('1. 繳費申報推播 itemsEn 英文化：支援 selectedNamesEn 並自動替換折扣標籤', () => {
+    function buildItemsText(details) {
+      var selectedNames = details.selectedNames || [];
+      var selectedNamesEn = details.selectedNamesEn;
+
+      var itemsZh = selectedNames.length > 0 ? selectedNames.map(function (n) { return "  - " + n; }).join("\n") : "  - 無項目";
+      var itemsEn = (selectedNamesEn && selectedNamesEn.length > 0)
+        ? selectedNamesEn.map(function (n) { return "  - " + n; }).join("\n")
+        : (selectedNames.length > 0
+            ? selectedNames.map(function (n) {
+                return "  - " + n.replace(/含社員5折優惠/g, "Member 50% discount applied");
+              }).join("\n")
+            : "  - None");
+
+      return { itemsZh, itemsEn };
+    }
+
+    // 測試情境 A：前端同時提供 selectedNames 與 selectedNamesEn
+    const resA = buildItemsText({
+      selectedNames: ['115-1 學期社費 (Membership Fee)', '四人帳 x1 (含社員5折優惠)'],
+      selectedNamesEn: ['Membership Fee (115-1)', '4-Person Tent x1 (Member 50% discount applied)']
+    });
+    assert.ok(resA.itemsZh.includes('含社員5折優惠'));
+    assert.ok(resA.itemsEn.includes('Member 50% discount applied'));
+    assert.ok(!resA.itemsEn.includes('含社員5折優惠'));
+
+    // 測試情境 B：舊版前端或僅傳入包含中文標籤的 selectedNames，GAS 後端安全替換
+    const resB = buildItemsText({
+      selectedNames: ['四人帳 (含營柱營釘) x1 (含社員5折優惠)']
+    });
+    assert.ok(resB.itemsZh.includes('含社員5折優惠'));
+    assert.ok(resB.itemsEn.includes('Member 50% discount applied'));
+    assert.ok(!resB.itemsEn.includes('含社員5折優惠'));
+  });
+
+  it('2. 外部未登入瀏覽器杜絕 TEST_USER_ID 越權進入幹部審核中心', () => {
+    function simulateAdminEventsAuth(userId) {
+      if (!userId || userId === 'TEST_USER_ID') {
+        return { isOfficer: false, authLoading: false, allowAccess: false };
+      }
+      // 真實幹部檢查
+      if (userId === 'U_OFFICER_VALID') {
+        return { isOfficer: true, authLoading: false, allowAccess: true };
+      }
+      return { isOfficer: false, authLoading: false, allowAccess: false };
+    }
+
+    // A. 外部瀏覽器（未登入，userId 為空）
+    const resEmpty = simulateAdminEventsAuth('');
+    assert.strictEqual(resEmpty.allowAccess, false);
+
+    // B. 預設 TEST_USER_ID 測試帳號
+    const resMock = simulateAdminEventsAuth('TEST_USER_ID');
+    assert.strictEqual(resMock.allowAccess, false);
+
+    // C. 合法幹部
+    const resOfficer = simulateAdminEventsAuth('U_OFFICER_VALID');
+    assert.strictEqual(resOfficer.allowAccess, true);
   });
 });
 

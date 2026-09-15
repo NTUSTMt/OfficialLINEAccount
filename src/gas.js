@@ -3856,8 +3856,24 @@ function _handleNotifyOfficersPayment(json) {
       });
     }
 
+    var selectedNamesEn = details.selectedNamesEn || json.selectedNamesEn;
+    if ((!selectedNamesEn || selectedNamesEn.length === 0) && details.selectedIds && Array.isArray(details.selectedIds)) {
+      selectedNamesEn = details.selectedIds.map(function (id) {
+        if (id === 'fee_membership') return 'Membership Fee';
+        if (id.indexOf('act_') === 0) return 'Event Fee (' + id + ')';
+        if (id.indexOf('eq_') === 0) return 'Equipment Loan (' + id + ')';
+        return id;
+      });
+    }
+
     var itemsZh = selectedNames.length > 0 ? selectedNames.map(function (n) { return "  - " + n; }).join("\n") : "  - 無項目";
-    var itemsEn = selectedNames.length > 0 ? selectedNames.map(function (n) { return "  - " + n; }).join("\n") : "  - None";
+    var itemsEn = (selectedNamesEn && selectedNamesEn.length > 0)
+      ? selectedNamesEn.map(function (n) { return "  - " + n; }).join("\n")
+      : (selectedNames.length > 0
+          ? selectedNames.map(function (n) {
+              return "  - " + n.replace(/含社員5折優惠/g, "Member 50% discount applied");
+            }).join("\n")
+          : "  - None");
 
     var verifyToken = details.verifyToken || json.verifyToken || "";
 
@@ -4774,7 +4790,8 @@ function _handleUpdateEquipmentImages(payload) {
  */
 function checkOfficerInternal(ss, userId, userName) {
   if (!userId && !userName) return { isOfficer: false, role: "", name: "" };
-  if (userId === "TEST_USER_ID") return { isOfficer: true, role: "管理員", name: "測試管理員" };
+  // 🛡️ 杜絕測試帳號或外部未授權存取在正式環境取得幹部特權
+  if (userId === "TEST_USER_ID") return { isOfficer: false, role: "", name: "" };
 
   try {
     // 1. 優先以 userId 查詢 members 表 (檢查 is_officer 或 officer_role)

@@ -41,12 +41,14 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  // 權限與初始化狀態 (支援快取秒開呈現)
+  // 權限與初始化狀態 (支援快取秒開呈現，若未經 LINE 授權或為測試帳號絕不放行)
   const [authLoading, setAuthLoading] = useState<boolean>(() => {
+    if (!userId || userId === 'TEST_USER_ID') return false;
     const cachedEvents = getCache<AdminEvent[]>(CACHE_KEY_ADMIN_EVENTS);
     return !cachedEvents || cachedEvents.length === 0;
   });
   const [isOfficer, setIsOfficer] = useState<boolean>(() => {
+    if (!userId || userId === 'TEST_USER_ID') return false;
     const cachedEvents = getCache<AdminEvent[]>(CACHE_KEY_ADMIN_EVENTS);
     return Boolean(cachedEvents && cachedEvents.length > 0);
   });
@@ -99,6 +101,15 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
   // 1. 獲取後台所有活動清單與檢驗幹部身分
   const fetchEvents = async (forceRefresh: boolean = false) => {
+    // 🛡️ 嚴格鑑權防護：無有效 LINE User ID 或為測試帳號時，拒絕讀取後台資料
+    if (!userId || userId === 'TEST_USER_ID') {
+      setIsOfficer(false);
+      setAuthLoading(false);
+      setLoadingEvents(false);
+      setIsRefreshingEvents(false);
+      return;
+    }
+
     if (forceRefresh) {
       setIsRefreshingEvents(true);
       removeCache(CACHE_KEY_ADMIN_EVENTS);
@@ -114,7 +125,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       if (!forceRefresh) {
         try {
           // ⚡ 1. 優先從 Supabase 秒級讀取活動清單與報名人數統計 (< 50ms)
-          const sbRes = await fetchAdminEventsFromSupabase(userId || 'TEST_USER_ID');
+          const sbRes = await fetchAdminEventsFromSupabase(userId);
           if (sbRes && sbRes.isOfficer) {
             loadedFromSb = true;
             setIsOfficer(true);
@@ -135,7 +146,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       // 2. 若 Supabase 未配置、未命中幹部或強制重新整理，無縫由 GAS 備援
       if (!loadedFromSb || forceRefresh) {
         try {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId}`));
           const data = await res.json();
           if (data.status === 'success' && Array.isArray(data.events)) {
             setIsOfficer(true);
@@ -177,11 +188,21 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     let ignore = false;
 
     async function loadInitial() {
+      // 🛡️ 嚴格鑑權防護：無有效 LINE User ID 時直接判定無權限
+      if (!userId || userId === 'TEST_USER_ID') {
+        if (!ignore) {
+          setIsOfficer(false);
+          setAuthLoading(false);
+          setLoadingEvents(false);
+        }
+        return;
+      }
+
       try {
         let loadedFromSb = false;
         try {
           // ⚡ 1. 優先從 Supabase 讀取 (< 50ms)
-          const sbRes = await fetchAdminEventsFromSupabase(userId || 'TEST_USER_ID');
+          const sbRes = await fetchAdminEventsFromSupabase(userId);
           if (sbRes && sbRes.isOfficer && !ignore) {
             loadedFromSb = true;
             setIsOfficer(true);
@@ -196,7 +217,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
         // 2. 若 Supabase 尚未建置該幹部快取，無縫由 GAS 備援
         if (!loadedFromSb) {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId || 'TEST_USER_ID'}`));
+          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId}`));
           const data = await res.json();
           if (!ignore && data.status === 'success' && Array.isArray(data.events)) {
             setIsOfficer(true);
@@ -694,7 +715,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           {t('adminEvents.unauthorizedDesc')}
         </p>
 
-        {userId && (
+        {userId && userId !== 'TEST_USER_ID' ? (
           <div style={{
             margin: '0 auto 24px',
             padding: '12px 16px',
@@ -731,6 +752,24 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               </button>
             </div>
           </div>
+        ) : (
+          <a
+            href="https://liff.line.me/2009217429-DSYjXqNK"
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: '12px 24px',
+              borderRadius: '12px',
+              fontWeight: 'bold',
+              backgroundColor: '#06c755',
+              color: '#fff',
+              textDecoration: 'none',
+              marginBottom: '16px',
+              boxSizing: 'border-box'
+            }}
+          >
+            📲 由 LINE 開啟以驗證幹部身分
+          </a>
         )}
 
         <button

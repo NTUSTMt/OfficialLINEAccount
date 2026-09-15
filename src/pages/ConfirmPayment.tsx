@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle2, AlertTriangle, ShieldCheck, ArrowRight, Loader2, Info } from 'lucide-react';
 import { verifyPaymentByTokenFromSupabase, type VerifyPaymentResult } from '../utils/supabaseClient';
 import { GAS_API_URL } from '../constants/api';
+import { LIFF_URLS } from '../constants/liff';
+import liff from '@line/liff';
 
 export default function ConfirmPayment() {
   const [searchParams] = useSearchParams();
@@ -14,6 +16,15 @@ export default function ConfirmPayment() {
 
   const paymentId = searchParams.get('paymentId') || '';
   const token = searchParams.get('token') || searchParams.get('verifyToken') || '';
+
+  const handleOpenAdmin = () => {
+    if (liff.isInClient()) {
+      navigate('/admin/events');
+    } else {
+      // 🛡️ 外部瀏覽器：透過 LIFF 網址開啟，強制由 LINE 進行幹部身分驗證，杜絕未授權存取
+      window.location.href = LIFF_URLS.ADMIN_EVENTS;
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -194,7 +205,7 @@ export default function ConfirmPayment() {
             </div>
 
             <button
-              onClick={() => navigate('/admin/events')}
+              onClick={handleOpenAdmin}
               style={{
                 width: '100%',
                 backgroundColor: '#059669',
@@ -212,7 +223,7 @@ export default function ConfirmPayment() {
                 boxShadow: '0 2px 4px rgba(5, 150, 105, 0.2)'
               }}
             >
-              進入幹部審核中心 <ArrowRight size={16} />
+              {liff.isInClient() ? '進入幹部審核中心' : '由 LINE 開啟幹部審核中心'} <ArrowRight size={16} />
             </button>
           </div>
         )}
@@ -240,7 +251,7 @@ export default function ConfirmPayment() {
             </p>
 
             <button
-              onClick={() => navigate('/admin/events')}
+              onClick={handleOpenAdmin}
               style={{
                 width: '100%',
                 backgroundColor: '#f1f5f9',
@@ -253,7 +264,7 @@ export default function ConfirmPayment() {
                 cursor: 'pointer'
               }}
             >
-              前往幹部審核中心
+              {liff.isInClient() ? '前往幹部審核中心' : '由 LINE 前往幹部審核中心'}
             </button>
           </div>
         )}

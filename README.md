@@ -3,11 +3,35 @@
 本專案是一個基於 **React + TypeScript + Vite** 開發的 LINE LIFF 網頁應用程式，為社團或個人提供直覺、現代化的露營與登山裝備預約租借平台。
 
 ## 📌 版本資訊 (Version Info)
-- **當前版本**：`0.1.120` (v0.1.120)
+- **當前版本**：`0.1.121` (v0.1.121)
 
 ---
 
 ## 🛠️ 主要更新與修復 (Key Updates & Bug Fixes)
+
+### 221. 繳費申報推播雙語英文化與封閉外部瀏覽器 TEST_USER_ID 幹部越權漏洞 (v0.1.121)
+- **問題排查與根因分析 (Problem Identification & Root Cause)**：
+  1. **繳費申報英文推播殘留中文折扣文字**：
+     - 在 [Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx)，勾選優惠裝備時呼叫 `t('payment.equip.discountApplied')`，若在繁體中文語系下會輸出 `含社員5折優惠`。前端僅將該中文品項字串存入 `selectedNames` 送出，未提供英文版 `selectedNamesEn`。
+     - GAS 後端 [gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js) 在組裝雙語推播時，`itemsEn` 直接複製了包含中文標籤的 `selectedNames`，導致英文段落仍顯示 `四人帳 (含營柱營釘) x1 (含社員5折優惠)`。
+  2. **Email 核銷按鈕直接在外部瀏覽器開啟幹部系統與個資外洩隱患 (Broken Access Control)**：
+     - 在 [ConfirmPayment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/ConfirmPayment.tsx)，核銷完成後提供「進入幹部審核中心」按鈕 (`navigate('/admin/events')`)。
+     - 當在外部瀏覽器（如 Chrome/Safari 或手機瀏覽器）開啟時，由於不在 LINE App 內，`userId` 為空，LIFF 初始化 fallback 預設值為 `TEST_USER_ID`。
+     - [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx) 呼叫 GAS 備援 API (`get_admin_events&userId=TEST_USER_ID`)，而 GAS [06_Helper_Services.js:1269](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js#L1269) 竟留有本機測試後門：`if (userId === "TEST_USER_ID") return { isOfficer: true, role: "管理員", name: "測試管理員" };`，導致外部任何一般訪客皆能以管理員身分檢視全體社員名單、身分證字號、電話、生日等高度敏感個資！
+- **架構設計與修復細節 (Architecture & Implementation)**：
+  1. **繳費申報雙語品項解耦與自動翻譯 ([src/pages/Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx), [gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 在 `Payment.tsx` 中同時生成 `selectedNamesZh`（帶 `(含社員5折優惠)`）與 `selectedNamesEn`（帶 `(Member 50% discount applied)`），並在 `detailsPayload` 與 `liff.sendMessages` 的英文區塊中分別填入對應陣列。
+     - 在 GAS `06_Helper_Services.js` 與 `src/gas.js` 支援 `details.selectedNamesEn`，並在 fallback 處加上正規表達式 `.replace(/含社員5折優惠/g, "Member 50% discount applied")`，提供雙重保護。
+  2. **全面封閉 TEST_USER_ID 幹部後門 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+     - 在 `checkOfficerInternal` 徹底拔除 `if (userId === "TEST_USER_ID") return true` 的特權邏輯，未經授權或非正式名冊成員必回傳 `isOfficer: false`。
+  3. **前端幹部審核中心嚴格鑑權防護 ([src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx))**：
+     - 初始 state 與 `fetchEvents`、`loadInitial` 增設嚴格防線：若 `!userId || userId === 'TEST_USER_ID'`，立即標記 `isOfficer: false`，拒絕向 Supabase 與 GAS 發起任何活動與報名者名單請求。
+     - 在未授權畫面上，針對外部瀏覽器訪客提供「📲 由 LINE 開啟以驗證幹部身分」專屬 LIFF 按鈕，引導進入 LINE 進行授權。
+  4. **核銷成功頁面外部瀏覽器防護 ([src/pages/ConfirmPayment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/ConfirmPayment.tsx))**：
+     - 檢查 `liff.isInClient()`：若在 LINE 內部，按鈕可直接前往 `/admin/events`；若在電腦或外部瀏覽器，按鈕改為「由 LINE 開啟幹部審核中心」，導向 `LIFF_URLS.ADMIN_EVENTS`，強制走 LINE 身分驗證機制。
+- **測試與驗證 (Verification)**：
+  - 單元測試：新增第 56 組測試（繳費推播 itemsEn 英文化替換與外部未登入瀏覽器防護），`pnpm test` **145/145 全數通過（38 test suites, 0 failures）**。
+  - 前端打包：`pnpm run build` TypeScript 編譯與 Vite 打包無警告/錯誤成功。
 
 ### 220. 解決 5 大核心 Bug：小岳助理引導、消除重複刷屏、報名雙語英文化、幹部預設值修正與精確核銷項目 (v0.1.120)
 - **問題排查與根因分析 (Problem Identification & Root Cause)**：

@@ -375,16 +375,24 @@ function Payment({ userId }: { userId: string }) {
       const selectedItems = allItemsFlat
         .filter(item => uniqueSelectedIds.includes(item.id));
 
-      const selectedNames = selectedItems.map(item => {
+      const selectedNamesZh = selectedItems.map(item => {
         if (item.type === 'equipment' && item.isDiscounted) {
-          return `${item.name} (${t('payment.equip.discountApplied')})`;
+          return `${item.name} (含社員5折優惠)`;
+        }
+        return item.name;
+      });
+
+      const selectedNamesEn = selectedItems.map(item => {
+        if (item.type === 'equipment' && item.isDiscounted) {
+          return `${item.name} (Member 50% discount applied)`;
         }
         return item.name;
       });
 
       const detailsPayload = {
         selectedIds: uniqueSelectedIds,
-        selectedNames: selectedNames,
+        selectedNames: selectedNamesZh,
+        selectedNamesEn: selectedNamesEn,
         last5Digits: finalDigits,
         totalAmount,
         note: note.trim(),
@@ -448,7 +456,7 @@ function Payment({ userId }: { userId: string }) {
             `• 帳號末5碼：${finalDigits}\n` +
             (note.trim() ? `• 備註：${note.trim()}\n` : '') +
             `• 申報項目：\n` +
-            selectedNames.map(n => `  - ${n}`).join('\n') + `\n\n` +
+            selectedNamesZh.map(n => `  - ${n}`).join('\n') + `\n\n` +
             `幹部會於核對款項後自動更新您的狀態。謝謝！\n` +
             `─────────────\n` +
             `Hello! Your payment submission has been received successfully:\n` +
@@ -456,7 +464,7 @@ function Payment({ userId }: { userId: string }) {
             `• Last 5 Digits: ${finalDigits}\n` +
             (note.trim() ? `• Note: ${note.trim()}\n` : '') +
             `• Items:\n` +
-            selectedNames.map(n => `  - ${n}`).join('\n') + `\n\n` +
+            selectedNamesEn.map(n => `  - ${n}`).join('\n') + `\n\n` +
             `Officers will update your status after verifying the transaction. Thank you!`;
 
           try {
