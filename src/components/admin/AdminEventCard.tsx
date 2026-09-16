@@ -342,11 +342,12 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
         </div>
       </div>
 
-      {/* 雲端資料夾與名冊試算表快捷連結 (純文字乾淨按鈕) */}
-      {(evt.driveFolderUrl || evt.spreadsheetUrl) && (
+      {/* 4. Google Drive 資料夾與試算表與活動群組外部連結 */}
+      {(evt.driveFolderUrl || evt.spreadsheetUrl || evt.lineGroupUrl) && (
         <div style={{
           display: 'flex',
           gap: '8px',
+          flexWrap: 'wrap',
           borderTop: '1px solid #f1f5f9',
           paddingTop: '10px',
           paddingBottom: '2px'
@@ -358,6 +359,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               rel="noopener noreferrer"
               style={{
                 flex: 1,
+                minWidth: '110px',
                 padding: '7px 10px',
                 borderRadius: '8px',
                 border: '1px solid #94a3b8',
@@ -373,7 +375,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               }}
             >
               <Folder size={13} />
-              <span>開啟活動資料夾</span>
+              <span>活動資料夾</span>
             </a>
           )}
           {evt.spreadsheetUrl && (
@@ -383,6 +385,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               rel="noopener noreferrer"
               style={{
                 flex: 1,
+                minWidth: '110px',
                 padding: '7px 10px',
                 borderRadius: '8px',
                 border: '1px solid #0284c7',
@@ -398,7 +401,34 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               }}
             >
               <FileSpreadsheet size={13} />
-              <span>開啟報名試算表</span>
+              <span>報名試算表</span>
+            </a>
+          )}
+          {evt.lineGroupUrl && (
+            <a
+              href={evt.lineGroupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                flex: 1,
+                minWidth: '110px',
+                padding: '7px 10px',
+                borderRadius: '8px',
+                border: '1px solid #16a34a',
+                backgroundColor: '#f0fdf4',
+                color: '#15803d',
+                fontSize: '12px',
+                fontWeight: '600',
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px'
+              }}
+              title={evt.lineGroupUrl}
+            >
+              <Users size={13} />
+              <span>活動群組</span>
             </a>
           )}
         </div>

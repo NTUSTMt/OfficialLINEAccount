@@ -67,8 +67,9 @@ describe('59. 活動截止時間時區、過期狀態與試算表欄位同步驗
     assert.equal(testScope._findHeaderCol(englishHeaders, 'name'), 1);
   });
 
-  test('4. _syncSignupToSheet allowedCols 必須包含 name, is_official_member_snapshot, cancel_reason', () => {
+  test('4. _syncSignupToSheet allowedCols 必須包含 name, line_id, is_official_member_snapshot, cancel_reason', () => {
     assert.ok(syncCode.includes('"name"'), 'allowedCols 必須包含 name');
+    assert.ok(syncCode.includes('"line_id"'), 'allowedCols 必須包含 line_id');
     assert.ok(syncCode.includes('"is_official_member_snapshot"'), 'allowedCols 必須包含 is_official_member_snapshot');
     assert.ok(syncCode.includes('"cancel_reason"'), 'allowedCols 必須包含 cancel_reason');
   });

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, Info, ImageIcon, Check, Mountain } from 'lucide-react';
+import { Sparkles, Info, ImageIcon, Check, Mountain, Link2, AlertCircle } from 'lucide-react';
 
 export interface AdminEventFormData {
   eventId: string;
@@ -13,6 +13,7 @@ export interface AdminEventFormData {
   shortDesc: string;
   fullDesc: string;
   imageUrl: string;
+  lineGroupUrl: string;
   notifyOfficerGroup: boolean;
 }
 
@@ -52,6 +53,18 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
   const isTotalDescOver = totalDescCount > TOTAL_DESC_LIMIT;
   // 只要總字數不要超過上限 (<= 1400) 即可送出
   const isDescOverLimit = isTotalDescOver;
+
+  // LINE 群組邀請連結格式檢查 (僅限一般群組邀請 https://line.me/R/ti/g/... 或 https://line.me/ti/g/...，排除社群 ti/g2/)
+  const lineGroupUrlTrimmed = (formData.lineGroupUrl || '').trim();
+  const isLineGroupValid = useMemo(() => {
+    if (!lineGroupUrlTrimmed) return isEditing ? true : false;
+    if (lineGroupUrlTrimmed.includes('/ti/g2/')) return false;
+    return /^https:\/\/(?:line\.me\/(?:R\/)?ti\/g\/[a-zA-Z0-9_\-]+|line\.me\/R\/ti\/g\/|line\.me\/ti\/g\/)/i.test(lineGroupUrlTrimmed);
+  }, [lineGroupUrlTrimmed, isEditing]);
+
+  const showLineGroupError = Boolean(
+    lineGroupUrlTrimmed && (!isLineGroupValid || lineGroupUrlTrimmed.includes('/ti/g2/'))
+  );
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
@@ -286,6 +299,56 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
                 textAlign: 'left'
               }}
             />
+          </div>
+        </div>
+
+        {/* 活動專屬群組連結 */}
+        <div style={{
+          backgroundColor: '#f8fafc',
+          padding: '14px 16px',
+          borderRadius: '12px',
+          border: showLineGroupError ? '1.5px solid #ef4444' : '1.5px solid #e2e8f0',
+          textAlign: 'left'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a' }}>
+              <Link2 size={14} color="#059669" />
+              <span>{t('adminEvents.lineGroupUrlLabel', '活動專屬群組連結 (LINE Group URL) *')}</span>
+            </label>
+            <span style={{ fontSize: '11px', color: isEditing && !lineGroupUrlTrimmed ? '#f59e0b' : '#64748b', fontWeight: isEditing && !lineGroupUrlTrimmed ? 'bold' : 'normal' }}>
+              {isEditing && !lineGroupUrlTrimmed ? '⚠️ 尚未填寫，推播前請補填' : '（保密，不公開於活動說明）'}
+            </span>
+          </div>
+          <input
+            type="url"
+            required={!isEditing}
+            value={formData.lineGroupUrl || ''}
+            placeholder={t('adminEvents.lineGroupUrlPlaceholder', 'https://line.me/R/ti/g/... 或 https://line.me/ti/g/...')}
+            onChange={(e) => setFormData({ ...formData, lineGroupUrl: e.target.value })}
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: showLineGroupError ? '1.5px solid #ef4444' : '1.5px solid #cbd5e1',
+              fontSize: '13px',
+              backgroundColor: '#ffffff',
+              color: '#1e293b',
+              boxSizing: 'border-box',
+              outline: 'none'
+            }}
+          />
+          {showLineGroupError && (
+            <div style={{ margin: '6px 0 0', display: 'flex', alignItems: 'center', gap: '4px', color: '#ef4444', fontSize: '12px' }}>
+              <AlertCircle size={13} />
+              <span>{t('adminEvents.lineGroupUrlError', '僅限一般 LINE 群組邀請連結（https://line.me/R/ti/g/... 或 https://line.me/ti/g/...），不支援 LINE 社群 (OpenChat)。')}</span>
+            </div>
+          )}
+          <div style={{ margin: '8px 0 0', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+            <Info size={14} color="#059669" style={{ marginTop: '2px', flexShrink: 0 }} />
+            <p style={{ margin: 0, fontSize: '12px', color: '#64748b', lineHeight: '1.4' }}>
+              {t('adminEvents.lineGroupUrlHelp', '此連結為保密資訊，絕不會顯示於公開活動說明中。系統僅會在幹部發送「活動正取通知」推播卡片時，提供給正取社員一鍵加入出隊群組。')}
+            </p>
           </div>
         </div>
 

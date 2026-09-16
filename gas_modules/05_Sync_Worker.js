@@ -389,7 +389,7 @@ function _getDefaultSchemaColumns(tableName) {
       "spreadsheet_id", "created_at", "updated_at"
     ],
     "event_signups": [
-      "id", "event_id", "line_user_id", "name", "status", "payment_status",
+      "id", "event_id", "line_user_id", "name", "line_id", "status", "payment_status",
       "is_official_member_snapshot", "cancel_reason", "notes", "created_at", "updated_at"
     ],
     "equipments": [
@@ -618,15 +618,16 @@ function _syncSignupToSheet(ss, p, action) {
 
   // 2. 嚴格過濾掉非標準 Schema 欄位，防止在主試算表長出 N, O, P, Q 欄
   var allowedCols = [
-    "id", "event_id", "line_user_id", "name", "status", "payment_status",
+    "id", "event_id", "line_user_id", "name", "line_id", "status", "payment_status",
     "is_official_member_snapshot", "cancel_reason", "role", "paid_amount", "assigned_driver", "notes", "created_at", "updated_at"
   ];
-  // ⚡ 若缺少 name 則自動自 members 查詢補齊，避免試算表姓名空白
-  if (!p.name && p.line_user_id && typeof _supabaseGet === "function") {
+  // ⚡ 若缺少 name 或 line_id 則自動自 members 查詢補齊，避免試算表姓名或 Line ID 空白
+  if ((!p.name || !p.line_id) && p.line_user_id && typeof _supabaseGet === "function") {
     try {
-      var mems = _supabaseGet("members", { line_user_id: "eq." + p.line_user_id, select: "name" });
-      if (mems && mems.length > 0 && mems[0].name) {
-        p.name = mems[0].name;
+      var mems = _supabaseGet("members", { line_user_id: "eq." + p.line_user_id, select: "name,line_id" });
+      if (mems && mems.length > 0) {
+        if (!p.name && mems[0].name) p.name = mems[0].name;
+        if (!p.line_id && mems[0].line_id) p.line_id = mems[0].line_id;
       }
     } catch (e) {}
   }
@@ -1124,6 +1125,7 @@ function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus, eve
       event_id: eventId,
       line_user_id: userId,
       name: p.name || "",
+      line_id: p.lineId || p.line_id || "",
       status: signupStatus || "審核中 Checking",
       is_official_member_snapshot: isOfficial,
       notes: "",

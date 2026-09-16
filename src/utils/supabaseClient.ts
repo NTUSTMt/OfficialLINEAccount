@@ -50,6 +50,7 @@ interface SupabaseEventRow {
   summary?: string;
   itinerary?: string;
   cover_image_url?: string;
+  line_group_url?: string;
   event_signups?: { status: string }[];
 }
 
@@ -167,7 +168,8 @@ export const fetchEventsFromSupabase = async (): Promise<AdminEvent[] | null> =>
         status,
         summary,
         itinerary,
-        cover_image_url
+        cover_image_url,
+        line_group_url
       `)
       .order('start_date', { ascending: false });
 
@@ -193,6 +195,7 @@ export const fetchEventsFromSupabase = async (): Promise<AdminEvent[] | null> =>
         shortDesc: row.summary || '',
         fullDesc: row.itinerary || '',
         imageUrl: row.cover_image_url || '',
+        lineGroupUrl: row.line_group_url || '',
         stats: {
           total: 0,
           accepted: 0,
@@ -228,6 +231,7 @@ export interface DashboardActivityData {
   reviewStatus: string;
   payStatus: string;
   code?: string;
+  lineGroupUrl?: string | null;
 }
 
 export interface DashboardEquipmentData {
@@ -946,6 +950,7 @@ export const saveEventToSupabase = async (
     driveFolderUrl?: string;
     spreadsheetUrl?: string;
     spreadsheetId?: string;
+    lineGroupUrl?: string;
   }
 ): Promise<{ success: boolean; eventId?: string }> => {
   if (!supabase || !userId) return { success: false };

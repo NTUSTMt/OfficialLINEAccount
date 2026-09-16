@@ -84,6 +84,20 @@ describe('60. 小岳 (Yue) 對外 AI 客服與小岳助理幹部管理 Bot 隔�
       return { handled: true, action: "verify_payment", paymentId: paymentId };
     }
 
+    // 最新活動查詢 (支援「最新活動 Activities」、「最新活動」、「Activities」、「Activiies」、「報名活動」、「Events」)
+    if (
+      text.indexOf("最新活動") > -1 ||
+      lowerText.indexOf("activi") > -1 ||
+      queryText.indexOf("最新活動") > -1 ||
+      lowerQueryText.indexOf("activi") > -1 ||
+      text.indexOf("報名活動") > -1 ||
+      queryText.indexOf("報名活動") > -1 ||
+      lowerText === "events" ||
+      lowerQueryText === "events"
+    ) {
+      return { handled: true, action: "event_list" };
+    }
+
     // 圖文選單「更多服務」
     if (text === "更多服務 More Services" || text === "更多服務" || queryText === "更多服務") {
       return { handled: true, action: "more_services" };
@@ -186,5 +200,49 @@ describe('60. 小岳 (Yue) 對外 AI 客服與小岳助理幹部管理 Bot 隔�
     assert.strictEqual(resTripGroup.handled, true);
     assert.strictEqual(resTripGroup.action, 'gemini_ai');
     assert.strictEqual(resTripGroup.geminiCalledWith, '請問出隊需要帶頭燈嗎？');
+  });
+
+  it('5. 支援最新活動與 Activities / Activiies 指令回傳活動列表', () => {
+    assert.strictEqual(simulateHandleTextMessage('最新活動 Activities').action, 'event_list');
+    assert.strictEqual(simulateHandleTextMessage('最新活動').action, 'event_list');
+    assert.strictEqual(simulateHandleTextMessage('Activities').action, 'event_list');
+    assert.strictEqual(simulateHandleTextMessage('Activiies').action, 'event_list');
+    assert.strictEqual(simulateHandleTextMessage('報名活動').action, 'event_list');
+    assert.strictEqual(simulateHandleTextMessage('Events').action, 'event_list');
+    assert.strictEqual(simulateHandleTextMessage('@Yue 最新活動').action, 'event_list');
+  });
+
+  it('6. _stripMarkdown 嚴格過濾所有 Markdown 標記，回傳乾淨純文字 (No Markdown)', () => {
+    function stripMarkdown(text) {
+      if (!text) return "";
+      return text
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/\*(.*?)\*/g, "$1")
+        .replace(/__(.*?)__/g, "$1")
+        .replace(/_(.*?)_/g, "$1")
+        .replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1")
+        .replace(/^#{1,6}\s+/gm, "")
+        .replace(/~~(.*?)~~/g, "$1")
+        .replace(/\[(.*?)\]\((.*?)\)/g, "$1 ($2)")
+        .trim();
+    }
+
+    // 粗體與斜體
+    assert.strictEqual(stripMarkdown('**玉山主峰** 高度為 3952 公尺，*注意事項* 請詳讀。'), '玉山主峰 高度為 3952 公尺，注意事項 請詳讀。');
+    // 標題
+    assert.strictEqual(stripMarkdown('### 裝備清單\n• 頭燈\n• 登山杖'), '裝備清單\n• 頭燈\n• 登山杖');
+    // 程式碼與超連結
+    assert.strictEqual(stripMarkdown('請點擊 [報名連結](https://example.com) 查看 `PAY_123` 狀態。'), '請點擊 報名連結 (https://example.com) 查看 PAY_123 狀態。');
+    // 刪除線
+    assert.strictEqual(stripMarkdown('原價 ~~1000~~ 特價 800'), '原價 1000 特價 800');
+  });
+
+  it('7. AI 客服回覆末尾必須附加中英對照免責聲明 (小岳是 AI，小岳可以出錯)', () => {
+    const rawAnswer = "玉山主峰海拔 3,952 公尺，為台灣第一高峰。";
+    const disclaimer = "\n\n─────────────\n小岳是 AI，小岳可以出錯\nYue is AI. Yue can make mistake.";
+    const fullReply = rawAnswer + disclaimer;
+
+    assert.ok(fullReply.endsWith("小岳是 AI，小岳可以出錯\nYue is AI. Yue can make mistake."));
+    assert.ok(fullReply.includes("─────────────"));
   });
 });

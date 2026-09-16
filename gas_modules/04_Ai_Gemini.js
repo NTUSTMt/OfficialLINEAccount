@@ -13,8 +13,16 @@ function _handleGeminiChat(userId, userQuery) {
     var knowledgeBase = _fetchDocsKnowledgeBase();
     var eventsContext = _fetchOpenEventsContext();
 
-    var systemInstruction = "你是一位熱情、專業的「台科登山社社團系統」AI 智慧客服嚮導。\n" +
+    var systemInstruction = "你是一位熱情、親切且專業的「台科登山社社團系統」AI 智慧客服嚮導「小岳 (Yue)」。\n" +
       "請根據以下社團規章、活動與知識庫回答使用者的問題。若資訊不足，請禮貌引導向幹部洽詢。\n\n" +
+      "【核心回覆原則與格式嚴格規範】：\n" +
+      "1. 語言一致性（Mirror User Language）：提問者使用什麼語言提問，你就必須一律使用相同的語言回答（例如：使用者用英文提問，必須以自然流利的英文回覆；使用者用繁體中文提問，必須以台灣繁體中文回覆；使用者用日文提問，必須以日文回覆，切勿混雜或擅自變更語言）。\n" +
+      "2. 嚴格純文字輸出（Strictly Plain Text Only, No Markdown）：LINE 官方帳號對話視窗不支援 Markdown 渲染，因此絕對禁止輸出任何 Markdown 語法標記！\n" +
+      "   • 嚴禁使用粗體或斜體語法（禁止出現 **文字**、*文字*、__文字__、_文字_ 等星號或底線標記）。\n" +
+      "   • 嚴禁使用標題語法（禁止出現 #、##、###）。\n" +
+      "   • 嚴禁使用反引號程式碼語法（禁止出現 `code` 或 ```code```）。\n" +
+      "   • 嚴禁使用 Markdown 格式超連結（禁止出現 [名稱](網址)，若需提供連結請直接輸出原始 URL）。\n" +
+      "   • 排版僅允許使用自然換行、條列符號（• 或 1. 2. 3.）、適量 emoji 與空行分隔，呈現乾淨易讀的純文字視覺效果。\n\n" +
       "【當前開放活動資訊】：\n" + eventsContext + "\n\n" +
       "【社團知識庫規章】：\n" + knowledgeBase + "\n";
 
@@ -45,7 +53,9 @@ function _handleGeminiChat(userId, userQuery) {
     if (res.getResponseCode() === 200) {
       var data = JSON.parse(res.getContentText());
       if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-        return data.candidates[0].content.parts[0].text;
+        var rawReply = data.candidates[0].content.parts[0].text;
+        var cleanReply = _stripMarkdown(rawReply);
+        return cleanReply + "\n\n─────────────\n小岳是 AI，小岳可以出錯\nYue is AI. Yue can make mistake.";
       }
     } else {
       console.warn("Gemini API 回應異常 (HTTP " + res.getResponseCode() + "):", res.getContentText());
@@ -54,6 +64,23 @@ function _handleGeminiChat(userId, userQuery) {
     console.error("Gemini AI 客服執行失敗:", err);
   }
   return null;
+}
+
+/**
+ * 徹底過濾任何 Markdown 標記，確保輸出至 LINE 之訊息為乾淨純文字
+ */
+function _stripMarkdown(text) {
+  if (!text) return "";
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/_(.*?)_/g, "$1")
+    .replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/~~(.*?)~~/g, "$1")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1 ($2)")
+    .trim();
 }
 
 /**

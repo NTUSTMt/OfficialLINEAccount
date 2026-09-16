@@ -5,15 +5,19 @@
 
 -- 0. 資料表結構自我修復與自動遷移 (Self-healing Schema Migration)
 ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS line_id TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS drive_folder_url TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS spreadsheet_url TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS spreadsheet_id TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS line_group_url TEXT;
 
--- 自 members 自動回填姓名
+-- 自 members 自動回填姓名與 line_id
 UPDATE event_signups s 
-SET name = m.name 
+SET name = COALESCE(NULLIF(s.name, ''), m.name),
+    line_id = COALESCE(NULLIF(s.line_id, ''), m.line_id)
 FROM members m 
-WHERE s.line_user_id = m.line_user_id AND (s.name IS NULL OR s.name = '');
+WHERE s.line_user_id = m.line_user_id 
+  AND ((s.name IS NULL OR s.name = '') OR (s.line_id IS NULL OR s.line_id = ''));
 
 -- 1. 建立幹部資料表 (officers)
 CREATE TABLE IF NOT EXISTS officers (
@@ -144,6 +148,7 @@ BEGIN
             'driveFolderUrl', COALESCE(e.drive_folder_url, ''),
             'spreadsheetUrl', COALESCE(e.spreadsheet_url, ''),
             'spreadsheetId', COALESCE(e.spreadsheet_id, ''),
+            'lineGroupUrl', COALESCE(e.line_group_url, ''),
             'stats', jsonb_build_object(
                 'total', COUNT(s.id) FILTER (WHERE s.status::text NOT LIKE '%取消%' AND s.status::text NOT LIKE '%Cancelled%'),
                 'accepted', COUNT(s.id) FILTER (WHERE s.status::text LIKE '%正取%'),
@@ -154,7 +159,7 @@ BEGIN
         ) AS evt
         FROM events e
         LEFT JOIN event_signups s ON e.id = s.event_id
-        GROUP BY e.id, e.title, e.start_date, e.end_date, e.deadline, e.fee, e.status, e.summary, e.itinerary, e.cover_image_url, e.drive_folder_url, e.spreadsheet_url, e.spreadsheet_id
+        GROUP BY e.id, e.title, e.start_date, e.end_date, e.deadline, e.fee, e.status, e.summary, e.itinerary, e.cover_image_url, e.drive_folder_url, e.spreadsheet_url, e.spreadsheet_id, e.line_group_url
         ORDER BY e.start_date DESC
     ) sub;
 
@@ -201,8 +206,8 @@ BEGIN
             'name', COALESCE(s.name, m.name, '未知報名者'),
             'gender', COALESCE(m.gender, ''),
             'phone', COALESCE(m.phone, ''),
-            'lineId', COALESCE(m.line_id, ''),
-            'realLineId', COALESCE(m.line_id, ''),
+            'lineId', COALESCE(s.line_id, m.line_id, ''),
+            'realLineId', COALESCE(s.line_id, m.line_id, ''),
             'email', COALESCE(m.email, ''),
             'address', COALESCE(m.address, ''),
             'birthday', COALESCE(m.birthday, ''),
@@ -418,6 +423,7 @@ BEGIN
         drive_folder_url,
         spreadsheet_url,
         spreadsheet_id,
+        line_group_url,
         updated_at
     )
     VALUES (
@@ -434,6 +440,7 @@ BEGIN
         NULLIF(trim(COALESCE(p_event_data->>'driveFolderUrl', '')), ''),
         NULLIF(trim(COALESCE(p_event_data->>'spreadsheetUrl', '')), ''),
         NULLIF(trim(COALESCE(p_event_data->>'spreadsheetId', '')), ''),
+        NULLIF(trim(COALESCE(p_event_data->>'lineGroupUrl', '')), ''),
         NOW()
     )
     ON CONFLICT (id) DO UPDATE
@@ -449,6 +456,7 @@ BEGIN
         drive_folder_url = COALESCE(EXCLUDED.drive_folder_url, events.drive_folder_url),
         spreadsheet_url = COALESCE(EXCLUDED.spreadsheet_url, events.spreadsheet_url),
         spreadsheet_id = COALESCE(EXCLUDED.spreadsheet_id, events.spreadsheet_id),
+        line_group_url = COALESCE(EXCLUDED.line_group_url, events.line_group_url),
         updated_at = NOW();
 
     -- 排入 sync_queue 佇列

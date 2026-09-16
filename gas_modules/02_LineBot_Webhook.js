@@ -157,7 +157,22 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     }
   }
 
-  // 3. 圖文選單「更多服務」與幫助中心次級選單
+  // 3. 最新活動查詢 (支援圖文選單「最新活動 Activities」、「最新活動」、「Activities」、「Activiies」、「報名活動」、「Events」)
+  if (
+    text.indexOf("最新活動") > -1 ||
+    lowerText.indexOf("activi") > -1 ||
+    queryText.indexOf("最新活動") > -1 ||
+    lowerQueryText.indexOf("activi") > -1 ||
+    text.indexOf("報名活動") > -1 ||
+    queryText.indexOf("報名活動") > -1 ||
+    lowerText === "events" ||
+    lowerQueryText === "events"
+  ) {
+    sendEventList(replyToken);
+    return;
+  }
+
+  // 4. 圖文選單「更多服務」與幫助中心次級選單
   if (text === "更多服務 More Services" || text === "更多服務" || queryText === "更多服務") {
     sendMoreOptionsMenu(replyToken);
     return;

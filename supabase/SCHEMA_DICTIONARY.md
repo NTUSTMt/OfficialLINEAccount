@@ -118,6 +118,7 @@
 | `event_id` | `TEXT` | 否 | 無 | - | **活動編號** (關聯 `events.id`) |
 | `line_user_id` | `TEXT` | 否 | 無 | - | **系統識別碼** (關聯 `members.line_user_id`) |
 | `name` | `TEXT` | 是 | NULL | - | **隊員姓名** (直觀檢視) |
+| `line_id` | `TEXT` | 是 | NULL | - | **自訂 Line ID** (關聯 `members.line_id`，方便幹部出隊聯絡) |
 | `status` | `event_signup_status_enum` | 否 | `'審核中 Checking'` | 1. `正取 Confirmed`<br>2. `正取（已繳費）Confirmed (Paid)`<br>3. `備取 Waitlisted`<br>4. `備取（有意願）Waitlisted (Interested)`<br>5. `審核中 Checking`<br>6. `已取消 Cancelled` | **審核結果 / 報名狀態** |
 | `payment_status` | `payment_status_enum` | 否 | `'未繳費 Unpaid'` | 1. `已繳費 Paid`<br>2. `待確認 Checking`<br>3. `未繳費 Unpaid` | **活動繳費狀態** |
 | `notification_status` | `TEXT` | 是 | `'未發送'` | `未發送`, `已發送` | **LINE 推播通知發送狀態** |

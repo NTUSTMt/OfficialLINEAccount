@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.127-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.133-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.124)](#7-最新版本異動紀錄-changelog-v01124)
+- [7. 最新版本異動紀錄 (Changelog v0.1.133)](#7-最新版本異動紀錄-changelog-v01133)
 
 ---
 
@@ -185,7 +185,78 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.127)
+## 7. 最新版本異動紀錄 (Changelog v0.1.133)
+
+### v0.1.133 (2026-09-16)
+- 🌐 **報名資料未完整防呆推播中英對稱健全化 ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+  - **英文版缺漏清單完整輸出**：修復原先英文段落僅有 `update the required information above` 而未列出具體缺漏欄位的缺陷。全新定義 `missingFormattedEn`，將各缺漏項目精確對應至完整英文欄位名稱（如 `👉 Fitness Proof`、`👉 Hiking Experience`），中英文雙語內容達到 100% 鏡像對齊。
+  - **移除原始 URL 網址暴露**：依據使用者要求，徹底移除文末生硬的原始 LIFF 連結字串（`👉 https://liff.line.me/...`），統一引導社員直接點選 LINE 底部圖文選單的「填寫資料 / Register」開啟設定，介面更加簡潔專業。
+  - **單元測試全數覆蓋**：更新 [test/61_event_group_url_and_accepted_notification.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/61_event_group_url_and_accepted_notification.test.mjs)，驗證中英欄位映射與無原始連結規則，167 項測試全數 Pass。
+
+### v0.1.132 (2026-09-16)
+- 🔗 **一鍵加入活動專屬群組全鏈路功能實施 (One-Click Event LINE Group Join Feature)**：
+  - **資料庫與 RPC 隱私架構升級 ([supabase/admin_events_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql), [supabase/get_my_dashboard.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/get_my_dashboard.sql), [supabase/add_line_group_url_to_events.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/add_line_group_url_to_events.sql))**：
+    - `events` 資料表擴充 `line_group_url TEXT` 欄位，支援自動自我修復結構遷移。
+    - `save_admin_event_rpc` 與 `get_admin_events_rpc` 支援 `line_group_url` 讀寫與同步。
+    - `get_my_dashboard` RPC 落實**嚴格隱私權限控制**：僅當報名狀態包含「正取」且非「取消」時（`s.status::text LIKE '%正取%' AND s.status::text NOT LIKE '%取消%'`）才向前端回傳 `lineGroupUrl`，杜絕未錄取或訪客透過網路 API 窺探群組連結。
+  - **幹部後台活動編輯與格式嚴格防呆 ([AdminEventForm.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventForm.tsx), [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx))**：
+    - **新增活動強制必填**：幹部發布新活動時，群組連結設定為必填項目；編輯舊活動若為空則顯示溫馨補填提示。
+    - **格式驗證並排除 OpenChat**：僅限一般 LINE 群組邀請連結（`https://line.me/R/ti/g/...` 或 `https://line.me/ti/g/...`），前端正規表達式嚴格阻擋並排除 LINE 社群（`ti/g2/`），避免入群審核與密碼混亂。
+    - **推播前防呆阻擋機制**：一鍵發送審核通知前，若該活動尚有正取人員待通知但未填寫群組連結，系統強制阻擋並彈出警示，杜絕發出失效或空白通知。
+    - **幹部卡片直達捷徑**：[AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx) 新增「活動群組」快捷連結，方便幹部快速進群管理。
+  - **正取 Flex Message 推播卡片升級 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+    - 改造正取通知 Bubble 卡片，採用清爽垂直雙按鈕設計，**全無 emoji**：
+      1. 上方主要按鈕（綠色 `#1DB446`）：`加入活動群組 Join Group`（點擊直接喚起 LINE 加入出隊專屬群組）
+      2. 下方次要按鈕（深灰 `#475569`）：`前往繳費系統 Pay`（導向 LIFF 繳費）
+    - 同步更新通知內文引導，提醒社員錄取後點擊按鈕直接加入出隊專屬群組。
+  - **個人主頁 Dashboard 備援按鈕 ([Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx))**：
+    - 正取社員登入「我的活動」卡片時，亦提供綠色「加入活動群組 Join Group」按鈕（無 emoji），避免社員誤刪 LINE 推播訊息而無法入群。
+  - **Google Sheets 雙向同步對齊**：
+    - 試算表 `events` 分頁新增同名欄位 `line_group_url`，幹部亦可直接在試算表中查閱群組連結。
+  - **全套單元測試覆蓋**：
+    - 新增 [test/61_event_group_url_and_accepted_notification.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/61_event_group_url_and_accepted_notification.test.mjs)，驗證正則檢驗、OpenChat 排除、RPC 結構與推播防呆，全套 166 項測試 100% 通過，打包建置無錯誤。
+
+### v0.1.131 (2026-09-16)
+- 🤖 **小岳 AI 客服回覆末尾自動附加中英對照免責警示語 ([gas_modules/04_Ai_Gemini.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/04_Ai_Gemini.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+  - **自動附加雙語警語**：每次小岳 AI 生成回覆時，於訊息最末端統一加入明確且友善的中英對照聲明：
+    ```text
+    ─────────────
+    小岳是 AI，小岳可以出錯
+    Yue is AI. Yue can make mistake.
+    ```
+  - **確保登山安全認知**：明確提醒使用者 AI 生成之戶外資訊與建議僅供參考，若遇特定路況或行程細節仍應與幹部確認。
+- 🧪 **單元測試全數覆蓋**：
+  - [test/60_ai_mention_and_chat_keyword_cleanup.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/60_ai_mention_and_chat_keyword_cleanup.test.mjs) 擴充免責聲明結尾格式驗證，162 項單元測試全數 Pass。
+
+### v0.1.130 (2026-09-16)
+- 📋 **活動報名表 `event_signups` 新增 `line_id` 欄位並直接綁定 `members.line_id` ([supabase/add_line_id_to_event_signups.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/add_line_id_to_event_signups.sql), [supabase/schema.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/schema.sql))**：
+  - **欄位擴充與歷史回填**：於 `event_signups` 資料表新增 `line_id TEXT` 欄位，並提供一次性更新將既有報名資料中對應 `line_user_id` 之 `line_id` 完整回填。
+  - **雙向自動連動觸發器 (Triggers with Recursion Guard)**：
+    - `trg_signup_sync_member_info`：新增報名時，若未傳入 `line_id` 或姓名，Trigger 自動自 `members` 資料表查詢填入。
+    - `trg_member_sync_to_signups`：當社員於個人主頁修改自訂 LINE ID 或姓名時，Trigger 自動串聯更新該社員在 `event_signups` 的所有報名紀錄。
+    - 嚴格守衛：所有觸發器開頭均包含 `IF pg_trigger_depth() > 1 THEN RETURN NEW; END IF;` 防遞迴守衛。
+- 🔄 **GAS 試算表與報名同步對齊 ([gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+  - `schemaMap.event_signups` 與 `_syncSignupToSheet` 的 `allowedCols` 正式納入 `line_id`，若報名同步至試算表時缺少 `line_id`，系統將自動向 `members` 查詢補齊，確保主試算表名冊包含隊員自訂 LINE ID。
+  - `_getGlobalColumnAliases` 擴充支援 `自訂Line`、`自訂LINE ID`。
+- 🧪 **單元測試全數覆蓋**：
+  - [test/59_event_deadline_timezone_and_sheet_sync.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/59_event_deadline_timezone_and_sheet_sync.test.mjs) 擴充 `line_id` 欄位白名單驗證，161 項單元測試全數 Pass。
+
+### v0.1.129 (2026-09-16)
+- 🧠 **小岳 AI 客服語言鏡像與嚴格純文字 (No Markdown) 規範 ([gas_modules/04_Ai_Gemini.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/04_Ai_Gemini.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+  - **提問語言鏡像一致性 (Language Mirroring)**：嚴格規範小岳 AI 依據提問語言對齊回答（以英文提問則一律以自然英文回答、以繁體中文提問則以繁體中文回答、日文問日文答），杜絕擅自切換語言或混雜。
+  - **嚴格純文字輸出 (Strictly Plain Text Only)**：全面嚴禁 Markdown 語法格式標記（禁止使用 `**粗體**`、`*斜體*`、`# 標題`、反引號代碼區塊與 Markdown 連結語法），排版一律以自然換行、條列符號（•）、數字列表（1. 2. 3.）與 emoji 呈現。
+  - **新增防禦性過濾函式 `_stripMarkdown`**：即使 LLM 模型產生殘留 Markdown 標記，於送出至 LINE 前端時一律自動轉為純文字與原生 URL 連結，杜絕星號與井號殘留在聊天室中。
+- 🧪 **單元測試全數覆蓋**：
+  - [test/60_ai_mention_and_chat_keyword_cleanup.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/60_ai_mention_and_chat_keyword_cleanup.test.mjs) 擴充 `_stripMarkdown` 粗體、斜體、標題、程式碼、超連結、刪除線過濾之單元測試，161 項單元測試全數 Pass。
+
+### v0.1.128 (2026-09-16)
+- 🎯 **恢復「最新活動 Activities」指令支援 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+  - **圖文選單與聊天指令無縫支援**：完整加回最新活動輪播卡片調用邏輯，支援「最新活動 Activities」、「最新活動」、「Activities」、「Activiies」（容錯包含常見拼寫）、「報名活動」與「Events」。
+  - **對外客服 @Yue 查詢連動**：支援在群組或私聊中輸入 `@Yue 最新活動` 或 `Yue activities` 立即觸發 `sendEventList`，直連 Supabase 回傳最新活動輪播。
+- 🤖 **選單文字同步對齊**：
+  - 更多服務次級選單卡片與 Webhook 指令同步更新為「🤖 小岳說明 AI Guide」，提升對外客服品牌認知一致性。
+- 🧪 **單元測試全數覆蓋**：
+  - [test/60_ai_mention_and_chat_keyword_cleanup.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/60_ai_mention_and_chat_keyword_cleanup.test.mjs) 擴充最新活動指令與容錯測試，160 項單元測試全數 Pass。
 
 ### v0.1.127 (2026-09-16)
 - 🛠️ **Supabase `admin_events_rpc.sql` 參數名稱一致性與防禦修復 ([supabase/admin_events_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql))**：

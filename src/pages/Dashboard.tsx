@@ -16,7 +16,8 @@ import {
   CalendarCheck,
   Package,
   Calendar,
-  FileText
+  FileText,
+  Users
 } from 'lucide-react';
 import '../App.css';
 
@@ -37,6 +38,7 @@ interface ActivityData {
   reviewStatus: string;
   payStatus: string;
   code?: string;
+  lineGroupUrl?: string | null;
 }
 
 interface EquipmentData {
@@ -663,7 +665,7 @@ function Dashboard({ userId }: { userId: string }) {
                   </div>
 
                   {/* 行動按鈕區 */}
-                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', marginTop: '4px' }}>
                     {act.reviewStatus.indexOf('取消') === -1 && act.reviewStatus.indexOf('已結束') === -1 && (
                       <button
                         onClick={() => handleCancelActivityClick(act)}
@@ -689,6 +691,38 @@ function Dashboard({ userId }: { userId: string }) {
                       >
                         {t('dashboard.activity.cancelBtn')}
                       </button>
+                    )}
+
+                    {/* 正取社員專屬：加入活動專屬群組按鈕 */}
+                    {act.reviewStatus.indexOf('正取') > -1 && act.reviewStatus.indexOf('取消') === -1 && act.lineGroupUrl && (
+                      <a
+                        href={act.lineGroupUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          backgroundColor: '#059669',
+                          color: 'white',
+                          border: 'none',
+                          padding: '8px 16px',
+                          borderRadius: '6px',
+                          fontWeight: 'bold',
+                          fontSize: '13px',
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.backgroundColor = '#047857';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.backgroundColor = '#059669';
+                        }}
+                      >
+                        <Users size={14} />
+                        <span>加入活動群組 Join Group</span>
+                      </a>
                     )}
 
                     {isUnpaid && (

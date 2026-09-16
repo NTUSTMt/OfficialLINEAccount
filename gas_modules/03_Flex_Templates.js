@@ -687,25 +687,50 @@ function handleSignup(replyToken, userId, eventId, ss) {
     var profileCheck = _checkProfileComplete(userId, ss, "signup");
 
     if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-      _replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先點選單中的「填寫資料」完成註冊後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first:\nhttps://liff.line.me/2009217429-AhPRqAHg");
+      _replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先點選單中的「填寫資料」完成註冊後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first.");
       return;
     }
 
     if (profileCheck.missingFields.length > 0) {
       var fieldEnMap = {
-        "姓名": "Name", "性別": "Gender", "身分證字號/居留證號": "ID / ARC Number",
-        "生日": "Birthday", "聯絡電話": "Phone Number", "系所": "Department",
-        "學號": "Student ID", "身分別": "Identity Status", "現居地址": "Current Address",
-        "電子郵件": "Email", "真實 LINE ID": "LINE ID", "緊急聯絡人姓名": "Emergency Contact Name",
-        "與緊急聯絡人關係": "Relationship", "緊急聯絡人電話": "Emergency Contact Phone",
-        "緊急聯絡人現居地址": "Emergency Contact Address", "爬山經歷": "Hiking Experience",
-        "體能自評": "Fitness Description", "體能證明": "Fitness Proof"
+        "姓名": "Full Name",
+        "性別": "Gender",
+        "身分證字號/居留證號": "ID / ARC / Passport Number",
+        "生日": "Date of Birth (Birthday)",
+        "聯絡電話": "Phone Number",
+        "系所": "Department",
+        "學號": "Student ID",
+        "身分別": "Identity Status",
+        "現居地址": "Current Residential Address",
+        "電子郵件": "Email Address",
+        "真實 LINE ID": "LINE ID",
+        "緊急聯絡人姓名": "Emergency Contact Name",
+        "與緊急聯絡人關係": "Relationship with Emergency Contact",
+        "緊急聯絡人電話": "Emergency Contact Phone",
+        "緊急聯絡人現居地址": "Emergency Contact Address",
+        "爬山經歷": "Hiking Experience",
+        "體能自評": "Fitness Self-Assessment",
+        "體能證明": "Fitness Proof"
       };
-      var missingFormatted = profileCheck.missingFields.map(function (f) {
+      var missingFormattedZh = profileCheck.missingFields.map(function (f) {
         return "👉 " + f + (fieldEnMap[f] ? " (" + fieldEnMap[f] + ")" : "");
       }).join("\n");
 
-      _replyMessage(replyToken, "⚠️ 報名失敗：您的個人資料尚不完整！\n\n為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n" + missingFormatted + "\n\n完成資料更新後，再回來點擊一鍵報名喔！🏕️\n─────────────\n⚠️ Registration Failed: Incomplete member profile!\nFor insurance and safety requirements, please click 'Register' in the menu to update the required information above, then try registering again:\n👉 https://liff.line.me/2009217429-AhPRqAHg");
+      var missingFormattedEn = profileCheck.missingFields.map(function (f) {
+        return "👉 " + (fieldEnMap[f] || f);
+      }).join("\n");
+
+      _replyMessage(replyToken, 
+        "⚠️ 報名失敗：您的個人資料尚不完整！\n\n" +
+        "為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n" +
+        missingFormattedZh + "\n\n" +
+        "完成資料更新後，再回來點擊一鍵報名喔！🏕️\n" +
+        "─────────────\n" +
+        "⚠️ Registration Failed: Incomplete member profile!\n\n" +
+        "For insurance coverage and outdoor activity safety, please click 'Register' in the menu to complete the following required fields:\n\n" +
+        missingFormattedEn + "\n\n" +
+        "Once your profile is updated, return here to sign up with one click! 🏕️"
+      );
       return;
     }
 

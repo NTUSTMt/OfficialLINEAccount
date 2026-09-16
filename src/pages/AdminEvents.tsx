@@ -81,6 +81,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     shortDesc: '',
     fullDesc: '',
     imageUrl: '',
+    lineGroupUrl: '',
     notifyOfficerGroup: true
   });
   const [selectedFile, setSelectedFile] = useState<{ base64: string; name: string } | null>(null);
@@ -309,6 +310,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       shortDesc: '',
       fullDesc: '',
       imageUrl: '',
+      lineGroupUrl: '',
       notifyOfficerGroup: true
     });
     setSelectedFile(null);
@@ -330,6 +332,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       shortDesc: evt.shortDesc,
       fullDesc: evt.fullDesc,
       imageUrl: evt.imageUrl,
+      lineGroupUrl: evt.lineGroupUrl || '',
       notifyOfficerGroup: false
     });
     setSelectedFile(null);
@@ -347,6 +350,21 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       return;
     }
 
+    const groupUrlTrimmed = (formData.lineGroupUrl || '').trim();
+    // 依據規格：新建立活動強制必填活動群組連結
+    if (!formData.eventId && !groupUrlTrimmed) {
+      alert('請填寫活動專屬群組連結 (LINE Group URL)！');
+      return;
+    }
+    // 格式防呆檢查：僅限一般 LINE 群組邀請連結，不支援 LINE 社群 (OpenChat)
+    if (groupUrlTrimmed) {
+      const lineGroupRegex = /^https:\/\/(?:line\.me\/(?:R\/)?ti\/g\/[a-zA-Z0-9_\-]+|line\.me\/R\/ti\/g\/|line\.me\/ti\/g\/)/i;
+      if (!lineGroupRegex.test(groupUrlTrimmed) || groupUrlTrimmed.includes('/ti/g2/')) {
+        alert('活動群組連結格式不正確！僅限一般 LINE 群組邀請連結（https://line.me/R/ti/g/... 或 https://line.me/ti/g/...），不支援 LINE 社群 (OpenChat)。');
+        return;
+      }
+    }
+
     setSubmittingForm(true);
     try {
       // ⚡ 若為「編輯舊活動」(formData.eventId 已存在)，才可在背景立即更新 Supabase
@@ -362,7 +380,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           status: formData.status,
           shortDesc: formData.shortDesc.trim(),
           fullDesc: formData.fullDesc.trim(),
-          imageUrl: formData.imageUrl
+          imageUrl: formData.imageUrl,
+          lineGroupUrl: groupUrlTrimmed
         }).catch(sbErr => {
           console.warn('[AdminEvents] Supabase 儲存活動例外:', sbErr);
         });
@@ -382,6 +401,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         shortDesc: formData.shortDesc.trim(),
         fullDesc: formData.fullDesc.trim(),
         imageUrl: formData.imageUrl,
+        lineGroupUrl: groupUrlTrimmed,
         coverImageFile: selectedFile,
         notifyOfficerGroup: formData.notifyOfficerGroup
       };
@@ -411,7 +431,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             imageUrl: result.imageUrl || formData.imageUrl,
             driveFolderUrl: result.driveFolderUrl,
             spreadsheetUrl: result.spreadsheetUrl,
-            spreadsheetId: result.spreadsheetId
+            spreadsheetId: result.spreadsheetId,
+            lineGroupUrl: groupUrlTrimmed
           }).catch(err => console.warn('[AdminEvents] 前端確認同步 Supabase 警告:', err));
         }
 
@@ -613,6 +634,15 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     if (unnotifiedCount === 0) {
       alert(t('adminEvents.alerts.noPendingNotification'));
+      return;
+    }
+
+    // 依據規格防呆：若名冊中有正取人員待發送，但活動尚未填寫群組連結，阻擋推播並提示
+    const hasUnnotifiedAccepted = signupsList.some(
+      (s) => s.reviewResult.indexOf('正取') > -1 && s.notifyStatus !== '已通知'
+    );
+    if (hasUnnotifiedAccepted && !selectedEventForSignups.lineGroupUrl) {
+      alert('⚠️ 此活動尚未設定專屬群組連結 (LINE Group URL)！\n\n系統規範在發送「正取通知」前，必須先於活動編輯頁面設定群組邀請連結，供社員一鍵入群。請先點選「編輯活動」填寫群組連結後再發送推播！');
       return;
     }
 

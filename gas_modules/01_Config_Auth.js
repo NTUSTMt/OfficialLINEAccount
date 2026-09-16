@@ -177,7 +177,7 @@ function _getGlobalColumnAliases(englishName) {
     "line_user_id": ["系統識別碼", "UID", "LINE UID", "User ID"],
     "name": ["姓名", "名字", "社員姓名", "稱呼", "聯絡人"],
     "gender": ["性別"],
-    "line_id": ["Line ID", "LINE ID", "Line帳號", "LINE帳號"],
+    "line_id": ["Line ID", "LINE ID", "Line帳號", "LINE帳號", "自訂Line", "自訂LINE ID"],
     "email": ["電子郵件", "信箱", "Email", "E-mail"],
     "phone": ["電話", "聯絡電話", "手機", "行動電話"],
     "department": ["系所", "系級", "科系", "學系"],

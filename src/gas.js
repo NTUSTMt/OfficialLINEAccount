@@ -177,7 +177,7 @@ function _getGlobalColumnAliases(englishName) {
     "line_user_id": ["系統識別碼", "UID", "LINE UID", "User ID"],
     "name": ["姓名", "名字", "社員姓名", "稱呼", "聯絡人"],
     "gender": ["性別"],
-    "line_id": ["Line ID", "LINE ID", "Line帳號", "LINE帳號"],
+    "line_id": ["Line ID", "LINE ID", "Line帳號", "LINE帳號", "自訂Line", "自訂LINE ID"],
     "email": ["電子郵件", "信箱", "Email", "E-mail"],
     "phone": ["電話", "聯絡電話", "手機", "行動電話"],
     "department": ["系所", "系級", "科系", "學系"],
@@ -607,7 +607,22 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     }
   }
 
-  // 3. 圖文選單「更多服務」與幫助中心次級選單
+  // 3. 最新活動查詢 (支援圖文選單「最新活動 Activities」、「最新活動」、「Activities」、「Activiies」、「報名活動」、「Events」)
+  if (
+    text.indexOf("最新活動") > -1 ||
+    lowerText.indexOf("activi") > -1 ||
+    queryText.indexOf("最新活動") > -1 ||
+    lowerQueryText.indexOf("activi") > -1 ||
+    text.indexOf("報名活動") > -1 ||
+    queryText.indexOf("報名活動") > -1 ||
+    lowerText === "events" ||
+    lowerQueryText === "events"
+  ) {
+    sendEventList(replyToken);
+    return;
+  }
+
+  // 4. 圖文選單「更多服務」與幫助中心次級選單
   if (text === "更多服務 More Services" || text === "更多服務" || queryText === "更多服務") {
     sendMoreOptionsMenu(replyToken);
     return;
@@ -1858,25 +1873,50 @@ function handleSignup(replyToken, userId, eventId, ss) {
     var profileCheck = _checkProfileComplete(userId, ss, "signup");
 
     if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-      _replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先點選單中的「填寫資料」完成註冊後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first:\nhttps://liff.line.me/2009217429-AhPRqAHg");
+      _replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先點選單中的「填寫資料」完成註冊後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first.");
       return;
     }
 
     if (profileCheck.missingFields.length > 0) {
       var fieldEnMap = {
-        "姓名": "Name", "性別": "Gender", "身分證字號/居留證號": "ID / ARC Number",
-        "生日": "Birthday", "聯絡電話": "Phone Number", "系所": "Department",
-        "學號": "Student ID", "身分別": "Identity Status", "現居地址": "Current Address",
-        "電子郵件": "Email", "真實 LINE ID": "LINE ID", "緊急聯絡人姓名": "Emergency Contact Name",
-        "與緊急聯絡人關係": "Relationship", "緊急聯絡人電話": "Emergency Contact Phone",
-        "緊急聯絡人現居地址": "Emergency Contact Address", "爬山經歷": "Hiking Experience",
-        "體能自評": "Fitness Description", "體能證明": "Fitness Proof"
+        "姓名": "Full Name",
+        "性別": "Gender",
+        "身分證字號/居留證號": "ID / ARC / Passport Number",
+        "生日": "Date of Birth (Birthday)",
+        "聯絡電話": "Phone Number",
+        "系所": "Department",
+        "學號": "Student ID",
+        "身分別": "Identity Status",
+        "現居地址": "Current Residential Address",
+        "電子郵件": "Email Address",
+        "真實 LINE ID": "LINE ID",
+        "緊急聯絡人姓名": "Emergency Contact Name",
+        "與緊急聯絡人關係": "Relationship with Emergency Contact",
+        "緊急聯絡人電話": "Emergency Contact Phone",
+        "緊急聯絡人現居地址": "Emergency Contact Address",
+        "爬山經歷": "Hiking Experience",
+        "體能自評": "Fitness Self-Assessment",
+        "體能證明": "Fitness Proof"
       };
-      var missingFormatted = profileCheck.missingFields.map(function (f) {
+      var missingFormattedZh = profileCheck.missingFields.map(function (f) {
         return "👉 " + f + (fieldEnMap[f] ? " (" + fieldEnMap[f] + ")" : "");
       }).join("\n");
 
-      _replyMessage(replyToken, "⚠️ 報名失敗：您的個人資料尚不完整！\n\n為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n" + missingFormatted + "\n\n完成資料更新後，再回來點擊一鍵報名喔！🏕️\n─────────────\n⚠️ Registration Failed: Incomplete member profile!\nFor insurance and safety requirements, please click 'Register' in the menu to update the required information above, then try registering again:\n👉 https://liff.line.me/2009217429-AhPRqAHg");
+      var missingFormattedEn = profileCheck.missingFields.map(function (f) {
+        return "👉 " + (fieldEnMap[f] || f);
+      }).join("\n");
+
+      _replyMessage(replyToken, 
+        "⚠️ 報名失敗：您的個人資料尚不完整！\n\n" +
+        "為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n" +
+        missingFormattedZh + "\n\n" +
+        "完成資料更新後，再回來點擊一鍵報名喔！🏕️\n" +
+        "─────────────\n" +
+        "⚠️ Registration Failed: Incomplete member profile!\n\n" +
+        "For insurance coverage and outdoor activity safety, please click 'Register' in the menu to complete the following required fields:\n\n" +
+        missingFormattedEn + "\n\n" +
+        "Once your profile is updated, return here to sign up with one click! 🏕️"
+      );
       return;
     }
 
@@ -2014,8 +2054,16 @@ function _handleGeminiChat(userId, userQuery) {
     var knowledgeBase = _fetchDocsKnowledgeBase();
     var eventsContext = _fetchOpenEventsContext();
 
-    var systemInstruction = "你是一位熱情、專業的「台科登山社社團系統」AI 智慧客服嚮導。\n" +
+    var systemInstruction = "你是一位熱情、親切且專業的「台科登山社社團系統」AI 智慧客服嚮導「小岳 (Yue)」。\n" +
       "請根據以下社團規章、活動與知識庫回答使用者的問題。若資訊不足，請禮貌引導向幹部洽詢。\n\n" +
+      "【核心回覆原則與格式嚴格規範】：\n" +
+      "1. 語言一致性（Mirror User Language）：提問者使用什麼語言提問，你就必須一律使用相同的語言回答（例如：使用者用英文提問，必須以自然流利的英文回覆；使用者用繁體中文提問，必須以台灣繁體中文回覆；使用者用日文提問，必須以日文回覆，切勿混雜或擅自變更語言）。\n" +
+      "2. 嚴格純文字輸出（Strictly Plain Text Only, No Markdown）：LINE 官方帳號對話視窗不支援 Markdown 渲染，因此絕對禁止輸出任何 Markdown 語法標記！\n" +
+      "   • 嚴禁使用粗體或斜體語法（禁止出現 **文字**、*文字*、__文字__、_文字_ 等星號或底線標記）。\n" +
+      "   • 嚴禁使用標題語法（禁止出現 #、##、###）。\n" +
+      "   • 嚴禁使用反引號程式碼語法（禁止出現 `code` 或 ```code```）。\n" +
+      "   • 嚴禁使用 Markdown 格式超連結（禁止出現 [名稱](網址)，若需提供連結請直接輸出原始 URL）。\n" +
+      "   • 排版僅允許使用自然換行、條列符號（• 或 1. 2. 3.）、適量 emoji 與空行分隔，呈現乾淨易讀的純文字視覺效果。\n\n" +
       "【當前開放活動資訊】：\n" + eventsContext + "\n\n" +
       "【社團知識庫規章】：\n" + knowledgeBase + "\n";
 
@@ -2046,7 +2094,9 @@ function _handleGeminiChat(userId, userQuery) {
     if (res.getResponseCode() === 200) {
       var data = JSON.parse(res.getContentText());
       if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-        return data.candidates[0].content.parts[0].text;
+        var rawReply = data.candidates[0].content.parts[0].text;
+        var cleanReply = _stripMarkdown(rawReply);
+        return cleanReply + "\n\n─────────────\n小岳是 AI，小岳可以出錯\nYue is AI. Yue can make mistake.";
       }
     } else {
       console.warn("Gemini API 回應異常 (HTTP " + res.getResponseCode() + "):", res.getContentText());
@@ -2055,6 +2105,23 @@ function _handleGeminiChat(userId, userQuery) {
     console.error("Gemini AI 客服執行失敗:", err);
   }
   return null;
+}
+
+/**
+ * 徹底過濾任何 Markdown 標記，確保輸出至 LINE 之訊息為乾淨純文字
+ */
+function _stripMarkdown(text) {
+  if (!text) return "";
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/_(.*?)_/g, "$1")
+    .replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/~~(.*?)~~/g, "$1")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1 ($2)")
+    .trim();
 }
 
 /**
@@ -2534,7 +2601,7 @@ function _getDefaultSchemaColumns(tableName) {
       "spreadsheet_id", "created_at", "updated_at"
     ],
     "event_signups": [
-      "id", "event_id", "line_user_id", "name", "status", "payment_status",
+      "id", "event_id", "line_user_id", "name", "line_id", "status", "payment_status",
       "is_official_member_snapshot", "cancel_reason", "notes", "created_at", "updated_at"
     ],
     "equipments": [
@@ -2763,15 +2830,16 @@ function _syncSignupToSheet(ss, p, action) {
 
   // 2. 嚴格過濾掉非標準 Schema 欄位，防止在主試算表長出 N, O, P, Q 欄
   var allowedCols = [
-    "id", "event_id", "line_user_id", "name", "status", "payment_status",
+    "id", "event_id", "line_user_id", "name", "line_id", "status", "payment_status",
     "is_official_member_snapshot", "cancel_reason", "role", "paid_amount", "assigned_driver", "notes", "created_at", "updated_at"
   ];
-  // ⚡ 若缺少 name 則自動自 members 查詢補齊，避免試算表姓名空白
-  if (!p.name && p.line_user_id && typeof _supabaseGet === "function") {
+  // ⚡ 若缺少 name 或 line_id 則自動自 members 查詢補齊，避免試算表姓名或 Line ID 空白
+  if ((!p.name || !p.line_id) && p.line_user_id && typeof _supabaseGet === "function") {
     try {
-      var mems = _supabaseGet("members", { line_user_id: "eq." + p.line_user_id, select: "name" });
-      if (mems && mems.length > 0 && mems[0].name) {
-        p.name = mems[0].name;
+      var mems = _supabaseGet("members", { line_user_id: "eq." + p.line_user_id, select: "name,line_id" });
+      if (mems && mems.length > 0) {
+        if (!p.name && mems[0].name) p.name = mems[0].name;
+        if (!p.line_id && mems[0].line_id) p.line_id = mems[0].line_id;
       }
     } catch (e) {}
   }
@@ -3269,6 +3337,7 @@ function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus, eve
       event_id: eventId,
       line_user_id: userId,
       name: p.name || "",
+      line_id: p.lineId || p.line_id || "",
       status: signupStatus || "審核中 Checking",
       is_official_member_snapshot: isOfficial,
       notes: "",
@@ -5431,6 +5500,7 @@ function _syncEventToSupabase(eventData) {
       drive_folder_url: eventData.driveFolderUrl || null,
       spreadsheet_url: eventData.spreadsheetUrl || null,
       spreadsheet_id: eventData.spreadsheetId || null,
+      line_group_url: eventData.lineGroupUrl || null,
       updated_at: new Date().toISOString()
     };
 
@@ -5502,7 +5572,8 @@ function _handleSaveEvent(json) {
           img: getOrCreateColIdx(eventSheet, headers, "封面圖網址"),
           driveFolder: getOrCreateColIdx(eventSheet, headers, "雲端資料夾網址"),
           sheetUrl: getOrCreateColIdx(eventSheet, headers, "報名名冊網址"),
-          sheetId: getOrCreateColIdx(eventSheet, headers, "試算表ID")
+          sheetId: getOrCreateColIdx(eventSheet, headers, "試算表ID"),
+          lineGroupUrl: getOrCreateColIdx(eventSheet, headers, "line_group_url")
         };
 
         if (eventId) {
@@ -5611,6 +5682,7 @@ function _handleSaveEvent(json) {
       if (driveFolderUrl) rowValues[hIdx.driveFolder] = driveFolderUrl;
       if (spreadsheetUrl) rowValues[hIdx.sheetUrl] = spreadsheetUrl;
       if (spreadsheetId) rowValues[hIdx.sheetId] = spreadsheetId;
+      if (json.lineGroupUrl !== undefined) rowValues[hIdx.lineGroupUrl] = json.lineGroupUrl || "";
 
       if (isUpdate && targetRow > -1) {
         eventSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
@@ -5634,7 +5706,8 @@ function _handleSaveEvent(json) {
         imageUrl: imageUrl,
         driveFolderUrl: driveFolderUrl,
         spreadsheetUrl: spreadsheetUrl,
-        spreadsheetId: spreadsheetId
+        spreadsheetId: spreadsheetId,
+        lineGroupUrl: json.lineGroupUrl
       });
     } catch (sbSyncErr) {
       console.warn("同步活動資料至 Supabase 警告:", sbSyncErr);
@@ -5701,9 +5774,10 @@ function _handleSendEventNotifications(json) {
     var sbSuccessNotified = false;
     if (sbUrl && sbKey && targetEventId) {
       try {
-        // 取得活動名稱
-        var evRes = _supabaseGet("events", { id: "eq." + targetEventId, select: "id,title" });
+        // 取得活動名稱與專屬群組連結
+        var evRes = _supabaseGet("events", { id: "eq." + targetEventId, select: "id,title,line_group_url" });
         var targetEventTitle = (evRes && evRes[0] && evRes[0].title) ? evRes[0].title : targetEventId;
+        var targetGroupUrl = (evRes && evRes[0] && evRes[0].line_group_url) ? String(evRes[0].line_group_url).trim() : "";
 
         // 查詢該活動之所有報名者
         var signupsUrl = sbUrl + "/rest/v1/event_signups?event_id=eq." + encodeURIComponent(targetEventId) + "&select=id,event_id,line_user_id,name,status,notification_status";
@@ -5719,6 +5793,18 @@ function _handleSendEventNotifications(json) {
         if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
           var sbSignups = JSON.parse(res.getContentText());
           if (Array.isArray(sbSignups) && sbSignups.length > 0) {
+            // 防呆檢驗：若有正取人員待推播通知，但活動未設定群組連結，立即阻擋
+            var hasPendingAccepted = sbSignups.some(function (item) {
+              var st = String(item.status || "");
+              var noti = String(item.notification_status || "");
+              var uid = String(item.line_user_id || "").trim();
+              return st.indexOf("正取") > -1 && st.indexOf("取消") === -1 && noti !== "已通知" && uid.startsWith("U");
+            });
+
+            if (hasPendingAccepted && !targetGroupUrl) {
+              return _errorResponse("此活動尚未設定專屬群組連結 (line_group_url)，請先至活動編輯填寫群組連結後再發送推播！");
+            }
+
             sbSuccessNotified = true;
             for (var k = 0; k < sbSignups.length; k++) {
               var sItem = sbSignups[k];
@@ -5743,22 +5829,35 @@ function _handleSendEventNotifications(json) {
                         { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
                         { type: "text", text: "【 " + statusStr + " 】", weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
                         { type: "separator", margin: "md" },
-                        { type: "text", text: "恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入出隊群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                        { type: "text", text: "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!", wrap: true, margin: "md", size: "xs", color: "#666666" }
                       ]
                     },
                     footer: {
                       type: "box",
                       layout: "vertical",
-                      contents: [{
-                        type: "button",
-                        style: "primary",
-                        color: "#1DB446",
-                        action: {
-                          type: "uri",
-                          label: "前往繳費系統 Pay",
-                          uri: "https://liff.line.me/" + (LIFF_CHANNEL_ID || "2009217429") + "-u7OCkmQO"
+                      spacing: "sm",
+                      contents: [
+                        {
+                          type: "button",
+                          style: "primary",
+                          color: "#1DB446",
+                          action: {
+                            type: "uri",
+                            label: "加入活動群組 Join Group",
+                            uri: targetGroupUrl
+                          }
+                        },
+                        {
+                          type: "button",
+                          style: "secondary",
+                          color: "#475569",
+                          action: {
+                            type: "uri",
+                            label: "前往繳費系統 Pay",
+                            uri: "https://liff.line.me/" + (LIFF_CHANNEL_ID || "2009217429") + "-u7OCkmQO"
+                          }
                         }
-                      }]
+                      ]
                     }
                   };
                   pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
@@ -5904,7 +6003,7 @@ function _handleGetAdminEvents(userId) {
     }
 
     if (SUPABASE_URL && SUPABASE_KEY) {
-      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,start_date,end_date,deadline,fee,status,summary,itinerary,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id&order=start_date.desc";
+      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,start_date,end_date,deadline,fee,status,summary,itinerary,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id,line_group_url&order=start_date.desc";
       var res = UrlFetchApp.fetch(url, {
         method: "get",
         headers: _getSupabaseHeaders(),
@@ -5927,7 +6026,8 @@ function _handleGetAdminEvents(userId) {
             imageUrl: e.image_url || "",
             driveFolderUrl: e.drive_folder_url || "",
             spreadsheetUrl: e.spreadsheet_url || "",
-            spreadsheetId: e.spreadsheet_id || ""
+            spreadsheetId: e.spreadsheet_id || "",
+            lineGroupUrl: e.line_group_url || ""
           };
         });
         return _jsonResponse({ status: "success", events: events });

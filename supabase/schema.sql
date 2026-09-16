@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS event_signups (
     event_id TEXT NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
     line_user_id TEXT NOT NULL REFERENCES members(line_user_id) ON DELETE RESTRICT,
     name TEXT,                           -- 社員姓名 (方便後台直觀辨識)
+    line_id TEXT,                        -- 自訂 Line ID (關聯 members.line_id 方便幹部聯絡)
     status event_signup_status_enum NOT NULL DEFAULT '審核中 Checking', 
     payment_status payment_status_enum NOT NULL DEFAULT '未繳費 Unpaid',
     is_official_member_snapshot BOOLEAN NOT NULL DEFAULT FALSE,
@@ -129,6 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_signups_line_user_id ON event_signups(line_user_i
 CREATE INDEX IF NOT EXISTS idx_signups_status ON event_signups(status);
 
 ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS line_id TEXT;
 
 DROP TRIGGER IF EXISTS trg_signups_updated_at ON event_signups;
 CREATE TRIGGER trg_signups_updated_at
