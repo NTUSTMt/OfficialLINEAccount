@@ -175,12 +175,12 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // 3.3 小岳助理說明 / AI Guide
+  // 3.3 小岳說明 / AI Guide
   if (
-    text.indexOf("小岳助理說明") > -1 ||
     text.indexOf("小岳說明") > -1 ||
     text.indexOf("小岳指南") > -1 ||
-    lowerText.indexOf("ai guide") > -1
+    lowerText.indexOf("ai guide") > -1 || 
+    text.indexOf("小岳說明 AI Guide") > -1
   ) {
     var aiGuideMsg = "🏔️ 【小岳 (Yue) AI 客服使用指南 / AI Guide】\n" +
       "─────────────\n" +

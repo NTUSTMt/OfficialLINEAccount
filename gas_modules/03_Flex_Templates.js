@@ -544,8 +544,8 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "🤖 小岳助理說明 AI Guide",
-          "text": "小岳助理說明"
+          "label": "🤖 小岳說明 AI Guide",
+          "text": "小岳說明 AI Guide"
         }
       }, {
         "type": "button",
