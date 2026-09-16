@@ -170,10 +170,76 @@ function _findColByEnglishName(headers, colName) {
   return -1;
 }
 
+// 全域常用中英欄位對照字典 (支援試算表純中文或純英文表頭自適應)
+function _getGlobalColumnAliases(englishName) {
+  var map = {
+    "id": ["編號", "代號", "ID", "專屬碼", "單號", "序號"],
+    "line_user_id": ["系統識別碼", "UID", "LINE UID", "User ID"],
+    "name": ["姓名", "名字", "社員姓名", "稱呼", "聯絡人"],
+    "gender": ["性別"],
+    "line_id": ["Line ID", "LINE ID", "Line帳號", "LINE帳號"],
+    "email": ["電子郵件", "信箱", "Email", "E-mail"],
+    "phone": ["電話", "聯絡電話", "手機", "行動電話"],
+    "department": ["系所", "系級", "科系", "學系"],
+    "student_id": ["學號"],
+    "payment_status": ["繳費狀態", "對帳狀態", "付款狀態"],
+    "membership_expires_at": ["社籍到期日", "到期日", "有效期限"],
+    "birthday": ["生日", "出生年月日"],
+    "id_card": ["身分證字號", "證件號碼", "居留證號", "身分證"],
+    "address": ["地址", "聯絡地址", "住址"],
+    "outdoor_experience": ["爬山經驗", "登山經驗", "百岳經歷", "戶外經驗"],
+    "fitness_desc": ["體能狀況", "體能說明", "平時運動習慣"],
+    "proof_urls": ["證明文件", "證照證明"],
+    "emergency_contact_name": ["緊急聯絡人姓名", "緊急聯絡人", "聯絡人姓名"],
+    "emergency_contact_rel": ["與緊急聯絡人關係", "緊急聯絡人關係", "關係"],
+    "emergency_contact_phone": ["緊急聯絡人電話", "緊急聯絡電話"],
+    "emergency_contact_address": ["緊急聯絡人地址", "緊急聯絡地址"],
+    "medical_history": ["病史", "過敏史", "特殊病史"],
+    "identity_status": ["身分", "學生身分", "校內外身分"],
+    "join_membership_intent": ["入社意願", "是否入社"],
+    "officer_intent": ["幹部意願", "擔任幹部意願"],
+    "is_official_member": ["是否為正式社員", "正式社員", "社員身分"],
+    "is_officer": ["是否為幹部", "幹部身分"],
+    "officer_role": ["幹部職稱", "幹部角色", "職稱"],
+    "created_at": ["建立時間", "填寫時間", "建立日期"],
+    "updated_at": ["更新時間", "最後更新", "修改時間"],
+    // events
+    "title": ["活動名稱", "活動標題", "名稱"],
+    "fee": ["費用", "活動費用", "報名費", "金額"],
+    "start_date": ["開始日期", "出發日期", "活動開始"],
+    "end_date": ["結束日期", "回程日期", "活動結束"],
+    "deadline": ["截止時間", "報名截止", "截止日期", "報名截止日"],
+    "status": ["狀態", "活動狀態", "審核狀態", "報名狀態"],
+    "summary": ["簡介", "活動簡介", "行程摘要"],
+    "itinerary": ["詳細行程", "行程規劃", "行程"],
+    "cover_image_url": ["封面圖", "封面照", "活動封面"],
+    "drive_folder_url": ["雲端資料夾", "Drive 資料夾"],
+    "spreadsheet_url": ["名冊試算表", "試算表網址"],
+    // equipments & loans
+    "total_qty": ["總數量", "總庫存"],
+    "available_qty": ["剩餘數量", "可用庫存", "庫存"],
+    "category": ["分類", "裝備類別", "器材類別"],
+    "member_price_per_day": ["社員每日租金", "社員價"],
+    "non_member_price_per_day": ["非社員每日租金", "非社員價"],
+    "days": ["天數", "租借天數"],
+    "purpose": ["用途", "活動用途"],
+    "total_deposit": ["押金總額", "總押金", "押金"],
+    "total_rent": ["租金總額", "總租金", "租金"],
+    // payments
+    "amount": ["金額", "繳費金額", "申報金額"],
+    "bank_last5": ["後五碼", "帳號後五碼", "末五碼"],
+    "proof_image_url": ["繳費憑證", "匯款證明", "水單圖片"]
+  };
+  return map[englishName] || null;
+}
+
 // 智慧表頭欄位尋找器 (優先以英文名精確比對，次以中文別名回退)
 function _findHeaderCol(headers, englishName, aliases) {
   var idx = _findColByEnglishName(headers, englishName);
   if (idx > -1) return idx;
+  if (!aliases) {
+    aliases = _getGlobalColumnAliases(englishName);
+  }
   if (aliases) {
     if (!Array.isArray(aliases)) aliases = [aliases];
     for (var a = 0; a < aliases.length; a++) {
@@ -446,43 +512,56 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   var lowerText = text.toLowerCase();
   var targetGroupId = groupId || (ev && ev.source && ev.source.groupId) || "";
   var isGroup = !!targetGroupId || (ev && ev.source && (ev.source.type === "group" || ev.source.type === "room"));
+  var adminGroupId = PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID') || "";
+  var isAdminGroup = !!(targetGroupId && adminGroupId && targetGroupId === adminGroupId);
 
-  // 檢查是否提及機器人 (@小岳助理 / @小岳 或 LINE 官方 mention.mentionees.isSelf 或 包含「小岳」/「助理」)
-  var isMentioned = false;
-  if (ev && ev.message && ev.message.mention && Array.isArray(ev.message.mention.mentionees)) {
-    isMentioned = ev.message.mention.mentionees.some(function (m) {
-      return m.isSelf === true;
-    });
-  }
-  if (!isMentioned) {
-    if (
-      text.indexOf("@小岳助理") > -1 ||
-      text.indexOf("小岳助理") > -1 ||
-      text.indexOf("@小岳") > -1 ||
-      text.indexOf("小岳") > -1 ||
-      lowerText.indexOf("小岳") > -1
-    ) {
-      isMentioned = true;
+  // 1. 判定是否呼叫幹部群組專用「小岳助理」
+  var isAssistantMentioned = (
+    text.indexOf("@小岳助理") > -1 ||
+    text.indexOf("小岳助理") > -1
+  );
+
+  // 2. 判定是否呼叫對外 AI 客服「小岳」或「Yue」（排除純「小岳助理」字樣之干擾）
+  var tempWithoutAssistant = text.replace(/@?小岳助理/g, "");
+  var isYueMentioned = (
+    tempWithoutAssistant.indexOf("@小岳") > -1 ||
+    tempWithoutAssistant.indexOf("小岳") > -1 ||
+    /\b@?yue\b/i.test(tempWithoutAssistant)
+  );
+
+  // 3. 隔離安全守衛：
+  // 3.1「小岳助理」僅限已綁定之幹部群組使用（或群組中執行綁定指令）；私聊或非幹部群組一律保持完全靜默
+  if (isAssistantMentioned) {
+    var isBindAttempt = (text.indexOf("綁定幹部群組") > -1 || text.indexOf("#bind_admin") > -1);
+    if (!isGroup || (!isAdminGroup && !isBindAttempt)) {
+      return;
     }
   }
 
-  // 群組防洗版過濾：在群組中若未被召喚（@小岳助理），嚴格靜默不回覆
-  if (isGroup && !isMentioned) {
+  // 3.2 群組防洗版：在群組中若未呼叫「小岳助理」（幹部群組）且未呼叫「小岳/Yue」，嚴格靜默不回覆
+  if (isGroup && !isAssistantMentioned && !isYueMentioned) {
     return;
   }
 
-  // 若在群組被召喚，清理叫名文字 (完整相容 LINE 內建 @標註、小岳助理、小岳、助理)
+  // 4. 清理叫名文字
   var cleanText = text;
-  if (isGroup && isMentioned) {
+  if (isAssistantMentioned) {
     cleanText = text
       .replace(/@\S+/g, "")
       .replace(/小岳助理/g, "")
-      .replace(/小岳/g, "")
       .replace(/助理/g, "")
+      .replace(/^[\s,，:：]+/, "")
+      .trim();
+  } else if (isYueMentioned) {
+    cleanText = tempWithoutAssistant
+      .replace(/@\S+/g, "")
+      .replace(/小岳/g, "")
+      .replace(/\byue\b/gi, "")
+      .replace(/^[\s,，:：]+/, "")
       .trim();
   }
 
-  var queryText = (isGroup && isMentioned && cleanText) ? cleanText : text;
+  var queryText = ((isAssistantMentioned || isYueMentioned) && cleanText) ? cleanText : text;
   var lowerQueryText = queryText.toLowerCase();
 
   // ⭐️ 幹部群組綁定指令（群組內必須 @小岳助理 召喚方可啟動綁定，避免誤觸）
@@ -498,10 +577,10 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // 1. 幹部專屬助理卡片（幹部在群組單純 @小岳助理、或輸入「@小岳助理 幹部系統」/「幹部系統」/ 招呼語）
+  // 1. 幹部專屬助理卡片（僅限幹部群組中呼叫小岳助理或查詢幹部系統）
   if (
-    (isGroup && isMentioned && (cleanText === "" || cleanText === "幹部系統" || cleanText === "嗨" || cleanText === "哈囉" || cleanText.toLowerCase() === "hi" || cleanText.toLowerCase() === "hello")) ||
-    text.indexOf("幹部系統") > -1
+    (isAdminGroup && isAssistantMentioned && (cleanText === "" || cleanText === "幹部系統" || cleanText === "嗨" || cleanText === "哈囉" || cleanText.toLowerCase() === "hi" || cleanText.toLowerCase() === "hello")) ||
+    (isAdminGroup && text.indexOf("幹部系統") > -1)
   ) {
     var adminCard = "🌲 幹部專屬助理「小岳助理」在此！\n" +
       "─────────────\n" +
@@ -528,81 +607,112 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     }
   }
 
-  // 3. 最新活動查詢 (支援「最新活動」、「最新活動 Activities」、「Activities」、「Events」)
-  if (queryText.indexOf("最新活動") > -1 || lowerQueryText.indexOf("activities") > -1 || queryText.indexOf("報名活動") > -1 || lowerQueryText === "events") {
-    sendEventList(replyToken);
-    return;
-  }
-
-  // 4. 幹部名單 (支援「幹部是誰」、「幹部名單」、「Officers」)
-  if (queryText.indexOf("幹部是誰") > -1 || queryText.indexOf("幹部名單") > -1 || lowerQueryText.indexOf("officers") > -1) {
-    sendOfficerMenu(replyToken, _getSpreadsheet());
-    return;
-  }
-
-  // 5. 更多服務 (支援「更多服務」、「更多服務 More Services」、「其他」、「More」)
-  if (queryText.indexOf("更多服務") > -1 || lowerQueryText.indexOf("more services") > -1 || queryText.indexOf("其他服務") > -1 || queryText === "其他" || lowerQueryText === "more") {
+  // 3. 圖文選單「更多服務」與幫助中心次級選單
+  if (text === "更多服務 More Services" || text === "更多服務" || queryText === "更多服務") {
     sendMoreOptionsMenu(replyToken);
     return;
   }
 
-  // 5.1 意見與回饋 (支援「意見與回饋」、「Feedback」)
-  if (queryText.indexOf("意見與回饋") > -1 || lowerQueryText.indexOf("feedback") > -1) {
+  // 3.1 幹部名單 (支援「幹部是誰」、「幹部名單」、「Officers」)
+  if (text.indexOf("幹部是誰") > -1 || text.indexOf("幹部名單") > -1 || lowerText.indexOf("officers") > -1) {
+    sendOfficerMenu(replyToken, _getSpreadsheet());
+    return;
+  }
+
+  // 3.2 意見與回饋 (支援「意見與回饋」、「Feedback」)
+  if (text.indexOf("意見與回饋") > -1 || lowerText.indexOf("feedback") > -1) {
     sendFeedbackLink(replyToken);
     return;
   }
 
-  // 5.2 小岳助理使用說明 (支援「小岳助理說明」、「小岳助理指南」、「小岳說明」、「小岳指南」、「AI Guide」)
+  // 3.3 小岳助理說明 / AI Guide
   if (
-    queryText.indexOf("小岳助理說明") > -1 ||
-    queryText.indexOf("小岳助理指南") > -1 ||
-    queryText.indexOf("小岳說明") > -1 ||
-    queryText.indexOf("小岳指南") > -1 ||
-    lowerQueryText.indexOf("ai guide") > -1
+    text.indexOf("小岳助理說明") > -1 ||
+    text.indexOf("小岳說明") > -1 ||
+    text.indexOf("小岳指南") > -1 ||
+    lowerText.indexOf("ai guide") > -1
   ) {
-    var aiGuideMsg = "🏔️ 【小岳助理使用指南 / AI Assistant Guide】\n" +
+    var aiGuideMsg = "🏔️ 【小岳 (Yue) AI 客服使用指南 / AI Guide】\n" +
       "─────────────\n" +
-      "我是台科登山社的 AI 助理「小岳」！很高興為大家服務！\n\n" +
+      "我是台科登山社的 AI 助理「小岳 (Yue)」！很高興為大家服務！\n\n" +
       "💬 【如何使用 How to Use】\n" +
       "1. 個人 1 對 1 聊天室：\n" +
-      "   • 直接輸入任何登山相關問題即可！\n" +
-      "   • 例如：「百岳新手推薦哪座山？」、「裝備該怎麼借？」、「睡袋要怎麼選？」\n\n" +
+      "   • 請輸入「小岳」或「Yue」開頭加上問題即可！\n" +
+      "   • 例如：「小岳 玉山有多高？」、「Yue 登山睡袋怎麼挑選？」、「Yue 奇萊南華適合新手嗎？」\n" +
+      "   • 💡 提醒：若未加上「小岳」或「Yue」，訊息將保留給社團幹部親自回覆喔！\n\n" +
       "2. LINE 群組中使用：\n" +
-      "   • 在群組中請「@小岳助理」並輸入您的問題。\n" +
-      "   • 例如：「@小岳助理 請問這次活動費用多少？」\n\n" +
+      "   • 在群組中請「@小岳」或「@Yue」並輸入您的問題。\n" +
+      "   • 例如：「@Yue 請問這次活動費用多少？」\n\n" +
       "💡 貼心提醒：\n" +
       "若需要報名活動、租借裝備或查看個人訂單，歡迎直接點擊下方圖文選單（Rich Menu）探索各項服務喔！\n" +
       "─────────────\n" +
-      "Feel free to ask climbing questions directly in 1-on-1 chat, or tag @小岳助理 in group chats!";
+      "Type '小岳' or 'Yue' before your question in 1-on-1 chat, or tag @Yue in group chats!";
     _replyMessage(replyToken, aiGuideMsg);
     return;
   }
 
-  // 6. 預設交由 Gemini AI 客服進行智慧應答 (結合 Google Docs 知識庫與活動公開資訊)
-  if (GEMINI_API_KEY) {
-    var aiReply = _handleGeminiChat(userId, queryText);
-    if (aiReply) {
-      _replyMessage(replyToken, aiReply);
+  // 3.4 社員全方位使用指南 (支援「使用指南」、「操作指南」、「用戶手冊」、「社員指南」、「member guide」、「user guide」)
+  if (
+    text.indexOf("使用指南") > -1 ||
+    text.indexOf("操作指南") > -1 ||
+    text.indexOf("用戶手冊") > -1 ||
+    text.indexOf("社員指南") > -1 ||
+    lowerText.indexOf("member guide") > -1 ||
+    lowerText.indexOf("user guide") > -1
+  ) {
+    var memberGuideMsg = "📖 【台科登山社 官方帳號社員使用指南】\n" +
+      "─────────────\n" +
+      "歡迎使用台科登山社線上系統！以下為常見功能與頁面切換指引：\n\n" +
+      "🗺️ 【三大頁面切換途徑】\n" +
+      "1. 底部圖文選單 (Rich Menu)：聊天室下方 6 大常駐按鈕。\n" +
+      "2. 網頁頂部頭貼選單：點擊右上角 LINE 頭像即可快速切換。\n" +
+      "3. 頁面內捷徑：未繳費項目一鍵「前往繳費」，出隊完一鍵「填寫心得」。\n\n" +
+      "🎒 【六大核心功能】\n" +
+      "• 📝 個人資料：首次使用請務必補齊 6 大必填欄位。\n" +
+      "• 🏕️ 最新活動：瀏覽活動詳情與登記報名。\n" +
+      "• 🎒 裝備租借：社員專屬租金 5 折優惠！\n" +
+      "• 💳 繳費申報：多筆費用合併申報，填寫末五碼。\n" +
+      "• 📊 個人主頁：掌握活動審核、借裝進度與待繳費用。\n" +
+      "• 🏆 成就與心得：累積出隊足跡並填寫回饋。\n\n" +
+      "─────────────\n" +
+      "📖 Member Guide (Quick Summary):\n" +
+      "• Navigation: Use the Rich Menu at the bottom or the top-right Avatar dropdown on any web page.\n" +
+      "• 6 Key Features: Events, Gear Loan (50% member discount), Dashboard, Payment, Footprints/Reflections, and AI Assistant.\n" +
+      "• Required: Complete your Profile (6 mandatory fields) before booking gear or joining hikes!\n\n" +
+      "💡 更多詳細圖文指南與流程說明，可參閱社團專屬手冊 MEMBER_GUIDE.md！";
+    _replyMessage(replyToken, memberGuideMsg);
+    return;
+  }
+
+  // 4. Gemini AI 客服（僅在明確呼叫「小岳」或「Yue」時調用）
+  if (isYueMentioned) {
+    if (!cleanText) {
+      var welcomeAi = "您好！我是台科登山社 AI 助理「小岳 (Yue)」🏔️\n" +
+        "請問有什麼我可以為您解答的嗎？\n\n" +
+        "💡 提問範例 / Example Queries：\n" +
+        "• 小岳 玉山有多高？\n" +
+        "• Yue 登山睡袋怎麼挑選？\n" +
+        "• Yue Which Baiyue peak is recommended for beginners?\n\n" +
+        "─────────────\n" +
+        "Hi! I'm the club's AI Assistant Yue. Type '小岳' or 'Yue' followed by your question!\n" +
+        "（若為特定個案或需幹部處理之行政事務，請直接留言，幹部將會親自回覆您！）";
+      _replyMessage(replyToken, welcomeAi);
       return;
+    }
+
+    if (GEMINI_API_KEY) {
+      var aiReply = _handleGeminiChat(userId, cleanText);
+      if (aiReply) {
+        _replyMessage(replyToken, aiReply);
+        return;
+      } else {
+        _replyMessage(replyToken, "小岳目前連線稍微忙碌，請稍後再試，或直接在此留言洽詢社團幹部喔！🏔️");
+        return;
+      }
     }
   }
 
-  // 7. 防刷屏過濾：僅在使用者主動發送問候或詢問選單時提示，一般聊天不重複洗版
-  var isGreetingOrHelp = (
-    queryText === "嗨" || queryText === "哈囉" || queryText === "你好" || queryText === "您好" ||
-    lowerQueryText === "hi" || lowerQueryText === "hello" || lowerQueryText === "hey" ||
-    queryText === "選單" || lowerQueryText === "menu" || lowerQueryText === "help" || queryText === "說明"
-  );
-  if (isGreetingOrHelp) {
-    _replyMessage(replyToken, "您好！請使用下方選單探索「最新活動」、「裝備租借」或「個人主頁」！若有特殊問題，歡迎直接留言詢問幹部！\n─────────────\nHello! Please use the rich menu below to explore Events, Equipment Loan, or Dashboard. If you have any questions, feel free to leave a message for the officers!");
-    return;
-  }
-
-  // 群組中若已召喚 @小岳助理 但未辨識出特殊指令，給予簡潔回應；私聊一般訊息則保持靜默不洗版
-  if (isGroup && isMentioned) {
-    _replyMessage(replyToken, "小岳收到您的訊息囉！若需查詢特定功能，歡迎在群組輸入「幹部系統」或使用下方選單探索社團各項服務！");
-    return;
-  }
+  // 若未提及小岳或 Yue，私聊一般留言保持靜默，保留給真人幹部查看並回覆，絕不亂發 AI 或問候洗版
 }
 
 /**
@@ -1079,12 +1189,24 @@ function _isEventExpired(deadlineVal) {
     }
     var str = String(deadlineVal).trim();
     if (!str) return false;
+
+    // 容錯歷史舊資料 23:59:59Z (原意為台北時間 23:59:59)
+    if (str.indexOf("23:59:59Z") > -1) {
+      var datePartOld = str.split("T")[0];
+      var pOld = datePartOld.split("-");
+      if (pOld.length >= 3) {
+        var tpeOldDeadline = new Date(parseInt(pOld[0], 10), parseInt(pOld[1], 10) - 1, parseInt(pOld[2], 10), 23, 59, 59, 999);
+        return now.getTime() > tpeOldDeadline.getTime();
+      }
+    }
+
     if (str.includes("T")) {
       var isoDate = new Date(str);
       if (!isNaN(isoDate.getTime())) {
         return now.getTime() > isoDate.getTime();
       }
     }
+
     var cleanStr = str.replace(/[\/\.]/g, "-");
     var datePart = cleanStr.split("T")[0].split(" ")[0];
     var parts = datePart.split("-");
@@ -1107,16 +1229,25 @@ function _isEventExpired(deadlineVal) {
 function _formatEventDate(dateVal) {
   if (!dateVal) return "";
   var str = String(dateVal).trim();
-  if (str.includes("T")) {
-    var d = new Date(str);
-    if (!isNaN(d.getTime())) {
-      var tzDate = new Date(d.getTime() + (8 * 60 * 60 * 1000));
-      var pad = function(n) { return n < 10 ? '0' + n : n; };
-      var yr = tzDate.getUTCFullYear();
-      var mo = pad(tzDate.getUTCMonth() + 1);
-      var dy = tzDate.getUTCDate();
-      return yr + '/' + mo + '/' + dy;
+  try {
+    var dateMatch = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    // 若時間剛好為 23:59:59Z (歷史舊 Bug 造成 UTC 23:59:59)，將其當作當天，避免跨日跳到隔天
+    if (str.indexOf("23:59:59Z") > -1 && dateMatch) {
+      var pad = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+      return dateMatch[1] + '/' + pad(dateMatch[2]) + '/' + pad(dateMatch[3]);
     }
+    if (typeof Utilities !== "undefined" && Utilities.formatDate) {
+      var d = (dateVal instanceof Date) ? dateVal : new Date(str);
+      if (!isNaN(d.getTime())) {
+        return Utilities.formatDate(d, "Asia/Taipei", "yyyy/MM/dd");
+      }
+    }
+  } catch (e) {}
+
+  var m = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (m) {
+    var padFn = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+    return m[1] + '/' + padFn(m[2]) + '/' + padFn(m[3]);
   }
   return str.replace(/-/g, "/").substring(0, 10);
 }
@@ -1145,15 +1276,15 @@ function sendEventList(replyToken) {
 
     // 判斷是否為未來開放或已過期
     var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
-    if (status === "開放" && isExpired) {
+    if (isExpired) {
       status = "關閉";
     }
 
     // 僅顯示「開放」或「未來開放」之活動
-    if (isFuture || status === "開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1) {
+    if (isFuture || status === "開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1 || isExpired) {
       var eventId = ev.id || "";
       var eventName = ev.title || "未命名活動";
-      var isOpen = !isFuture && (status === "開放" || status.indexOf("開放") > -1) && !isExpired;
+      var isOpen = !isFuture && !isExpired && (status === "開放" || status.indexOf("開放") > -1);
       var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
       var displayStatus = isFuture ? "未來開放 Coming Soon" : (isOpen ? "開放 Open" : "已截止 Closed");
       var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
@@ -1295,7 +1426,7 @@ function sendEventDetail(replyToken, eventId) {
   var isExpired = _isEventExpired(deadlineStr);
 
   var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
-  if (status === "開放" && isExpired) {
+  if (isExpired) {
     status = "關閉";
   }
 
@@ -1310,7 +1441,7 @@ function sendEventDetail(replyToken, eventId) {
   }
 
   var buttonBox;
-  if (!isFuture && status === "開放" && !isExpired) {
+  if (!isFuture && !isExpired && (status === "開放" || status.indexOf("開放") > -1)) {
     buttonBox = {
       "type": "button",
       "style": "primary",
@@ -1572,6 +1703,14 @@ function _buildMoreServicesFlex() {
       "layout": "vertical",
       "spacing": "sm",
       "contents": [{
+        "type": "button",
+        "style": "secondary",
+        "action": {
+          "type": "message",
+          "label": "📖 社員使用指南 Member Guide",
+          "text": "使用指南"
+        }
+      }, {
         "type": "button",
         "style": "secondary",
         "action": {
@@ -2624,9 +2763,18 @@ function _syncSignupToSheet(ss, p, action) {
 
   // 2. 嚴格過濾掉非標準 Schema 欄位，防止在主試算表長出 N, O, P, Q 欄
   var allowedCols = [
-    "id", "event_id", "line_user_id", "status", "payment_status",
-    "role", "paid_amount", "assigned_driver", "notes", "created_at", "updated_at"
+    "id", "event_id", "line_user_id", "name", "status", "payment_status",
+    "is_official_member_snapshot", "cancel_reason", "role", "paid_amount", "assigned_driver", "notes", "created_at", "updated_at"
   ];
+  // ⚡ 若缺少 name 則自動自 members 查詢補齊，避免試算表姓名空白
+  if (!p.name && p.line_user_id && typeof _supabaseGet === "function") {
+    try {
+      var mems = _supabaseGet("members", { line_user_id: "eq." + p.line_user_id, select: "name" });
+      if (mems && mems.length > 0 && mems[0].name) {
+        p.name = mems[0].name;
+      }
+    } catch (e) {}
+  }
   var sanitizedPayload = {};
   for (var key in p) {
     if (allowedCols.indexOf(key) > -1) {
@@ -3176,7 +3324,7 @@ function dailyPatrol() {
   // 1. 活動截止巡檢：若超過報名截止日且狀態仍為「開放」，自動切換為「關閉」
   // ==============================================================================
   try {
-    var evUrl = sbUrl + "/rest/v1/events?status=eq.開放&deadline=lt." + todayStr + "&select=id,name,deadline";
+    var evUrl = sbUrl + "/rest/v1/events?status=eq.開放&deadline=lt." + encodeURIComponent(now.toISOString()) + "&select=id,title,deadline";
     var evRes = UrlFetchApp.fetch(evUrl, {
       method: "get",
       headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
@@ -3195,7 +3343,7 @@ function dailyPatrol() {
           payload: JSON.stringify({ status: "關閉", updated_at: new Date().toISOString() }),
           muteHttpExceptions: true
         });
-        closedEvents.push("• " + (evt.name || evt.id) + " (截止日: " + evt.deadline + ")");
+        closedEvents.push("• " + (evt.title || evt.id) + " (截止日: " + evt.deadline + ")");
       }
     }
   } catch (errEv) {
@@ -3206,7 +3354,7 @@ function dailyPatrol() {
   // 2. 社員社籍期滿巡檢：到期日小於今日者，轉為未繳費並發送期滿祝福
   // ==============================================================================
   try {
-    var memUrl = sbUrl + "/rest/v1/members?fee_status=eq.已繳費 Paid&expire_date=lt." + todayStr + "&select=line_user_id,name,expire_date";
+    var memUrl = sbUrl + "/rest/v1/members?payment_status=eq." + encodeURIComponent("已繳費 Paid") + "&membership_expires_at=lt." + todayStr + "&select=line_user_id,name,membership_expires_at";
     var memRes = UrlFetchApp.fetch(memUrl, {
       method: "get",
       headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
@@ -3223,13 +3371,13 @@ function dailyPatrol() {
           contentType: "application/json",
           headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey, "Prefer": "return=minimal" },
           payload: JSON.stringify({
-            fee_status: "未繳費 Unpaid",
-            is_member: false,
+            payment_status: "未繳費 Unpaid",
+            is_official_member: false,
             updated_at: new Date().toISOString()
           }),
           muteHttpExceptions: true
         });
-        expiredMembers.push("• " + (mem.name || "社員") + " (到期日: " + mem.expire_date + ")");
+        expiredMembers.push("• " + (mem.name || "社員") + " (到期日: " + mem.membership_expires_at + ")");
 
         // 推播期滿溫馨祝福至該社員個人 LINE
         if (mem.line_user_id && mem.line_user_id.indexOf("U") === 0) {
@@ -5262,7 +5410,11 @@ function _syncEventToSupabase(eventData) {
     var deadlineIso = null;
     if (eventData.deadline) {
       var dStr = String(eventData.deadline).replace(/\//g, "-").trim();
-      deadlineIso = dStr.includes("T") ? dStr : (dStr + "T23:59:59Z");
+      if (dStr.includes("T")) {
+        deadlineIso = (dStr.endsWith("Z") || dStr.includes("+") || dStr.indexOf("-", 10) > -1) ? dStr : (dStr + "+08:00");
+      } else {
+        deadlineIso = dStr + "T23:59:59+08:00";
+      }
     }
 
     var payload = {

@@ -67,8 +67,10 @@ $$;
 
 -- 3. 自動/手動同步幹部快取 (sync_officer_cache_rpc)
 -- 當使用者首次於前端經由 GAS 通過幹部驗證時，自動登錄至 Supabase officers 表
+DROP FUNCTION IF EXISTS sync_officer_cache_rpc(TEXT, TEXT, TEXT);
+
 CREATE OR REPLACE FUNCTION sync_officer_cache_rpc(
-    p_line_user_id TEXT,
+    p_officer_line_user_id TEXT,
     p_name TEXT DEFAULT '',
     p_role TEXT DEFAULT '幹部'
 )
@@ -78,13 +80,13 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
+    IF p_officer_line_user_id IS NULL OR trim(p_officer_line_user_id) = '' THEN
         RETURN jsonb_build_object('success', false, 'message', '缺少 LINE User ID');
     END IF;
 
     INSERT INTO officers (line_user_id, name, role, updated_at)
     VALUES (
-        trim(p_line_user_id),
+        trim(p_officer_line_user_id),
         COALESCE(NULLIF(trim(p_name), ''), '幹部成員'),
         COALESCE(NULLIF(trim(p_role), ''), '幹部'),
         NOW()
@@ -133,7 +135,7 @@ BEGIN
             'name', e.title,
             'startDate', to_char(e.start_date, 'YYYY/MM/DD'),
             'endDate', to_char(e.end_date, 'YYYY/MM/DD'),
-            'deadline', to_char(e.deadline, 'YYYY/MM/DD'),
+            'deadline', to_char(e.deadline AT TIME ZONE 'Asia/Taipei', 'YYYY/MM/DD'),
             'cost', CASE WHEN e.fee > 0 THEN '$' || e.fee ELSE '免費' END,
             'status', COALESCE(e.status, '關閉'),
             'shortDesc', COALESCE(e.summary, ''),
@@ -395,8 +397,11 @@ BEGIN
 
     -- 解析日期
     v_start_date := (replace(p_event_data->>'startDate', '/', '-'))::DATE;
-    v_end_date := (replace(COALESCE(NULLIF(p_event_data->>'endDate', ''), p_event_data->>'startDate'), '/', '-'))::DATE;
-    v_deadline := (replace(p_event_data->>'deadline', '/', '-') || ' 23:59:59')::TIMESTAMPTZ;
+    IF (p_event_data->>'deadline') ~ 'T|\+|:\d{2}' THEN
+        v_deadline := (p_event_data->>'deadline')::TIMESTAMPTZ;
+    ELSE
+        v_deadline := (replace(p_event_data->>'deadline', '/', '-') || ' 23:59:59+08')::TIMESTAMPTZ;
+    END IF;
 
     -- UPSERT 進入 events 表
     INSERT INTO events (

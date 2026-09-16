@@ -618,9 +618,18 @@ function _syncSignupToSheet(ss, p, action) {
 
   // 2. 嚴格過濾掉非標準 Schema 欄位，防止在主試算表長出 N, O, P, Q 欄
   var allowedCols = [
-    "id", "event_id", "line_user_id", "status", "payment_status",
-    "role", "paid_amount", "assigned_driver", "notes", "created_at", "updated_at"
+    "id", "event_id", "line_user_id", "name", "status", "payment_status",
+    "is_official_member_snapshot", "cancel_reason", "role", "paid_amount", "assigned_driver", "notes", "created_at", "updated_at"
   ];
+  // ⚡ 若缺少 name 則自動自 members 查詢補齊，避免試算表姓名空白
+  if (!p.name && p.line_user_id && typeof _supabaseGet === "function") {
+    try {
+      var mems = _supabaseGet("members", { line_user_id: "eq." + p.line_user_id, select: "name" });
+      if (mems && mems.length > 0 && mems[0].name) {
+        p.name = mems[0].name;
+      }
+    } catch (e) {}
+  }
   var sanitizedPayload = {};
   for (var key in p) {
     if (allowedCols.indexOf(key) > -1) {
@@ -1170,7 +1179,7 @@ function dailyPatrol() {
   // 1. 活動截止巡檢：若超過報名截止日且狀態仍為「開放」，自動切換為「關閉」
   // ==============================================================================
   try {
-    var evUrl = sbUrl + "/rest/v1/events?status=eq.開放&deadline=lt." + todayStr + "&select=id,name,deadline";
+    var evUrl = sbUrl + "/rest/v1/events?status=eq.開放&deadline=lt." + encodeURIComponent(now.toISOString()) + "&select=id,title,deadline";
     var evRes = UrlFetchApp.fetch(evUrl, {
       method: "get",
       headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
@@ -1189,7 +1198,7 @@ function dailyPatrol() {
           payload: JSON.stringify({ status: "關閉", updated_at: new Date().toISOString() }),
           muteHttpExceptions: true
         });
-        closedEvents.push("• " + (evt.name || evt.id) + " (截止日: " + evt.deadline + ")");
+        closedEvents.push("• " + (evt.title || evt.id) + " (截止日: " + evt.deadline + ")");
       }
     }
   } catch (errEv) {
@@ -1200,7 +1209,7 @@ function dailyPatrol() {
   // 2. 社員社籍期滿巡檢：到期日小於今日者，轉為未繳費並發送期滿祝福
   // ==============================================================================
   try {
-    var memUrl = sbUrl + "/rest/v1/members?fee_status=eq.已繳費 Paid&expire_date=lt." + todayStr + "&select=line_user_id,name,expire_date";
+    var memUrl = sbUrl + "/rest/v1/members?payment_status=eq." + encodeURIComponent("已繳費 Paid") + "&membership_expires_at=lt." + todayStr + "&select=line_user_id,name,membership_expires_at";
     var memRes = UrlFetchApp.fetch(memUrl, {
       method: "get",
       headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey },
@@ -1217,13 +1226,13 @@ function dailyPatrol() {
           contentType: "application/json",
           headers: { "apikey": sbKey, "Authorization": "Bearer " + sbKey, "Prefer": "return=minimal" },
           payload: JSON.stringify({
-            fee_status: "未繳費 Unpaid",
-            is_member: false,
+            payment_status: "未繳費 Unpaid",
+            is_official_member: false,
             updated_at: new Date().toISOString()
           }),
           muteHttpExceptions: true
         });
-        expiredMembers.push("• " + (mem.name || "社員") + " (到期日: " + mem.expire_date + ")");
+        expiredMembers.push("• " + (mem.name || "社員") + " (到期日: " + mem.membership_expires_at + ")");
 
         // 推播期滿溫馨祝福至該社員個人 LINE
         if (mem.line_user_id && mem.line_user_id.indexOf("U") === 0) {

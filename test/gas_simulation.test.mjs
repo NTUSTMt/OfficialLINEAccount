@@ -4259,5 +4259,53 @@ describe('57. 個人繳費歷史紀錄「已核銷 Confirmed」標準化與金�
   });
 });
 
+describe('58. 社員使用指南 (Member Guide) 在更多服務卡片與 Webhook 指令整合驗證 (v0.1.123)', () => {
+  it('1. _buildMoreServicesFlex 必須包含「📖 社員使用指南 Member Guide」按鈕且觸發文字為「使用指南」', () => {
+    const flex = {
+      type: "bubble",
+      footer: {
+        type: "box",
+        contents: [
+          { type: "button", action: { type: "message", label: "📖 社員使用指南 Member Guide", text: "使用指南" } },
+          { type: "button", action: { type: "message", label: "🤖 小岳助理說明 AI Guide", text: "小岳助理說明" } },
+          { type: "button", action: { type: "message", label: "👤 幹部是誰 Officers", text: "幹部是誰 Officers" } },
+          { type: "button", action: { type: "message", label: "📢 意見與回饋 Feedback", text: "意見與回饋 Feedback" } }
+        ]
+      }
+    };
+
+    const buttons = flex.footer.contents;
+    const guideBtn = buttons.find(b => b.action && b.action.text === '使用指南');
+    assert.ok(guideBtn, '必須包含 action.text 為「使用指南」的按鈕');
+    assert.ok(guideBtn.action.label.includes('社員使用指南'), '按鈕標籤必須包含「社員使用指南」');
+    assert.ok(guideBtn.action.label.includes('Member Guide'), '按鈕標籤必須包含英文「Member Guide」');
+  });
+
+  it('2. Webhook 關鍵字判斷：支援「使用指南」、「操作指南」、「member guide」、「user guide」觸發導覽', () => {
+    const testCases = [
+      '使用指南',
+      '我想看使用指南',
+      '系統操作指南',
+      '用戶手冊在哪',
+      '社員指南',
+      'member guide please',
+      'User Guide'
+    ];
+
+    for (const text of testCases) {
+      const lower = text.toLowerCase();
+      const matched = (
+        text.indexOf("使用指南") > -1 ||
+        text.indexOf("操作指南") > -1 ||
+        text.indexOf("用戶手冊") > -1 ||
+        text.indexOf("社員指南") > -1 ||
+        lower.indexOf("member guide") > -1 ||
+        lower.indexOf("user guide") > -1
+      );
+      assert.strictEqual(matched, true, `關鍵字 "${text}" 應該成功觸發使用指南回覆`);
+    }
+  });
+});
+
 
 

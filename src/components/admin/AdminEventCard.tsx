@@ -34,13 +34,25 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
   const [now] = useState(() => Date.now());
   const imgDirect = evt.imageUrl ? (getDirectImageUrl(evt.imageUrl, 400) || evt.imageUrl) : '';
   const hasPending = evt.stats.pending > 0;
+
+  const formattedDeadline = useMemo(() => {
+    if (!evt.deadline) return '';
+    const str = evt.deadline.trim();
+    const m = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    if (m) {
+      const pad = (n: string) => (n.length < 2 ? '0' + n : n);
+      return `${m[1]}/${pad(m[2])}/${pad(m[3])}`;
+    }
+    return str.split('T')[0];
+  }, [evt.deadline]);
+
   const isDeadlinePassed = useMemo(() => {
     if (!evt.deadline) return false;
     try {
       const clean = evt.deadline.replace(/\//g, '-').trim();
-      const parts = clean.split(' ')[0].split('-');
-      if (parts.length >= 3) {
-        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 23, 59, 59);
+      const m = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) {
+        const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 23, 59, 59, 999);
         return !isNaN(d.getTime()) && now > d.getTime();
       }
     } catch {
@@ -48,6 +60,9 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
     }
     return false;
   }, [evt.deadline, now]);
+
+  const isActuallyOpen = evt.status === '開放' && !isDeadlinePassed;
+  const isExpiredOpen = evt.status === '開放' && isDeadlinePassed;
 
   return (
     <div
@@ -79,9 +94,9 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
             fontWeight: 'bold',
             padding: '3px 10px',
             borderRadius: '20px',
-            backgroundColor: evt.status === '開放' ? '#dcfce7' : evt.status === '未來開放' ? '#ffedd5' : '#f1f5f9',
-            color: evt.status === '開放' ? '#15803d' : evt.status === '未來開放' ? '#c2410c' : '#64748b',
-            border: `1px solid ${evt.status === '開放' ? '#bbf7d0' : evt.status === '未來開放' ? '#fed7aa' : '#e2e8f0'}`,
+            backgroundColor: isActuallyOpen ? '#dcfce7' : isExpiredOpen ? '#fef2f2' : evt.status === '未來開放' ? '#ffedd5' : '#f1f5f9',
+            color: isActuallyOpen ? '#15803d' : isExpiredOpen ? '#b91c1c' : evt.status === '未來開放' ? '#c2410c' : '#64748b',
+            border: `1px solid ${isActuallyOpen ? '#bbf7d0' : isExpiredOpen ? '#fecaca' : evt.status === '未來開放' ? '#fed7aa' : '#e2e8f0'}`,
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px'
@@ -90,10 +105,10 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               width: '6px',
               height: '6px',
               borderRadius: '50%',
-              backgroundColor: evt.status === '開放' ? '#16a34a' : evt.status === '未來開放' ? '#ea580c' : '#94a3b8',
+              backgroundColor: isActuallyOpen ? '#16a34a' : isExpiredOpen ? '#dc2626' : evt.status === '未來開放' ? '#ea580c' : '#94a3b8',
               display: 'inline-block'
             }} />
-            <span>{evt.status === '開放' ? '開放報名' : evt.status === '未來開放' ? '未來開放' : '已關閉'}</span>
+            <span>{isActuallyOpen ? '開放報名' : isExpiredOpen ? '已截止 (過期)' : evt.status === '未來開放' ? '未來開放' : '已關閉'}</span>
           </span>
           <span style={{
             fontSize: '12px',
@@ -219,7 +234,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
             <Clock size={13} /> 報名截止
           </span>
           <span style={{ fontSize: '12px', color: '#1e293b', fontWeight: 'bold' }}>
-            {evt.deadline}
+            {formattedDeadline || evt.deadline}
             {isDeadlinePassed && (
               <span style={{ color: '#ef4444', fontSize: '11px', marginLeft: '4px' }}>(已截止)</span>
             )}

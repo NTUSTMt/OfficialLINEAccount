@@ -170,10 +170,76 @@ function _findColByEnglishName(headers, colName) {
   return -1;
 }
 
+// 全域常用中英欄位對照字典 (支援試算表純中文或純英文表頭自適應)
+function _getGlobalColumnAliases(englishName) {
+  var map = {
+    "id": ["編號", "代號", "ID", "專屬碼", "單號", "序號"],
+    "line_user_id": ["系統識別碼", "UID", "LINE UID", "User ID"],
+    "name": ["姓名", "名字", "社員姓名", "稱呼", "聯絡人"],
+    "gender": ["性別"],
+    "line_id": ["Line ID", "LINE ID", "Line帳號", "LINE帳號"],
+    "email": ["電子郵件", "信箱", "Email", "E-mail"],
+    "phone": ["電話", "聯絡電話", "手機", "行動電話"],
+    "department": ["系所", "系級", "科系", "學系"],
+    "student_id": ["學號"],
+    "payment_status": ["繳費狀態", "對帳狀態", "付款狀態"],
+    "membership_expires_at": ["社籍到期日", "到期日", "有效期限"],
+    "birthday": ["生日", "出生年月日"],
+    "id_card": ["身分證字號", "證件號碼", "居留證號", "身分證"],
+    "address": ["地址", "聯絡地址", "住址"],
+    "outdoor_experience": ["爬山經驗", "登山經驗", "百岳經歷", "戶外經驗"],
+    "fitness_desc": ["體能狀況", "體能說明", "平時運動習慣"],
+    "proof_urls": ["證明文件", "證照證明"],
+    "emergency_contact_name": ["緊急聯絡人姓名", "緊急聯絡人", "聯絡人姓名"],
+    "emergency_contact_rel": ["與緊急聯絡人關係", "緊急聯絡人關係", "關係"],
+    "emergency_contact_phone": ["緊急聯絡人電話", "緊急聯絡電話"],
+    "emergency_contact_address": ["緊急聯絡人地址", "緊急聯絡地址"],
+    "medical_history": ["病史", "過敏史", "特殊病史"],
+    "identity_status": ["身分", "學生身分", "校內外身分"],
+    "join_membership_intent": ["入社意願", "是否入社"],
+    "officer_intent": ["幹部意願", "擔任幹部意願"],
+    "is_official_member": ["是否為正式社員", "正式社員", "社員身分"],
+    "is_officer": ["是否為幹部", "幹部身分"],
+    "officer_role": ["幹部職稱", "幹部角色", "職稱"],
+    "created_at": ["建立時間", "填寫時間", "建立日期"],
+    "updated_at": ["更新時間", "最後更新", "修改時間"],
+    // events
+    "title": ["活動名稱", "活動標題", "名稱"],
+    "fee": ["費用", "活動費用", "報名費", "金額"],
+    "start_date": ["開始日期", "出發日期", "活動開始"],
+    "end_date": ["結束日期", "回程日期", "活動結束"],
+    "deadline": ["截止時間", "報名截止", "截止日期", "報名截止日"],
+    "status": ["狀態", "活動狀態", "審核狀態", "報名狀態"],
+    "summary": ["簡介", "活動簡介", "行程摘要"],
+    "itinerary": ["詳細行程", "行程規劃", "行程"],
+    "cover_image_url": ["封面圖", "封面照", "活動封面"],
+    "drive_folder_url": ["雲端資料夾", "Drive 資料夾"],
+    "spreadsheet_url": ["名冊試算表", "試算表網址"],
+    // equipments & loans
+    "total_qty": ["總數量", "總庫存"],
+    "available_qty": ["剩餘數量", "可用庫存", "庫存"],
+    "category": ["分類", "裝備類別", "器材類別"],
+    "member_price_per_day": ["社員每日租金", "社員價"],
+    "non_member_price_per_day": ["非社員每日租金", "非社員價"],
+    "days": ["天數", "租借天數"],
+    "purpose": ["用途", "活動用途"],
+    "total_deposit": ["押金總額", "總押金", "押金"],
+    "total_rent": ["租金總額", "總租金", "租金"],
+    // payments
+    "amount": ["金額", "繳費金額", "申報金額"],
+    "bank_last5": ["後五碼", "帳號後五碼", "末五碼"],
+    "proof_image_url": ["繳費憑證", "匯款證明", "水單圖片"]
+  };
+  return map[englishName] || null;
+}
+
 // 智慧表頭欄位尋找器 (優先以英文名精確比對，次以中文別名回退)
 function _findHeaderCol(headers, englishName, aliases) {
   var idx = _findColByEnglishName(headers, englishName);
   if (idx > -1) return idx;
+  if (!aliases) {
+    aliases = _getGlobalColumnAliases(englishName);
+  }
   if (aliases) {
     if (!Array.isArray(aliases)) aliases = [aliases];
     for (var a = 0; a < aliases.length; a++) {

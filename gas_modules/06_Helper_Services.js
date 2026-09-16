@@ -1754,7 +1754,11 @@ function _syncEventToSupabase(eventData) {
     var deadlineIso = null;
     if (eventData.deadline) {
       var dStr = String(eventData.deadline).replace(/\//g, "-").trim();
-      deadlineIso = dStr.includes("T") ? dStr : (dStr + "T23:59:59Z");
+      if (dStr.includes("T")) {
+        deadlineIso = (dStr.endsWith("Z") || dStr.includes("+") || dStr.indexOf("-", 10) > -1) ? dStr : (dStr + "+08:00");
+      } else {
+        deadlineIso = dStr + "T23:59:59+08:00";
+      }
     }
 
     var payload = {

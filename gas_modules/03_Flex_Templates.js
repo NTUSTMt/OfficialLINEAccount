@@ -18,12 +18,24 @@ function _isEventExpired(deadlineVal) {
     }
     var str = String(deadlineVal).trim();
     if (!str) return false;
+
+    // 容錯歷史舊資料 23:59:59Z (原意為台北時間 23:59:59)
+    if (str.indexOf("23:59:59Z") > -1) {
+      var datePartOld = str.split("T")[0];
+      var pOld = datePartOld.split("-");
+      if (pOld.length >= 3) {
+        var tpeOldDeadline = new Date(parseInt(pOld[0], 10), parseInt(pOld[1], 10) - 1, parseInt(pOld[2], 10), 23, 59, 59, 999);
+        return now.getTime() > tpeOldDeadline.getTime();
+      }
+    }
+
     if (str.includes("T")) {
       var isoDate = new Date(str);
       if (!isNaN(isoDate.getTime())) {
         return now.getTime() > isoDate.getTime();
       }
     }
+
     var cleanStr = str.replace(/[\/\.]/g, "-");
     var datePart = cleanStr.split("T")[0].split(" ")[0];
     var parts = datePart.split("-");
@@ -46,16 +58,25 @@ function _isEventExpired(deadlineVal) {
 function _formatEventDate(dateVal) {
   if (!dateVal) return "";
   var str = String(dateVal).trim();
-  if (str.includes("T")) {
-    var d = new Date(str);
-    if (!isNaN(d.getTime())) {
-      var tzDate = new Date(d.getTime() + (8 * 60 * 60 * 1000));
-      var pad = function(n) { return n < 10 ? '0' + n : n; };
-      var yr = tzDate.getUTCFullYear();
-      var mo = pad(tzDate.getUTCMonth() + 1);
-      var dy = tzDate.getUTCDate();
-      return yr + '/' + mo + '/' + dy;
+  try {
+    var dateMatch = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    // 若時間剛好為 23:59:59Z (歷史舊 Bug 造成 UTC 23:59:59)，將其當作當天，避免跨日跳到隔天
+    if (str.indexOf("23:59:59Z") > -1 && dateMatch) {
+      var pad = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+      return dateMatch[1] + '/' + pad(dateMatch[2]) + '/' + pad(dateMatch[3]);
     }
+    if (typeof Utilities !== "undefined" && Utilities.formatDate) {
+      var d = (dateVal instanceof Date) ? dateVal : new Date(str);
+      if (!isNaN(d.getTime())) {
+        return Utilities.formatDate(d, "Asia/Taipei", "yyyy/MM/dd");
+      }
+    }
+  } catch (e) {}
+
+  var m = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (m) {
+    var padFn = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+    return m[1] + '/' + padFn(m[2]) + '/' + padFn(m[3]);
   }
   return str.replace(/-/g, "/").substring(0, 10);
 }
@@ -84,15 +105,15 @@ function sendEventList(replyToken) {
 
     // 判斷是否為未來開放或已過期
     var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
-    if (status === "開放" && isExpired) {
+    if (isExpired) {
       status = "關閉";
     }
 
     // 僅顯示「開放」或「未來開放」之活動
-    if (isFuture || status === "開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1) {
+    if (isFuture || status === "開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1 || isExpired) {
       var eventId = ev.id || "";
       var eventName = ev.title || "未命名活動";
-      var isOpen = !isFuture && (status === "開放" || status.indexOf("開放") > -1) && !isExpired;
+      var isOpen = !isFuture && !isExpired && (status === "開放" || status.indexOf("開放") > -1);
       var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
       var displayStatus = isFuture ? "未來開放 Coming Soon" : (isOpen ? "開放 Open" : "已截止 Closed");
       var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
@@ -234,7 +255,7 @@ function sendEventDetail(replyToken, eventId) {
   var isExpired = _isEventExpired(deadlineStr);
 
   var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
-  if (status === "開放" && isExpired) {
+  if (isExpired) {
     status = "關閉";
   }
 
@@ -249,7 +270,7 @@ function sendEventDetail(replyToken, eventId) {
   }
 
   var buttonBox;
-  if (!isFuture && status === "開放" && !isExpired) {
+  if (!isFuture && !isExpired && (status === "開放" || status.indexOf("開放") > -1)) {
     buttonBox = {
       "type": "button",
       "style": "primary",
@@ -511,6 +532,14 @@ function _buildMoreServicesFlex() {
       "layout": "vertical",
       "spacing": "sm",
       "contents": [{
+        "type": "button",
+        "style": "secondary",
+        "action": {
+          "type": "message",
+          "label": "📖 社員使用指南 Member Guide",
+          "text": "使用指南"
+        }
+      }, {
         "type": "button",
         "style": "secondary",
         "action": {
