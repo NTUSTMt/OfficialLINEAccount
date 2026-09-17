@@ -1094,11 +1094,29 @@ export const cancelEventSignupInSupabase = async (
 };
 
 /**
- * 幹部後台：取得所有社員清單 (members)
+ * 幹部後台：取得所有社員清單 (優先調用 get_admin_members_rpc，相容 direct query)
  */
-export const fetchAdminMembersFromSupabase = async (): Promise<AdminMemberListItem[]> => {
+export const fetchAdminMembersFromSupabase = async (officerUserId?: string): Promise<AdminMemberListItem[]> => {
   if (!supabase) return [];
 
+  // 1. 優先嘗試 SECURITY DEFINER RPC (具備幹部鑑權，完全豁免 RLS 封閉與 42501 權限限制)
+  if (officerUserId && officerUserId !== 'TEST_USER_ID') {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('get_admin_members_rpc', {
+        p_officer_line_user_id: officerUserId
+      });
+      if (!rpcErr && rpcRes && rpcRes.status === 'success' && Array.isArray(rpcRes.members)) {
+        return rpcRes.members as AdminMemberListItem[];
+      }
+      if (rpcErr) {
+        console.warn('[Supabase] get_admin_members_rpc 呼叫失敗，嘗試直接查詢:', rpcErr.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] get_admin_members_rpc 例外，切換直讀備援:', err);
+    }
+  }
+
+  // 2. 直讀備援 (若已配置 RLS Allow Policy)
   try {
     const { data, error } = await supabase
       .from('members')
@@ -1120,9 +1138,31 @@ export const fetchAdminMembersFromSupabase = async (): Promise<AdminMemberListIt
 /**
  * 幹部後台：取得單一社員全部欄位 (MemberFullRecord)
  */
-export const fetchMemberFullDetailFromSupabase = async (userId: string): Promise<MemberFullRecord | null> => {
+export const fetchMemberFullDetailFromSupabase = async (
+  userId: string,
+  officerUserId?: string
+): Promise<MemberFullRecord | null> => {
   if (!supabase || !userId) return null;
 
+  // 1. 優先嘗試 RPC (幹部鑑權，完全豁免 RLS 封閉)
+  if (officerUserId && officerUserId !== 'TEST_USER_ID') {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('get_admin_member_detail_rpc', {
+        p_officer_line_user_id: officerUserId,
+        p_target_user_id: userId
+      });
+      if (!rpcErr && rpcRes && rpcRes.status === 'success' && rpcRes.member) {
+        return rpcRes.member as MemberFullRecord;
+      }
+      if (rpcErr) {
+        console.warn('[Supabase] get_admin_member_detail_rpc 失敗，切換直讀模式:', rpcErr.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] get_admin_member_detail_rpc 例外，切換直讀模式:', err);
+    }
+  }
+
+  // 2. 直讀備援
   try {
     const { data, error } = await supabase
       .from('members')
@@ -1145,9 +1185,27 @@ export const fetchMemberFullDetailFromSupabase = async (userId: string): Promise
 /**
  * 幹部後台：取得社員進行中活動、租借與繳費狀態
  */
-export const fetchMemberActiveStatsFromSupabase = async (userId: string): Promise<MemberActiveStats> => {
+export const fetchMemberActiveStatsFromSupabase = async (
+  userId: string,
+  officerUserId?: string
+): Promise<MemberActiveStats> => {
   if (!supabase || !userId) {
     return { unfinishedEvents: [], activeLoans: [], pendingPaymentsCount: 0 };
+  }
+
+  // 1. 優先由 RPC 取得快照
+  if (officerUserId && officerUserId !== 'TEST_USER_ID') {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('get_admin_member_detail_rpc', {
+        p_officer_line_user_id: officerUserId,
+        p_target_user_id: userId
+      });
+      if (!rpcErr && rpcRes && rpcRes.status === 'success' && rpcRes.activeStats) {
+        return rpcRes.activeStats as MemberActiveStats;
+      }
+    } catch (err) {
+      console.warn('[Supabase] get_admin_member_detail_rpc activeStats 例外:', err);
+    }
   }
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -1192,7 +1250,7 @@ export const fetchMemberActiveStatsFromSupabase = async (userId: string): Promis
     // 2. 查詢進行中租借單
     const { data: loansData } = await supabase
       .from('loans')
-      .select('id, start_date, end_date, status, payment_status, items')
+      .select('id, start_date, end_date, status, payment_status, loan_items(equipment_id, quantity, equipments(name))')
       .eq('line_user_id', userId)
       .in('status', ['待領取 To Be Collected', '租借中 Borrowed']);
 
@@ -1200,8 +1258,8 @@ export const fetchMemberActiveStatsFromSupabase = async (userId: string): Promis
     if (loansData && Array.isArray(loansData)) {
       loansData.forEach((l: any) => {
         let itemsText = '裝備租借';
-        if (Array.isArray(l.items) && l.items.length > 0) {
-          itemsText = l.items.map((it: any) => `${it.name || it.equipment_id || '裝備'} x ${it.quantity || 1}`).join(', ');
+        if (Array.isArray(l.loan_items) && l.loan_items.length > 0) {
+          itemsText = l.loan_items.map((li: any) => `${li.equipments?.name || li.equipment_id || '裝備'} x ${li.quantity || 1}`).join(', ');
         }
         activeLoans.push({
           id: l.id,
@@ -1239,10 +1297,30 @@ export const fetchMemberActiveStatsFromSupabase = async (userId: string): Promis
  */
 export const updateMemberFullDetailInSupabase = async (
   userId: string,
-  fields: Partial<MemberFullRecord>
+  fields: Partial<MemberFullRecord>,
+  officerUserId?: string
 ): Promise<{ success: boolean; error?: string }> => {
   if (!supabase || !userId) {
     return { success: false, error: '缺少 Supabase 連線或 userId' };
+  }
+
+  // 1. 優先嘗試 RPC
+  if (officerUserId && officerUserId !== 'TEST_USER_ID') {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('update_admin_member_rpc', {
+        p_officer_line_user_id: officerUserId,
+        p_target_user_id: userId,
+        p_data: fields
+      });
+      if (!rpcErr && rpcRes && rpcRes.success) {
+        return { success: true };
+      }
+      if (rpcErr) {
+        console.warn('[Supabase] update_admin_member_rpc 失敗，切換直更模式:', rpcErr.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] update_admin_member_rpc 例外，切換直更模式:', err);
+    }
   }
 
   try {
@@ -1273,8 +1351,41 @@ export const updateMemberFullDetailInSupabase = async (
 /**
  * 幹部後台：取得財務對帳卡片清單 (結合 payments, 未結 loans 與未結 signups)
  */
-export const fetchFinanceItemsFromSupabase = async (): Promise<AdminFinanceItem[]> => {
+export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Promise<AdminFinanceItem[]> => {
   if (!supabase) return [];
+
+  // 1. 優先調用 get_admin_finance_rpc (幹部鑑權專屬 RPC，豁免 42501 權限限制)
+  if (officerUserId && officerUserId !== 'TEST_USER_ID') {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('get_admin_finance_rpc', {
+        p_officer_line_user_id: officerUserId
+      });
+      if (!rpcErr && rpcRes && rpcRes.status === 'success' && Array.isArray(rpcRes.items)) {
+        return rpcRes.items.map((it: any) => ({
+          id: it.id,
+          line_user_id: it.line_user_id,
+          name: it.name,
+          type: it.type,
+          amount: Number(it.amount) || 0,
+          bank_last5: it.bank_last5,
+          proof_image_url: it.proof_image_url,
+          target_type: it.target_type,
+          target_id: it.target_id,
+          status: it.status === '已核銷 Confirmed' ? '已核銷 Confirmed' : '待確認 Checking',
+          payment_status: it.payment_status || (it.status === '已核銷 Confirmed' ? '已繳費 Paid' : '待確認 Checking'),
+          officer_notes: it.officer_notes,
+          created_at: it.created_at || new Date().toISOString(),
+          sourceType: it.source_type || 'payment',
+          itemCategory: it.item_category || 'general'
+        })) as AdminFinanceItem[];
+      }
+      if (rpcErr) {
+        console.warn('[Supabase] get_admin_finance_rpc 呼叫失敗，嘗試直接查詢:', rpcErr.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] get_admin_finance_rpc 例外，切換直讀備援:', err);
+    }
+  }
 
   try {
     const items: AdminFinanceItem[] = [];
@@ -1322,11 +1433,11 @@ export const fetchFinanceItemsFromSupabase = async (): Promise<AdminFinanceItem[
       });
     }
 
-    // 2. 補充未填報 payments 但有金額之待繳費／待確認租借單
+    // 2. 補充未填報 payments 但有金額之待繳費／待確認租借單 (校正欄位名稱為 total_rent)
     const { data: unpaidLoans } = await supabase
       .from('loans')
       .select('*')
-      .gt('total_fee', 0)
+      .gt('total_rent', 0)
       .neq('payment_status', '已繳費 Paid')
       .order('created_at', { ascending: false });
 
@@ -1340,7 +1451,7 @@ export const fetchFinanceItemsFromSupabase = async (): Promise<AdminFinanceItem[
             line_user_id: l.line_user_id,
             name: l.name || '借用人',
             type: `裝備租借：${l.id}`,
-            amount: l.total_fee || l.total_rent || 0,
+            amount: l.total_rent || 0,
             status: l.payment_status === '已繳費 Paid' ? '已核銷 Confirmed' : '待確認 Checking',
             payment_status: l.payment_status || '未繳費 Unpaid',
             created_at: l.created_at || new Date().toISOString(),
@@ -1372,8 +1483,34 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
   officerName?: string;
   lineUserId?: string | null;
   notes?: string | null;
+  officerUserId?: string;
 }): Promise<{ success: boolean; error?: string }> => {
   if (!supabase) return { success: false, error: '缺少 Supabase 連線' };
+
+  // 1. 優先嘗試 RPC (幹部鑑權，完全豁免 RLS 限制)
+  if (params.officerUserId && params.officerUserId !== 'TEST_USER_ID') {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('update_admin_payment_status_rpc', {
+        p_officer_line_user_id: params.officerUserId,
+        p_payment_id: params.paymentId,
+        p_source_type: params.sourceType,
+        p_target_type: params.targetType || null,
+        p_target_id: params.targetId || null,
+        p_status: params.newStatus,
+        p_line_user_id: params.lineUserId || null,
+        p_officer_name: params.officerName || '管理幹部',
+        p_notes: params.notes || null
+      });
+      if (!rpcErr && rpcRes && rpcRes.success) {
+        return { success: true };
+      }
+      if (rpcErr) {
+        console.warn('[Supabase] update_admin_payment_status_rpc 失敗，切換直更模式:', rpcErr.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] update_admin_payment_status_rpc 例外，切換直更模式:', err);
+    }
+  }
 
   try {
     const isConfirmed = params.newStatus === '已核銷 Confirmed';
@@ -1449,10 +1586,27 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
 };
 
 /**
- * 幹部後台：取得所有裝備租借訂單 (loans)
+ * 幹部後台：取得所有裝備租借訂單 (loans，優先調用 get_admin_loans_rpc)
  */
-export const fetchAllLoansFromSupabase = async (): Promise<AdminLoanItem[]> => {
+export const fetchAllLoansFromSupabase = async (officerUserId?: string): Promise<AdminLoanItem[]> => {
   if (!supabase) return [];
+
+  // 1. 優先調用 get_admin_loans_rpc (幹部鑑權專屬 RPC，豁免 42501 權限限制並關聯品項明細)
+  if (officerUserId && officerUserId !== 'TEST_USER_ID') {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('get_admin_loans_rpc', {
+        p_officer_line_user_id: officerUserId
+      });
+      if (!rpcErr && rpcRes && rpcRes.status === 'success' && Array.isArray(rpcRes.loans)) {
+        return rpcRes.loans as AdminLoanItem[];
+      }
+      if (rpcErr) {
+        console.warn('[Supabase] get_admin_loans_rpc 呼叫失敗，嘗試直接查詢:', rpcErr.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] get_admin_loans_rpc 例外，切換直讀備援:', err);
+    }
+  }
 
   try {
     const { data, error } = await supabase
@@ -1465,7 +1619,10 @@ export const fetchAllLoansFromSupabase = async (): Promise<AdminLoanItem[]> => {
       throw new Error(`[Supabase 讀取 loans 失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
     }
 
-    return (data || []) as AdminLoanItem[];
+    return (data || []).map((l: any) => ({
+      ...l,
+      total_fee: l.total_rent || l.total_fee || 0
+    })) as AdminLoanItem[];
   } catch (err: any) {
     console.error('[Supabase] fetchAllLoansFromSupabase 例外:', err);
     throw err;
@@ -1478,9 +1635,30 @@ export const fetchAllLoansFromSupabase = async (): Promise<AdminLoanItem[]> => {
 export const updateLoanStatusInSupabase = async (
   loanId: string,
   newStatus: '待領取 To Be Collected' | '租借中 Borrowed' | '已歸還 Returned' | '已取消 Cancelled',
-  notes?: string
+  notes?: string,
+  officerUserId?: string
 ): Promise<{ success: boolean; error?: string }> => {
   if (!supabase || !loanId) return { success: false, error: '缺少必要參數' };
+
+  // 1. 優先嘗試 RPC
+  if (officerUserId && officerUserId !== 'TEST_USER_ID') {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('update_admin_loan_status_rpc', {
+        p_officer_line_user_id: officerUserId,
+        p_loan_id: loanId,
+        p_status: newStatus,
+        p_notes: notes || null
+      });
+      if (!rpcErr && rpcRes && rpcRes.success) {
+        return { success: true };
+      }
+      if (rpcErr) {
+        console.warn('[Supabase] update_admin_loan_status_rpc 失敗，切換直更模式:', rpcErr.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] update_admin_loan_status_rpc 例外，切換直更模式:', err);
+    }
+  }
 
   try {
     const updateObj: Record<string, any> = {

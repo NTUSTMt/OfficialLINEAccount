@@ -12,7 +12,7 @@ const SORT_OPTIONS: SortOption[] = [
   { key: 'student_id', label: '依學號代碼' }
 ];
 
-export default function AdminMembers() {
+export default function AdminMembers({ userId }: { userId?: string }) {
   const navigate = useNavigate();
   const [members, setMembers] = useState<AdminMemberListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +30,7 @@ export default function AdminMembers() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const data = await fetchAdminMembersFromSupabase();
+      const data = await fetchAdminMembersFromSupabase(userId);
       setMembers(data);
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -42,7 +42,7 @@ export default function AdminMembers() {
 
   useEffect(() => {
     loadMembers();
-  }, []);
+  }, [userId]);
 
   // 篩選群組定義
   const filters: FilterGroup[] = useMemo(() => [

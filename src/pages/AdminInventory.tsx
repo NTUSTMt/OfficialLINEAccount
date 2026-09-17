@@ -7,8 +7,7 @@ import {
   AlertCircle,
   CheckCircle2,
   X,
-  Camera,
-  Image as ImageIcon
+  Camera
 } from 'lucide-react';
 import {
   fetchAllInventoryFromSupabase,
@@ -22,6 +21,7 @@ import { NotionFilterBar, type FilterGroup, type SortOption } from '../component
 import { AdminSubNav } from '../components/admin/AdminSubNav';
 import { GAS_API_URL } from '../constants/api';
 import { getDirectImageUrl } from '../utils/image';
+import { ProductImage } from '../components/borrow/ProductImage';
 
 const CATEGORIES: AdminInventoryItem['category'][] = [
   '睡眠系統',
@@ -41,7 +41,7 @@ const SORT_OPTIONS: SortOption[] = [
   { key: 'id', label: '依裝備編號' }
 ];
 
-export default function AdminInventory() {
+export default function AdminInventory(_props: { userId?: string } = {}) {
   const [items, setItems] = useState<AdminInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -556,7 +556,7 @@ export default function AdminInventory() {
             查無符合條件的裝備品項
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="products-grid" style={{ gap: '12px' }}>
             {filteredItems.map((it) => {
               // 首張相片預覽
               let firstImg = '';
@@ -565,119 +565,171 @@ export default function AdminInventory() {
               } else if (it.images && typeof it.images === 'string') {
                 firstImg = (it.images as string).split(/[\n,，;\s]+/)[0] || '';
               }
+              const isOutOfStock = (it.available_qty || 0) <= 0;
 
               return (
                 <div
                   key={it.id}
+                  className="product-card"
                   style={{
-                    backgroundColor: '#ffffff',
                     borderRadius: '12px',
+                    backgroundColor: '#ffffff',
                     border: '1px solid #e2e8f0',
-                    padding: '14px',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
                     display: 'flex',
-                    gap: '14px',
-                    alignItems: 'flex-start'
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
                   }}
                 >
-                  {/* 相片縮圖 */}
-                  <div style={{
-                    width: '74px',
-                    height: '74px',
-                    borderRadius: '8px',
-                    backgroundColor: '#f1f5f9',
-                    border: '1px solid #e2e8f0',
-                    overflow: 'hidden',
-                    flexShrink: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {firstImg ? (
-                      <img
-                        src={getDirectImageUrl(firstImg)}
-                        alt={it.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <ImageIcon size={24} color="#cbd5e1" />
-                    )}
-                  </div>
-
-                  {/* 裝備資訊 */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                  {/* 頂部 1:1 大圖 */}
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1' }}>
+                    <ProductImage name={it.name} imageUrl={firstImg} />
+                    {/* 左上角分類與開放外借標籤 */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '8px',
+                      left: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px',
+                      zIndex: 2
+                    }}>
                       <span style={{
-                        fontSize: '11px',
+                        fontSize: '10px',
                         padding: '2px 6px',
                         borderRadius: '4px',
-                        backgroundColor: '#f1f5f9',
-                        color: '#475569',
-                        fontWeight: 600
+                        backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                        color: '#334155',
+                        fontWeight: 700,
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.08)'
                       }}>
                         {it.category}
                       </span>
+                      {!it.is_borrowable && (
+                        <span style={{
+                          fontSize: '10px',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: 'rgba(241, 245, 249, 0.95)',
+                          color: '#64748b',
+                          fontWeight: 600,
+                          border: '1px solid #cbd5e1'
+                        }}>
+                          不開放外借
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 右上角庫存標籤 */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      zIndex: 2
+                    }}>
                       <span style={{
-                        fontSize: '11px',
+                        fontSize: '10px',
                         padding: '2px 6px',
                         borderRadius: '4px',
-                        backgroundColor: it.is_borrowable ? '#ecfdf5' : '#f1f5f9',
-                        color: it.is_borrowable ? '#059669' : '#94a3b8',
-                        fontWeight: 600
+                        backgroundColor: isOutOfStock ? 'rgba(239, 68, 68, 0.9)' : 'rgba(5, 150, 105, 0.9)',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
                       }}>
-                        {it.is_borrowable ? '開放借用' : '不開放外借'}
-                      </span>
-                      <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>
-                        {it.id}
+                        {isOutOfStock ? '無庫存' : `可借 ${it.available_qty}`}
                       </span>
                     </div>
+                  </div>
 
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
-                      {it.name}
+                  {/* 下方商品資訊 */}
+                  <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+                        <span style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'monospace' }}>
+                          {it.id}
+                        </span>
+                        <span style={{ fontSize: '10px', color: '#64748b' }}>
+                          總量 {it.total_qty}
+                        </span>
+                      </div>
+
+                      <h3 style={{
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#0f172a',
+                        margin: '0 0 6px 0',
+                        lineHeight: 1.3,
+                        minHeight: '34px',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
+                      }}>
+                        {it.name}
+                      </h3>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11px', color: '#64748b' }}>2天租金</span>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#059669' }}>
+                            ${it.price_2day}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '10px', color: '#94a3b8' }}>續租每日</span>
+                          <span style={{ fontSize: '10px', color: '#64748b' }}>
+                            +${it.price_extra_day || 0}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-                      庫存: 可借 {it.available_qty} / 總量 {it.total_qty} | 2天租金: ${it.price_2day} 元 (續租每日 +${it.price_extra_day})
-                    </div>
-
-                    {/* 操作按鈕 (編輯 / 刪除) */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {/* 底部精巧操作按鈕 (編輯 / 刪除) */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '6px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid #f1f5f9'
+                    }}>
                       <button
                         onClick={() => handleOpenEdit(it)}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '4px',
-                          padding: '5px 10px',
+                          justifyContent: 'center',
+                          gap: '3px',
+                          padding: '6px 4px',
                           borderRadius: '6px',
                           border: '1px solid #cbd5e1',
                           backgroundColor: '#ffffff',
                           color: '#334155',
-                          fontSize: '12px',
+                          fontSize: '11px',
                           fontWeight: 600,
                           cursor: 'pointer'
                         }}
                       >
-                        <Edit2 size={13} />
-                        <span>編輯裝備</span>
+                        <Edit2 size={12} />
+                        <span>編輯</span>
                       </button>
                       <button
                         onClick={() => setItemToDelete(it)}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '4px',
-                          padding: '5px 10px',
+                          justifyContent: 'center',
+                          gap: '3px',
+                          padding: '6px 4px',
                           borderRadius: '6px',
                           border: '1px solid #fecaca',
                           backgroundColor: '#ffffff',
                           color: '#dc2626',
-                          fontSize: '12px',
+                          fontSize: '11px',
                           fontWeight: 600,
                           cursor: 'pointer'
                         }}
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={12} />
                         <span>刪除</span>
                       </button>
                     </div>

@@ -88,3 +88,27 @@ test('幹部系統模組測試：租借狀態合法值校驗 (嚴格杜絕非現
   assert.ok(!allowedStatuses.includes('退件 Rejected'));
   assert.ok(!allowedStatuses.includes('已損壞 Damaged'));
 });
+
+test('幹部系統模組測試：admin_portal_rpc.sql 鑑權防護與 RPC 函式齊備性檢驗', async () => {
+  const fs = await import('fs/promises');
+  const sql = await fs.readFile('supabase/admin_portal_rpc.sql', 'utf8');
+
+  assert.ok(sql.includes('CREATE OR REPLACE FUNCTION get_admin_members_rpc'), '必須包含 get_admin_members_rpc');
+  assert.ok(sql.includes('CREATE OR REPLACE FUNCTION get_admin_finance_rpc'), '必須包含 get_admin_finance_rpc');
+  assert.ok(sql.includes('CREATE OR REPLACE FUNCTION get_admin_loans_rpc'), '必須包含 get_admin_loans_rpc');
+  assert.ok(sql.includes('CREATE OR REPLACE FUNCTION update_admin_payment_status_rpc'), '必須包含 update_admin_payment_status_rpc');
+  assert.ok(sql.includes('CREATE OR REPLACE FUNCTION update_admin_loan_status_rpc'), '必須包含 update_admin_loan_status_rpc');
+  assert.ok(sql.includes('is_officer'), 'RPC 必須包含 is_officer 幹部鑑權驗證');
+  assert.ok(sql.includes('SECURITY DEFINER'), 'RPC 必須宣告為 SECURITY DEFINER 以安全豁免 RLS');
+  assert.ok(sql.includes('GRANT EXECUTE ON FUNCTION'), '必須授權 RPC 函式執行權限予 anon, authenticated, service_role');
+});
+
+test('幹部系統模組測試：裝備庫存改版為雙欄電商大圖結構檢驗', async () => {
+  const fs = await import('fs/promises');
+  const inventoryCode = await fs.readFile('src/pages/AdminInventory.tsx', 'utf8');
+
+  assert.ok(inventoryCode.includes('products-grid'), '裝備庫存必須使用 products-grid 網格樣式');
+  assert.ok(inventoryCode.includes('product-card'), '裝備庫存卡片必須採用 product-card 樣式');
+  assert.ok(inventoryCode.includes('ProductImage'), '裝備庫存必須使用 ProductImage 顯示 1:1 大圖');
+});
+

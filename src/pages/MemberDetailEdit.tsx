@@ -49,7 +49,7 @@ const FIELD_LABELS: Record<string, string> = {
   officer_role: '幹部職責角色'
 };
 
-export default function MemberDetailEdit() {
+export default function MemberDetailEdit({ officerUserId }: { officerUserId?: string } = {}) {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
 
@@ -89,8 +89,8 @@ export default function MemberDetailEdit() {
     setErrorMessage(null);
     try {
       const [detail, stats] = await Promise.all([
-        fetchMemberFullDetailFromSupabase(userId),
-        fetchMemberActiveStatsFromSupabase(userId)
+        fetchMemberFullDetailFromSupabase(userId, officerUserId),
+        fetchMemberActiveStatsFromSupabase(userId, officerUserId)
       ]);
 
       if (!detail) {
@@ -194,7 +194,7 @@ export default function MemberDetailEdit() {
         changedPayload[d.field] = formData[d.field];
       });
 
-      const res = await updateMemberFullDetailInSupabase(userId, changedPayload);
+      const res = await updateMemberFullDetailInSupabase(userId, changedPayload, officerUserId);
       if (!res.success) {
         setErrorMessage(res.error || '儲存失敗');
         setIsDiffModalOpen(false);

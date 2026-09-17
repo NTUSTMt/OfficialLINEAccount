@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.143-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.144-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.143)](#7-最新版本異動紀錄-changelog-v01143)
+- [7. 最新版本異動紀錄 (Changelog v0.1.144)](#7-最新版本異動紀錄-changelog-v01144)
 
 ---
 
@@ -377,6 +377,23 @@ pnpm test
   - **中英文 Part I / Part II 100% 鏡像對齊**：同步修正英文版對應章節、狀態清單、導航方式與 FAQ。
 - 🧪 **單元測試擴充**：
   - 新增 `test/60_ai_mention_and_chat_keyword_cleanup.test.mjs`，測試全數 158 項通過，前端打包建置無錯誤。
+
+### v0.1.144 (2026-09-17)
+- 幹部後台權限與資料庫 RPC 安全雙軌架構 (admin_portal_rpc.sql)：
+  - 新增專屬 SECURITY DEFINER RPC 函式：`get_admin_members_rpc`、`get_admin_member_detail_rpc`、`get_admin_finance_rpc`、`get_admin_loans_rpc`、`update_admin_member_rpc`、`update_admin_payment_status_rpc` 與 `update_admin_loan_status_rpc`。
+  - 函式內部強制執行 `is_officer(p_officer_line_user_id)` 身分校驗，非幹部拒絕存取，杜絕外部人士以前端 anon key 爬取全體社員機密個資（身分證號、病史、電話）與財務對帳紀錄。
+  - 配置資料表層級權限與 RLS 存取策略（GRANT SELECT, UPDATE, INSERT ON members, payments, loans, loan_items, event_signups），徹底根治 PostgreSQL 42501 (permission denied) 與 RLS 導致之 0 筆社員名冊問題。
+- 前端 Supabase 連線層與資料欄位校正 (src/utils/supabaseClient.ts)：
+  - 修正 loans 資料表查詢欄位名稱為 `total_rent`（修正原先錯誤查詢不存在之 `total_fee` 導致之報錯）。
+  - 後台社員名冊、財務對帳與租借管理讀寫全面優先調用幹部鑑權專屬 RPC，並保留資料表直讀直寫備援機制。
+- 路由與組件幹部鑑權參數傳遞 (src/App.tsx, AdminMembers, AdminFinance, AdminLoans, MemberDetailEdit)：
+  - 將當前登入者 `liffInit.userId` 作為 prop 傳遞至各後台頁面組件，確保 RPC 調用時具備完整鑑權憑證。
+- 裝備庫存雙欄購物網站大圖風格重構 (src/pages/AdminInventory.tsx)：
+  - 依社員端借用頁面規格全面改版為雙欄商品卡片網格 (products-grid)。
+  - 採用 ProductImage 組件呈現 1:1 滿版商品大圖，搭配左上角分類標籤、右上角剩餘庫存徽章與外借狀態提示。
+  - 卡片下方展示 2 天基本租金與續租日租金，並於底部配置精巧小巧的「編輯」與「刪除」操作按鈕。
+- 單元測試與建置驗證：
+  - 在 test/65_officer_system_modules.test.mjs 擴充 RPC 函式齊備性、幹部鑑權與雙欄大圖佈局之靜態檢查測試，全數 195 項單元測試通過，TypeScript 與 Vite 打包建置零錯誤。
 
 ### v0.1.143 (2026-09-17)
 - 幹部系統架構與手機端導航 (Officer Portal Navigation)：

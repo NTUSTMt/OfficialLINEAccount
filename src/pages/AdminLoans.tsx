@@ -24,7 +24,7 @@ const SORT_OPTIONS: SortOption[] = [
   { key: 'name', label: '依借用人姓名' }
 ];
 
-export default function AdminLoans() {
+export default function AdminLoans({ userId }: { userId?: string }) {
   const navigate = useNavigate();
   const [loans, setLoans] = useState<AdminLoanItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +48,7 @@ export default function AdminLoans() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const data = await fetchAllLoansFromSupabase();
+      const data = await fetchAllLoansFromSupabase(userId);
       setLoans(data);
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -60,7 +60,7 @@ export default function AdminLoans() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [userId]);
 
   const handleOpenDetail = (l: AdminLoanItem) => {
     setSelectedLoan(l);
@@ -76,7 +76,7 @@ export default function AdminLoans() {
     setSuccessMessage(null);
 
     try {
-      const res = await updateLoanStatusInSupabase(selectedLoan.id, editStatus, editNotes);
+      const res = await updateLoanStatusInSupabase(selectedLoan.id, editStatus, editNotes, userId);
       if (!res.success) {
         setErrorMessage(res.error || '更新租借狀態失敗');
         setIsSaving(false);

@@ -616,11 +616,11 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
             </ProfileCheck>
           } />
           <Route path="/admin/events" element={<AdminEvents userId={liffInit.userId} />} />
-          <Route path="/admin/members" element={<AdminMembers />} />
-          <Route path="/admin/members/:userId" element={<MemberDetailEdit />} />
-          <Route path="/admin/finance" element={<AdminFinance />} />
-          <Route path="/admin/loans" element={<AdminLoans />} />
-          <Route path="/admin/inventory" element={<AdminInventory />} />
+          <Route path="/admin/members" element={<AdminMembers userId={liffInit.userId} />} />
+          <Route path="/admin/members/:userId" element={<MemberDetailEdit officerUserId={liffInit.userId} />} />
+          <Route path="/admin/finance" element={<AdminFinance userId={liffInit.userId} />} />
+          <Route path="/admin/loans" element={<AdminLoans userId={liffInit.userId} />} />
+          <Route path="/admin/inventory" element={<AdminInventory userId={liffInit.userId} />} />
           <Route path="/admin" element={<Navigate to="/admin/events" replace />} />
           {/* 免 Google/LINE 登入之單鍵安全核銷頁面 */}
           <Route path="/confirm-payment" element={<ConfirmPayment />} />

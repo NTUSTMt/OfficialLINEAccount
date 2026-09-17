@@ -24,7 +24,7 @@ const SORT_OPTIONS: SortOption[] = [
   { key: 'name', label: '依申報人姓名' }
 ];
 
-export default function AdminFinance() {
+export default function AdminFinance({ userId }: { userId?: string }) {
   const navigate = useNavigate();
   const [items, setItems] = useState<AdminFinanceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,7 @@ export default function AdminFinance() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const data = await fetchFinanceItemsFromSupabase();
+      const data = await fetchFinanceItemsFromSupabase(userId);
       setItems(data);
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -63,7 +63,7 @@ export default function AdminFinance() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [userId]);
 
   const handleOpenDetail = (it: AdminFinanceItem) => {
     setSelectedItem(it);
@@ -87,7 +87,8 @@ export default function AdminFinance() {
         newStatus: editStatus,
         officerName: '財務幹部線上核銷',
         lineUserId: selectedItem.line_user_id,
-        notes: officerNotes
+        notes: officerNotes,
+        officerUserId: userId
       });
 
       if (!res.success) {
