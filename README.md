@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.146-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.147-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.146)](#7-最新版本異動紀錄-changelog-v01146)
+- [7. 最新版本異動紀錄 (Changelog v0.1.147)](#7-最新版本異動紀錄-changelog-v01147)
 
 ---
 
@@ -377,6 +377,18 @@ pnpm test
   - **中英文 Part I / Part II 100% 鏡像對齊**：同步修正英文版對應章節、狀態清單、導航方式與 FAQ。
 - 🧪 **單元測試擴充**：
   - 新增 `test/60_ai_mention_and_chat_keyword_cleanup.test.mjs`，測試全數 158 項通過，前端打包建置無錯誤。
+### v0.1.147 (2026-09-18)
+- 待結費用計算校準與項目明細化 (supabase/admin_portal_rpc.sql, src/utils/supabaseClient.ts, src/pages/MemberDetailEdit.tsx)：
+  - 依照社團業務流程校正待繳判定：活動未公告正備取（審核中 Checking）或備取狀態不具備繳費資格，嚴格限制僅「正取 Confirmed」且付款狀態非「已繳費 Paid」之活動方計入待結費用，徹底解決尚未公告錄取即錯誤顯示待結項目的問題。
+  - 待結費用卡片由單純數字提示升級為具體項目逐筆明細：條列展示待繳項目類型徽章（活動、裝備租借、社費）、具體項目名稱與目前狀態；若全數結清則呈現綠色「帳務已全數結清」狀態卡片。
+- 移除幹部角色預設值以消除載入幽靈變更 (src/pages/MemberDetailEdit.tsx)：
+  - 診斷並修復每次載入社員詳細頁面即自動跳出「儲存變更 (1)」之缺陷。原先組件將 officer_role 預設賦值為 '幹部'，造成原本為空的資料與表單初值不一致而誤觸發 diff 計算。
+  - 修正為保持空字串 (detail.officer_role || '')，徹底消除非使用者操作之幽靈異動提示。
+- 社員詳細編輯與個人資料預覽全面靠左對齊 (src/pages/MemberDetailEdit.tsx, src/components/admin/MemberProfileModal.tsx)：
+  - 依使用者指示，於 MemberDetailEdit 與 MemberProfileModal 最外層容器及排版元件強制設定 textAlign: 'left'，覆蓋根節點 #root 之居中樣式。
+  - 確保所有欄位標題、輸入框說明文字、個資內容與狀態徽章皆維持整齊靠左對齊之現代後台閱讀排版。
+- 單元測試與建置驗證：
+  - 於 test/65_officer_system_modules.test.mjs 新增 v0.1.147 專屬單元測試，驗證僅正取活動計入待結、幹部角色無幽靈預設、容器強制靠左對齊與全項目零表情符號檢驗。
 
 ### v0.1.146 (2026-09-17)
 - 財務核銷社費連動修復與正式社員狀態標記 (supabase/admin_portal_rpc.sql, src/utils/supabaseClient.ts)：

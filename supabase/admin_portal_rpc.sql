@@ -105,6 +105,7 @@ DECLARE
     v_member_json JSONB;
     v_active_events JSONB;
     v_active_loans JSONB;
+    v_pending_items JSONB;
     v_pending_count INT := 0;
 BEGIN
     v_is_officer := is_officer(p_officer_line_user_id);
@@ -164,11 +165,35 @@ BEGIN
     WHERE l.line_user_id = trim(p_target_user_id)
       AND l.status IN ('待領取 To Be Collected', '租借中 Borrowed');
 
-    -- 計算未繳費筆數
-    SELECT 
-        COALESCE((SELECT count(*) FROM event_signups s JOIN events e ON s.event_id = e.id WHERE s.line_user_id = trim(p_target_user_id) AND s.status = '正取 Confirmed' AND s.payment_status != '已繳費 Paid'), 0) +
-        COALESCE((SELECT count(*) FROM loans l WHERE l.line_user_id = trim(p_target_user_id) AND l.status IN ('待領取 To Be Collected', '租借中 Borrowed') AND l.payment_status != '已繳費 Paid'), 0)
-    INTO v_pending_count;
+    -- 計算待結項目 (嚴格遵循社團規定：僅「正取」活動才具備繳費資格與計入待繳)
+    SELECT COALESCE(jsonb_agg(p_item), '[]'::jsonb)
+    INTO v_pending_items
+    FROM (
+        SELECT 'event' AS type, '活動：' || e.title AS title, s.payment_status::TEXT AS status
+        FROM event_signups s
+        JOIN events e ON s.event_id = e.id
+        WHERE s.line_user_id = trim(p_target_user_id)
+          AND s.status = '正取 Confirmed'
+          AND s.payment_status != '已繳費 Paid'
+        UNION ALL
+        SELECT 'loan' AS type, '裝備租借：' || COALESCE((
+            SELECT string_agg(eq.name || ' x ' || li.quantity, ', ')
+            FROM loan_items li
+            JOIN equipments eq ON li.equipment_id = eq.id
+            WHERE li.loan_id = l.id
+        ), '裝備') AS title, l.payment_status::TEXT AS status
+        FROM loans l
+        WHERE l.line_user_id = trim(p_target_user_id)
+          AND l.status IN ('待領取 To Be Collected', '租借中 Borrowed')
+          AND l.payment_status != '已繳費 Paid'
+        UNION ALL
+        SELECT 'membership' AS type, '社費：社籍費用' AS title, m.payment_status::TEXT AS status
+        FROM members m
+        WHERE m.line_user_id = trim(p_target_user_id)
+          AND m.payment_status != '已繳費 Paid'
+    ) p_item;
+
+    v_pending_count := jsonb_array_length(v_pending_items);
 
     RETURN jsonb_build_object(
         'status', 'success',
@@ -177,7 +202,8 @@ BEGIN
         'activeStats', jsonb_build_object(
             'unfinishedEvents', v_active_events,
             'activeLoans', v_active_loans,
-            'pendingPaymentsCount', v_pending_count
+            'pendingPaymentsCount', v_pending_count,
+            'pendingItems', v_pending_items
         )
     );
 END;

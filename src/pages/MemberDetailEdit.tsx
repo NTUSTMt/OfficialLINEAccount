@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
+  ArrowRight,
   Save,
   AlertCircle,
   CheckCircle2,
@@ -125,7 +126,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
         join_membership_intent: detail.join_membership_intent || '',
         officer_intent: detail.officer_intent || '',
         is_officer: Boolean(detail.is_officer),
-        officer_role: detail.officer_role || '幹部'
+        officer_role: detail.officer_role || ''
       });
       setActiveStats(stats);
     } catch (err: any) {
@@ -235,7 +236,8 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f8fafc',
-      paddingBottom: '60px'
+      paddingBottom: '60px',
+      textAlign: 'left'
     }}>
       {/* 頂部控制列 */}
       <div style={{
@@ -392,14 +394,31 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
             </div>
 
             {/* 待繳款項 */}
-            <div style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #f1f5f9' }}>
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #f1f5f9', textAlign: 'left' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', marginBottom: '6px' }}>
                 <CreditCard size={14} color="#d97706" />
-                <span>待確認/未繳費項目</span>
+                <span>待確認/未繳費項目 ({activeStats.pendingPaymentsCount})</span>
               </div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: activeStats.pendingPaymentsCount > 0 ? '#d97706' : '#059669' }}>
-                {activeStats.pendingPaymentsCount > 0 ? `有 ${activeStats.pendingPaymentsCount} 筆待結費用` : '帳務已全數結清'}
-              </div>
+              {activeStats.pendingPaymentsCount === 0 ? (
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#059669' }}>
+                  帳務已全數結清
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {activeStats.pendingItems && activeStats.pendingItems.length > 0 ? (
+                    activeStats.pendingItems.map((item, idx) => (
+                      <div key={idx} style={{ fontSize: '12px', color: '#0f172a', backgroundColor: '#ffffff', padding: '6px 8px', borderRadius: '6px', border: '1px solid #fde68a' }}>
+                        <div style={{ fontWeight: 600 }}>{item.title}</div>
+                        <div style={{ fontSize: '11px', color: '#d97706', marginTop: '2px' }}>狀態：{item.status}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#d97706' }}>
+                      有 {activeStats.pendingPaymentsCount} 筆待結費用
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -869,7 +888,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ color: '#ef4444', textDecoration: 'line-through' }}>{d.oldVal}</span>
-                    <span style={{ color: '#64748b' }}>➔</span>
+                    <ArrowRight size={14} color="#64748b" />
                     <span style={{ color: '#059669', fontWeight: 600 }}>{d.newVal}</span>
                   </div>
                 </div>

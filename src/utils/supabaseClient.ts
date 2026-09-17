@@ -1287,19 +1287,54 @@ export const fetchMemberActiveStatsFromSupabase = async (
       });
     }
 
-    // 3. 待確認或未繳費筆數
-    let pendingCount = 0;
+    // 3. 待確認或未繳費筆數 (嚴格遵循社團規定：僅「正取」活動才具備繳費資格與計入待繳)
+    const pendingItems: Array<{ type: 'event' | 'loan' | 'membership'; title: string; status: string }> = [];
+
     unfinishedEvents.forEach(e => {
-      if (e.payStatus !== '已繳費 Paid') pendingCount++;
+      const isConfirmedSignup = e.signupStatus && e.signupStatus.includes('正取');
+      if (isConfirmedSignup && e.payStatus !== '已繳費 Paid') {
+        pendingItems.push({
+          type: 'event',
+          title: `活動：${e.title}`,
+          status: e.payStatus || '未繳費 Unpaid'
+        });
+      }
     });
+
     activeLoans.forEach(l => {
-      if (l.payStatus !== '已繳費 Paid') pendingCount++;
+      if (l.payStatus !== '已繳費 Paid') {
+        pendingItems.push({
+          type: 'loan',
+          title: `裝備租借：${l.itemsSummary}`,
+          status: l.payStatus || '未繳費 Unpaid'
+        });
+      }
     });
+
+    // 查詢社費繳納狀態
+    try {
+      const { data: memberData } = await supabase
+        .from('members')
+        .select('payment_status')
+        .eq('line_user_id', userId)
+        .maybeSingle();
+
+      if (memberData && memberData.payment_status && memberData.payment_status !== '已繳費 Paid') {
+        pendingItems.push({
+          type: 'membership',
+          title: '社費：社籍費用',
+          status: memberData.payment_status
+        });
+      }
+    } catch {
+      // 忽略非關鍵社費查詢例外
+    }
 
     return {
       unfinishedEvents,
       activeLoans,
-      pendingPaymentsCount: pendingCount
+      pendingPaymentsCount: pendingItems.length,
+      pendingItems
     };
   } catch (err) {
     console.warn('[Supabase] fetchMemberActiveStatsFromSupabase 例外:', err);
@@ -1436,7 +1471,7 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
           amount: p.amount || 0,
           bank_last5: p.bank_last5,
           proof_image_url: p.proof_image_url,
-          target_type: p.target_type,
+          target_type: p.target_type || (cat === 'membership' ? 'membership' : cat === 'activity' ? 'event' : cat === 'equipment' ? 'loan' : null),
           target_id: p.target_id,
           status: p.status === '已核銷 Confirmed' ? '已核銷 Confirmed' : '待確認 Checking',
           payment_status: p.status === '已核銷 Confirmed' ? '已繳費 Paid' : '待確認 Checking',

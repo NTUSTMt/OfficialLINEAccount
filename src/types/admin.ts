@@ -65,6 +65,11 @@ export interface MemberActiveStats {
     itemsSummary: string;
   }>;
   pendingPaymentsCount: number;
+  pendingItems?: Array<{
+    type: 'event' | 'loan' | 'membership';
+    title: string;
+    status: string;
+  }>;
 }
 
 export interface AdminFinanceItem {

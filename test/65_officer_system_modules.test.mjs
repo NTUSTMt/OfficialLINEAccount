@@ -188,3 +188,29 @@ test('幹部系統模組測試：財務核銷社費連動、正式社員標記�
   assert.ok(clientTs.includes('updatedRows.length === 0'), 'Client 必須校驗更新列數杜絕 RLS 靜默阻斷');
 });
 
+test('幹部系統模組測試：待結項目明細化、僅正取活動計入待繳、幹部角色無預設與欄位靠左對齊 (v0.1.147)', async () => {
+  const fs = await import('fs/promises');
+  const editCode = await fs.readFile('src/pages/MemberDetailEdit.tsx', 'utf8');
+  const modalCode = await fs.readFile('src/components/admin/MemberProfileModal.tsx', 'utf8');
+  const rpcSql = await fs.readFile('supabase/admin_portal_rpc.sql', 'utf8');
+  const clientTs = await fs.readFile('src/utils/supabaseClient.ts', 'utf8');
+
+  // 1. 幹部角色不可預設為 '幹部'，避免載入即觸發變更提示
+  assert.ok(!editCode.includes("detail.officer_role || '幹部'"), '不可將 officer_role 預設為幹部');
+  assert.ok(editCode.includes("detail.officer_role || ''"), 'officer_role 未設定時應為空字串');
+
+  // 2. 靠左對齊檢驗（覆蓋 #root 的 center）
+  assert.ok(editCode.includes("textAlign: 'left'"), 'MemberDetailEdit 容器必須明確設定 textAlign: left');
+  assert.ok(modalCode.includes("textAlign: 'left'"), 'MemberProfileModal 內容必須明確設定 textAlign: left');
+
+  // 3. 活動待繳僅計算正取狀態
+  assert.ok(rpcSql.includes("s.status = '正取 Confirmed'"), 'SQL 必須僅對正取狀態之活動計算待繳');
+  assert.ok(rpcSql.includes('pendingItems'), 'SQL 必須回傳 pendingItems 明細陣列');
+  assert.ok(clientTs.includes("e.signupStatus.includes('正取')"), 'Client 必須僅對正取狀態之活動計算待繳');
+  assert.ok(clientTs.includes('pendingItems'), 'Client 必須生成 pendingItems 明細陣列');
+
+  // 4. 零表情符號檢驗擴充
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  assert.ok(!editCode.match(emojiRegex), 'MemberDetailEdit.tsx 不得包含表情符號');
+});
+

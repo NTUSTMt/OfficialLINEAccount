@@ -192,7 +192,8 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          gap: '14px'
+          gap: '14px',
+          textAlign: 'left'
         }}
         onClick={(e) => e.stopPropagation()}
       >
