@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.142-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.143-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.142)](#7-最新版本異動紀錄-changelog-v01142)
+- [7. 最新版本異動紀錄 (Changelog v0.1.143)](#7-最新版本異動紀錄-changelog-v01143)
 
 ---
 
@@ -378,19 +378,28 @@ pnpm test
 - 🧪 **單元測試擴充**：
   - 新增 `test/60_ai_mention_and_chat_keyword_cleanup.test.mjs`，測試全數 158 項通過，前端打包建置無錯誤。
 
-### v0.1.124 (2026-09-16)
-- 🕒 **活動截止時間時區偏移與跨日 Bug 徹底修復**：
-  - 修正 [admin_events_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql)：儲存截止日強制帶入 `+08` 台灣時區，讀取時強制以 `AT TIME ZONE 'Asia/Taipei'` 格式化，徹底解決 9/22 截止變成 9/23 的跨日問題。
-  - 修正 [06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js) 與 [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js)：`deadlineIso` 改用 `+08:00` 偏移量，杜絕誤當 UTC `Z`。
-  - 修正 [03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js)：`_formatEventDate` 加入歷史資料 `23:59:59Z` 容錯還原機制，既有卡片與新卡片均能精確呈現正確年月日。
-- 🚫 **過期活動狀態連動與前端防呆優化**：
-  - 修正 [AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx)：當活動已過期且資料庫狀態仍為「開放」時，狀態標籤改為顯示「已截止 (過期)」紅/橘警示樣式，不再誤導顯示綠色「開放報名」。
-  - 修正 [03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js)：LINE Bot 詳細活動卡片與輪播在活動到期後，一律切換為「報名已截止 Closed」並將按鈕轉為灰色訊息按鈕。
-- 🔄 **每日巡檢排程修復與試算表佇列欄位補齊**：
-  - 修正 [05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js)：修正定時排程 PostgREST API 查詢中的欄位名稱錯誤（`select=id,name,deadline` 修正為 `select=id,title,deadline`；社員到期查詢修正為 `payment_status` 與 `membership_expires_at`），使自動關閉過期活動排程能順暢每日執行。
-  - 補齊 `_syncSignupToSheet` 之 `allowedCols`：正式納入 `name`、`is_official_member_snapshot`、`cancel_reason`，並支援社員姓名自動自 members 表補齊，解決試算表報名者姓名空白問題。
-  - 擴充 [01_Config_Auth.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/01_Config_Auth.js)：在 `_findHeaderCol` 加入通用中英欄位對照字典 `_getGlobalColumnAliases`，純中文或純英文表頭皆能自適應寫入。
-- 📚 **文件結構優化**：
-  - 將前版 411KB `README.md` 完整封存至 `README_ARCHIVE.md`。
-  - 重新建立精簡清晰、現代架構的繁體中文新版 `README.md`。
-  - 新增單元測試 `test/59_event_deadline_timezone_and_sheet_sync.test.mjs`，測試全數 155 項通過。
+### v0.1.143 (2026-09-17)
+- 幹部系統架構與手機端導航 (Officer Portal Navigation)：
+  - 在 /admin/* 路由下全面建構手機端專屬次級橫向滑動標籤導航 (AdminSubNav)，支援活動管理、社員資料、財務對帳、租借管理與裝備庫存五大模組無縫切換。
+  - 全域頂部導覽列 (GlobalHeader) 頭像下拉選單全面支援幹部身分直接展開 5 大後台功能入口，並依當前路由動態更新標題與副標題。
+- Notion 風格搜尋、篩選與排序共用組件 (NotionFilterBar)：
+  - 專為手機端觸控設計，提供平時完全收起的簡潔搜尋框、篩選抽屜按鈕與排序面板按鈕。
+  - 點擊篩選圖示彈出底部抽屜 (Bottom Sheet)，展示各頁面專屬常用欄位標籤，選取完成即時套用並於圖示右上角顯示啟用條件計數；點擊排序圖示可一鍵切換升降冪與排序欄位。
+- 社員資料管理模組 (AdminMembers 與 MemberDetailEdit)：
+  - 清單頁面 (/admin/members) 支援關鍵字搜尋（姓名、Line ID、Line UID、信箱、學號）、身分與繳費狀態篩選，以卡片形式直觀呈現姓名、身分狀態、系所學號與正式社員徽章。
+  - 獨立子頁面 (/admin/members/:userId) 頂部即時呈現尚未結束的活動行程、未歸還借用與待繳款項動態概況；下方表單將全數 members 欄位依邏輯分類為五大摺疊分組。
+  - 內建儲存確認防呆 Diff Modal，於送出前條列列出有異動的欄位新舊值對比，確認後直接直連寫入 Supabase members 表。
+- 財務對帳管理模組 (AdminFinance)：
+  - 統一卡片流整合活動報名費、裝備租借費與社費，提供 Notion 搜尋篩選與排序。
+  - 詳細對帳彈窗展示申報人（附帶開啟個人資料按鈕）、金額、帳號末五碼、匯款截圖（可點擊放大檢視）。
+  - 下拉選單嚴格僅開放合法狀態（待確認 Checking、已核銷 Confirmed）；核銷時自動雙向連動更新對應之活動報名名冊 (event_signups.payment_status) 或裝備租借單 (loans.payment_status)，並非同步推播 LINE 繳費成功通知給社員。
+- 裝備租借管理模組 (AdminLoans)：
+  - 依借用人姓名呈現租借單卡片流，直觀檢視租借狀態、繳費狀態、出隊起訖天數與租金。
+  - 詳細彈窗提供借用人資訊、一鍵開啟個人資料、借用裝備品項細項清單，以及嚴格合法之租借狀態下拉選單（待領取 To Be Collected、租借中 Borrowed、已歸還 Returned、已取消 Cancelled），儲存後自動推播 LINE 通知。
+- 裝備庫存管理模組 (AdminInventory)：
+  - 顯示社團全部庫存品項（含開放借用與不開放外借，沿用 Borrow 頁面視覺排版）。
+  - 支援自動流水號代碼配發 (EQ_001, EQ_002...)，提供新增裝備、刪除裝備（二次防呆彈窗）、全欄位修改與 Google Drive 直連相片維護。
+- 後端推播與單元測試擴充：
+  - 在 gas.js 中擴充 notify_loan_status_updated 處理常式，確保租借狀態更新時順暢推播。
+  - 新增 test/65_officer_system_modules.test.mjs 單元測試，全數 193 項測試通過，TypeScript 建置零錯誤。
+

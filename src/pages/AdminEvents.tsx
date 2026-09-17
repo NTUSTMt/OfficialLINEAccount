@@ -20,6 +20,7 @@ import { AdminEventForm, type AdminEventFormData } from '../components/admin/Adm
 import { AdminSignupsModal } from '../components/admin/AdminSignupsModal';
 import { ApplicantModals } from '../components/admin/ApplicantModals';
 import { openExternalUrl, parseProofUrls } from '../utils/applicantUtils';
+import { AdminSubNav } from '../components/admin/AdminSubNav';
 import {
   Search,
   RotateCw,
@@ -856,7 +857,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               boxSizing: 'border-box'
             }}
           >
-            📲 由 LINE 開啟以驗證幹部身分
+            由 LINE 開啟以驗證幹部身分
           </a>
         )}
 
@@ -873,8 +874,10 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   }
 
   return (
-    <div className="admin-events-container animate-fade-in" style={{ maxWidth: '900px', margin: '0 auto', padding: '16px', textAlign: 'left' }}>
-      {/* 頁籤切換 */}
+    <div>
+      <AdminSubNav />
+      <div className="admin-events-container animate-fade-in" style={{ maxWidth: '900px', margin: '0 auto', padding: '16px', textAlign: 'left' }}>
+        {/* 頁籤切換 */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -1149,6 +1152,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         onUpdateApplicantResult={handleUpdateApplicantResult}
         updatingSignupCode={updatingSignupCode}
       />
+      </div>
     </div>
   );
 }

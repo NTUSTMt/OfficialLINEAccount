@@ -2,6 +2,14 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Equipment } from '../types/equipment';
 import type { AdminEvent, SignupApplicant } from '../types/event';
 import type { ProfileData } from '../types/member';
+import type {
+  AdminMemberListItem,
+  MemberFullRecord,
+  MemberActiveStats,
+  AdminFinanceItem,
+  AdminLoanItem,
+  AdminInventoryItem
+} from '../types/admin';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -1077,11 +1085,576 @@ export const cancelEventSignupInSupabase = async (
       return { success: false, message: error?.message || data?.message };
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 活動報名已秒級取消！', 'color: #10b981; font-weight: bold;', signupId);
+    console.log('%c[DataSource: Supabase] 活動報名已秒級取消！', 'color: #10b981; font-weight: bold;', signupId);
     return { success: true, message: data.message };
   } catch (err: unknown) {
     console.warn('[Supabase] 取消報名例外:', err);
     return { success: false, message: err instanceof Error ? err.message : String(err) };
   }
 };
+
+/**
+ * 幹部後台：取得所有社員清單 (members)
+ */
+export const fetchAdminMembersFromSupabase = async (): Promise<AdminMemberListItem[]> => {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('members')
+      .select('line_user_id, name, identity_status, department, student_id, line_id, is_official_member, is_officer, officer_role, payment_status, created_at, phone, email')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[Supabase] 讀取社員名單失敗:', error.message);
+      throw new Error(`[Supabase 讀取社員名單失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
+    }
+
+    return (data || []) as AdminMemberListItem[];
+  } catch (err: any) {
+    console.error('[Supabase] fetchAdminMembersFromSupabase 例外:', err);
+    throw err;
+  }
+};
+
+/**
+ * 幹部後台：取得單一社員全部欄位 (MemberFullRecord)
+ */
+export const fetchMemberFullDetailFromSupabase = async (userId: string): Promise<MemberFullRecord | null> => {
+  if (!supabase || !userId) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('members')
+      .select('*')
+      .eq('line_user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[Supabase] 讀取社員詳細資料失敗:', error.message);
+      throw new Error(`[Supabase 讀取社員詳細資料失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
+    }
+
+    return data as MemberFullRecord | null;
+  } catch (err: any) {
+    console.error('[Supabase] fetchMemberFullDetailFromSupabase 例外:', err);
+    throw err;
+  }
+};
+
+/**
+ * 幹部後台：取得社員進行中活動、租借與繳費狀態
+ */
+export const fetchMemberActiveStatsFromSupabase = async (userId: string): Promise<MemberActiveStats> => {
+  if (!supabase || !userId) {
+    return { unfinishedEvents: [], activeLoans: [], pendingPaymentsCount: 0 };
+  }
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  try {
+    // 1. 查詢尚未結束的活動行程
+    const { data: signupsData } = await supabase
+      .from('event_signups')
+      .select(`
+        id,
+        event_id,
+        status,
+        payment_status,
+        events:event_id (
+          id,
+          title,
+          start_date,
+          end_date,
+          status
+        )
+      `)
+      .eq('line_user_id', userId)
+      .neq('status', '已取消 Cancelled');
+
+    const unfinishedEvents: MemberActiveStats['unfinishedEvents'] = [];
+    if (signupsData && Array.isArray(signupsData)) {
+      signupsData.forEach((s: any) => {
+        const ev = s.events;
+        if (ev && (ev.end_date >= todayStr || ev.status !== '已結束 Finished')) {
+          unfinishedEvents.push({
+            id: ev.id,
+            title: ev.title,
+            startDate: ev.start_date,
+            endDate: ev.end_date,
+            signupStatus: s.status,
+            payStatus: s.payment_status
+          });
+        }
+      });
+    }
+
+    // 2. 查詢進行中租借單
+    const { data: loansData } = await supabase
+      .from('loans')
+      .select('id, start_date, end_date, status, payment_status, items')
+      .eq('line_user_id', userId)
+      .in('status', ['待領取 To Be Collected', '租借中 Borrowed']);
+
+    const activeLoans: MemberActiveStats['activeLoans'] = [];
+    if (loansData && Array.isArray(loansData)) {
+      loansData.forEach((l: any) => {
+        let itemsText = '裝備租借';
+        if (Array.isArray(l.items) && l.items.length > 0) {
+          itemsText = l.items.map((it: any) => `${it.name || it.equipment_id || '裝備'} x ${it.quantity || 1}`).join(', ');
+        }
+        activeLoans.push({
+          id: l.id,
+          startDate: l.start_date,
+          endDate: l.end_date,
+          status: l.status,
+          payStatus: l.payment_status,
+          itemsSummary: itemsText
+        });
+      });
+    }
+
+    // 3. 待確認或未繳費筆數
+    let pendingCount = 0;
+    unfinishedEvents.forEach(e => {
+      if (e.payStatus !== '已繳費 Paid') pendingCount++;
+    });
+    activeLoans.forEach(l => {
+      if (l.payStatus !== '已繳費 Paid') pendingCount++;
+    });
+
+    return {
+      unfinishedEvents,
+      activeLoans,
+      pendingPaymentsCount: pendingCount
+    };
+  } catch (err) {
+    console.warn('[Supabase] fetchMemberActiveStatsFromSupabase 例外:', err);
+    return { unfinishedEvents: [], activeLoans: [], pendingPaymentsCount: 0 };
+  }
+};
+
+/**
+ * 幹部後台：直接更新社員完整資料 (純資料直連 Supabase)
+ */
+export const updateMemberFullDetailInSupabase = async (
+  userId: string,
+  fields: Partial<MemberFullRecord>
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase || !userId) {
+    return { success: false, error: '缺少 Supabase 連線或 userId' };
+  }
+
+  try {
+    const updatePayload: Record<string, any> = {
+      ...fields,
+      updated_at: new Date().toISOString()
+    };
+    delete updatePayload.line_user_id;
+
+    const { error } = await supabase
+      .from('members')
+      .update(updatePayload)
+      .eq('line_user_id', userId);
+
+    if (error) {
+      console.error('[Supabase] 更新社員資料失敗:', error.message);
+      return { success: false, error: `[更新社員資料失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('[Supabase] updateMemberFullDetailInSupabase 例外:', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `[更新社員資料例外]: ${msg}` };
+  }
+};
+
+/**
+ * 幹部後台：取得財務對帳卡片清單 (結合 payments, 未結 loans 與未結 signups)
+ */
+export const fetchFinanceItemsFromSupabase = async (): Promise<AdminFinanceItem[]> => {
+  if (!supabase) return [];
+
+  try {
+    const items: AdminFinanceItem[] = [];
+
+    // 1. 查詢所有申報的 payments 記錄
+    const { data: paymentsData, error: pErr } = await supabase
+      .from('payments')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (pErr) {
+      console.error('[Supabase] 讀取 payments 失敗:', pErr.message);
+      throw new Error(`[Supabase 讀取 payments 失敗]: ${pErr.message} (代碼: ${pErr.code || 'UNKNOWN'})`);
+    }
+
+    if (paymentsData && Array.isArray(paymentsData)) {
+      paymentsData.forEach((p: any) => {
+        let cat: AdminFinanceItem['itemCategory'] = 'general';
+        const typeStr = (p.type || '').toLowerCase();
+        if (p.target_type === 'event' || typeStr.includes('活動')) {
+          cat = 'activity';
+        } else if (p.target_type === 'loan' || typeStr.includes('裝備')) {
+          cat = 'equipment';
+        } else if (p.target_type === 'membership' || typeStr.includes('社費')) {
+          cat = 'membership';
+        }
+
+        items.push({
+          id: p.id,
+          line_user_id: p.line_user_id,
+          name: p.name || '未知申報人',
+          type: p.type || '款項申報',
+          amount: p.amount || 0,
+          bank_last5: p.bank_last5,
+          proof_image_url: p.proof_image_url,
+          target_type: p.target_type,
+          target_id: p.target_id,
+          status: p.status === '已核銷 Confirmed' ? '已核銷 Confirmed' : '待確認 Checking',
+          payment_status: p.status === '已核銷 Confirmed' ? '已繳費 Paid' : '待確認 Checking',
+          officer_notes: p.officer_notes,
+          created_at: p.created_at || new Date().toISOString(),
+          sourceType: 'payment',
+          itemCategory: cat
+        });
+      });
+    }
+
+    // 2. 補充未填報 payments 但有金額之待繳費／待確認租借單
+    const { data: unpaidLoans } = await supabase
+      .from('loans')
+      .select('*')
+      .gt('total_fee', 0)
+      .neq('payment_status', '已繳費 Paid')
+      .order('created_at', { ascending: false });
+
+    if (unpaidLoans && Array.isArray(unpaidLoans)) {
+      unpaidLoans.forEach((l: any) => {
+        // 若該筆 loan 已經有 payment 關聯，則不重複新增
+        const alreadyInPayments = items.some(it => it.target_id === l.id || it.id === l.id);
+        if (!alreadyInPayments) {
+          items.push({
+            id: l.id,
+            line_user_id: l.line_user_id,
+            name: l.name || '借用人',
+            type: `裝備租借：${l.id}`,
+            amount: l.total_fee || l.total_rent || 0,
+            status: l.payment_status === '已繳費 Paid' ? '已核銷 Confirmed' : '待確認 Checking',
+            payment_status: l.payment_status || '未繳費 Unpaid',
+            created_at: l.created_at || new Date().toISOString(),
+            sourceType: 'loan',
+            itemCategory: 'equipment',
+            target_type: 'loan',
+            target_id: l.id
+          });
+        }
+      });
+    }
+
+    return items;
+  } catch (err: any) {
+    console.error('[Supabase] fetchFinanceItemsFromSupabase 例外:', err);
+    throw err;
+  }
+};
+
+/**
+ * 幹部後台：財務審核狀態更新與雙向連動
+ */
+export const updatePaymentAndLinkedStatusInSupabase = async (params: {
+  paymentId: string;
+  sourceType: 'payment' | 'loan' | 'event_signup';
+  targetType?: string | null;
+  targetId?: string | null;
+  newStatus: '待確認 Checking' | '已核銷 Confirmed';
+  officerName?: string;
+  lineUserId?: string | null;
+  notes?: string | null;
+}): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase) return { success: false, error: '缺少 Supabase 連線' };
+
+  try {
+    const isConfirmed = params.newStatus === '已核銷 Confirmed';
+    const mappedPayStatus = isConfirmed ? '已繳費 Paid' : '待確認 Checking';
+    const nowIso = new Date().toISOString();
+
+    if (params.sourceType === 'payment') {
+      const { error: pErr } = await supabase
+        .from('payments')
+        .update({
+          status: params.newStatus,
+          confirmed_by: isConfirmed ? (params.officerName || '管理幹部') : null,
+          confirmed_at: isConfirmed ? nowIso : null,
+          officer_notes: params.notes,
+          updated_at: nowIso
+        })
+        .eq('id', params.paymentId);
+
+      if (pErr) {
+        return { success: false, error: `[更新 payments 失敗]: ${pErr.message} (代碼: ${pErr.code || 'UNKNOWN'})` };
+      }
+
+      // 雙向連動：若有 targetType 與 targetId
+      if (params.targetType === 'event' && params.targetId && params.lineUserId) {
+        await supabase
+          .from('event_signups')
+          .update({ payment_status: mappedPayStatus, updated_at: nowIso })
+          .eq('event_id', params.targetId)
+          .eq('line_user_id', params.lineUserId);
+      } else if (params.targetType === 'loan' && params.targetId) {
+        await supabase
+          .from('loans')
+          .update({ payment_status: mappedPayStatus, updated_at: nowIso })
+          .eq('id', params.targetId);
+      } else if (params.targetType === 'membership' && params.lineUserId) {
+        await supabase
+          .from('members')
+          .update({ payment_status: mappedPayStatus, updated_at: nowIso })
+          .eq('line_user_id', params.lineUserId);
+      } else if (params.lineUserId && isConfirmed) {
+        // 多筆或未指定 target 時，若已核銷則將該使用者未繳費項目一併轉為已繳費
+        await supabase
+          .from('event_signups')
+          .update({ payment_status: '已繳費 Paid', updated_at: nowIso })
+          .eq('line_user_id', params.lineUserId)
+          .eq('payment_status', '待確認 Checking');
+
+        await supabase
+          .from('loans')
+          .update({ payment_status: '已繳費 Paid', updated_at: nowIso })
+          .eq('line_user_id', params.lineUserId)
+          .eq('payment_status', '待確認 Checking');
+      }
+    } else if (params.sourceType === 'loan') {
+      const { error: lErr } = await supabase
+        .from('loans')
+        .update({
+          payment_status: mappedPayStatus,
+          updated_at: nowIso
+        })
+        .eq('id', params.paymentId);
+
+      if (lErr) {
+        return { success: false, error: `[更新 loans 繳費狀態失敗]: ${lErr.message} (代碼: ${lErr.code || 'UNKNOWN'})` };
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `[財務核銷雙向更新例外]: ${msg}` };
+  }
+};
+
+/**
+ * 幹部後台：取得所有裝備租借訂單 (loans)
+ */
+export const fetchAllLoansFromSupabase = async (): Promise<AdminLoanItem[]> => {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('loans')
+      .select('*')
+      .order('start_date', { ascending: false });
+
+    if (error) {
+      console.error('[Supabase] 讀取 loans 失敗:', error.message);
+      throw new Error(`[Supabase 讀取 loans 失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
+    }
+
+    return (data || []) as AdminLoanItem[];
+  } catch (err: any) {
+    console.error('[Supabase] fetchAllLoansFromSupabase 例外:', err);
+    throw err;
+  }
+};
+
+/**
+ * 幹部後台：更新裝備租借狀態 (loans.status)
+ */
+export const updateLoanStatusInSupabase = async (
+  loanId: string,
+  newStatus: '待領取 To Be Collected' | '租借中 Borrowed' | '已歸還 Returned' | '已取消 Cancelled',
+  notes?: string
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase || !loanId) return { success: false, error: '缺少必要參數' };
+
+  try {
+    const updateObj: Record<string, any> = {
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    };
+    if (notes !== undefined) {
+      updateObj.notes = notes;
+    }
+    if (newStatus === '已取消 Cancelled') {
+      updateObj.cancelled_at = new Date().toISOString();
+    }
+
+    const { error } = await supabase
+      .from('loans')
+      .update(updateObj)
+      .eq('id', loanId);
+
+    if (error) {
+      console.error('[Supabase] 更新租借狀態失敗:', error.message);
+      return { success: false, error: `[更新租借狀態失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `[更新租借狀態例外]: ${msg}` };
+  }
+};
+
+/**
+ * 幹部後台：取得社團全部裝備 (包括開放與不開放外借)
+ */
+export const fetchAllInventoryFromSupabase = async (): Promise<AdminInventoryItem[]> => {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('equipments')
+      .select('*')
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.error('[Supabase] 讀取全裝備庫存失敗:', error.message);
+      throw new Error(`[Supabase 讀取全裝備庫存失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
+    }
+
+    return (data || []) as AdminInventoryItem[];
+  } catch (err: any) {
+    console.error('[Supabase] fetchAllInventoryFromSupabase 例外:', err);
+    throw err;
+  }
+};
+
+/**
+ * 幹部後台：自動計算下一筆裝備流水號 (例如 EQ_001, EQ_002...)
+ */
+export const getNextEquipmentIdFromSupabase = async (): Promise<string> => {
+  if (!supabase) return 'EQ_001';
+
+  try {
+    const { data, error } = await supabase
+      .from('equipments')
+      .select('id');
+
+    if (error || !data || data.length === 0) {
+      return 'EQ_001';
+    }
+
+    let maxNum = 0;
+    data.forEach((row: any) => {
+      const match = String(row.id).match(/^EQ_(\d+)$/i);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+
+    const nextNum = maxNum + 1;
+    return `EQ_${String(nextNum).padStart(3, '0')}`;
+  } catch {
+    return 'EQ_001';
+  }
+};
+
+/**
+ * 幹部後台：新增裝備品項
+ */
+export const insertEquipmentToSupabase = async (
+  item: Omit<AdminInventoryItem, 'created_at'>
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase) return { success: false, error: '缺少 Supabase 連線' };
+
+  try {
+    const { error } = await supabase
+      .from('equipments')
+      .insert([
+        {
+          ...item,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ]);
+
+    if (error) {
+      console.error('[Supabase] 新增裝備失敗:', error.message);
+      return { success: false, error: `[新增裝備失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `[新增裝備例外]: ${msg}` };
+  }
+};
+
+/**
+ * 幹部後台：更新裝備全欄位
+ */
+export const updateEquipmentFullInSupabase = async (
+  id: string,
+  fields: Partial<AdminInventoryItem>
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase || !id) return { success: false, error: '缺少必要參數' };
+
+  try {
+    const updatePayload: Record<string, any> = {
+      ...fields,
+      updated_at: new Date().toISOString()
+    };
+    delete updatePayload.id;
+
+    const { error } = await supabase
+      .from('equipments')
+      .update(updatePayload)
+      .eq('id', id);
+
+    if (error) {
+      console.error('[Supabase] 更新裝備失敗:', error.message);
+      return { success: false, error: `[更新裝備失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `[更新裝備例外]: ${msg}` };
+  }
+};
+
+/**
+ * 幹部後台：刪除裝備品項
+ */
+export const deleteEquipmentFromSupabase = async (
+  id: string
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase || !id) return { success: false, error: '缺少必要參數' };
+
+  try {
+    const { error } = await supabase
+      .from('equipments')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[Supabase] 刪除裝備失敗:', error.message);
+      return { success: false, error: `[刪除裝備失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `[刪除裝備例外]: ${msg}` };
+  }
+};
+
 

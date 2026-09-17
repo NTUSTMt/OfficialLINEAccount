@@ -18,6 +18,11 @@ const History = lazy(() => import('./pages/History'));
 const Achievements = lazy(() => import('./pages/Achievements'));
 const AdminEvents = lazy(() => import('./pages/AdminEvents'));
 const ConfirmPayment = lazy(() => import('./pages/ConfirmPayment'));
+const AdminMembers = lazy(() => import('./pages/AdminMembers'));
+const MemberDetailEdit = lazy(() => import('./pages/MemberDetailEdit'));
+const AdminFinance = lazy(() => import('./pages/AdminFinance'));
+const AdminLoans = lazy(() => import('./pages/AdminLoans'));
+const AdminInventory = lazy(() => import('./pages/AdminInventory'));
 
 // 解析 LIFF 傳入的初始路徑 (解決 liff.state 傳參導致重定向遺失的問題)
 const getInitialRedirectPath = () => {
@@ -52,6 +57,18 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
   // 根據當前路由，動態決定左側的 Logo、標題與副標題（子路由如 /dashboard/achievements, /payment/history 需優先判斷）
   const getHeaderDetails = () => {
     const path = location.pathname;
+    if (path.includes('/admin/members')) {
+      return { title: '社員資料管理', subtitle: '社員名冊與權限維護', icon: <ShieldCheck size={24} color="#059669" /> };
+    }
+    if (path.includes('/admin/finance')) {
+      return { title: '財務對帳審核', subtitle: '活動與裝備款項對帳', icon: <ShieldCheck size={24} color="#059669" /> };
+    }
+    if (path.includes('/admin/loans')) {
+      return { title: '裝備租借管理', subtitle: '租借訂單與歸還追蹤', icon: <ShieldCheck size={24} color="#059669" /> };
+    }
+    if (path.includes('/admin/inventory')) {
+      return { title: '裝備庫存管理', subtitle: '社團裝備資產維護', icon: <ShieldCheck size={24} color="#059669" /> };
+    }
     if (path.includes('/admin')) {
       return { title: t('nav.adminEvents.title'), subtitle: t('nav.adminEvents.subtitle'), icon: <ShieldCheck size={24} color="#059669" /> };
     }
@@ -92,13 +109,13 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
     return () => document.removeEventListener('click', handleOutsideClick);
   }, [isOpen]);
 
-  const handleNav = (path: string, externalUrl: string) => {
+  const handleNav = (path: string, externalUrl?: string) => {
     setIsOpen(false);
-    if (liff.isInClient()) {
-      // 在 LINE Client 內，開啟對應的 LIFF 連結以加載正確的 LIFF ID 上下文
+    if (externalUrl && liff.isInClient()) {
+      // 在 LINE Client 內，若有獨立 LIFF 網址則開啟
       liff.openWindow({ url: externalUrl, external: false });
     } else {
-      // 瀏覽器/本地開發環境直接以路由切換
+      // 瀏覽器/本地開發或無獨立 LIFF ID 時直接以路由切換
       navigate(path);
     }
   };
@@ -234,22 +251,84 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                   {t('nav.menuAchievements')}
                 </div>
                 {isOfficer && (
-                  <div
-                    onClick={() => handleNav('/admin/events', LIFF_URLS.ADMIN_EVENTS)}
-                    style={{
-                      padding: '10px 16px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      color: '#059669',
-                      fontWeight: 'bold',
-                      borderTop: '1px solid #e2e8f0',
-                      transition: 'background 0.2s'
-                    }}
-                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
-                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    {t('nav.menuAdminEvents')}
-                  </div>
+                  <>
+                    <div
+                      onClick={() => handleNav('/admin/events', LIFF_URLS.ADMIN_EVENTS)}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        color: '#059669',
+                        fontWeight: 'bold',
+                        borderTop: '1px solid #e2e8f0',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      {t('nav.menuAdminEvents')}
+                    </div>
+                    <div
+                      onClick={() => handleNav('/admin/members')}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        color: '#059669',
+                        fontWeight: 'bold',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      社員資料管理
+                    </div>
+                    <div
+                      onClick={() => handleNav('/admin/finance')}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        color: '#059669',
+                        fontWeight: 'bold',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      財務對帳管理
+                    </div>
+                    <div
+                      onClick={() => handleNav('/admin/loans')}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        color: '#059669',
+                        fontWeight: 'bold',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      裝備租借管理
+                    </div>
+                    <div
+                      onClick={() => handleNav('/admin/inventory')}
+                      style={{
+                        padding: '10px 16px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        color: '#059669',
+                        fontWeight: 'bold',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      裝備庫存管理
+                    </div>
+                  </>
                 )}
               </div>
             </>
@@ -537,6 +616,11 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
             </ProfileCheck>
           } />
           <Route path="/admin/events" element={<AdminEvents userId={liffInit.userId} />} />
+          <Route path="/admin/members" element={<AdminMembers />} />
+          <Route path="/admin/members/:userId" element={<MemberDetailEdit />} />
+          <Route path="/admin/finance" element={<AdminFinance />} />
+          <Route path="/admin/loans" element={<AdminLoans />} />
+          <Route path="/admin/inventory" element={<AdminInventory />} />
           <Route path="/admin" element={<Navigate to="/admin/events" replace />} />
           {/* 免 Google/LINE 登入之單鍵安全核銷頁面 */}
           <Route path="/confirm-payment" element={<ConfirmPayment />} />

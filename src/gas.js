@@ -3909,6 +3909,11 @@ function handleLiffHelperApi(json) {
     return _handleCreateEventSheet(json);
   }
 
+  // 14. 裝備租借狀態更新推播 Helper (純發訊息通知借用人)
+  if (action === "notify_loan_status_updated") {
+    return _handleNotifyLoanStatusUpdated(json);
+  }
+
   return _errorResponse("未支援的 Helper Action: " + action);
 }
 
@@ -4376,6 +4381,41 @@ function _handleNotifyPaymentConfirmed(json) {
     return _successResponse({ message: "核銷通知推播已成功送出" });
   } catch (err) {
     console.warn("_handleNotifyPaymentConfirmed 異常:", err);
+    return _errorResponse(err.toString());
+  }
+}
+
+/**
+ * 裝備租借狀態更新推播 Helper (純推播通知借用人)
+ */
+function _handleNotifyLoanStatusUpdated(json) {
+  try {
+    var loanId = json.loanId || "";
+    var userId = json.userId || "";
+    var borrowerName = json.borrowerName || "社員";
+    var newStatus = json.newStatus || "";
+    var pickupDate = json.pickupDate || "";
+    var returnDate = json.returnDate || "";
+    var itemsSummary = json.itemsSummary || [];
+    var itemsText = Array.isArray(itemsSummary)
+      ? (itemsSummary.map(function (it) { return (it.name || it.equipment_id || "裝備") + " x " + (it.quantity || 1); }).join("\n• "))
+      : String(itemsSummary || "無品項細項");
+
+    if (userId && userId.indexOf("U") === 0) {
+      var userMsg = "【裝備租借狀態更新通知】\n\n" +
+        "親愛的 " + borrowerName + " 您好：\n" +
+        "您的裝備租借申請單狀態已更新！\n\n" +
+        "• 訂單編號：" + loanId + "\n" +
+        "• 最新租借狀態：【" + newStatus + "】\n" +
+        "• 租借期間：" + pickupDate + " ~ " + returnDate + "\n" +
+        (itemsText ? ("• 租借裝備品項：\n• " + itemsText + "\n\n") : "\n") +
+        "如有任何疑問或需確認領取/歸還時間，請隨時與社團裝備幹部聯絡，謝謝！";
+      _pushMessage(userId, userMsg);
+    }
+
+    return _successResponse({ message: "裝備狀態推播通知已成功送出" });
+  } catch (err) {
+    console.warn("_handleNotifyLoanStatusUpdated 異常:", err);
     return _errorResponse(err.toString());
   }
 }
