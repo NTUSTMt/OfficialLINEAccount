@@ -755,6 +755,10 @@ function _handleNotifyProfileSaved(json) {
           detailsZh.push("• 擔任幹部意願：" + (data.intendOfficer || "已更新"));
           detailsEn.push("• Officer Intent: " + _translateValueToEn(data.intendOfficer || "已更新"));
         }
+        if (cFields.indexOf("wantToSay") > -1) {
+          detailsZh.push("• 想說的話：已更新");
+          detailsEn.push("• I want to say...: Updated");
+        }
       }
     } else {
       // 3. 既有使用者且未傳入 changedFields 之向下相容 fallback
@@ -1442,7 +1446,7 @@ function _createEventDriveFolderAndSheet(payload, eventId) {
       var headers = [
         "系統識別碼", "專屬碼", "姓名", "性別", "LINE ID", "聯絡信箱", "聯絡電話", "聯絡地址",
         "生日", "證件號碼", "緊急聯絡人姓名", "緊急聯絡人電話", "緊急聯絡人聯絡地址", "緊急聯絡人關係",
-        "爬山經驗", "體能測驗", "體能證明", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註"
+        "爬山經驗", "體能測驗", "體能證明", "想說的話", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註"
       ];
       signupSheet.appendRow(headers);
 
@@ -2045,9 +2049,10 @@ function _handleSendEventNotifications(json) {
     var sbSuccessNotified = false;
     if (sbUrl && sbKey && targetEventId) {
       try {
-        // 取得活動名稱
-        var evRes = _supabaseGet("events", { id: "eq." + targetEventId, select: "id,title" });
+        // 取得活動名稱與專屬群組連結
+        var evRes = _supabaseGet("events", { id: "eq." + targetEventId, select: "id,title,line_group_url" });
         var targetEventTitle = (evRes && evRes[0] && evRes[0].title) ? evRes[0].title : targetEventId;
+        var targetGroupUrl = (evRes && evRes[0] && evRes[0].line_group_url) ? String(evRes[0].line_group_url).trim() : "";
 
         // 查詢該活動之所有報名者
         var signupsUrl = sbUrl + "/rest/v1/event_signups?event_id=eq." + encodeURIComponent(targetEventId) + "&select=id,event_id,line_user_id,name,status,notification_status";
@@ -2063,6 +2068,18 @@ function _handleSendEventNotifications(json) {
         if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
           var sbSignups = JSON.parse(res.getContentText());
           if (Array.isArray(sbSignups) && sbSignups.length > 0) {
+            // 防呆檢驗：若有正取人員待推播通知，但活動未設定群組連結，立即阻擋
+            var hasPendingAccepted = sbSignups.some(function (item) {
+              var st = String(item.status || "");
+              var noti = String(item.notification_status || "");
+              var uid = String(item.line_user_id || "").trim();
+              return st.indexOf("正取") > -1 && st.indexOf("取消") === -1 && noti !== "已通知" && uid.startsWith("U");
+            });
+
+            if (hasPendingAccepted && !targetGroupUrl) {
+              return _errorResponse("此活動尚未設定專屬群組連結 (line_group_url)，請先至活動編輯填寫群組連結後再發送推播！");
+            }
+
             sbSuccessNotified = true;
             for (var k = 0; k < sbSignups.length; k++) {
               var sItem = sbSignups[k];
@@ -2087,22 +2104,35 @@ function _handleSendEventNotifications(json) {
                         { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
                         { type: "text", text: "【 " + statusStr + " 】", weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
                         { type: "separator", margin: "md" },
-                        { type: "text", text: "恭喜您錄取！請留意我們後續會透過您留下的真實 LINE ID 將您加入出隊群組，並請於期限內完成繳費！\nCongratulations! We will invite you to the LINE group soon. Please complete the payment before the deadline!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                        { type: "text", text: "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!", wrap: true, margin: "md", size: "xs", color: "#666666" }
                       ]
                     },
                     footer: {
                       type: "box",
                       layout: "vertical",
-                      contents: [{
-                        type: "button",
-                        style: "primary",
-                        color: "#1DB446",
-                        action: {
-                          type: "uri",
-                          label: "前往繳費系統 Pay",
-                          uri: "https://liff.line.me/" + (LIFF_CHANNEL_ID || "2009217429") + "-u7OCkmQO"
+                      spacing: "sm",
+                      contents: [
+                        {
+                          type: "button",
+                          style: "primary",
+                          color: "#1DB446",
+                          action: {
+                            type: "uri",
+                            label: "加入活動群組 Join Group",
+                            uri: targetGroupUrl
+                          }
+                        },
+                        {
+                          type: "button",
+                          style: "secondary",
+                          color: "#475569",
+                          action: {
+                            type: "uri",
+                            label: "前往繳費系統 Pay",
+                            uri: "https://liff.line.me/" + (LIFF_CHANNEL_ID || "2009217429") + "-u7OCkmQO"
+                          }
                         }
-                      }]
+                      ]
                     }
                   };
                   pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
@@ -2536,6 +2566,7 @@ function _handleCreateEventSheet(json) {
             m.outdoor_experience || m.hiking_experience || "",
             m.fitness_desc || m.fitness_test || "",
             proofUrlsStr || m.fitness_proof_url || "",
+            m.want_to_say || "",
             s.is_official_member_snapshot ? "是" : (m.is_official_member ? "是" : "否"),
             s.status || "審核中 Checking",
             s.notification_status || "未通知",
@@ -2591,6 +2622,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     var expCol = _findHeaderCol(headers, "outdoor_experience", ["爬山經驗", "登山經驗"]);
     var fitCol = _findHeaderCol(headers, "fitness_desc", ["體能測驗", "體能"]);
     var proofCol = _findHeaderCol(headers, "proof_urls", ["體能證明"]);
+    var wantSayCol = _findHeaderCol(headers, "want_to_say", ["想說的話", "想說的話 I want to say...", "留言"]);
 
     var signups = _supabaseGet("event_signups", { event_id: "eq." + eventId, select: "*", order: "created_at.asc" });
     if (!Array.isArray(signups) || signups.length === 0) return 0;
@@ -2650,6 +2682,10 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
         var pVal = proofUrlsStr || m.fitness_proof_url || "";
         if (pVal) { sheet.getRange(r + 1, proofCol + 1).setValue(pVal); changed = true; }
       }
+      if (wantSayCol > -1 && !String(sData[r][wantSayCol] || "").trim()) {
+        var sayVal = m.want_to_say || "";
+        if (sayVal) { sheet.getRange(r + 1, wantSayCol + 1).setValue(sayVal); changed = true; }
+      }
 
       if (changed) updatedCount++;
     }
@@ -2686,6 +2722,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
           mem.outdoor_experience || mem.hiking_experience || "",
           mem.fitness_desc || mem.fitness_test || "",
           pUrls || mem.fitness_proof_url || "",
+          mem.want_to_say || "",
           s.is_official_member_snapshot ? "是" : (mem.is_official_member ? "是" : "否"),
           s.status || "審核中 Checking",
           s.notification_status || "未通知",

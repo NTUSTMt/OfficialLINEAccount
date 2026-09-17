@@ -55,6 +55,7 @@
 | `identity_status` | `TEXT` | 是 | NULL | - | **身分狀態** (本校生 / 校友 / 外校生 / 社會人士) |
 | `join_membership_intent` | `TEXT` | 是 | NULL | - | **加入社員意願** |
 | `officer_intent` | `TEXT` | 是 | NULL | - | **擔任幹部意願** (初次填寫或改為有意願會推播) |
+| `want_to_say` | `TEXT` | 是 | NULL | - | **想說的話 I want to say...** (使用者自由留言，完全非必填) |
 | `is_officer` | `BOOLEAN` | 是 | `FALSE` | `TRUE`, `FALSE` | **是否為幹部** (連動幹部名冊與後台權限) |
 | `officer_role` | `TEXT` | 是 | `'幹部'` | - | **幹部職責角色** |
 

@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS members (
     identity_status TEXT,                -- 身分狀態
     join_membership_intent TEXT,         -- 加入社員意願
     officer_intent TEXT,                 -- 擔任幹部意願
+    want_to_say TEXT,                    -- 想說的話 I want to say... (非必填留言)
     is_official_member BOOLEAN DEFAULT FALSE, -- 正式社員身分 (由繳費狀態判定)
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

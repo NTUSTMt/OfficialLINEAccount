@@ -30,6 +30,7 @@ interface ProfileData {
   strengthProof: string;
   intendOfficial: string;
   intendOfficer: string;
+  wantToSay?: string;
 }
 
 interface UploadedFile {
@@ -65,6 +66,7 @@ function Register({ userId }: { userId: string }) {
     strengthProof: '',
     intendOfficial: '',
     intendOfficer: '',
+    wantToSay: '',
   });
 
   // 上傳檔案狀態
@@ -162,6 +164,7 @@ function Register({ userId }: { userId: string }) {
                 strengthProof: p.strengthProof ? String(p.strengthProof) : '',
                 intendOfficial: p.intendOfficial ? String(p.intendOfficial) : '',
                 intendOfficer: p.intendOfficer ? String(p.intendOfficer) : '',
+                wantToSay: p.wantToSay ? String(p.wantToSay) : '',
               };
 
               setFormData(loadedData);
@@ -254,6 +257,7 @@ function Register({ userId }: { userId: string }) {
       strengthProof: '',
       intendOfficial: '',
       intendOfficer: '',
+      wantToSay: '',
     });
   };
 
@@ -488,6 +492,7 @@ function Register({ userId }: { userId: string }) {
             }
             if (norm(finalFormData.intendOfficial) !== norm(originalFormData.intendOfficial)) changedFields.push('intendOfficial');
             if (norm(finalFormData.intendOfficer) !== norm(originalFormData.intendOfficer)) changedFields.push('intendOfficer');
+            if (norm(finalFormData.wantToSay) !== norm(originalFormData.wantToSay)) changedFields.push('wantToSay');
           }
 
           fetch(GAS_API_URL, {
@@ -1018,6 +1023,32 @@ function Register({ userId }: { userId: string }) {
                 />
                 <span>{t('register.step4.intendOfficerCheckbox')}</span>
               </label>
+
+              {/* 想說的話 I want to say... (非必填多行輸入框) */}
+              <div style={{ marginTop: '20px', borderTop: '1px dashed var(--border-color)', paddingTop: '16px' }}>
+                <label style={{ display: 'block', fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>
+                  {t('register.step4.wantToSayTitle')}
+                </label>
+                <textarea
+                  name="wantToSay"
+                  value={formData.wantToSay || ''}
+                  onChange={handleChange}
+                  placeholder={t('register.step4.wantToSayPlaceholder')}
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                    backgroundColor: 'var(--input-bg, #fff)',
+                    color: 'var(--text-primary)'
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}

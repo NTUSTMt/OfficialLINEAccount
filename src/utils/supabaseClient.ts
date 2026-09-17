@@ -322,7 +322,8 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
       strengthProof: proofsStr,
       medicalHistory: data.medical_history || '',
       intendOfficial: data.join_membership_intent || '',
-      intendOfficer: data.officer_intent || ''
+      intendOfficer: data.officer_intent || '',
+      wantToSay: data.want_to_say || ''
     };
 
     console.log('%c⚡ [DataSource: Supabase] 社員個人資料預填讀取成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', profile);
@@ -376,7 +377,8 @@ export const saveMemberProfileToSupabase = async (
       medical_history: formData.medicalHistory.trim(),
       identity_status: formData.identityStatus.trim(),
       join_membership_intent: formData.intendOfficial.trim(),
-      officer_intent: formData.intendOfficer.trim()
+      officer_intent: formData.intendOfficer.trim(),
+      want_to_say: formData.wantToSay ? formData.wantToSay.trim() : ''
     };
 
     const { data, error } = await supabase.rpc('save_member_profile', {

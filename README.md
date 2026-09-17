@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.141-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.142-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.141)](#7-最新版本異動紀錄-changelog-v01141)
+- [7. 最新版本異動紀錄 (Changelog v0.1.142)](#7-最新版本異動紀錄-changelog-v01142)
 
 ---
 
@@ -306,6 +306,16 @@ pnpm test
   - 更多服務次級選單卡片與 Webhook 指令同步更新為「🤖 小岳說明 AI Guide」，提升對外客服品牌認知一致性。
 - 🧪 **單元測試全數覆蓋**：
   - [test/60_ai_mention_and_chat_keyword_cleanup.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/60_ai_mention_and_chat_keyword_cleanup.test.mjs) 擴充最新活動指令與容錯測試，160 項單元測試全數 Pass。
+
+### v0.1.142 (2026-09-17)
+- **「想說的話 (want_to_say)」非必填多行文字輸入框與全鏈路同步支援 ([src/pages/Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx), [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts), [src/types/member.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/types/member.ts), [src/locales/zh.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/zh.json), [src/locales/en.json](file:///Users/brianhung/Documents/OfficialLINEAccount/src/locales/en.json), [gas_modules/01_Config_Auth.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/01_Config_Auth.js), [gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js), [supabase/add_member_want_to_say.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/add_member_want_to_say.sql), [supabase/event_sheet_script.js](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/event_sheet_script.js), [test/64_member_want_to_say.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/64_member_want_to_say.test.mjs))**：
+  - **資料填寫第四步新增多行留言輸入框**：於「幹部意願調查」下方新增「想說的話 I want to say...」多行文字輸入框 (`textarea`)，無論初次註冊或後續更新皆完全非必填，自由提供使用者留言給社團或幹部。
+  - **Supabase 資料庫與安全 RPC 擴充**：於 `members` 資料表新增 `want_to_say TEXT` 欄位，並更新 `save_member_profile` RPC 函式與 `get_member_profile` 支援 `want_to_say` 寫入與預填。
+  - **主試算表與活動獨立試算表雙向對齊**：
+    - 在通用欄位別名加入 `want_to_say` 對應「想說的話」、「想說的話 I want to say...」、「留言」。
+    - 活動獨立試算表表頭擴充第 23 欄「想說的話」，一鍵手動建立試算表與背景巡檢回補（`_backfillEventSpreadsheetMemberInfo`）時均完整回補與追加該欄位。
+    - 活動獨立試算表內嵌腳本 (`event_sheet_script.js`) 支援「想說的話」雙向同步與差異比對。
+  - **個人檔案更新推播連動**：在更新既有個人資料比對 `changedFields` 時納入 `wantToSay`，若內容有變動自動於 LINE 推播通知中標註「想說的話：已更新」。
 
 ### v0.1.141 (2026-09-17)
 - **「開啟試算表」點擊自動靜默同步與「同步名冊」按鈕整併 ([src/components/admin/AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx), [src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx), [gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js), [test/63_manual_create_event_sheet_and_import.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/63_manual_create_event_sheet_and_import.test.mjs))**：

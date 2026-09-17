@@ -202,7 +202,8 @@ function getSignupsDiff() {
     status: findCol(["審核結果", "審核狀態"]),
     notifyStatus: findCol(["通知狀態"]),
     payStatus: findCol(["繳費狀態"]),
-    notes: findCol(["備註"])
+    notes: findCol(["備註"]),
+    wantToSay: findCol(["想說的話"])
   };
 
   // 1. 抓取試算表中「有專屬碼」的隊員資料 (過濾非隊員雜項列)
@@ -236,7 +237,8 @@ function getSignupsDiff() {
       status: colIdx.status > -1 ? String(row[colIdx.status] || "").trim() : "",
       notifyStatus: colIdx.notifyStatus > -1 ? String(row[colIdx.notifyStatus] || "").trim() : "",
       payStatus: colIdx.payStatus > -1 ? String(row[colIdx.payStatus] || "").trim() : "",
-      notes: colIdx.notes > -1 ? String(row[colIdx.notes] || "").trim() : ""
+      notes: colIdx.notes > -1 ? String(row[colIdx.notes] || "").trim() : "",
+      wantToSay: colIdx.wantToSay > -1 ? String(row[colIdx.wantToSay] || "").trim() : ""
     };
   }
 
@@ -244,7 +246,7 @@ function getSignupsDiff() {
   var sbUrl = sbConfig.url;
   var sbKey = sbConfig.key;
 
-  var fetchUrl = sbUrl + "/rest/v1/event_signups?event_id=eq." + encodeURIComponent(eventId) + "&select=id,status,notes,line_user_id,members(name,gender,line_id,email,phone,address,birthday,id_card,emergency_contact_name,emergency_contact_phone,emergency_contact_address,emergency_contact_rel,outdoor_experience,fitness_desc,is_official_member)";
+  var fetchUrl = sbUrl + "/rest/v1/event_signups?event_id=eq." + encodeURIComponent(eventId) + "&select=id,status,notes,line_user_id,members(name,gender,line_id,email,phone,address,birthday,id_card,emergency_contact_name,emergency_contact_phone,emergency_contact_address,emergency_contact_rel,outdoor_experience,fitness_desc,want_to_say,is_official_member)";
   var res = UrlFetchApp.fetch(fetchUrl, {
     method: "get",
     headers: {
@@ -288,6 +290,7 @@ function getSignupsDiff() {
       emerRel: m.emergency_contact_rel || "",
       exp: m.outdoor_experience || "",
       fitness: m.fitness_desc || "",
+      wantToSay: m.want_to_say || "",
       isOfficial: m.is_official_member ? "是" : "否"
     };
   }
@@ -326,6 +329,9 @@ function getSignupsDiff() {
     }
     if (local.address && remote.address && local.address !== remote.address) {
       changes.push({ field: "聯絡地址", oldVal: remote.address, newVal: local.address });
+    }
+    if (local.wantToSay !== remote.wantToSay) {
+      changes.push({ field: "想說的話", oldVal: remote.wantToSay, newVal: local.wantToSay });
     }
 
     if (changes.length > 0) {
@@ -402,6 +408,7 @@ function commitDiffsToSupabase(diffsToCommit) {
       if (full.emerRel) memberPayload.emergency_contact_rel = full.emerRel;
       if (full.exp) memberPayload.outdoor_experience = full.exp;
       if (full.fitness) memberPayload.fitness_desc = full.fitness;
+      if (full.wantToSay !== undefined) memberPayload.want_to_say = full.wantToSay;
 
       if (Object.keys(memberPayload).length > 0) {
         var mUrl = sbUrl + "/rest/v1/members?line_user_id=eq." + encodeURIComponent(full.userId);

@@ -198,6 +198,7 @@ function _getGlobalColumnAliases(englishName) {
     "identity_status": ["身分", "學生身分", "校內外身分"],
     "join_membership_intent": ["入社意願", "是否入社"],
     "officer_intent": ["幹部意願", "擔任幹部意願"],
+    "want_to_say": ["想說的話", "想說的話 I want to say...", "給幹部的話", "留言"],
     "is_official_member": ["是否為正式社員", "正式社員", "社員身分"],
     "is_officer": ["是否為幹部", "幹部身分"],
     "officer_role": ["幹部職稱", "幹部角色", "職稱"],

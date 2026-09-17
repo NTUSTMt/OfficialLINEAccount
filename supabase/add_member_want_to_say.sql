@@ -1,38 +1,11 @@
 -- ==============================================================================
--- 台科登山社社團系統：個人基本資料安全讀取與儲存 RPC 函式 (SECURITY DEFINER)
--- 目的：嚴格限定僅能讀寫本人資料，杜絕全體社員名冊與身分證/電話等機密個資外洩
+-- 台科登山社社團系統：新增 members.want_to_say 欄位與 RPC 更新
 -- ==============================================================================
 
--- 1. 確保 members 資料表維持最高規格 RLS 封閉防護，禁止任何人直接 SELECT 整張表
-ALTER TABLE members ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Anon read member" ON members;
-DROP POLICY IF EXISTS "Anon insert member" ON members;
-DROP POLICY IF EXISTS "Anon update member" ON members;
+-- 1. 新增 want_to_say 欄位 (非必填，可為 NULL)
+ALTER TABLE members ADD COLUMN IF NOT EXISTS want_to_say TEXT;
 
--- 2. 安全讀取 RPC 函式：嚴格僅能以指定之 line_user_id 查閱本人紀錄 (查無則回傳 null，杜絕整表爬取)
-CREATE OR REPLACE FUNCTION get_member_profile(p_line_user_id TEXT)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_member members%ROWTYPE;
-BEGIN
-    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' OR trim(p_line_user_id) = 'TEST_USER_ID' THEN
-        RETURN NULL;
-    END IF;
-
-    SELECT * INTO v_member FROM members WHERE line_user_id = trim(p_line_user_id);
-    IF FOUND THEN
-        RETURN to_jsonb(v_member);
-    ELSE
-        RETURN NULL;
-    END IF;
-END;
-$$;
-
--- 3. 安全儲存 RPC 函式：以 line_user_id 為唯一鎖定，嚴格僅能寫入本人資料
+-- 2. 更新 save_member_profile RPC 函式支援寫入與更新 want_to_say
 CREATE OR REPLACE FUNCTION save_member_profile(
     p_line_user_id TEXT,
     p_data JSONB
@@ -41,12 +14,13 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
+AS $$
 DECLARE
     v_is_officer BOOLEAN := FALSE;
-    v_officer_role TEXT := NULL;
+    v_officer_role TEXT := '幹部';
 BEGIN
-    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
-        RETURN jsonb_build_object('success', false, 'message', '缺少使用者識別碼');
+    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' OR trim(p_line_user_id) = 'TEST_USER_ID' THEN
+        RETURN jsonb_build_object('success', false, 'message', '無效的使用者識別碼');
     END IF;
 
     -- 檢查該成員目前是否具備幹部身分
@@ -139,6 +113,4 @@ BEGIN
 END;
 $$;
 
--- 4. 授權前端客戶端執行這兩個專屬安全函式
-GRANT EXECUTE ON FUNCTION get_member_profile(TEXT) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION save_member_profile(TEXT, JSONB) TO anon, authenticated, service_role;

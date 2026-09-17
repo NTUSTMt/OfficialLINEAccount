@@ -127,7 +127,9 @@
       "feeInfoGraduation": "Until Graduation Scheme: Undergrad $800 / Master $400",
       "feeInfoNote": "After submitting your profile, you can visit the Payment page anytime to select a scheme and pay.",
       "intendOfficerTitle": "Officer Interest",
-      "intendOfficerCheckbox": "I am interested in becoming a club officer (Exchange student is not able to become an officer, sorry >_<)"
+      "intendOfficerCheckbox": "I am interested in becoming a club officer (Exchange student is not able to become an officer, sorry >_<)",
+      "wantToSayTitle": "I want to say...",
+      "wantToSayPlaceholder": "Feel free to leave any remarks, suggestions, or expectations for the club or officers (Optional)..."
     },
     "nav": {
       "prev": "Back",

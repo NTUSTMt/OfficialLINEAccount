@@ -1,3 +1,5 @@
+// ===== 01_Config_Auth.js =====
+
 // ==============================================================================
 // 🌲 台科登山社社團系統 GAS 模組 1：環境設定、認證與共通工具 (01_Config_Auth.js)
 // ==============================================================================
@@ -198,6 +200,7 @@ function _getGlobalColumnAliases(englishName) {
     "identity_status": ["身分", "學生身分", "校內外身分"],
     "join_membership_intent": ["入社意願", "是否入社"],
     "officer_intent": ["幹部意願", "擔任幹部意願"],
+    "want_to_say": ["想說的話", "想說的話 I want to say...", "給幹部的話", "留言"],
     "is_official_member": ["是否為正式社員", "正式社員", "社員身分"],
     "is_officer": ["是否為幹部", "幹部身分"],
     "officer_role": ["幹部職稱", "幹部角色", "職稱"],
@@ -447,6 +450,8 @@ function _supabasePatch(table, queryParams, payload) {
 }
 
 
+
+// ===== 02_LineBot_Webhook.js =====
 
 // ==============================================================================
 // 🤖 台科登山社社團系統 GAS 模組 2：LINE Bot Webhook 接收與指令路由 (02_LineBot_Webhook.js)
@@ -869,12 +874,13 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
       muteHttpExceptions: true
     });
 
-    // 2.5 連動更新 Supabase 對應子項目繳費狀態 (活動報名、社費、裝備租借)
+    // 2.1 提取繳費與社員核心資訊 (優先讀取 payments.type 真實欄位)
     var targetUserId = payment.line_user_id || payment.userId || "";
     var targetUserName = payment.name || "社員";
     var totalAmount = payment.amount || payment.total_amount || 0;
     var selectedItems = payment.type || (payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團活動/裝備費用"));
 
+    // 2.5 連動更新 Supabase 對應子項目繳費狀態 (活動報名、社費、裝備租借)
     var selTypes = payment.selected_types || [];
     if (typeof selTypes === 'string') {
       try { selTypes = JSON.parse(selTypes); } catch (e) { selTypes = [selTypes]; }
@@ -938,6 +944,11 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
     }
 
     // 3. 自動主動推播【🎉 繳費成功通知】至該社員個人 LINE
+    var targetUserId = payment.line_user_id;
+    var targetUserName = payment.name || "社員";
+    var totalAmount = payment.amount || payment.total_amount || 0;
+    var selectedItems = payment.type || (payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團活動/裝備費用"));
+
     if (targetUserId && targetUserId.indexOf("U") === 0) {
       var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
         "親愛的 " + targetUserName + " 您好：\n" +
@@ -1196,6 +1207,8 @@ function pushAdminMessage(text, customSubject, optionsOrHtml) {
 }
 
 
+
+// ===== 03_Flex_Templates.js =====
 
 // ==============================================================================
 // 🎨 台科登山社社團系統 GAS 模組 3：LINE Flex Message 樣板與展示 (03_Flex_Templates.js)
@@ -2052,6 +2065,8 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
 }
 
 
+// ===== 04_Ai_Gemini.js =====
+
 // ==============================================================================
 // 🧠 台科登山社社團系統 GAS 模組 4：Gemini AI 智慧客服與知識庫 (04_Ai_Gemini.js)
 // ==============================================================================
@@ -2300,6 +2315,8 @@ function _fetchDocsKnowledgeBase() {
 }
 
 
+
+// ===== 05_Sync_Worker.js =====
 
 // ==============================================================================
 // 🔄 台科登山社社團系統 GAS 模組 5：Supabase sync_queue 背景單向同步排程 (05_Sync_Worker.js)
@@ -3814,6 +3831,8 @@ function setupSpreadsheetEditTrigger() {
 
 
 
+// ===== 06_Helper_Services.js =====
+
 // ==============================================================================
 // ⚡ 台科登山社社團系統 GAS 模組 6：LIFF 輕量 Helper API (06_Helper_Services.js)
 // 目的：僅處理 Google Drive 檔案上傳與 LINE 推播通知，徹底移除所有試算表寫入依賴
@@ -4571,6 +4590,10 @@ function _handleNotifyProfileSaved(json) {
           detailsZh.push("• 擔任幹部意願：" + (data.intendOfficer || "已更新"));
           detailsEn.push("• Officer Intent: " + _translateValueToEn(data.intendOfficer || "已更新"));
         }
+        if (cFields.indexOf("wantToSay") > -1) {
+          detailsZh.push("• 想說的話：已更新");
+          detailsEn.push("• I want to say...: Updated");
+        }
       }
     } else {
       // 3. 既有使用者且未傳入 changedFields 之向下相容 fallback
@@ -5258,7 +5281,7 @@ function _createEventDriveFolderAndSheet(payload, eventId) {
       var headers = [
         "系統識別碼", "專屬碼", "姓名", "性別", "LINE ID", "聯絡信箱", "聯絡電話", "聯絡地址",
         "生日", "證件號碼", "緊急聯絡人姓名", "緊急聯絡人電話", "緊急聯絡人聯絡地址", "緊急聯絡人關係",
-        "爬山經驗", "體能測驗", "體能證明", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註"
+        "爬山經驗", "體能測驗", "體能證明", "想說的話", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註"
       ];
       signupSheet.appendRow(headers);
 
@@ -5601,7 +5624,6 @@ function _syncEventToSupabase(eventData) {
       drive_folder_url: eventData.driveFolderUrl || null,
       spreadsheet_url: eventData.spreadsheetUrl || null,
       spreadsheet_id: eventData.spreadsheetId || null,
-      line_group_url: eventData.lineGroupUrl || null,
       updated_at: new Date().toISOString()
     };
 
@@ -5673,8 +5695,7 @@ function _handleSaveEvent(json) {
           img: getOrCreateColIdx(eventSheet, headers, "封面圖網址"),
           driveFolder: getOrCreateColIdx(eventSheet, headers, "雲端資料夾網址"),
           sheetUrl: getOrCreateColIdx(eventSheet, headers, "報名名冊網址"),
-          sheetId: getOrCreateColIdx(eventSheet, headers, "試算表ID"),
-          lineGroupUrl: getOrCreateColIdx(eventSheet, headers, "line_group_url")
+          sheetId: getOrCreateColIdx(eventSheet, headers, "試算表ID")
         };
 
         if (eventId) {
@@ -5773,7 +5794,6 @@ function _handleSaveEvent(json) {
       if (driveFolderUrl) rowValues[hIdx.driveFolder] = driveFolderUrl;
       if (spreadsheetUrl) rowValues[hIdx.sheetUrl] = spreadsheetUrl;
       if (spreadsheetId) rowValues[hIdx.sheetId] = spreadsheetId;
-      if (json.lineGroupUrl !== undefined) rowValues[hIdx.lineGroupUrl] = json.lineGroupUrl || "";
 
       if (isUpdate && targetRow > -1) {
         eventSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
@@ -5797,8 +5817,7 @@ function _handleSaveEvent(json) {
         imageUrl: imageUrl,
         driveFolderUrl: driveFolderUrl,
         spreadsheetUrl: spreadsheetUrl,
-        spreadsheetId: spreadsheetId,
-        lineGroupUrl: json.lineGroupUrl
+        spreadsheetId: spreadsheetId
       });
     } catch (sbSyncErr) {
       console.warn("同步活動資料至 Supabase 警告:", sbSyncErr);
@@ -6094,7 +6113,7 @@ function _handleGetAdminEvents(userId) {
     }
 
     if (SUPABASE_URL && SUPABASE_KEY) {
-      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,start_date,end_date,deadline,fee,status,summary,itinerary,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id,line_group_url&order=start_date.desc";
+      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,start_date,end_date,deadline,fee,status,summary,itinerary,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id&order=start_date.desc";
       var res = UrlFetchApp.fetch(url, {
         method: "get",
         headers: _getSupabaseHeaders(),
@@ -6117,8 +6136,7 @@ function _handleGetAdminEvents(userId) {
             imageUrl: e.image_url || "",
             driveFolderUrl: e.drive_folder_url || "",
             spreadsheetUrl: e.spreadsheet_url || "",
-            spreadsheetId: e.spreadsheet_id || "",
-            lineGroupUrl: e.line_group_url || ""
+            spreadsheetId: e.spreadsheet_id || ""
           };
         });
         return _jsonResponse({ status: "success", events: events });
@@ -6383,6 +6401,7 @@ function _handleCreateEventSheet(json) {
             m.outdoor_experience || m.hiking_experience || "",
             m.fitness_desc || m.fitness_test || "",
             proofUrlsStr || m.fitness_proof_url || "",
+            m.want_to_say || "",
             s.is_official_member_snapshot ? "是" : (m.is_official_member ? "是" : "否"),
             s.status || "審核中 Checking",
             s.notification_status || "未通知",
@@ -6438,6 +6457,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     var expCol = _findHeaderCol(headers, "outdoor_experience", ["爬山經驗", "登山經驗"]);
     var fitCol = _findHeaderCol(headers, "fitness_desc", ["體能測驗", "體能"]);
     var proofCol = _findHeaderCol(headers, "proof_urls", ["體能證明"]);
+    var wantSayCol = _findHeaderCol(headers, "want_to_say", ["想說的話", "想說的話 I want to say...", "留言"]);
 
     var signups = _supabaseGet("event_signups", { event_id: "eq." + eventId, select: "*", order: "created_at.asc" });
     if (!Array.isArray(signups) || signups.length === 0) return 0;
@@ -6497,6 +6517,10 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
         var pVal = proofUrlsStr || m.fitness_proof_url || "";
         if (pVal) { sheet.getRange(r + 1, proofCol + 1).setValue(pVal); changed = true; }
       }
+      if (wantSayCol > -1 && !String(sData[r][wantSayCol] || "").trim()) {
+        var sayVal = m.want_to_say || "";
+        if (sayVal) { sheet.getRange(r + 1, wantSayCol + 1).setValue(sayVal); changed = true; }
+      }
 
       if (changed) updatedCount++;
     }
@@ -6533,6 +6557,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
           mem.outdoor_experience || mem.hiking_experience || "",
           mem.fitness_desc || mem.fitness_test || "",
           pUrls || mem.fitness_proof_url || "",
+          mem.want_to_say || "",
           s.is_official_member_snapshot ? "是" : (mem.is_official_member ? "是" : "否"),
           s.status || "審核中 Checking",
           s.notification_status || "未通知",
@@ -6558,4 +6583,6 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     return 0;
   }
 }
+
+
 

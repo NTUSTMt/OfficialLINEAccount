@@ -20,4 +20,5 @@ export interface ProfileData {
   medicalHistory: string;
   intendOfficial: string;
   intendOfficer: string;
+  wantToSay?: string;
 }
