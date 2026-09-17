@@ -112,11 +112,11 @@ test('幹部系統模組測試：裝備庫存改版為雙欄電商大圖結構�
   assert.ok(inventoryCode.includes('ProductImage'), '裝備庫存必須使用 ProductImage 顯示 1:1 大圖');
 });
 
-test('幹部系統模組測試：MemberProfileModal 彈窗與移至詳細社員狀態導航', async () => {
+test('幹部系統模組測試：MemberProfileModal 彈窗與移至社員詳細資料編輯頁面導航', async () => {
   const fs = await import('fs/promises');
   const modalCode = await fs.readFile('src/components/admin/MemberProfileModal.tsx', 'utf8');
 
-  assert.ok(modalCode.includes('移至詳細社員狀態'), '個人資料彈窗底部必須包含「移至詳細社員狀態」按鈕');
+  assert.ok(modalCode.includes('移至社員詳細資料編輯頁面'), '個人資料彈窗底部必須包含「移至社員詳細資料編輯頁面」按鈕');
   assert.ok(modalCode.includes('fetchMemberFullDetailFromSupabase'), '個人資料彈窗必須支援拉取社員完整欄位');
   assert.ok(modalCode.includes('openExternalUrl'), '個人資料彈窗必須支援開啟體能證明照片');
   assert.ok(modalCode.includes('緊急聯絡人資訊'), '個人資料彈窗必須包含緊急聯絡人區塊');
@@ -212,5 +212,30 @@ test('幹部系統模組測試：待結項目明細化、僅正取活動計入�
   // 4. 零表情符號檢驗擴充
   const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
   assert.ok(!editCode.match(emojiRegex), 'MemberDetailEdit.tsx 不得包含表情符號');
+});
+
+test('幹部系統模組測試：身分狀態標準值對齊與向下相容檢驗 (v0.1.148)', async () => {
+  const fs = await import('fs/promises');
+  const adminMembersCode = await fs.readFile('src/pages/AdminMembers.tsx', 'utf8');
+  const editCode = await fs.readFile('src/pages/MemberDetailEdit.tsx', 'utf8');
+  const schemaDict = await fs.readFile('supabase/SCHEMA_DICTIONARY.md', 'utf8');
+
+  // 1. AdminMembers 篩選選項對齊 Supabase 真實標準值
+  assert.ok(adminMembersCode.includes("value: '臺科大在校學生'"), 'AdminMembers 篩選必須包含 臺科大在校學生');
+  assert.ok(adminMembersCode.includes("value: '畢業校友'"), 'AdminMembers 篩選必須包含 畢業校友');
+  assert.ok(adminMembersCode.includes("value: '校外人士'"), 'AdminMembers 篩選必須包含 校外人士');
+
+  // 2. AdminMembers 篩選邏輯向下相容歷史舊資料
+  assert.ok(adminMembersCode.includes("val === '臺科大在校學生' || val === '本校生'"), '臺科大在校學生必須向下相容本校生');
+  assert.ok(adminMembersCode.includes("val === '畢業校友' || val === '校友'"), '畢業校友必須向下相容校友');
+  assert.ok(adminMembersCode.includes("val === '校外人士' || val === '外校生' || val === '社會人士'"), '校外人士必須向下相容外校生與社會人士');
+
+  // 3. MemberDetailEdit 下拉選單對齊標準值
+  assert.ok(editCode.includes('<option value="臺科大在校學生">臺科大在校學生</option>'), 'MemberDetailEdit 選單必須包含 臺科大在校學生');
+  assert.ok(editCode.includes('<option value="畢業校友">畢業校友</option>'), 'MemberDetailEdit 選單必須包含 畢業校友');
+  assert.ok(editCode.includes('<option value="校外人士">校外人士</option>'), 'MemberDetailEdit 選單必須包含 校外人士');
+
+  // 4. SCHEMA_DICTIONARY 文件對齊
+  assert.ok(schemaDict.includes('臺科大在校學生 / 畢業校友 / 校外人士'), 'SCHEMA_DICTIONARY 範例值必須更新為標準值');
 });
 

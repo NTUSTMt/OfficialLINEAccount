@@ -576,10 +576,12 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                     style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
                   >
                     <option value="">(未設定)</option>
-                    <option value="本校生">本校生</option>
-                    <option value="校友">校友</option>
-                    <option value="外校生">外校生</option>
-                    <option value="社會人士">社會人士</option>
+                    <option value="臺科大在校學生">臺科大在校學生</option>
+                    <option value="畢業校友">畢業校友</option>
+                    <option value="校外人士">校外人士</option>
+                    {formData.identity_status && !['臺科大在校學生', '畢業校友', '校外人士', ''].includes(formData.identity_status) && (
+                      <option value={formData.identity_status}>{formData.identity_status}</option>
+                    )}
                   </select>
                 </div>
 
@@ -639,7 +641,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>關係 (如：父子、夫妻、朋友)</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>關係</label>
                     <input
                       type="text"
                       value={formData.emergency_contact_rel || ''}
@@ -763,7 +765,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>社籍到期日 (YYYY-MM-DD)</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>社籍到期日</label>
                     <input
                       type="date"
                       value={formData.membership_expires_at || ''}

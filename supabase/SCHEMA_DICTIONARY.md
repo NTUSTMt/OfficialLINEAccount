@@ -52,7 +52,7 @@
 | `payment_status` | `payment_status_enum` | 否 | `'未繳費 Unpaid'` | 1. `已繳費 Paid`<br>2. `待確認 Checking`<br>3. `未繳費 Unpaid` | **社員社費繳納狀態** |
 | `address` | `TEXT` | 是 | NULL | - | **聯絡地址** (學生租屋處或戶籍地址) |
 | `medical_history` | `TEXT` | 是 | NULL | - | **個人特殊病史或過敏藥物** (入山安全防護) |
-| `identity_status` | `TEXT` | 是 | NULL | - | **身分狀態** (本校生 / 校友 / 外校生 / 社會人士) |
+| `identity_status` | `TEXT` | 是 | NULL | - | **身分狀態** (臺科大在校學生 / 畢業校友 / 校外人士) |
 | `join_membership_intent` | `TEXT` | 是 | NULL | - | **加入社員意願** |
 | `officer_intent` | `TEXT` | 是 | NULL | - | **擔任幹部意願** (初次填寫或改為有意願會推播) |
 | `want_to_say` | `TEXT` | 是 | NULL | - | **想說的話 I want to say...** (使用者自由留言，完全非必填) |

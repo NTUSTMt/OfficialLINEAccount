@@ -53,10 +53,9 @@ export default function AdminMembers({ userId }: { userId?: string }) {
       onChange: setIdentityFilter,
       options: [
         { value: 'all', label: '全部身分' },
-        { value: '本校生', label: '本校生' },
-        { value: '校友', label: '校友' },
-        { value: '外校生', label: '外校生' },
-        { value: '社會人士', label: '社會人士' }
+        { value: '臺科大在校學生', label: '臺科大在校學生' },
+        { value: '畢業校友', label: '畢業校友' },
+        { value: '校外人士', label: '校外人士' }
       ]
     },
     {
@@ -101,9 +100,21 @@ export default function AdminMembers({ userId }: { userId?: string }) {
       });
     }
 
-    // 身分篩選
+    // 身分篩選 (向下相容歷史舊資料標籤)
     if (identityFilter !== 'all') {
-      list = list.filter(m => m.identity_status === identityFilter);
+      list = list.filter(m => {
+        const val = m.identity_status || '';
+        if (identityFilter === '臺科大在校學生') {
+          return val === '臺科大在校學生' || val === '本校生';
+        }
+        if (identityFilter === '畢業校友') {
+          return val === '畢業校友' || val === '校友';
+        }
+        if (identityFilter === '校外人士') {
+          return val === '校外人士' || val === '外校生' || val === '社會人士';
+        }
+        return val === identityFilter;
+      });
     }
 
     // 社費狀態篩選

@@ -294,7 +294,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
             <div><span style={{ color: '#64748b' }}>姓名：</span><span style={{ fontWeight: '600', color: '#0f172a' }}>{name}</span></div>
             <div><span style={{ color: '#64748b' }}>性別：</span><span style={{ color: '#0f172a' }}>{gender}</span></div>
-            <div><span style={{ color: '#64748b' }}>身分資格：</span><span style={{ color: '#0f172a' }}>{identityStatus || '未設定'}</span></div>
+            <div><span style={{ color: '#64748b' }}>身分：</span><span style={{ color: '#0f172a' }}>{identityStatus || '未設定'}</span></div>
             <div><span style={{ color: '#64748b' }}>生日：</span><span style={{ color: '#0f172a' }}>{formatDateSlash(birthday)}</span></div>
             {studentId && (
               <div><span style={{ color: '#64748b' }}>學號：</span><span style={{ color: '#0f172a' }}>{studentId}</span></div>
@@ -460,7 +460,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
           </div>
         )}
 
-        {/* 底部按鈕：移至詳細社員狀態 */}
+        {/* 底部按鈕：移至社員詳細資料編輯頁面 */}
         <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '14px', marginTop: '4px' }}>
           <button
             type="button"
@@ -483,7 +483,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
               transition: 'background-color 0.15s ease'
             }}
           >
-            <span>移至詳細社員狀態</span>
+            <span>移至社員詳細資料編輯頁面</span>
             <ArrowRight size={16} />
           </button>
         </div>

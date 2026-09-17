@@ -593,7 +593,7 @@ export default function AdminLoans({ userId }: { userId?: string }) {
         </div>
       )}
 
-      {/* 借用人個人資料彈窗 (底部提供移至詳細社員狀態按鈕) */}
+      {/* 借用人個人資料彈窗 (底部提供移至社員詳細資料編輯頁面按鈕) */}
       <MemberProfileModal
         isOpen={Boolean(previewMemberUserId)}
         onClose={() => {

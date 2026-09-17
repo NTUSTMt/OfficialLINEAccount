@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.147-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.148-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.147)](#7-最新版本異動紀錄-changelog-v01147)
+- [7. 最新版本異動紀錄 (Changelog v0.1.148)](#7-最新版本異動紀錄-changelog-v01148)
 
 ---
 
@@ -377,6 +377,16 @@ pnpm test
   - **中英文 Part I / Part II 100% 鏡像對齊**：同步修正英文版對應章節、狀態清單、導航方式與 FAQ。
 - 🧪 **單元測試擴充**：
   - 新增 `test/60_ai_mention_and_chat_keyword_cleanup.test.mjs`，測試全數 158 項通過，前端打包建置無錯誤。
+### v0.1.148 (2026-09-18)
+- 社員身分狀態標準值對齊與向下相容 (src/pages/AdminMembers.tsx, src/pages/MemberDetailEdit.tsx, supabase/SCHEMA_DICTIONARY.md)：
+  - 診斷並修復幹部名冊頁面身分篩選與詳細編輯頁面選項與 Supabase 資料庫真實值不一致之缺陷。
+  - 將身分篩選選單標準化為 Supabase members 資料表與註冊表單儲存之三大真實值：`臺科大在校學生`、`畢業校友`、`校外人士`。
+  - 在 `AdminMembers.tsx` 過濾器中實作雙向向下相容邏輯：選取「臺科大在校學生」自動匹配 `臺科大在校學生` 與 `本校生`；選取「畢業校友」自動匹配 `畢業校友` 與 `校友`；選取「校外人士」自動匹配 `校外人士`、`外校生` 與 `社會人士`。
+  - 在 `MemberDetailEdit.tsx` 表單下拉選單更新為標準選項，並自動相容保留既有非標準標籤，確保修改社員時不發生選項跑版。
+  - 同步更新 `supabase/SCHEMA_DICTIONARY.md` 欄位字典註記。
+- 單元測試與建置驗證：
+  - 於 `test/65_officer_system_modules.test.mjs` 新增身分狀態標準值與向下相容測試，全數 202 項測試通過，TypeScript 與 Vite 建置零錯誤。
+
 ### v0.1.147 (2026-09-18)
 - 待結費用計算校準與項目明細化 (supabase/admin_portal_rpc.sql, src/utils/supabaseClient.ts, src/pages/MemberDetailEdit.tsx)：
   - 依照社團業務流程校正待繳判定：活動未公告正備取（審核中 Checking）或備取狀態不具備繳費資格，嚴格限制僅「正取 Confirmed」且付款狀態非「已繳費 Paid」之活動方計入待結費用，徹底解決尚未公告錄取即錯誤顯示待結項目的問題。
@@ -416,7 +426,7 @@ pnpm test
 - 統一社員個人資料預覽彈窗 (MemberProfileModal)：
   - 抽取審核名冊之報名者個資彈窗視覺規格，獨立打造共用之 `MemberProfileModal` 組件。
   - 彈窗完整呈現姓名、性別、正式社員徽章、生日、學號系所、身分證號、LINE ID（支援一鍵複製）、聯絡電話（支援一鍵撥號連結）、電子郵件、緊急聯絡人、登山經歷、體能紀錄、病史與想對幹部說的話。
-  - 彈窗底部統一配置醒目的「移至詳細社員狀態」綠色按鈕，點擊後平滑導航至 `/admin/members/:userId` 全欄位編輯頁。
+  - 彈窗底部統一配置醒目的「移至社員詳細資料編輯頁面」綠色按鈕，點擊後平滑導航至 `/admin/members/:userId` 全欄位編輯頁。
   - 於 `AdminMembers`（點擊卡片先開預覽）、`AdminFinance`（點擊開啟個人資料）與 `AdminLoans`（點擊開啟個人資料）全面串接此彈窗。
 - 嚴格零表情符號 (Zero Emoji) 規範落地：
   - 全面清理程式碼、UI 提示文字、單元測試、註解與文件內之所有 emoji 表情符號，統一改用 Lucide React 現代幾何圖示。

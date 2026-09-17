@@ -305,10 +305,10 @@ export default function AdminFinance({ userId }: { userId?: string }) {
               const categoryBadge = it.itemCategory === 'activity'
                 ? { label: '[活動]', bg: '#eff6ff', color: '#2563eb' }
                 : it.itemCategory === 'equipment'
-                ? { label: '[裝備]', bg: '#fef3c7', color: '#d97706' }
-                : it.itemCategory === 'membership'
-                ? { label: '[社費]', bg: '#f3e8ff', color: '#7e22ce' }
-                : { label: '[款項]', bg: '#f1f5f9', color: '#475569' };
+                  ? { label: '[裝備]', bg: '#fef3c7', color: '#d97706' }
+                  : it.itemCategory === 'membership'
+                    ? { label: '[社費]', bg: '#f3e8ff', color: '#7e22ce' }
+                    : { label: '[款項]', bg: '#f1f5f9', color: '#475569' };
 
               return (
                 <div
@@ -652,7 +652,7 @@ export default function AdminFinance({ userId }: { userId?: string }) {
         </div>
       )}
 
-      {/* 報名/繳款人詳細個人資料彈窗 (底部提供移至詳細社員狀態按鈕) */}
+      {/* 報名/繳款人詳細個人資料彈窗 (底部提供移至社員詳細資料編輯頁面按鈕) */}
       <MemberProfileModal
         isOpen={Boolean(previewMemberUserId)}
         onClose={() => {

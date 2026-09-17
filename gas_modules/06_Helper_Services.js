@@ -2414,7 +2414,7 @@ function _handleGetEventSignups(eventId, userId) {
         var emerPhoneIdx = _findHeaderCol(headers, "emer_phone", ["緊急聯絡人電話"]);
         var emerRelIdx = _findHeaderCol(headers, "emer_rel", ["與緊急聯絡人關係", "關係"]);
         var emerAddrIdx = _findHeaderCol(headers, "emer_addr", ["緊急聯絡人聯絡地址", "緊急聯絡人地址"]);
-        var offIdx = _findHeaderCol(headers, "is_official", ["是否為社員", "身分資格"]);
+        var offIdx = _findHeaderCol(headers, "is_official", ["是否為社員"]);
         var resultIdx = _findHeaderCol(headers, "review_status", ["審核結果", "結果"]);
         var notifyIdx = _findHeaderCol(headers, "notify_status", ["通知狀態", "通知"]);
         var payIdx = _findHeaderCol(headers, "payment_status", ["繳費狀態", "繳費"]);
