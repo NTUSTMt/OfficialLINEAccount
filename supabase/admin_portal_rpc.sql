@@ -6,6 +6,16 @@
 -- 3. 嚴格限定僅限登山社幹部 (is_officer) 存取敏感個資與財務對帳流
 -- ==============================================================================
 
+-- 預先清理舊簽名函式以避免參數名稱變更衝突 (ERROR: 42P13: cannot change name of input parameter)
+DROP FUNCTION IF EXISTS is_officer(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS get_admin_members_rpc(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS get_admin_member_detail_rpc(TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS update_admin_member_rpc(TEXT, TEXT, JSONB) CASCADE;
+DROP FUNCTION IF EXISTS get_admin_finance_rpc(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS get_admin_loans_rpc(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS update_admin_payment_status_rpc(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS update_admin_loan_status_rpc(TEXT, TEXT, TEXT, TEXT) CASCADE;
+
 -- 1. 內部幹部鑑權函式 (is_officer) 確保存在且支援雙軌查核
 CREATE OR REPLACE FUNCTION is_officer(p_line_user_id TEXT)
 RETURNS BOOLEAN
