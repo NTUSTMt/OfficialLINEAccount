@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.138-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.141-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.138)](#7-最新版本異動紀錄-changelog-v01138)
+- [7. 最新版本異動紀錄 (Changelog v0.1.141)](#7-最新版本異動紀錄-changelog-v01141)
 
 ---
 
@@ -306,6 +306,24 @@ pnpm test
   - 更多服務次級選單卡片與 Webhook 指令同步更新為「🤖 小岳說明 AI Guide」，提升對外客服品牌認知一致性。
 - 🧪 **單元測試全數覆蓋**：
   - [test/60_ai_mention_and_chat_keyword_cleanup.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/60_ai_mention_and_chat_keyword_cleanup.test.mjs) 擴充最新活動指令與容錯測試，160 項單元測試全數 Pass。
+
+### v0.1.141 (2026-09-17)
+- **「開啟試算表」點擊自動靜默同步與「同步名冊」按鈕整併 ([src/components/admin/AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx), [src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx), [gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js), [test/63_manual_create_event_sheet_and_import.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/63_manual_create_event_sheet_and_import.test.mjs))**：
+  - **按鈕邏輯一體化整合**：移除獨立的「同步名冊」按鈕，將同步名冊並回補個資的邏輯完整合併至「報名試算表」按鈕中。幹部點擊開啟試算表時，系統在開啟新分頁瀏覽的同時，自動於背景發動對 Supabase 最新報名資料的巡檢與回補。
+  - **靜默同步防彈窗攔截與即時狀態顯示**：保留原生連結導航避免 iOS Safari 與 LINE LIFF 彈窗封鎖；加入 silent 模式抑制完成通知彈窗，並在按鈕上顯示「同步中...」旋轉圖示提供明確視覺反饋。
+  - **自動追加新報名者至試算表末端**：`_backfillEventSpreadsheetMemberInfo` 不僅自動回補現有隊員的 5 大缺漏個資，亦主動檢查 Supabase 最新產生的報名資料，若有新隊員尚未列於試算表中，自動將完整 22 欄資料追加寫入工作表末端。
+
+### v0.1.140 (2026-09-17)
+- **活動獨立試算表 5 大個資欄位精確對齊與「同步名冊」回補支援 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js), [src/components/admin/AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx), [test/63_manual_create_event_sheet_and_import.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/63_manual_create_event_sheet_and_import.test.mjs))**：
+  - **資料庫欄位名稱精確對齊**：修正讀取 Supabase `members` 資料表之 Key 名稱，對齊 `id_card`（證件號碼）、`emergency_contact_rel`（緊急聯絡人關係）、`outdoor_experience`（爬山經驗）、`fitness_desc`（體能測驗）與 `proof_urls`（體能證明圖片陣列轉換為字串），徹底解決試算表空白問題。
+  - **支援既有試算表自動巡檢回補 (`_backfillEventSpreadsheetMemberInfo`)**：若該活動獨立試算表已存在，點擊時不再直接返回無動作，而是開啟試算表並逐列比對，將缺漏的證件號碼、關係、爬山經驗、體能與證明全自動回補齊全。
+  - **前端活動卡片新增「同步名冊」按鈕**：在已建立獨立試算表的卡片操作列中，額外提供「同步名冊」一鍵刷新按鈕，幹部隨時可點擊以更新最新個資。
+
+### v0.1.139 (2026-09-17)
+- **幹部驗證函式參數適配與建立獨立試算表權限修復 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js), [test/63_manual_create_event_sheet_and_import.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/63_manual_create_event_sheet_and_import.test.mjs))**：
+  - **解決參數錯位導致的權限判定失敗**：`checkOfficerInternal(ss, userId, userName)` 函式簽名首個參數原為試算表物件。在 `_handleCreateEventSheet` 中僅傳入單一參數 `userId` 時，導致 `userId` 被塞入 `ss` 變數而實際校驗身分之 `userId` 變為 `undefined`，進而一律回傳非幹部錯誤。
+  - **增強容錯自適應**：於函式入口加入自動檢查 `if (typeof ss === "string" && !userId) { userId = ss; ss = null; }`，相容單參數直接呼叫與傳統雙參數呼叫。
+  - **修正呼叫端與錯誤透明度**：在 `_handleCreateEventSheet` 明確以 `checkOfficerInternal(null, userId)` 呼叫，並於失敗訊息直接附帶當前 `userId` 以利除錯。
 
 ### v0.1.138 (2026-09-17)
 - **活動獨立試算表與雲端資料夾手動生成健全化 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js), [src/components/admin/AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx))**：

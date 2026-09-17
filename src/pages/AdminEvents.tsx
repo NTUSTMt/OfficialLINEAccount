@@ -470,10 +470,10 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     // 3. Supabase 已透過 Triggers 自動排入 sync_queue，由背景 Worker 平滑同步至 Google Sheets，無須前端呼叫 GAS 改試算表
   };
 
-  // 幹部專用：一鍵建立活動專屬獨立試算表與雲端資料夾，並匯入既有名冊資料
-  const handleCreateEventSheet = async (eventId: string) => {
+  // 幹部專用：一鍵建立活動專屬獨立試算表與雲端資料夾，或於開啟試算表時靜默同步名冊資料
+  const handleCreateEventSheet = async (eventId: string, silent: boolean = false) => {
     if (!userId || userId === 'TEST_USER_ID') {
-      alert(t('adminEvents.errorNoUser', '無法取得使用者身分或權限不足'));
+      if (!silent) alert(t('adminEvents.errorNoUser', '無法取得使用者身分或權限不足'));
       return;
     }
     setCreatingSheetEventId(eventId);
@@ -507,13 +507,21 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           setCache(CACHE_KEY_ADMIN_EVENTS, next, 180);
           return next;
         });
-        alert(result.message || '獨立試算表建立成功');
+        if (!silent) {
+          alert(result.message || '獨立試算表建立成功');
+        }
       } else {
-        alert(result.message || '建立獨立試算表失敗');
+        if (!silent) {
+          alert(result.message || '建立獨立試算表失敗');
+        } else {
+          console.warn('[handleCreateEventSheet] 靜默同步失敗:', result.message);
+        }
       }
     } catch (err: any) {
       console.error('[handleCreateEventSheet] 例外:', err);
-      alert('建立試算表異常: ' + (err?.message || String(err)));
+      if (!silent) {
+        alert('建立試算表異常: ' + (err?.message || String(err)));
+      }
     } finally {
       setCreatingSheetEventId(null);
     }

@@ -1286,6 +1286,11 @@ function _handleUpdateEquipmentImages(payload) {
  * 內部輔助：檢驗使用者是否為登山社幹部 (100% 直連 Supabase members 與 officers 表 SSOT)
  */
 function checkOfficerInternal(ss, userId, userName) {
+  // 支援單參數呼叫：若第一個參數為字串且未傳第二個參數，則代表第一個參數即為 userId
+  if (typeof ss === "string" && !userId) {
+    userId = ss;
+    ss = null;
+  }
   if (!userId && !userName) return { isOfficer: false, role: "", name: "" };
   // 🛡️ 杜絕測試帳號或外部未授權存取在正式環境取得幹部特權
   if (userId === "TEST_USER_ID") return { isOfficer: false, role: "", name: "" };
@@ -2437,9 +2442,9 @@ function _handleCreateEventSheet(json) {
   }
 
   // 1. 幹部身分校驗
-  var officer = checkOfficerInternal(userId);
+  var officer = checkOfficerInternal(null, userId);
   if (!officer || !officer.isOfficer) {
-    return _errorResponse("權限不足：僅限社團幹部可建立活動專屬試算表");
+    return _errorResponse("權限不足：僅限社團幹部可建立活動專屬試算表 (userId=" + userId + ")");
   }
 
   try {
@@ -2450,11 +2455,15 @@ function _handleCreateEventSheet(json) {
     }
     var evt = events[0];
 
-    // 若已經有試算表，直接回傳既有網址與 ID，避免重複建立
+    // 若已經有試算表，自動巡檢並回補缺漏之個資（如證件號碼、爬山經驗、體能等）
     if (evt.spreadsheet_id && evt.spreadsheet_url) {
+      var ssId = evt.spreadsheet_id;
+      var updatedCount = _backfillEventSpreadsheetMemberInfo(ssId, eventId);
       return _jsonResponse({
         status: "success",
-        message: "此活動已存在獨立試算表",
+        message: updatedCount > 0
+          ? "已成功補齊試算表中 " + updatedCount + " 筆隊員個資！"
+          : "獨立試算表已是最新狀態，名冊資料完整無缺漏",
         spreadsheetUrl: evt.spreadsheet_url,
         spreadsheetId: evt.spreadsheet_id,
         driveFolderUrl: evt.drive_folder_url || ""
@@ -2502,6 +2511,13 @@ function _handleCreateEventSheet(json) {
           var s = signups[i];
           var m = memberMap[s.line_user_id] || {};
 
+          var proofUrlsStr = "";
+          if (Array.isArray(m.proof_urls)) {
+            proofUrlsStr = m.proof_urls.join(", ");
+          } else if (m.proof_urls) {
+            proofUrlsStr = String(m.proof_urls);
+          }
+
           var row = [
             s.line_user_id || "",
             s.id || "",
@@ -2512,15 +2528,15 @@ function _handleCreateEventSheet(json) {
             m.phone || "",
             m.address || "",
             m.birthday ? String(m.birthday).replace(/-/g, "/").slice(0, 10) : "",
-            m.id_number || "",
+            m.id_card || m.id_number || "",
             m.emergency_contact_name || "",
             m.emergency_contact_phone || "",
             m.emergency_contact_address || "",
-            m.emergency_contact_relationship || "",
-            m.hiking_experience || "",
-            m.fitness_test || "",
-            m.fitness_proof_url || "",
-            s.is_official_member_snapshot ? "是" : "否",
+            m.emergency_contact_rel || m.emergency_contact_relationship || "",
+            m.outdoor_experience || m.hiking_experience || "",
+            m.fitness_desc || m.fitness_test || "",
+            proofUrlsStr || m.fitness_proof_url || "",
+            s.is_official_member_snapshot ? "是" : (m.is_official_member ? "是" : "否"),
             s.status || "審核中 Checking",
             s.notification_status || "未通知",
             s.payment_status || "未繳費 Unpaid",
@@ -2550,6 +2566,149 @@ function _handleCreateEventSheet(json) {
   } catch (err) {
     console.error("建立活動獨立試算表例外:", err);
     return _errorResponse("建立活動獨立試算表失敗: " + (err.message || err.toString()));
+  }
+}
+
+/**
+ * ⚡ 巡檢並補齊活動獨立試算表中缺漏的名冊個資 (如證件號碼、緊急聯絡人關係、爬山經驗、體能測驗、體能證明等)
+ * 同時自動追加尚未寫入試算表的新報名者，達成每次點擊皆 100% 完整雙向對齊
+ */
+function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
+  if (!ssId || !eventId) return 0;
+  try {
+    var eventSS = SpreadsheetApp.openById(ssId);
+    var sheet = eventSS.getSheetByName("報名名冊") || eventSS.getSheets()[0];
+    if (!sheet) return 0;
+
+    var sData = sheet.getDataRange().getValues();
+    if (sData.length === 0) return 0;
+
+    var headers = sData[0];
+    var uidCol = _findHeaderCol(headers, "line_user_id", ["系統識別碼", "userId"]);
+    var codeCol = _findHeaderCol(headers, "id", ["專屬碼", "報名編號"]);
+    var idCardCol = _findHeaderCol(headers, "id_card", ["證件號碼", "身分證字號", "身分證"]);
+    var emerRelCol = _findHeaderCol(headers, "emergency_contact_rel", ["緊急聯絡人關係", "關係"]);
+    var expCol = _findHeaderCol(headers, "outdoor_experience", ["爬山經驗", "登山經驗"]);
+    var fitCol = _findHeaderCol(headers, "fitness_desc", ["體能測驗", "體能"]);
+    var proofCol = _findHeaderCol(headers, "proof_urls", ["體能證明"]);
+
+    var signups = _supabaseGet("event_signups", { event_id: "eq." + eventId, select: "*", order: "created_at.asc" });
+    if (!Array.isArray(signups) || signups.length === 0) return 0;
+
+    var userIds = signups.map(function(s) { return s.line_user_id; }).filter(Boolean);
+    var memberMap = {};
+    if (userIds.length > 0) {
+      var members = _supabaseGet("members", {
+        line_user_id: "in.(" + userIds.map(encodeURIComponent).join(",") + ")",
+        select: "*"
+      });
+      if (Array.isArray(members)) {
+        members.forEach(function(m) {
+          if (m.line_user_id) memberMap[m.line_user_id] = m;
+        });
+      }
+    }
+
+    var existingCodes = {};
+    var existingUids = {};
+    var updatedCount = 0;
+
+    for (var r = 1; r < sData.length; r++) {
+      var rowUid = uidCol > -1 ? String(sData[r][uidCol] || "").trim() : "";
+      var rowCode = codeCol > -1 ? String(sData[r][codeCol] || "").trim() : "";
+      if (rowUid) existingUids[rowUid] = true;
+      if (rowCode) existingCodes[rowCode] = true;
+
+      var m = memberMap[rowUid];
+      if (!m) continue;
+
+      var proofUrlsStr = "";
+      if (Array.isArray(m.proof_urls)) {
+        proofUrlsStr = m.proof_urls.join(", ");
+      } else if (m.proof_urls) {
+        proofUrlsStr = String(m.proof_urls);
+      }
+
+      var changed = false;
+      if (idCardCol > -1 && !String(sData[r][idCardCol] || "").trim()) {
+        var cardVal = m.id_card || m.id_number || "";
+        if (cardVal) { sheet.getRange(r + 1, idCardCol + 1).setValue("'" + cardVal); changed = true; }
+      }
+      if (emerRelCol > -1 && !String(sData[r][emerRelCol] || "").trim()) {
+        var relVal = m.emergency_contact_rel || m.emergency_contact_relationship || "";
+        if (relVal) { sheet.getRange(r + 1, emerRelCol + 1).setValue(relVal); changed = true; }
+      }
+      if (expCol > -1 && !String(sData[r][expCol] || "").trim()) {
+        var expVal = m.outdoor_experience || m.hiking_experience || "";
+        if (expVal) { sheet.getRange(r + 1, expCol + 1).setValue(expVal); changed = true; }
+      }
+      if (fitCol > -1 && !String(sData[r][fitCol] || "").trim()) {
+        var fitVal = m.fitness_desc || m.fitness_test || "";
+        if (fitVal) { sheet.getRange(r + 1, fitCol + 1).setValue(fitVal); changed = true; }
+      }
+      if (proofCol > -1 && !String(sData[r][proofCol] || "").trim()) {
+        var pVal = proofUrlsStr || m.fitness_proof_url || "";
+        if (pVal) { sheet.getRange(r + 1, proofCol + 1).setValue(pVal); changed = true; }
+      }
+
+      if (changed) updatedCount++;
+    }
+
+    // 檢查是否有 Supabase 存在但試算表尚未有的新報名者，自動追加新列
+    var rowsToAppend = [];
+    for (var sIdx = 0; sIdx < signups.length; sIdx++) {
+      var s = signups[sIdx];
+      var isExisting = (s.id && existingCodes[s.id]) || (s.line_user_id && existingUids[s.line_user_id]);
+      if (!isExisting) {
+        var mem = memberMap[s.line_user_id] || {};
+        var pUrls = "";
+        if (Array.isArray(mem.proof_urls)) {
+          pUrls = mem.proof_urls.join(", ");
+        } else if (mem.proof_urls) {
+          pUrls = String(mem.proof_urls);
+        }
+
+        var newRow = [
+          s.line_user_id || "",
+          s.id || "",
+          mem.name || s.name || "",
+          mem.gender || "",
+          mem.line_id || s.line_id || "",
+          mem.email || "",
+          mem.phone || "",
+          mem.address || "",
+          mem.birthday ? String(mem.birthday).replace(/-/g, "/").slice(0, 10) : "",
+          mem.id_card || mem.id_number || "",
+          mem.emergency_contact_name || "",
+          mem.emergency_contact_phone || "",
+          mem.emergency_contact_address || "",
+          mem.emergency_contact_rel || mem.emergency_contact_relationship || "",
+          mem.outdoor_experience || mem.hiking_experience || "",
+          mem.fitness_desc || mem.fitness_test || "",
+          pUrls || mem.fitness_proof_url || "",
+          s.is_official_member_snapshot ? "是" : (mem.is_official_member ? "是" : "否"),
+          s.status || "審核中 Checking",
+          s.notification_status || "未通知",
+          s.payment_status || "未繳費 Unpaid",
+          s.notes || ""
+        ];
+        rowsToAppend.push(newRow);
+        if (s.id) existingCodes[s.id] = true;
+        if (s.line_user_id) existingUids[s.line_user_id] = true;
+      }
+    }
+
+    if (rowsToAppend.length > 0) {
+      var startRow = sheet.getLastRow() + 1;
+      sheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+      updatedCount += rowsToAppend.length;
+      console.log("[backfillEventSpreadsheetMemberInfo] 成功追加 " + rowsToAppend.length + " 筆新隊員至試算表: " + ssId);
+    }
+
+    return updatedCount;
+  } catch (err) {
+    console.error("[backfillEventSpreadsheetMemberInfo] 異常:", err);
+    return 0;
   }
 }
 

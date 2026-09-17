@@ -23,7 +23,7 @@ interface AdminEventCardProps {
   onEdit: (evt: AdminEvent) => void;
   onOpenSignups: (evt: AdminEvent) => void;
   onQuickStatusChange: (eventId: string, newStatus: string) => void;
-  onCreateSheet?: (eventId: string) => void;
+  onCreateSheet?: (eventId: string, silent?: boolean) => void;
   isCreatingSheet?: boolean;
 }
 
@@ -388,6 +388,9 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               href={evt.spreadsheetUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => {
+                if (onCreateSheet) onCreateSheet(evt.id, true);
+              }}
               style={{
                 flex: 1,
                 minWidth: '110px',
@@ -405,8 +408,12 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
                 gap: '5px'
               }}
             >
-              <FileSpreadsheet size={13} />
-              <span>報名試算表</span>
+              {isCreatingSheet ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <FileSpreadsheet size={13} />
+              )}
+              <span>{isCreatingSheet ? '同步中...' : '報名試算表'}</span>
             </a>
           ) : (
             onCreateSheet && (
