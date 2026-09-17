@@ -104,7 +104,7 @@ export const fetchEquipmentsFromSupabase = async (): Promise<Equipment[] | null>
       };
     });
 
-    console.log('%c⚡ [DataSource: Supabase] 裝備清單讀取成功！共 ' + formatted.length + ' 筆 (連線延遲 < 100ms)', 'color: #10b981; font-weight: bold;');
+    console.log('%c[DataSource: Supabase] 裝備清單讀取成功！共 ' + formatted.length + ' 筆 (連線延遲 < 100ms)', 'color: #10b981; font-weight: bold;');
     return formatted;
   } catch (err) {
     console.warn('[Supabase] 連線異常，啟用 GAS fallback:', err);
@@ -113,7 +113,7 @@ export const fetchEquipmentsFromSupabase = async (): Promise<Equipment[] | null>
 };
 
 /**
- * ⚡ 直接更新 Supabase 裝備照片清單 (免除 GAS 跨域 302 重導向之 Load failed 阻斷，延遲 < 30ms)
+ * 直接更新 Supabase 裝備照片清單 (免除 GAS 跨域 302 重導向之 Load failed 阻斷，延遲 < 30ms)
  */
 export const updateEquipmentImagesInSupabase = async (
   equipId: string,
@@ -131,7 +131,7 @@ export const updateEquipmentImagesInSupabase = async (
     });
 
     if (!rpcError && (rpcData?.success !== false)) {
-      console.log('%c⚡ [DataSource: Supabase] 裝備照片已透過 RPC 成功更新！', 'color: #10b981; font-weight: bold;', equipId, imageUrls);
+      console.log('%c[DataSource: Supabase] 裝備照片已透過 RPC 成功更新！', 'color: #10b981; font-weight: bold;', equipId, imageUrls);
       return { success: true };
     }
 
@@ -149,7 +149,7 @@ export const updateEquipmentImagesInSupabase = async (
       return { success: false, message: updateError.message };
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 裝備照片已直接更新成功！', 'color: #10b981; font-weight: bold;', equipId, imageUrls);
+    console.log('%c[DataSource: Supabase] 裝備照片已直接更新成功！', 'color: #10b981; font-weight: bold;', equipId, imageUrls);
     return { success: true };
   } catch (err: any) {
     console.error('[Supabase] 更新裝備照片例外:', err);
@@ -214,7 +214,7 @@ export const fetchEventsFromSupabase = async (): Promise<AdminEvent[] | null> =>
       };
     });
 
-    console.log('%c⚡ [DataSource: Supabase] 活動清單讀取成功！共 ' + formatted.length + ' 筆 (連線延遲 < 100ms)', 'color: #10b981; font-weight: bold;');
+    console.log('%c[DataSource: Supabase] 活動清單讀取成功！共 ' + formatted.length + ' 筆 (連線延遲 < 100ms)', 'color: #10b981; font-weight: bold;');
     return formatted;
   } catch (err) {
     console.warn('[Supabase] 連線異常，啟用 GAS fallback:', err);
@@ -275,7 +275,7 @@ export const fetchDashboardFromSupabase = async (userId: string): Promise<Supaba
     if (!data) return null;
 
     lastSupabaseError = null;
-    console.log('%c⚡ [DataSource: Supabase] 個人主頁資料讀取成功！(連線延遲 < 100ms)', 'color: #10b981; font-weight: bold;', data);
+    console.log('%c[DataSource: Supabase] 個人主頁資料讀取成功！(連線延遲 < 100ms)', 'color: #10b981; font-weight: bold;', data);
     return data as SupabaseDashboardData;
   } catch (err: any) {
     const errMsg = err?.message || String(err);
@@ -286,7 +286,7 @@ export const fetchDashboardFromSupabase = async (userId: string): Promise<Supaba
 };
 
 /**
- * ⚡ 從 Supabase 取得個人基本資料 (透過 get_member_profile 安全 RPC 函式，延遲 < 50ms)
+ * 從 Supabase 取得個人基本資料 (透過 get_member_profile 安全 RPC 函式，延遲 < 50ms)
  * 嚴密保護：僅能查閱傳入 userId 本人的資料，杜絕全表爬取
  */
 export const fetchMemberProfileFromSupabase = async (userId: string): Promise<ProfileData | null> => {
@@ -334,7 +334,7 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
       wantToSay: data.want_to_say || ''
     };
 
-    console.log('%c⚡ [DataSource: Supabase] 社員個人資料預填讀取成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', profile);
+    console.log('%c[DataSource: Supabase] 社員個人資料預填讀取成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', profile);
     return profile;
   } catch (err) {
     console.warn('[Supabase] 讀取社員個人資料例外，啟用 GAS fallback:', err);
@@ -343,7 +343,7 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
 };
 
 /**
- * ⚡ 將個人基本資料儲存至 Supabase (透過 save_member_profile 安全 RPC 函式，延遲 < 50ms)
+ * 將個人基本資料儲存至 Supabase (透過 save_member_profile 安全 RPC 函式，延遲 < 50ms)
  * 觸發器會自動寫入 sync_queue，背景平滑同步至 Google Sheets
  */
 export const saveMemberProfileToSupabase = async (
@@ -403,7 +403,7 @@ export const saveMemberProfileToSupabase = async (
       return { success: false, message: data?.message || '儲存未成功' };
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 社員個人資料已極速儲存！', 'color: #10b981; font-weight: bold;', data);
+    console.log('%c[DataSource: Supabase] 社員個人資料已極速儲存！', 'color: #10b981; font-weight: bold;', data);
     return { success: true };
   } catch (err: any) {
     console.warn('[Supabase] 儲存個人資料例外:', err);
@@ -438,7 +438,7 @@ export interface PaymentSubmitDetails {
 }
 
 /**
- * ⚡ 從 Supabase 取得個人待繳清單 (透過 get_unpaid_payments 安全 RPC 函式，延遲 < 50ms)
+ * 從 Supabase 取得個人待繳清單 (透過 get_unpaid_payments 安全 RPC 函式，延遲 < 50ms)
  * 聚合社費、正取活動費用、裝備租借費用，杜絕全表個資爬取
  */
 export const fetchUnpaidPaymentsFromSupabase = async (userId: string): Promise<SupabaseUnpaidList | null> => {
@@ -454,7 +454,7 @@ export const fetchUnpaidPaymentsFromSupabase = async (userId: string): Promise<S
 
     if (!data) return null;
 
-    console.log('%c⚡ [DataSource: Supabase] 待繳費用清單秒開成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
+    console.log('%c[DataSource: Supabase] 待繳費用清單秒開成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
     return data as SupabaseUnpaidList;
   } catch (err) {
     console.warn('[Supabase] 讀取待繳清單例外，啟用 GAS fallback:', err);
@@ -463,7 +463,7 @@ export const fetchUnpaidPaymentsFromSupabase = async (userId: string): Promise<S
 };
 
 /**
- * ⚡ 提交繳費對帳申報至 Supabase (透過 submit_payment_rpc 安全 RPC 函式，延遲 < 50ms)
+ * 提交繳費對帳申報至 Supabase (透過 submit_payment_rpc 安全 RPC 函式，延遲 < 50ms)
  * 原子性建立 payments 記錄並更新關聯項目的繳費狀態為「待確認 Checking」，同時回傳單次安全核銷密鑰 verify_token
  */
 export const submitPaymentToSupabase = async (
@@ -490,7 +490,7 @@ export const submitPaymentToSupabase = async (
       return { success: false, error: dbErr };
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 繳費申報已極速送出！', 'color: #10b981; font-weight: bold;', data);
+    console.log('%c[DataSource: Supabase] 繳費申報已極速送出！', 'color: #10b981; font-weight: bold;', data);
     return {
       success: true,
       paymentId: data?.payment_id,
@@ -515,7 +515,7 @@ export interface VerifyPaymentResult {
 }
 
 /**
- * ⚡ 透過單次專屬安全金鑰直接在 Supabase 執行單鍵核銷 (免 Google 帳號登入、無轉向阻斷，延遲 < 50ms)
+ * 透過單次專屬安全金鑰直接在 Supabase 執行單鍵核銷 (免 Google 帳號登入、無轉向阻斷，延遲 < 50ms)
  */
 export const verifyPaymentByTokenFromSupabase = async (
   paymentId: string,
@@ -561,7 +561,7 @@ export interface SupabasePaymentHistoryData {
 }
 
 /**
- * ⚡ 從 Supabase 取得個人歷史繳費紀錄 (透過 get_my_payment_history 安全 RPC 函式，延遲 < 50ms)
+ * 從 Supabase 取得個人歷史繳費紀錄 (透過 get_my_payment_history 安全 RPC 函式，延遲 < 50ms)
  * 自動分類社費/活動/裝備並統計已核銷總金額
  */
 export const fetchPaymentHistoryFromSupabase = async (userId: string): Promise<SupabasePaymentHistoryData | null> => {
@@ -577,7 +577,7 @@ export const fetchPaymentHistoryFromSupabase = async (userId: string): Promise<S
 
     if (!data) return null;
 
-    console.log('%c⚡ [DataSource: Supabase] 歷史繳費紀錄秒開成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
+    console.log('%c[DataSource: Supabase] 歷史繳費紀錄秒開成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
     return data as SupabasePaymentHistoryData;
   } catch (err) {
     console.warn('[Supabase] 讀取歷史繳費例外，啟用 GAS fallback:', err);
@@ -618,7 +618,7 @@ export interface ReflectionSubmitDetails {
 }
 
 /**
- * ⚡ 從 Supabase 取得個人活動成就與出隊歷程 (透過 get_my_achievements 安全 RPC 函式，延遲 < 50ms)
+ * 從 Supabase 取得個人活動成就與出隊歷程 (透過 get_my_achievements 安全 RPC 函式，延遲 < 50ms)
  */
 export const fetchAchievementsFromSupabase = async (userId: string): Promise<SupabaseAchievementData | null> => {
   if (!supabase || !userId || userId === 'TEST_USER_ID') return null;
@@ -635,7 +635,7 @@ export const fetchAchievementsFromSupabase = async (userId: string): Promise<Sup
     if (!data) return null;
 
     lastSupabaseError = null;
-    console.log('%c⚡ [DataSource: Supabase] 活動成就紀錄秒開成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
+    console.log('%c[DataSource: Supabase] 活動成就紀錄秒開成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
     return data as SupabaseAchievementData;
   } catch (err: any) {
     const errMsg = err?.message || String(err);
@@ -646,7 +646,7 @@ export const fetchAchievementsFromSupabase = async (userId: string): Promise<Sup
 };
 
 /**
- * ⚡ 提交活動心得與評分至 Supabase (透過 save_reflection_rpc 安全 RPC 函式，延遲 < 50ms)
+ * 提交活動心得與評分至 Supabase (透過 save_reflection_rpc 安全 RPC 函式，延遲 < 50ms)
  */
 export const saveReflectionToSupabase = async (
   userId: string,
@@ -665,7 +665,7 @@ export const saveReflectionToSupabase = async (
       return false;
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 活動心得已極速儲存！', 'color: #10b981; font-weight: bold;', data);
+    console.log('%c[DataSource: Supabase] 活動心得已極速儲存！', 'color: #10b981; font-weight: bold;', data);
     return true;
   } catch (err) {
     console.warn('[Supabase] 儲存活動心得例外:', err);
@@ -674,7 +674,7 @@ export const saveReflectionToSupabase = async (
 };
 
 /**
- * ⚡ 自動/手動同步幹部快取至 Supabase officers 表
+ * 自動/手動同步幹部快取至 Supabase officers 表
  */
 export const registerOfficerToSupabase = async (
   userId: string,
@@ -702,7 +702,7 @@ export const registerOfficerToSupabase = async (
 };
 
 /**
- * ⚡ 直接自 Supabase 驗證使用者是否具備幹部身分 (延遲 < 30ms)
+ * 直接自 Supabase 驗證使用者是否具備幹部身分 (延遲 < 30ms)
  * 同時檢驗 members.is_officer 與 officers 表
  */
 export const checkOfficerStatusFromSupabase = async (
@@ -752,7 +752,7 @@ export const checkOfficerStatusFromSupabase = async (
 };
 
 /**
- * ⚡ 獲取幹部活動管理清單與報名人數統計 (透過 get_admin_events_rpc，延遲 < 50ms)
+ * 獲取幹部活動管理清單與報名人數統計 (透過 get_admin_events_rpc，延遲 < 50ms)
  */
 export const fetchAdminEventsFromSupabase = async (
   userId: string
@@ -774,7 +774,7 @@ export const fetchAdminEventsFromSupabase = async (
 
     lastSupabaseError = null;
     if (data.isOfficer) {
-      console.log('%c⚡ [DataSource: Supabase] 後台活動與報名統計讀取成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
+      console.log('%c[DataSource: Supabase] 後台活動與報名統計讀取成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', data);
       return {
         isOfficer: true,
         officerRole: data.officerRole || '幹部',
@@ -796,7 +796,7 @@ export const fetchAdminEventsFromSupabase = async (
 };
 
 /**
- * ⚡ 獲取單一活動的全部報名者名冊 (透過 get_admin_event_signups_rpc，延遲 < 50ms)
+ * 獲取單一活動的全部報名者名冊 (透過 get_admin_event_signups_rpc，延遲 < 50ms)
  */
 export const fetchAdminEventSignupsFromSupabase = async (
   userId: string,
@@ -819,9 +819,9 @@ export const fetchAdminEventSignupsFromSupabase = async (
       return null;
     }
 
-    console.log(`%c⚡ [DataSource: Supabase] 活動 (${eventId}) 報名名冊秒開成功！共 ${data.signups.length} 筆 (連線延遲 < 50ms)`, 'color: #10b981; font-weight: bold;');
+    console.log(`%c[DataSource: Supabase] 活動 (${eventId}) 報名名冊秒開成功！共 ${data.signups.length} 筆 (連線延遲 < 50ms)`, 'color: #10b981; font-weight: bold;');
     
-    // 🛡️ 欄位防禦性正規化：全面相容 realLineId/lineId、id/signupCode、climbingExp/experience 等舊版/新版 RPC 鍵名
+    // ️ 欄位防禦性正規化：全面相容 realLineId/lineId、id/signupCode、climbingExp/experience 等舊版/新版 RPC 鍵名
     const mappedSignups: SignupApplicant[] = (data.signups as any[]).map((item, idx) => {
       const emerContact = item.emergencyContact || '';
       let parsedEmerName = item.emerName || '';
@@ -876,7 +876,7 @@ export const fetchAdminEventSignupsFromSupabase = async (
 };
 
 /**
- * ⚡ 審核個別社員報名狀態 (透過 update_signup_status_rpc，延遲 < 30ms)
+ * 審核個別社員報名狀態 (透過 update_signup_status_rpc，延遲 < 30ms)
  */
 export const updateSignupStatusInSupabase = async (
   userId: string,
@@ -901,7 +901,7 @@ export const updateSignupStatusInSupabase = async (
       return false;
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 審核狀態已秒級更新！', 'color: #10b981; font-weight: bold;', signupId, reviewResult);
+    console.log('%c[DataSource: Supabase] 審核狀態已秒級更新！', 'color: #10b981; font-weight: bold;', signupId, reviewResult);
     return true;
   } catch (err: any) {
     const errMsg = err?.message || String(err);
@@ -912,7 +912,7 @@ export const updateSignupStatusInSupabase = async (
 };
 
 /**
- * ⚡ 快速切換活動開放狀態 (透過 update_event_status_rpc，延遲 < 30ms)
+ * 快速切換活動開放狀態 (透過 update_event_status_rpc，延遲 < 30ms)
  */
 export const updateEventStatusInSupabase = async (
   userId: string,
@@ -933,7 +933,7 @@ export const updateEventStatusInSupabase = async (
       return false;
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 活動狀態已秒級更新！', 'color: #10b981; font-weight: bold;', eventId, status);
+    console.log('%c[DataSource: Supabase] 活動狀態已秒級更新！', 'color: #10b981; font-weight: bold;', eventId, status);
     return true;
   } catch (err) {
     console.warn('[Supabase] 活動狀態更新例外:', err);
@@ -942,7 +942,7 @@ export const updateEventStatusInSupabase = async (
 };
 
 /**
- * ⚡ 建立或更新活動資料 (透過 save_admin_event_rpc，延遲 < 50ms)
+ * 建立或更新活動資料 (透過 save_admin_event_rpc，延遲 < 50ms)
  */
 export const saveEventToSupabase = async (
   userId: string,
@@ -976,7 +976,7 @@ export const saveEventToSupabase = async (
       return { success: false };
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 活動已極速儲存！', 'color: #10b981; font-weight: bold;', data);
+    console.log('%c[DataSource: Supabase] 活動已極速儲存！', 'color: #10b981; font-weight: bold;', data);
     return { success: true, eventId: data.eventId };
   } catch (err) {
     console.warn('[Supabase] 儲存活動例外:', err);
@@ -993,7 +993,7 @@ export interface EquipmentLoanDetails {
 }
 
 /**
- * ⚡ 提交裝備租借申請至 Supabase (透過 submit_equipment_loan_rpc 安全原子性 RPC，延遲 < 50ms)
+ * 提交裝備租借申請至 Supabase (透過 submit_equipment_loan_rpc 安全原子性 RPC，延遲 < 50ms)
  * 自動防超賣鎖定庫存、判定社員身分計算租金，並觸發 sync_queue 佇列
  */
 export const submitEquipmentLoanToSupabase = async (
@@ -1020,7 +1020,7 @@ export const submitEquipmentLoanToSupabase = async (
       return { success: false, message: data?.message || '申請失敗' };
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 裝備租借申請已極速儲存！', 'color: #10b981; font-weight: bold;', data);
+    console.log('%c[DataSource: Supabase] 裝備租借申請已極速儲存！', 'color: #10b981; font-weight: bold;', data);
     return {
       success: true,
       loanId: data.loanId,
@@ -1035,7 +1035,7 @@ export const submitEquipmentLoanToSupabase = async (
 };
 
 /**
- * ⚡ 取消裝備租借申請 (透過 cancel_equipment_loan_rpc 安全 RPC，延遲 < 30ms)
+ * 取消裝備租借申請 (透過 cancel_equipment_loan_rpc 安全 RPC，延遲 < 30ms)
  * 自動在資料庫層釋放並歸還裝備庫存，觸發 sync_queue
  */
 export const cancelEquipmentLoanInSupabase = async (
@@ -1055,7 +1055,7 @@ export const cancelEquipmentLoanInSupabase = async (
       return { success: false, message: error?.message || data?.message };
     }
 
-    console.log('%c⚡ [DataSource: Supabase] 裝備預約已秒級取消！', 'color: #10b981; font-weight: bold;', loanId);
+    console.log('%c[DataSource: Supabase] 裝備預約已秒級取消！', 'color: #10b981; font-weight: bold;', loanId);
     return { success: true, message: data.message };
   } catch (err: unknown) {
     console.warn('[Supabase] 取消裝備例外:', err);
@@ -1064,7 +1064,7 @@ export const cancelEquipmentLoanInSupabase = async (
 };
 
 /**
- * ⚡ 取消活動報名 (透過 cancel_event_signup_rpc 安全 RPC，延遲 < 30ms)
+ * 取消活動報名 (透過 cancel_event_signup_rpc 安全 RPC，延遲 < 30ms)
  */
 export const cancelEventSignupInSupabase = async (
   userId: string,
@@ -1499,6 +1499,7 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
   lineUserId?: string | null;
   notes?: string | null;
   officerUserId?: string;
+  paymentType?: string;
 }): Promise<{ success: boolean; error?: string }> => {
   if (!supabase) return { success: false, error: '缺少 Supabase 連線' };
 
@@ -1533,7 +1534,7 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
     const nowIso = new Date().toISOString();
 
     if (params.sourceType === 'payment') {
-      const { error: pErr } = await supabase
+      const { data: updatedRows, error: pErr } = await supabase
         .from('payments')
         .update({
           status: params.newStatus,
@@ -1542,13 +1543,25 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
           officer_notes: params.notes,
           updated_at: nowIso
         })
-        .eq('id', params.paymentId);
+        .eq('id', params.paymentId)
+        .select('id');
 
       if (pErr) {
         return { success: false, error: `[更新 payments 失敗]: ${pErr.message} (代碼: ${pErr.code || 'UNKNOWN'})` };
       }
 
-      // 雙向連動：若有 targetType 與 targetId
+      if (!updatedRows || updatedRows.length === 0) {
+        return {
+          success: false,
+          error: `[更新 payments 失敗]: 資料庫未變更任何資料列 (可能缺少 RLS 寫入權限或該單號不存在)，請確認已執行最新 admin_portal_rpc.sql 腳本`
+        };
+      }
+
+      const isMembership =
+        params.targetType === 'membership' ||
+        (params.paymentType && (params.paymentType.includes('社費') || params.paymentType.includes('Membership')));
+
+      // 雙向連動：活動報名
       if (params.targetType === 'event' && params.targetId && params.lineUserId) {
         await supabase
           .from('event_signups')
@@ -1556,15 +1569,36 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
           .eq('event_id', params.targetId)
           .eq('line_user_id', params.lineUserId);
       } else if (params.targetType === 'loan' && params.targetId) {
+        // 雙向連動：裝備租借
         await supabase
           .from('loans')
           .update({ payment_status: mappedPayStatus, updated_at: nowIso })
           .eq('id', params.targetId);
-      } else if (params.targetType === 'membership' && params.lineUserId) {
-        await supabase
-          .from('members')
-          .update({ payment_status: mappedPayStatus, updated_at: nowIso })
-          .eq('line_user_id', params.lineUserId);
+      } else if (isMembership && params.lineUserId) {
+        // 雙向連動：社費繳納 (包含正式社員標記與到期日提取)
+        if (isConfirmed) {
+          const match = (params.paymentType || '').match(/(\d{4}[-/]\d{2}[-/]\d{2})/);
+          const expiryDate = match ? match[1].replace(/\//g, '-') : undefined;
+
+          const memberUpdate: any = {
+            payment_status: '已繳費 Paid',
+            is_official_member: true,
+            updated_at: nowIso
+          };
+          if (expiryDate) {
+            memberUpdate.membership_expires_at = expiryDate;
+          }
+
+          await supabase
+            .from('members')
+            .update(memberUpdate)
+            .eq('line_user_id', params.lineUserId);
+        } else {
+          await supabase
+            .from('members')
+            .update({ payment_status: mappedPayStatus, updated_at: nowIso })
+            .eq('line_user_id', params.lineUserId);
+        }
       } else if (params.lineUserId && isConfirmed) {
         // 多筆或未指定 target 時，若已核銷則將該使用者未繳費項目一併轉為已繳費
         await supabase
@@ -1580,16 +1614,24 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
           .eq('payment_status', '待確認 Checking');
       }
     } else if (params.sourceType === 'loan') {
-      const { error: lErr } = await supabase
+      const { data: updatedLoanRows, error: lErr } = await supabase
         .from('loans')
         .update({
           payment_status: mappedPayStatus,
           updated_at: nowIso
         })
-        .eq('id', params.paymentId);
+        .eq('id', params.paymentId)
+        .select('id');
 
       if (lErr) {
         return { success: false, error: `[更新 loans 繳費狀態失敗]: ${lErr.message} (代碼: ${lErr.code || 'UNKNOWN'})` };
+      }
+
+      if (!updatedLoanRows || updatedLoanRows.length === 0) {
+        return {
+          success: false,
+          error: `[更新 loans 失敗]: 資料庫未變更任何資料列 (可能缺少 RLS 寫入權限或該租借單不存在)`
+        };
       }
     }
 

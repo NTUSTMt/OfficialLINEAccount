@@ -88,7 +88,8 @@ export default function AdminFinance({ userId }: { userId?: string }) {
         officerName: '財務幹部線上核銷',
         lineUserId: selectedItem.line_user_id,
         notes: officerNotes,
-        officerUserId: userId
+        officerUserId: userId,
+        paymentType: selectedItem.type
       });
 
       if (!res.success) {

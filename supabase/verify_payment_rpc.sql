@@ -225,6 +225,8 @@ DECLARE
     v_now TIMESTAMPTZ := NOW();
     v_signup RECORD;
     v_new_signup_status event_signup_status_enum;
+    v_extracted_expiry TEXT;
+    v_calculated_expiry DATE;
 BEGIN
     -- 參數基本防禦
     IF p_payment_id IS NULL OR trim(p_payment_id) = '' THEN
@@ -292,10 +294,22 @@ BEGIN
         END LOOP;
 
         -- 3. 連動更新社員社費 (members)
-        IF v_payment.type LIKE '%社費%' OR v_payment.type LIKE '%Membership%' THEN
+        IF v_payment.type LIKE '%社費%' OR v_payment.type LIKE '%Membership%' OR v_payment.target_type = 'membership' THEN
+            v_extracted_expiry := substring(v_payment.type from '(\d{4}[-/]\d{2}[-/]\d{2})');
+            IF v_extracted_expiry IS NOT NULL THEN
+                BEGIN
+                    v_calculated_expiry := replace(v_extracted_expiry, '/', '-')::DATE;
+                EXCEPTION WHEN OTHERS THEN
+                    v_calculated_expiry := NULL;
+                END;
+            ELSE
+                v_calculated_expiry := NULL;
+            END IF;
+
             UPDATE members
             SET payment_status = '已繳費 Paid',
                 is_official_member = TRUE,
+                membership_expires_at = COALESCE(v_calculated_expiry, membership_expires_at),
                 updated_at = v_now
             WHERE line_user_id = v_payment.line_user_id;
         END IF;

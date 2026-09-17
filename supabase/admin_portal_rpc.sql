@@ -456,6 +456,11 @@ DECLARE
     v_is_officer BOOLEAN;
     v_is_confirmed BOOLEAN;
     v_mapped_pay_status payment_status_enum;
+    v_payment RECORD;
+    v_target_user_id TEXT;
+    v_is_membership BOOLEAN;
+    v_extracted_expiry TEXT;
+    v_calculated_expiry DATE;
 BEGIN
     v_is_officer := is_officer(p_officer_line_user_id);
 
@@ -467,6 +472,10 @@ BEGIN
     v_mapped_pay_status := CASE WHEN v_is_confirmed THEN '已繳費 Paid'::payment_status_enum ELSE '待確認 Checking'::payment_status_enum END;
 
     IF p_source_type = 'payment' THEN
+        -- 讀取繳費單既有紀錄備援
+        SELECT * INTO v_payment FROM payments WHERE id = p_payment_id;
+        v_target_user_id := COALESCE(NULLIF(p_line_user_id, ''), v_payment.line_user_id);
+
         UPDATE payments
         SET status = p_status,
             confirmed_by = CASE WHEN v_is_confirmed THEN COALESCE(NULLIF(p_officer_name, ''), '管理幹部') ELSE NULL END,
@@ -475,19 +484,66 @@ BEGIN
             updated_at = NOW()
         WHERE id = p_payment_id;
 
-        -- 連動更新
-        IF p_target_type = 'event' AND p_target_id IS NOT NULL AND p_line_user_id IS NOT NULL THEN
+        -- 判定是否為社費繳納 (支援 target_type 與 type 文字特徵)
+        v_is_membership := (
+            p_target_type = 'membership' 
+            OR v_payment.target_type = 'membership'
+            OR v_payment.type ILIKE '%社費%' 
+            OR v_payment.type ILIKE '%Membership%'
+        );
+
+        -- A. 活動報名連動
+        IF (p_target_type = 'event' OR v_payment.target_type = 'event' OR v_payment.type ILIKE '%活動%') AND v_target_user_id IS NOT NULL THEN
             UPDATE event_signups
             SET payment_status = v_mapped_pay_status, updated_at = NOW()
-            WHERE event_id = p_target_id AND line_user_id = p_line_user_id;
-        ELSIF p_target_type = 'loan' AND p_target_id IS NOT NULL THEN
-            UPDATE loans
-            SET payment_status = v_mapped_pay_status, updated_at = NOW()
-            WHERE id = p_target_id;
-        ELSIF p_target_type = 'membership' AND p_line_user_id IS NOT NULL THEN
-            UPDATE members
-            SET payment_status = v_mapped_pay_status, updated_at = NOW()
-            WHERE line_user_id = p_line_user_id;
+            WHERE line_user_id = v_target_user_id 
+              AND (event_id = p_target_id OR v_payment.target_id = event_id OR p_target_id IS NULL);
+        END IF;
+
+        -- B. 裝備租借連動
+        IF (p_target_type = 'loan' OR v_payment.target_type = 'loan' OR v_payment.type ILIKE '%裝備%' OR v_payment.type ILIKE '%租借%') THEN
+            IF p_target_id IS NOT NULL THEN
+                UPDATE loans
+                SET payment_status = v_mapped_pay_status, updated_at = NOW()
+                WHERE id = p_target_id;
+            ELSIF v_payment.target_id IS NOT NULL THEN
+                UPDATE loans
+                SET payment_status = v_mapped_pay_status, updated_at = NOW()
+                WHERE id = v_payment.target_id;
+            ELSIF v_target_user_id IS NOT NULL THEN
+                UPDATE loans
+                SET payment_status = v_mapped_pay_status, updated_at = NOW()
+                WHERE line_user_id = v_target_user_id AND (payment_status != '已繳費 Paid' OR NOT v_is_confirmed);
+            END IF;
+        END IF;
+
+        -- C. 社費繳納連動 (更新繳費狀態、正式社員標記、若有註明則填入到期日)
+        IF v_is_membership AND v_target_user_id IS NOT NULL THEN
+            IF v_is_confirmed THEN
+                -- 從繳費項目字串提取明確有效期限 (例如：有效至 2026/07/31 或 2026-07-31)
+                v_extracted_expiry := substring(v_payment.type from '(\d{4}[-/]\d{2}[-/]\d{2})');
+                IF v_extracted_expiry IS NOT NULL THEN
+                    BEGIN
+                        v_calculated_expiry := replace(v_extracted_expiry, '/', '-')::DATE;
+                    EXCEPTION WHEN OTHERS THEN
+                        v_calculated_expiry := NULL;
+                    END;
+                ELSE
+                    v_calculated_expiry := NULL;
+                END IF;
+
+                UPDATE members
+                SET payment_status = '已繳費 Paid'::payment_status_enum,
+                    is_official_member = TRUE,
+                    membership_expires_at = COALESCE(v_calculated_expiry, membership_expires_at),
+                    updated_at = NOW()
+                WHERE line_user_id = v_target_user_id;
+            ELSE
+                UPDATE members
+                SET payment_status = v_mapped_pay_status,
+                    updated_at = NOW()
+                WHERE line_user_id = v_target_user_id;
+            END IF;
         END IF;
     ELSIF p_source_type = 'loan' THEN
         UPDATE loans

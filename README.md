@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.145-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.146-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.145)](#7-最新版本異動紀錄-changelog-v01145)
+- [7. 最新版本異動紀錄 (Changelog v0.1.146)](#7-最新版本異動紀錄-changelog-v01146)
 
 ---
 
@@ -377,6 +377,20 @@ pnpm test
   - **中英文 Part I / Part II 100% 鏡像對齊**：同步修正英文版對應章節、狀態清單、導航方式與 FAQ。
 - 🧪 **單元測試擴充**：
   - 新增 `test/60_ai_mention_and_chat_keyword_cleanup.test.mjs`，測試全數 158 項通過，前端打包建置無錯誤。
+
+### v0.1.146 (2026-09-17)
+- 財務核銷社費連動修復與正式社員狀態標記 (supabase/admin_portal_rpc.sql, src/utils/supabaseClient.ts)：
+  - 診斷並修復財務核銷時僅更新 `payment_status`、未同步更新 `is_official_member = TRUE` 之缺陷。
+  - 強化社費判定邏輯，同時相容 `target_type = 'membership'` 與款項文字特徵（`type ILIKE '%社費%'` 或 `type ILIKE '%Membership%'`），防範歷史申報項目連動脫鉤。
+  - 實作明確社籍到期日提取機制：以正規表達式 `substring(v_payment.type from '(\\d{4}[-/]\\d{2}[-/]\\d{2})')` 自動自申報款項字串中提取明確到期日並更新至 `members.membership_expires_at`；依使用者指示嚴格不自作主張推算預設學期結束日。
+- 直更模式防呆與 RLS 靜默阻斷攔截 (src/utils/supabaseClient.ts, src/pages/AdminFinance.tsx)：
+  - 修正前端在呼叫 `payments` 與 `loans` 之直更 SQL 時加上 `.select('id')`，校驗實際異動資料筆數。
+  - 若受 RLS 權限阻斷導致 0 筆更新，主動拋出具體錯誤訊息，杜絕因資料庫無更動而誤判成功發出 LINE 推播之假象。
+  - 在 `AdminFinance.tsx` 中傳遞 `paymentType` 參數至連動更新函式，確保社費款項特徵能被完整辨識。
+- 單鍵核銷與 GAS Webhook 雙軌同步補強 (supabase/verify_payment_rpc.sql, src/gas.js, gas_modules/02_LineBot_Webhook.js)：
+  - 在 Email 單鍵核銷 RPC `verify_payment_by_token` 以及 GAS LINE Bot Webhook 處理常式中同步支援到期日自動提取與 `is_official_member = TRUE` 標記。
+- 單元測試與建置驗證：
+  - 在 `test/65_officer_system_modules.test.mjs` 新增社費連動、正式社員標記、明確到期日提取與杜絕學期預設推算之單元測試，全數 200 項測試通過，TypeScript 與 Vite 建置零錯誤。
 
 ### v0.1.145 (2026-09-17)
 - 社員詳細資料載入修復與多層備援機制 (supabase/admin_portal_rpc.sql, src/utils/supabaseClient.ts)：

@@ -172,3 +172,19 @@ test('幹部系統模組測試：嚴格零表情符號 (Zero Emoji) 規範驗證
   }
 });
 
+test('幹部系統模組測試：財務核銷社費連動、正式社員標記與明確到期日提取驗證 (v0.1.146)', async () => {
+  const fs = await import('fs/promises');
+  const rpcSql = await fs.readFile('supabase/admin_portal_rpc.sql', 'utf8');
+  const clientTs = await fs.readFile('src/utils/supabaseClient.ts', 'utf8');
+
+  // 1. SQL 檢查
+  assert.ok(rpcSql.includes('is_official_member = TRUE'), 'SQL 核銷社費必須更新 is_official_member = TRUE');
+  assert.ok(rpcSql.includes("substring(v_payment.type from '(\\d{4}[-/]\\d{2}[-/]\\d{2})')"), 'SQL 必須提取明確到期日');
+  assert.ok(!rpcSql.includes('make_date('), '依指示不得自動以當前學期推算預設到期日');
+
+  // 2. TypeScript Client 檢查
+  assert.ok(clientTs.includes('is_official_member: true'), 'Client 核銷社費必須更新 is_official_member: true');
+  assert.ok(clientTs.includes('membership_expires_at = expiryDate'), 'Client 必須提取明確到期日');
+  assert.ok(clientTs.includes('updatedRows.length === 0'), 'Client 必須校驗更新列數杜絕 RLS 靜默阻斷');
+});
+

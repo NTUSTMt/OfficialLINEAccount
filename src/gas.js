@@ -918,11 +918,16 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
     var isMembership = (Array.isArray(selTypes) && selTypes.indexOf("membership") > -1) ||
       itemsStr.indexOf("社費") > -1 || itemsStr.indexOf("Membership") > -1;
     if (isMembership && targetUserId && typeof _supabasePatch === "function") {
-      _supabasePatch("members", { line_user_id: "eq." + targetUserId }, {
+      var memberPatch = {
         payment_status: "已繳費 Paid",
         is_official_member: true,
         updated_at: nowIso
-      });
+      };
+      var dateMatch = itemsStr.match(/(\d{4}[-/]\d{2}[-/]\d{2})/);
+      if (dateMatch && dateMatch[1]) {
+        memberPatch.membership_expires_at = dateMatch[1].replace(/\//g, "-");
+      }
+      _supabasePatch("members", { line_user_id: "eq." + targetUserId }, memberPatch);
     }
 
     // C. 裝備租借連動 (若含有 loan_id 或申報包含租借/裝備)
