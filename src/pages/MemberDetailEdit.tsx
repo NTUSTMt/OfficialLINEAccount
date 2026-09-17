@@ -596,7 +596,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>學號 (或備註)</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>學號</label>
                     <input
                       type="text"
                       value={formData.student_id || ''}

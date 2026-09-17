@@ -85,6 +85,8 @@ export interface AdminFinanceItem {
   status: '待確認 Checking' | '已核銷 Confirmed';
   payment_status?: '未繳費 Unpaid' | '待確認 Checking' | '已繳費 Paid';
   officer_notes?: string | null;
+  notes?: string | null;
+  notification_status?: '未通知' | '已通知' | string | null;
   created_at: string;
   sourceType: 'payment' | 'loan' | 'event_signup';
   itemCategory: 'activity' | 'equipment' | 'membership' | 'general';

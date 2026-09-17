@@ -187,7 +187,8 @@ export default function AdminLoans({ userId }: { userId?: string }) {
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f8fafc',
-      paddingBottom: '40px'
+      paddingBottom: '40px',
+      textAlign: 'left'
     }}>
       <AdminSubNav />
 
@@ -311,7 +312,8 @@ export default function AdminLoans({ userId }: { userId?: string }) {
                     transition: 'all 0.15s ease',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    textAlign: 'left'
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -349,7 +351,7 @@ export default function AdminLoans({ userId }: { userId?: string }) {
 
                     {/* 第三行：出隊日期與金額 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#64748b' }}>
-                      <span>出隊: {l.start_date} ~ {l.end_date} ({l.days} 天)</span>
+                      <span>出隊: {l.start_date} ~ {l.end_date} ({l.days || (l.start_date && l.end_date ? Math.max(1, Math.round((new Date(l.end_date).getTime() - new Date(l.start_date).getTime()) / 86400000) + 1) : 1)} 天)</span>
                       <span style={{ fontWeight: 700, color: '#059669' }}>${l.total_fee || l.total_rent || 0} 元</span>
                     </div>
                   </div>
@@ -388,7 +390,8 @@ export default function AdminLoans({ userId }: { userId?: string }) {
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            textAlign: 'left'
           }}>
             {/* 標題與關閉 */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
@@ -452,12 +455,12 @@ export default function AdminLoans({ userId }: { userId?: string }) {
                 )}
               </div>
 
-              {/* 出隊天數與用途 */}
+              {/* 天數與用途 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>出隊天數與起訖</div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>天數與日期起訖</div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', marginTop: '2px' }}>
-                    {selectedLoan.days} 天 ({selectedLoan.start_date} ~ {selectedLoan.end_date})
+                    {selectedLoan.days || (selectedLoan.start_date && selectedLoan.end_date ? Math.max(1, Math.round((new Date(selectedLoan.end_date).getTime() - new Date(selectedLoan.start_date).getTime()) / 86400000) + 1) : 1)} 天 ({selectedLoan.start_date} ~ {selectedLoan.end_date})
                   </div>
                 </div>
                 <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px' }}>

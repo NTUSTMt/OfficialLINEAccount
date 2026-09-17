@@ -168,7 +168,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 寫入 payments 資料表 (包含 verify_token)
+    -- 寫入 payments 資料表 (包含 verify_token，申報備註寫入 notes 欄位，通知狀態預設未通知)
     INSERT INTO payments (
         id,
         line_user_id,
@@ -178,7 +178,9 @@ BEGIN
         bank_last5,
         status,
         verify_token,
+        notes,
         officer_notes,
+        notification_status,
         created_at,
         updated_at
     ) VALUES (
@@ -191,6 +193,8 @@ BEGIN
         '待確認 Checking',
         v_verify_token,
         v_note,
+        NULL,
+        '未通知',
         NOW(),
         NOW()
     );

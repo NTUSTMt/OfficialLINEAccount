@@ -41,6 +41,7 @@ export default function AdminFinance({ userId }: { userId?: string }) {
   // 詳細對帳彈窗
   const [selectedItem, setSelectedItem] = useState<AdminFinanceItem | null>(null);
   const [editStatus, setEditStatus] = useState<'待確認 Checking' | '已核銷 Confirmed'>('待確認 Checking');
+  const [editNotificationStatus, setEditNotificationStatus] = useState<'未通知' | '已通知'>('未通知');
   const [officerNotes, setOfficerNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -68,6 +69,7 @@ export default function AdminFinance({ userId }: { userId?: string }) {
   const handleOpenDetail = (it: AdminFinanceItem) => {
     setSelectedItem(it);
     setEditStatus(it.status);
+    setEditNotificationStatus((it.notification_status as any) === '已通知' ? '已通知' : '未通知');
     setOfficerNotes(it.officer_notes || '');
     setSuccessMessage(null);
   };
@@ -79,27 +81,11 @@ export default function AdminFinance({ userId }: { userId?: string }) {
     setSuccessMessage(null);
 
     try {
-      const res = await updatePaymentAndLinkedStatusInSupabase({
-        paymentId: selectedItem.id,
-        sourceType: selectedItem.sourceType,
-        targetType: selectedItem.target_type,
-        targetId: selectedItem.target_id,
-        newStatus: editStatus,
-        officerName: '財務幹部線上核銷',
-        lineUserId: selectedItem.line_user_id,
-        notes: officerNotes,
-        officerUserId: userId,
-        paymentType: selectedItem.type
-      });
+      // 判定是否需發送 LINE 推播：僅當改為「已核銷 Confirmed」且通知狀態為「未通知」時發送
+      const shouldNotify = editStatus === '已核銷 Confirmed' && editNotificationStatus === '未通知' && Boolean(selectedItem.line_user_id);
+      let finalNotificationStatus = editNotificationStatus;
 
-      if (!res.success) {
-        setErrorMessage(res.error || '狀態更新失敗');
-        setIsSaving(false);
-        return;
-      }
-
-      // 若改為「已核銷 Confirmed」，非同步呼叫 GAS 發送 LINE 推播通知
-      if (editStatus === '已核銷 Confirmed' && selectedItem.line_user_id) {
+      if (shouldNotify) {
         try {
           fetch(GAS_API_URL, {
             method: 'POST',
@@ -114,12 +100,35 @@ export default function AdminFinance({ userId }: { userId?: string }) {
               confirmedBy: '財務幹部線上審核'
             })
           }).catch(e => console.warn('[AdminFinance] 推播通知例外:', e));
+
+          // 成功觸發推播後，自動將通知狀態設為已通知
+          finalNotificationStatus = '已通知';
         } catch (e) {
           console.warn('[AdminFinance] 推播呼叫異常:', e);
         }
       }
 
-      setSuccessMessage(`單號 ${selectedItem.id} 繳費狀態已成功更新為【${editStatus}】並連動名冊！`);
+      const res = await updatePaymentAndLinkedStatusInSupabase({
+        paymentId: selectedItem.id,
+        sourceType: selectedItem.sourceType,
+        targetType: selectedItem.target_type,
+        targetId: selectedItem.target_id,
+        newStatus: editStatus,
+        officerName: '財務幹部線上核銷',
+        lineUserId: selectedItem.line_user_id,
+        notes: officerNotes,
+        officerUserId: userId,
+        paymentType: selectedItem.type,
+        notificationStatus: finalNotificationStatus
+      });
+
+      if (!res.success) {
+        setErrorMessage(res.error || '狀態更新失敗');
+        setIsSaving(false);
+        return;
+      }
+
+      setSuccessMessage(`單號 ${selectedItem.id} 繳費狀態已成功更新為【${editStatus}】（通知狀態：${finalNotificationStatus}）！`);
       setSelectedItem(null);
       await loadData();
     } catch (err: any) {
@@ -205,7 +214,8 @@ export default function AdminFinance({ userId }: { userId?: string }) {
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f8fafc',
-      paddingBottom: '40px'
+      paddingBottom: '40px',
+      textAlign: 'left'
     }}>
       <AdminSubNav />
 
@@ -324,7 +334,8 @@ export default function AdminFinance({ userId }: { userId?: string }) {
                     transition: 'all 0.15s ease',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    textAlign: 'left'
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -351,6 +362,16 @@ export default function AdminFinance({ userId }: { userId?: string }) {
                         fontWeight: 600
                       }}>
                         {it.status}
+                      </span>
+                      <span style={{
+                        fontSize: '11px',
+                        padding: '2px 7px',
+                        borderRadius: '6px',
+                        backgroundColor: it.notification_status === '已通知' ? '#eff6ff' : '#f1f5f9',
+                        color: it.notification_status === '已通知' ? '#2563eb' : '#64748b',
+                        fontWeight: 500
+                      }}>
+                        {it.notification_status === '已通知' ? '已通知' : '未通知'}
                       </span>
                     </div>
 
@@ -401,7 +422,8 @@ export default function AdminFinance({ userId }: { userId?: string }) {
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            textAlign: 'left'
           }}>
             {/* 彈窗標題 */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
@@ -559,9 +581,45 @@ export default function AdminFinance({ userId }: { userId?: string }) {
                   <option value="已核銷 Confirmed">已核銷 Confirmed</option>
                 </select>
                 <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-                  若改為「已核銷 Confirmed」，儲存後將自動發送 LINE 推播訊息通知社員，並同步連動更新活動名冊或租借單繳費狀態。
+                  若改為「已核銷 Confirmed」且通知狀態為「未通知」，儲存後將發送 LINE 推播通知社員，並連動活動名冊或租借單。
                 </div>
               </div>
+
+              {/* LINE 通知發送狀態下拉選單 */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  LINE 通知發送狀態
+                </label>
+                <select
+                  value={editNotificationStatus}
+                  onChange={e => setEditNotificationStatus(e.target.value as any)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    backgroundColor: '#ffffff',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="未通知">未通知 (儲存核銷時將發送推播)</option>
+                  <option value="已通知">已通知 (儲存時不發送推播)</option>
+                </select>
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                  若已推播過，系統標記為「已通知」且不再重複發送；若需重新通知社員，可切回「未通知」。
+                </div>
+              </div>
+
+              {/* 社員申報備註 (由社員申報時填寫，唯讀展示) */}
+              {selectedItem.notes && (
+                <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '4px' }}>社員申報備註</div>
+                  <div style={{ fontSize: '13px', color: '#0f172a', whiteSpace: 'pre-wrap' }}>
+                    {selectedItem.notes}
+                  </div>
+                </div>
+              )}
 
               {/* 幹部審核備註 */}
               <div>

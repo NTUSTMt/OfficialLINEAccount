@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.148-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.149-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.148)](#7-最新版本異動紀錄-changelog-v01148)
+- [7. 最新版本異動紀錄 (Changelog v0.1.149)](#7-最新版本異動紀錄-changelog-v01149)
 
 ---
 
@@ -377,6 +377,22 @@ pnpm test
   - **中英文 Part I / Part II 100% 鏡像對齊**：同步修正英文版對應章節、狀態清單、導航方式與 FAQ。
 - 🧪 **單元測試擴充**：
   - 新增 `test/60_ai_mention_and_chat_keyword_cleanup.test.mjs`，測試全數 158 項通過，前端打包建置無錯誤。
+### v0.1.149 (2026-09-18)
+- 財務對帳備註欄位分離與申報寫入修復 (supabase/verify_payment_rpc.sql, supabase/payment_rpc.sql, supabase/admin_portal_rpc.sql, src/pages/AdminFinance.tsx)：
+  - 診斷並修正社員申報繳費時誤將備註寫入 `officer_notes` 之資料庫缺陷，正名寫入 `payments.notes` 欄位。
+  - 對帳彈窗完整區隔呈現「社員申報備註（唯讀展示）」與「幹部審核備註（可自由輸入修改）」，杜絕幹部核銷紀錄與社員備註互相覆蓋。
+- LINE 繳費核銷通知發送狀態控制與防重複推播 (src/pages/AdminFinance.tsx, src/utils/supabaseClient.ts, supabase/admin_portal_rpc.sql)：
+  - `payments` 資料表正式納入 `notification_status`（未通知 / 已通知）欄位。
+  - 對帳彈窗新增「LINE 通知發送狀態」下拉選單：核銷儲存時若狀態為「未通知」，發送推播後自動標記為「已通知」；若已處於「已通知」，再次點擊儲存將不再重複發送訊息，亦可手動切回「未通知」進行重發。
+  - 財務卡片清單直觀增加「已通知」或「未通知」徽章標籤。
+- 裝備租借天數自動計算兜底 (src/pages/AdminLoans.tsx, src/utils/supabaseClient.ts, supabase/admin_portal_rpc.sql)：
+  - 解決當資料庫或試算表同步資料遺漏 `days` 欄位時，介面僅顯示「 天」之缺陷。
+  - 於前端組件、Supabase Client 映射層與資料庫 RPC 中全方位加入 `end_date - start_date + 1` 天數動態推算兜底。
+- 卡片清單與詳細彈窗全面靠左排版 (src/pages/AdminMembers.tsx, src/pages/AdminLoans.tsx, src/pages/AdminFinance.tsx)：
+  - 社員資料卡片、租借管理卡片、財務對帳卡片以及對帳與租借詳細彈窗內容強制宣告 `textAlign: 'left'`，根除文字置中跑版。
+- 單元測試與建置驗證：
+  - 於 `test/65_officer_system_modules.test.mjs` 新增 v0.1.149 完整單元測試，全數 203 項測試通過，TypeScript 與 Vite 打包建置零錯誤。
+
 ### v0.1.148 (2026-09-18)
 - 社員身分狀態標準值對齊與向下相容 (src/pages/AdminMembers.tsx, src/pages/MemberDetailEdit.tsx, supabase/SCHEMA_DICTIONARY.md)：
   - 診斷並修復幹部名冊頁面身分篩選與詳細編輯頁面選項與 Supabase 資料庫真實值不一致之缺陷。

@@ -148,7 +148,8 @@ export default function AdminMembers({ userId }: { userId?: string }) {
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f8fafc',
-      paddingBottom: '40px'
+      paddingBottom: '40px',
+      textAlign: 'left'
     }}>
       <AdminSubNav />
 
@@ -243,7 +244,8 @@ export default function AdminMembers({ userId }: { userId?: string }) {
                     transition: 'all 0.15s ease',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    textAlign: 'left'
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>

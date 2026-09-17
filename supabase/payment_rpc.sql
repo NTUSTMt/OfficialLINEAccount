@@ -273,7 +273,9 @@ BEGIN
         amount,
         bank_last5,
         status,
+        notes,
         officer_notes,
+        notification_status,
         created_at,
         updated_at
     ) VALUES (
@@ -285,6 +287,8 @@ BEGIN
         v_last5,
         '待確認 Checking',
         v_note,
+        NULL,
+        '未通知',
         NOW(),
         NOW()
     );

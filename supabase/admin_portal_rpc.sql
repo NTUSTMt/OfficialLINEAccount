@@ -14,7 +14,12 @@ DROP FUNCTION IF EXISTS update_admin_member_rpc(TEXT, TEXT, JSONB) CASCADE;
 DROP FUNCTION IF EXISTS get_admin_finance_rpc(TEXT) CASCADE;
 DROP FUNCTION IF EXISTS get_admin_loans_rpc(TEXT) CASCADE;
 DROP FUNCTION IF EXISTS update_admin_payment_status_rpc(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS update_admin_payment_status_rpc(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS update_admin_loan_status_rpc(TEXT, TEXT, TEXT, TEXT) CASCADE;
+
+-- 確保 payments 表存在 notes 與 notification_status 欄位
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS notification_status TEXT DEFAULT '未通知';
 
 -- 1. 內部幹部鑑權函式 (is_officer) 確保存在且支援雙軌查核
 CREATE OR REPLACE FUNCTION is_officer(p_line_user_id TEXT)
@@ -315,7 +320,9 @@ BEGIN
             p.target_id,
             p.status,
             CASE WHEN p.status = '已核銷 Confirmed' THEN '已繳費 Paid' ELSE '待確認 Checking' END AS payment_status,
+            p.notes,
             p.officer_notes,
+            COALESCE(p.notification_status, '未通知') AS notification_status,
             to_char(p.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             'payment' AS source_type,
             CASE 
@@ -342,7 +349,9 @@ BEGIN
             l.id AS target_id,
             '待確認 Checking' AS status,
             l.payment_status::TEXT AS payment_status,
-            l.notes AS officer_notes,
+            l.notes,
+            NULL AS officer_notes,
+            '未通知' AS notification_status,
             to_char(l.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             'loan' AS source_type,
             'equipment' AS item_category
@@ -370,7 +379,9 @@ BEGIN
             e.id AS target_id,
             '待確認 Checking' AS status,
             s.payment_status::TEXT AS payment_status,
-            s.notes AS officer_notes,
+            s.notes,
+            NULL AS officer_notes,
+            COALESCE(s.notification_status, '未通知') AS notification_status,
             to_char(s.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             'event_signup' AS source_type,
             'activity' AS item_category
@@ -425,7 +436,7 @@ BEGIN
             COALESCE(l.name, m.name, '借用人') AS name,
             to_char(l.start_date, 'YYYY-MM-DD') AS start_date,
             to_char(l.end_date, 'YYYY-MM-DD') AS end_date,
-            l.days,
+            COALESCE(l.days, CASE WHEN l.end_date IS NOT NULL AND l.start_date IS NOT NULL THEN (l.end_date - l.start_date + 1) ELSE 1 END) AS days,
             l.purpose,
             l.purpose_other,
             l.status,
@@ -471,7 +482,8 @@ CREATE OR REPLACE FUNCTION update_admin_payment_status_rpc(
     p_status TEXT,
     p_line_user_id TEXT,
     p_officer_name TEXT,
-    p_notes TEXT
+    p_notes TEXT,
+    p_notification_status TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -507,6 +519,7 @@ BEGIN
             confirmed_by = CASE WHEN v_is_confirmed THEN COALESCE(NULLIF(p_officer_name, ''), '管理幹部') ELSE NULL END,
             confirmed_at = CASE WHEN v_is_confirmed THEN NOW() ELSE NULL END,
             officer_notes = p_notes,
+            notification_status = COALESCE(p_notification_status, notification_status),
             updated_at = NOW()
         WHERE id = p_payment_id;
 
@@ -663,5 +676,5 @@ GRANT EXECUTE ON FUNCTION get_admin_member_detail_rpc(TEXT, TEXT) TO anon, authe
 GRANT EXECUTE ON FUNCTION update_admin_member_rpc(TEXT, TEXT, JSONB) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION get_admin_finance_rpc(TEXT) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION get_admin_loans_rpc(TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION update_admin_payment_status_rpc(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION update_admin_payment_status_rpc(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION update_admin_loan_status_rpc(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;

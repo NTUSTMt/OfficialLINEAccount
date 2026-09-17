@@ -1424,6 +1424,8 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
           status: it.status === '已核銷 Confirmed' ? '已核銷 Confirmed' : '待確認 Checking',
           payment_status: it.payment_status || (it.status === '已核銷 Confirmed' ? '已繳費 Paid' : '待確認 Checking'),
           officer_notes: it.officer_notes,
+          notes: it.notes || it.member_notes || '',
+          notification_status: it.notification_status || '未通知',
           created_at: it.created_at || new Date().toISOString(),
           sourceType: it.source_type || 'payment',
           itemCategory: it.item_category || 'general'
@@ -1476,6 +1478,8 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
           status: p.status === '已核銷 Confirmed' ? '已核銷 Confirmed' : '待確認 Checking',
           payment_status: p.status === '已核銷 Confirmed' ? '已繳費 Paid' : '待確認 Checking',
           officer_notes: p.officer_notes,
+          notes: p.notes || '',
+          notification_status: p.notification_status || '未通知',
           created_at: p.created_at || new Date().toISOString(),
           sourceType: 'payment',
           itemCategory: cat
@@ -1535,6 +1539,7 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
   notes?: string | null;
   officerUserId?: string;
   paymentType?: string;
+  notificationStatus?: '未通知' | '已通知' | string;
 }): Promise<{ success: boolean; error?: string }> => {
   if (!supabase) return { success: false, error: '缺少 Supabase 連線' };
 
@@ -1550,7 +1555,8 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
         p_status: params.newStatus,
         p_line_user_id: params.lineUserId || null,
         p_officer_name: params.officerName || '管理幹部',
-        p_notes: params.notes || null
+        p_notes: params.notes || null,
+        p_notification_status: params.notificationStatus || null
       });
       if (!rpcErr && rpcRes && rpcRes.success) {
         return { success: true };
@@ -1569,15 +1575,20 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
     const nowIso = new Date().toISOString();
 
     if (params.sourceType === 'payment') {
+      const updatePayload: any = {
+        status: params.newStatus,
+        confirmed_by: isConfirmed ? (params.officerName || '管理幹部') : null,
+        confirmed_at: isConfirmed ? nowIso : null,
+        officer_notes: params.notes,
+        updated_at: nowIso
+      };
+      if (params.notificationStatus) {
+        updatePayload.notification_status = params.notificationStatus;
+      }
+
       const { data: updatedRows, error: pErr } = await supabase
         .from('payments')
-        .update({
-          status: params.newStatus,
-          confirmed_by: isConfirmed ? (params.officerName || '管理幹部') : null,
-          confirmed_at: isConfirmed ? nowIso : null,
-          officer_notes: params.notes,
-          updated_at: nowIso
-        })
+        .update(updatePayload)
         .eq('id', params.paymentId)
         .select('id');
 
@@ -1713,6 +1724,7 @@ export const fetchAllLoansFromSupabase = async (officerUserId?: string): Promise
 
     return (data || []).map((l: any) => ({
       ...l,
+      days: l.days || (l.start_date && l.end_date ? Math.max(1, Math.round((new Date(l.end_date).getTime() - new Date(l.start_date).getTime()) / 86400000) + 1) : 1),
       total_fee: l.total_rent || l.total_fee || 0
     })) as AdminLoanItem[];
   } catch (err: any) {

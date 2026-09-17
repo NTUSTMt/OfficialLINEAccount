@@ -239,3 +239,34 @@ test('幹部系統模組測試：身分狀態標準值對齊與向下相容檢�
   assert.ok(schemaDict.includes('臺科大在校學生 / 畢業校友 / 校外人士'), 'SCHEMA_DICTIONARY 範例值必須更新為標準值');
 });
 
+test('幹部系統模組測試：財務對帳備註區分、通知狀態防重覆推播、租借天數兜底與卡片彈窗靠左 (v0.1.149)', async () => {
+  const fs = await import('fs/promises');
+  const financeCode = await fs.readFile('src/pages/AdminFinance.tsx', 'utf8');
+  const loansCode = await fs.readFile('src/pages/AdminLoans.tsx', 'utf8');
+  const membersCode = await fs.readFile('src/pages/AdminMembers.tsx', 'utf8');
+  const verifySql = await fs.readFile('supabase/verify_payment_rpc.sql', 'utf8');
+  const portalSql = await fs.readFile('supabase/admin_portal_rpc.sql', 'utf8');
+
+  // 1. 卡片與彈窗靠左排版檢驗
+  assert.ok(financeCode.includes("textAlign: 'left'"), 'AdminFinance 必須包含 textAlign: left');
+  assert.ok(loansCode.includes("textAlign: 'left'"), 'AdminLoans 必須包含 textAlign: left');
+  assert.ok(membersCode.includes("textAlign: 'left'"), 'AdminMembers 必須包含 textAlign: left');
+
+  // 2. 租借天數兜底計算 (杜絕顯示空白天數)
+  assert.ok(loansCode.includes('Math.round'), 'AdminLoans 必須具備起訖日期天數兜底計算');
+  assert.ok(portalSql.includes('l.end_date - l.start_date + 1'), 'SQL 必須具備租借天數兜底計算');
+
+  // 3. 申報寫入 notes 欄位檢驗
+  assert.ok(verifySql.includes('notes,\n        officer_notes'), 'verify_payment_rpc 必須將申報備註寫入 notes 欄位');
+
+  // 4. 對帳彈窗社員備註展示與通知狀態控制
+  assert.ok(financeCode.includes('selectedItem.notes'), 'AdminFinance 必須展示社員申報備註');
+  assert.ok(financeCode.includes('editNotificationStatus'), 'AdminFinance 必須提供通知狀態下拉選單');
+  assert.ok(financeCode.includes("editNotificationStatus === '未通知'"), 'AdminFinance 僅在未通知時觸發推播防重複');
+
+  // 5. 零表情符號檢驗
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  assert.ok(!financeCode.match(emojiRegex), 'AdminFinance.tsx 不得包含表情符號');
+  assert.ok(!loansCode.match(emojiRegex), 'AdminLoans.tsx 不得包含表情符號');
+});
+
