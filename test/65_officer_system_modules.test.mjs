@@ -112,3 +112,63 @@ test('幹部系統模組測試：裝備庫存改版為雙欄電商大圖結構�
   assert.ok(inventoryCode.includes('ProductImage'), '裝備庫存必須使用 ProductImage 顯示 1:1 大圖');
 });
 
+test('幹部系統模組測試：MemberProfileModal 彈窗與移至詳細社員狀態導航', async () => {
+  const fs = await import('fs/promises');
+  const modalCode = await fs.readFile('src/components/admin/MemberProfileModal.tsx', 'utf8');
+
+  assert.ok(modalCode.includes('移至詳細社員狀態'), '個人資料彈窗底部必須包含「移至詳細社員狀態」按鈕');
+  assert.ok(modalCode.includes('fetchMemberFullDetailFromSupabase'), '個人資料彈窗必須支援拉取社員完整欄位');
+  assert.ok(modalCode.includes('openExternalUrl'), '個人資料彈窗必須支援開啟體能證明照片');
+  assert.ok(modalCode.includes('緊急聯絡人資訊'), '個人資料彈窗必須包含緊急聯絡人區塊');
+});
+
+test('幹部系統模組測試：fetchMemberFullDetailFromSupabase 多層備援機制', async () => {
+  const fs = await import('fs/promises');
+  const clientCode = await fs.readFile('src/utils/supabaseClient.ts', 'utf8');
+
+  assert.ok(clientCode.includes('get_admin_member_detail_rpc'), '第一層優先調用 get_admin_member_detail_rpc');
+  assert.ok(clientCode.includes('get_member_profile'), '第二層備援調用 get_member_profile');
+});
+
+test('幹部系統模組測試：5大幹部管理頁面緊湊工具列與標題塊瘦身檢驗', async () => {
+  const fs = await import('fs/promises');
+  const membersCode = await fs.readFile('src/pages/AdminMembers.tsx', 'utf8');
+  const financeCode = await fs.readFile('src/pages/AdminFinance.tsx', 'utf8');
+  const loansCode = await fs.readFile('src/pages/AdminLoans.tsx', 'utf8');
+  const inventoryCode = await fs.readFile('src/pages/AdminInventory.tsx', 'utf8');
+  const eventsCode = await fs.readFile('src/pages/AdminEvents.tsx', 'utf8');
+
+  // NotionFilterBar 整合重新整理與新增
+  assert.ok(membersCode.includes('onRefresh={loadMembers}'), 'AdminMembers 必須將重新整理整併至 NotionFilterBar');
+  assert.ok(financeCode.includes('onRefresh={loadData}'), 'AdminFinance 必須將重新整理整併至 NotionFilterBar');
+  assert.ok(loansCode.includes('onRefresh={loadData}'), 'AdminLoans 必須將重新整理整併至 NotionFilterBar');
+  assert.ok(inventoryCode.includes('onRefresh={loadData}'), 'AdminInventory 必須將重新整理整併至 NotionFilterBar');
+  assert.ok(inventoryCode.includes('onAdd={handleOpenAdd}'), 'AdminInventory 必須將新增裝備整併至 NotionFilterBar');
+  assert.ok(eventsCode.includes('onAdd={resetFormForCreate}'), 'AdminEvents 必須將發布活動整併至 NotionFilterBar');
+
+  // 個人資料彈窗於其他幹部頁面串接
+  assert.ok(membersCode.includes('MemberProfileModal'), 'AdminMembers 必須串接 MemberProfileModal');
+  assert.ok(financeCode.includes('MemberProfileModal'), 'AdminFinance 必須串接 MemberProfileModal');
+  assert.ok(loansCode.includes('MemberProfileModal'), 'AdminLoans 必須串接 MemberProfileModal');
+});
+
+test('幹部系統模組測試：嚴格零表情符號 (Zero Emoji) 規範驗證', async () => {
+  const fs = await import('fs/promises');
+  const files = [
+    'src/components/admin/MemberProfileModal.tsx',
+    'src/components/admin/NotionFilterBar.tsx',
+    'src/pages/AdminMembers.tsx',
+    'src/pages/AdminFinance.tsx',
+    'src/pages/AdminLoans.tsx',
+    'src/pages/AdminInventory.tsx',
+    'src/pages/AdminEvents.tsx'
+  ];
+
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  for (const file of files) {
+    const content = await fs.readFile(file, 'utf8');
+    const match = content.match(emojiRegex);
+    assert.ok(!match, `檔案 ${file} 違反規範包含表情符號: ${match ? match[0] : ''}`);
+  }
+});
+

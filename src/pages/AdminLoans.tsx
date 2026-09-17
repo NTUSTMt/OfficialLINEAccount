@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
-  RefreshCw,
   AlertCircle,
   CheckCircle2,
   ChevronRight,
@@ -15,6 +13,7 @@ import {
 import type { AdminLoanItem } from '../types/admin';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
 import { AdminSubNav } from '../components/admin/AdminSubNav';
+import { MemberProfileModal } from '../components/admin/MemberProfileModal';
 import { GAS_API_URL } from '../constants/api';
 
 const SORT_OPTIONS: SortOption[] = [
@@ -25,9 +24,10 @@ const SORT_OPTIONS: SortOption[] = [
 ];
 
 export default function AdminLoans({ userId }: { userId?: string }) {
-  const navigate = useNavigate();
   const [loans, setLoans] = useState<AdminLoanItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewMemberUserId, setPreviewMemberUserId] = useState<string | null>(null);
+  const [previewMemberData, setPreviewMemberData] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -196,42 +196,6 @@ export default function AdminLoans({ userId }: { userId?: string }) {
         margin: '0 auto',
         padding: '16px 14px'
       }}>
-        {/* 頂部標題 */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '14px'
-        }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 700, color: '#0f172a' }}>
-              裝備租借管理
-            </h2>
-            <p style={{ margin: '3px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-              社員裝備借用申請與歸還審核 (共 {filteredLoans.length} 筆)
-            </p>
-          </div>
-          <button
-            onClick={loadData}
-            disabled={loading}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 12px',
-              borderRadius: '8px',
-              border: '1px solid #e2e8f0',
-              backgroundColor: '#ffffff',
-              color: '#334155',
-              fontSize: '13px',
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>重新整理</span>
-          </button>
-        </div>
-
         {/* 錯誤與成功訊息 */}
         {errorMessage && (
           <div style={{
@@ -273,7 +237,7 @@ export default function AdminLoans({ userId }: { userId?: string }) {
           </div>
         )}
 
-        {/* Notion 搜尋、篩選與排序列 */}
+        {/* Notion 搜尋、篩選、排序與重新整理列 */}
         <NotionFilterBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -286,6 +250,8 @@ export default function AdminLoans({ userId }: { userId?: string }) {
             setSortBy(k);
             setSortOrder(o);
           }}
+          onRefresh={loadData}
+          isRefreshing={loading}
         />
 
         {/* 卡片清單 (依名字列出裝備借用與繳費狀態) */}
@@ -459,11 +425,12 @@ export default function AdminLoans({ userId }: { userId?: string }) {
                 </div>
                 {selectedLoan.line_user_id && (
                   <button
+                    type="button"
                     onClick={() => {
                       const uid = selectedLoan.line_user_id;
                       if (!uid) return;
-                      setSelectedLoan(null);
-                      navigate(`/admin/members/${encodeURIComponent(uid)}`);
+                      setPreviewMemberUserId(uid);
+                      setPreviewMemberData({ name: selectedLoan.name, line_user_id: uid });
                     }}
                     style={{
                       display: 'inline-flex',
@@ -625,6 +592,18 @@ export default function AdminLoans({ userId }: { userId?: string }) {
           </div>
         </div>
       )}
+
+      {/* 借用人個人資料彈窗 (底部提供移至詳細社員狀態按鈕) */}
+      <MemberProfileModal
+        isOpen={Boolean(previewMemberUserId)}
+        onClose={() => {
+          setPreviewMemberUserId(null);
+          setPreviewMemberData(null);
+        }}
+        userId={previewMemberUserId}
+        officerUserId={userId}
+        initialMember={previewMemberData}
+      />
     </div>
   );
 }

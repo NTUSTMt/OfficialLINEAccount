@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.144-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.145-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -9,18 +9,18 @@
 
 本系統為**國立臺灣科技大學登山社**打造之現代化官方 LINE 數位生態系，整合 **LINE Front-end Framework (LIFF)**、**Supabase PostgreSQL (單一信任源)** 與 **Google Apps Script (GAS 模組化後端)**，提供社員活動報名、裝備租借、繳費申報、心得登頂紀錄與幹部即時審核自動化。
 
-> 📜 **歷史文件封存**：前版龐大日誌與過往除錯歷史（v0.1.0 ~ v0.1.123，逾 3,000 行紀錄）已完整歸檔至 [README_ARCHIVE.md](file:///Users/brianhung/Documents/OfficialLINEAccount/README_ARCHIVE.md)。
+> 歷史文件封存：前版龐大日誌與過往除錯歷史（v0.1.0 ~ v0.1.123，逾 3,000 行紀錄）已完整歸檔至 [README_ARCHIVE.md](file:///Users/brianhung/Documents/OfficialLINEAccount/README_ARCHIVE.md)。
 
 ---
 
-## 📑 目錄 (Table of Contents)
+## 目錄 (Table of Contents)
 - [1. 系統架構總覽 (Architecture Overview)](#1-系統架構總覽-architecture-overview)
 - [2. 專案目錄結構 (Project Structure)](#2-專案目錄結構-project-structure)
 - [3. Supabase 資料庫與信任源規範 (Database & Single Source of Truth)](#3-supabase-資料庫與信任源規範-database--single-source-of-truth)
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.144)](#7-最新版本異動紀錄-changelog-v01144)
+- [7. 最新版本異動紀錄 (Changelog v0.1.145)](#7-最新版本異動紀錄-changelog-v01145)
 
 ---
 
@@ -377,6 +377,25 @@ pnpm test
   - **中英文 Part I / Part II 100% 鏡像對齊**：同步修正英文版對應章節、狀態清單、導航方式與 FAQ。
 - 🧪 **單元測試擴充**：
   - 新增 `test/60_ai_mention_and_chat_keyword_cleanup.test.mjs`，測試全數 158 項通過，前端打包建置無錯誤。
+
+### v0.1.145 (2026-09-17)
+- 社員詳細資料載入修復與多層備援機制 (supabase/admin_portal_rpc.sql, src/utils/supabaseClient.ts)：
+  - 診斷並修正 `get_admin_member_detail_rpc` 內部未型別化 record 導致之 `cannot call to_jsonb on a record of unknown type` 資料庫例外，改採 `row_to_json(m.*)::jsonb` 穩定輸出。
+  - 資料庫 RLS 補充 members 資料表之 anon 讀取與更新存取策略，避免 anon 模式直接查詢受阻。
+  - 前端 `fetchMemberFullDetailFromSupabase` 實作三層彈性備援機制：優先嘗試 `get_admin_member_detail_rpc`、次選生產環境行之有年之 `get_member_profile` RPC、最後回退直接資料表查詢，徹底杜絕找不到社員資料之操作失敗異常。
+- 五大幹部管理頁面緊湊工具列與標題塊瘦身 (Compact Single-Row Toolbar)：
+  - 依照使用者指示，全面移除 `AdminMembers`、`AdminFinance`、`AdminLoans`、`AdminInventory` 與 `AdminEvents` 頂部重複之 `<h2>` 標題、筆數副標題與獨立大按鈕。
+  - 擴充 `NotionFilterBar` 組件，將搜尋框、篩選圖示、排序圖示、重新整理圖示（帶旋轉動畫）與新增項目加號按鈕（`onAdd`）統一整合於同一列單行工具列中。
+  - 統一 `AdminInventory`（新增裝備）與 `AdminEvents`（發布新活動）的加號按鈕風格；`AdminEvents` 之搜尋、狀態篩選、出隊/截止日排序、重新整理與發布活動全面標準化為與其他頁面完全一致的簡潔體驗。
+- 統一社員個人資料預覽彈窗 (MemberProfileModal)：
+  - 抽取審核名冊之報名者個資彈窗視覺規格，獨立打造共用之 `MemberProfileModal` 組件。
+  - 彈窗完整呈現姓名、性別、正式社員徽章、生日、學號系所、身分證號、LINE ID（支援一鍵複製）、聯絡電話（支援一鍵撥號連結）、電子郵件、緊急聯絡人、登山經歷、體能紀錄、病史與想對幹部說的話。
+  - 彈窗底部統一配置醒目的「移至詳細社員狀態」綠色按鈕，點擊後平滑導航至 `/admin/members/:userId` 全欄位編輯頁。
+  - 於 `AdminMembers`（點擊卡片先開預覽）、`AdminFinance`（點擊開啟個人資料）與 `AdminLoans`（點擊開啟個人資料）全面串接此彈窗。
+- 嚴格零表情符號 (Zero Emoji) 規範落地：
+  - 全面清理程式碼、UI 提示文字、單元測試、註解與文件內之所有 emoji 表情符號，統一改用 Lucide React 現代幾何圖示。
+- 單元測試與建置驗證：
+  - 於 `test/65_officer_system_modules.test.mjs` 擴充工具列整併、多層備援、`MemberProfileModal` 與零表情符號靜態檢查測試，全數 199 項單元測試通過，`tsc -b && vite build` 建置零錯誤。
 
 ### v0.1.144 (2026-09-17)
 - 幹部後台權限與資料庫 RPC 安全雙軌架構 (admin_portal_rpc.sql)：

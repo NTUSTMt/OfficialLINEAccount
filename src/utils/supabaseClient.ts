@@ -1162,7 +1162,22 @@ export const fetchMemberFullDetailFromSupabase = async (
     }
   }
 
-  // 2. 直讀備援
+  // 2. 第二層備援：調用行之有年的 get_member_profile RPC
+  try {
+    const { data: profData, error: profErr } = await supabase.rpc('get_member_profile', {
+      p_line_user_id: userId
+    });
+    if (!profErr && profData && typeof profData === 'object' && Object.keys(profData).length > 0) {
+      return profData as MemberFullRecord;
+    }
+    if (profErr) {
+      console.warn('[Supabase] get_member_profile 備援查詢未果:', profErr.message);
+    }
+  } catch (err) {
+    console.warn('[Supabase] get_member_profile 備援查詢例外:', err);
+  }
+
+  // 3. 直讀備援
   try {
     const { data, error } = await supabase
       .from('members')

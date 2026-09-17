@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, ArrowUpDown, X, Check, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, X, Check, ArrowUp, ArrowDown, RefreshCw, Plus } from 'lucide-react';
 
 export interface FilterGroup {
   key: string;
@@ -23,6 +23,10 @@ interface NotionFilterBarProps {
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   onSortChange?: (key: string, order: 'asc' | 'desc') => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
+  onAdd?: () => void;
+  addTooltip?: string;
 }
 
 export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
@@ -33,7 +37,11 @@ export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
   sortOptions = [],
   sortBy = '',
   sortOrder = 'desc',
-  onSortChange
+  onSortChange,
+  onRefresh,
+  isRefreshing = false,
+  onAdd,
+  addTooltip = '新增'
 }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
@@ -165,6 +173,61 @@ export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
             }}
           >
             <ArrowUpDown size={17} />
+          </button>
+        )}
+
+        {/* 重新整理圖示按鈕 */}
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            title="重新整理"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#ffffff',
+              color: isRefreshing ? '#94a3b8' : '#64748b',
+              cursor: isRefreshing ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <RefreshCw
+              size={17}
+              style={{
+                animation: isRefreshing ? 'spin 1s linear infinite' : 'none'
+              }}
+            />
+          </button>
+        )}
+
+        {/* 新增項目按鈕 */}
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            title={addTooltip}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              border: 'none',
+              backgroundColor: '#059669',
+              color: '#ffffff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'all 0.15s ease',
+              boxShadow: '0 2px 4px rgba(5, 150, 105, 0.2)'
+            }}
+          >
+            <Plus size={19} />
           </button>
         )}
       </div>

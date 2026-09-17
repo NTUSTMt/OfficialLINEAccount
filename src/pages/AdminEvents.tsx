@@ -21,14 +21,11 @@ import { AdminSignupsModal } from '../components/admin/AdminSignupsModal';
 import { ApplicantModals } from '../components/admin/ApplicantModals';
 import { openExternalUrl, parseProofUrls } from '../utils/applicantUtils';
 import { AdminSubNav } from '../components/admin/AdminSubNav';
+import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
 import {
-  Search,
-  RotateCw,
   Lock,
   Mountain,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown
+  ArrowLeft
 } from 'lucide-react';
 
 interface AdminEventsProps {
@@ -37,6 +34,12 @@ interface AdminEventsProps {
 
 const CACHE_KEY_ADMIN_EVENTS = 'admin_events_list';
 const CACHE_KEY_SIGNUPS_PREFIX = 'admin_event_signups_';
+
+const EVENT_SORT_OPTIONS: SortOption[] = [
+  { key: 'deadline', label: '依報名截止日' },
+  { key: 'startDate', label: '依活動出隊日' },
+  { key: 'status', label: '依活動狀態' }
+];
 
 export default function AdminEvents({ userId }: AdminEventsProps) {
   const { t } = useTranslation();
@@ -69,6 +72,22 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const [eventSortBy, setEventSortBy] = useState<'startDate' | 'deadline' | 'status'>('deadline');
   const [eventSortOrder, setEventSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isRefreshingEvents, setIsRefreshingEvents] = useState(false);
+
+  // 活動狀態篩選群組
+  const eventFilters: FilterGroup[] = useMemo(() => [
+    {
+      key: 'status',
+      label: '活動狀態',
+      selected: statusFilter,
+      onChange: setStatusFilter,
+      options: [
+        { value: 'all', label: '全部活動' },
+        { value: '開放', label: '開放中' },
+        { value: '未來開放', label: '未來開放' },
+        { value: '關閉', label: '已關閉' }
+      ]
+    }
+  ], [statusFilter]);
 
   // 表單狀態
   const [formData, setFormData] = useState<AdminEventFormData>({
@@ -104,7 +123,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
   // 1. 獲取後台所有活動清單與檢驗幹部身分
   const fetchEvents = async (forceRefresh: boolean = false) => {
-    // 🛡️ 嚴格鑑權防護：無有效 LINE User ID 或為測試帳號時，拒絕讀取後台資料
+    // 嚴格鑑權防護：無有效 LINE User ID 或為測試帳號時，拒絕讀取後台資料
     if (!userId || userId === 'TEST_USER_ID') {
       setIsOfficer(false);
       setAuthLoading(false);
@@ -127,7 +146,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       let sbErrorDetail: string | null = null;
       if (!forceRefresh) {
         try {
-          // ⚡ 1. 優先從 Supabase 秒級讀取活動清單與報名人數統計 (< 50ms)
+          // 1. 優先從 Supabase 秒級讀取活動清單與報名人數統計 (< 50ms)
           const sbRes = await fetchAdminEventsFromSupabase(userId);
           if (sbRes && sbRes.isOfficer) {
             loadedFromSb = true;
@@ -161,7 +180,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               setErrorNotice(null);
             }
 
-            // ⚡ 若經由 GAS 認證為幹部，自動同步至 Supabase officers 表，下次即可享受 < 50ms 秒開
+            // 若經由 GAS 認證為幹部，自動同步至 Supabase officers 表，下次即可享受 < 50ms 秒開
             if (userId && userId !== 'TEST_USER_ID') {
               registerOfficerToSupabase(userId, data.officerName, data.officerRole).catch(() => {});
             }
@@ -191,7 +210,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     let ignore = false;
 
     async function loadInitial() {
-      // 🛡️ 嚴格鑑權防護：無有效 LINE User ID 時直接判定無權限
+      // 嚴格鑑權防護：無有效 LINE User ID 時直接判定無權限
       if (!userId || userId === 'TEST_USER_ID') {
         if (!ignore) {
           setIsOfficer(false);
@@ -204,7 +223,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       try {
         let loadedFromSb = false;
         try {
-          // ⚡ 1. 優先從 Supabase 讀取 (< 50ms)
+          // 1. 優先從 Supabase 讀取 (< 50ms)
           const sbRes = await fetchAdminEventsFromSupabase(userId);
           if (sbRes && sbRes.isOfficer && !ignore) {
             loadedFromSb = true;
@@ -369,7 +388,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     setSubmittingForm(true);
     try {
-      // ⚡ 若為「編輯舊活動」(formData.eventId 已存在)，才可在背景立即更新 Supabase
+      // 若為「編輯舊活動」(formData.eventId 已存在)，才可在背景立即更新 Supabase
       // 若為「新活動建立」(formData.eventId 為空)，不可在未確定 ID 時發送 RPC，避免產生 E20260912_... 時間戳重複紀錄
       if (formData.eventId) {
         saveEventToSupabase(userId || 'TEST_USER_ID', {
@@ -456,7 +475,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
   // 快速切換活動狀態
   const handleQuickStatusChange = async (eventId: string, newStatus: string) => {
-    // ⚡ 1. 優先極速更新 Supabase (< 30ms)
+    // 1. 優先極速更新 Supabase (< 30ms)
     updateEventStatusInSupabase(userId || 'TEST_USER_ID', eventId, newStatus).catch(sbErr => {
       console.warn('[AdminEvents] Supabase 活動狀態更新例外:', sbErr);
     });
@@ -548,7 +567,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     try {
       if (!forceRefresh) {
         try {
-          // ⚡ 1. 優先從 Supabase 秒開讀取報名名冊 (< 50ms)
+          // 1. 優先從 Supabase 秒開讀取報名名冊 (< 50ms)
           const sbSignups = await fetchAdminEventSignupsFromSupabase(userId || 'TEST_USER_ID', evt.id);
           if (sbSignups) {
             loadedFromSb = true;
@@ -613,7 +632,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         throw new Error('缺少報名序號/代碼 (Missing Signup Code)');
       }
 
-      // ⚡ 1. 優先極速更新 Supabase (< 30ms)
+      // 1. 優先極速更新 Supabase (< 30ms)
       const sbSuccess = await updateSignupStatusInSupabase(
         userId || 'TEST_USER_ID',
         selectedEventForSignups?.id || '',
@@ -701,7 +720,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       (s) => s.reviewResult.indexOf('正取') > -1 && s.notifyStatus !== '已通知'
     );
     if (hasUnnotifiedAccepted && !selectedEventForSignups.lineGroupUrl) {
-      alert('⚠️ 此活動尚未設定專屬群組連結 (LINE Group URL)！\n\n系統規範在發送「正取通知」前，必須先於活動編輯頁面設定群組邀請連結，供社員一鍵入群。請先點選「編輯活動」填寫群組連結後再發送推播！');
+      alert('此活動尚未設定專屬群組連結 (LINE Group URL)！\n\n系統規範在發送「正取通知」前，必須先於活動編輯頁面設定群組邀請連結，供社員一鍵入群。請先點選「編輯活動」填寫群組連結後再發送推播！');
       return;
     }
 
@@ -877,60 +896,6 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     <div>
       <AdminSubNav />
       <div className="admin-events-container animate-fade-in" style={{ maxWidth: '900px', margin: '0 auto', padding: '16px', textAlign: 'left' }}>
-        {/* 頁籤切換 */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        marginBottom: '20px',
-        backgroundColor: 'white',
-        padding: '6px',
-        borderRadius: '12px',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        gap: '6px'
-      }}>
-        <button
-          type="button"
-          onClick={() => setActiveTab('list')}
-          style={{
-            flex: 1,
-            padding: '10px 14px',
-            borderRadius: '8px',
-            border: 'none',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer',
-            background: activeTab === 'list' ? '#059669' : 'transparent',
-            color: activeTab === 'list' ? 'white' : '#475569',
-            transition: 'all 0.2s',
-            whiteSpace: 'nowrap',
-            textAlign: 'center'
-          }}
-        >
-          {t('adminEvents.tabList', '活動總覽與審核')}
-        </button>
-        <button
-          type="button"
-          onClick={resetFormForCreate}
-          style={{
-            flex: 1,
-            padding: '10px 14px',
-            borderRadius: '8px',
-            border: 'none',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer',
-            background: activeTab === 'create' ? '#059669' : 'transparent',
-            color: activeTab === 'create' ? 'white' : '#475569',
-            transition: 'all 0.2s',
-            whiteSpace: 'nowrap',
-            textAlign: 'center'
-          }}
-        >
-          {isEditing ? t('adminEvents.tabEdit', '編輯活動') : `+ ${t('adminEvents.tabCreate', '發布新活動')}`}
-        </button>
-      </div>
-
       {/* 錯誤/警告提示 Banner */}
       {errorNotice && (
         <div style={{
@@ -954,127 +919,24 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       {/* 區塊一：活動列表與審核總覽 (Tab: list) */}
       {activeTab === 'list' && (
         <div>
-          {/* 搜尋與篩選列 */}
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: '240px' }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-                <input
-                  type="text"
-                  placeholder="搜尋活動名稱或代號..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px 10px 36px',
-                    borderRadius: '10px',
-                    border: '1.5px solid #cbd5e1',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => fetchEvents(true)}
-                disabled={isRefreshingEvents || loadingEvents}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '10px 14px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  borderRadius: '10px',
-                  border: '1.5px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#475569',
-                  cursor: (isRefreshingEvents || loadingEvents) ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s ease',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
-                }}
-                title={t('adminEvents.refresh', '重新整理')}
-              >
-                <RotateCw size={13} style={{ animation: isRefreshingEvents ? 'spin 1s linear infinite' : 'none' }} />
-                <span>{isRefreshingEvents ? t('adminEvents.refreshing', '更新中...') : t('adminEvents.refresh', '重新整理')}</span>
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-              {(['all', '開放', '未來開放', '關閉'] as const).map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setStatusFilter(st)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    border: '1px solid',
-                    cursor: 'pointer',
-                    backgroundColor: statusFilter === st ? '#1e293b' : '#f8fafc',
-                    color: statusFilter === st ? 'white' : '#64748b',
-                    borderColor: statusFilter === st ? '#1e293b' : '#cbd5e1'
-                  }}
-                >
-                  {st === 'all' ? '全部' : st}
-                </button>
-              ))}
-
-              {/* 活動清單排序控制項 */}
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                backgroundColor: '#ffffff',
-                padding: '4px 8px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '12px'
-              }}>
-                <ArrowUpDown size={13} color="#64748b" />
-                <select
-                  value={eventSortBy}
-                  onChange={(e) => setEventSortBy(e.target.value as 'startDate' | 'deadline' | 'status')}
-                  style={{
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: '#334155',
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="startDate">{t('adminEvents.sort.startDate', '活動日期')}</option>
-                  <option value="deadline">{t('adminEvents.sort.deadline', '截止時間')}</option>
-                  <option value="status">{t('adminEvents.sort.status', '活動狀態')}</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setEventSortOrder((prev) => prev === 'asc' ? 'desc' : 'asc')}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '2px',
-                    border: 'none',
-                    backgroundColor: '#f1f5f9',
-                    borderRadius: '4px',
-                    padding: '3px 6px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    color: '#1e293b',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {eventSortOrder === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
-                  <span>{eventSortOrder === 'asc' ? t('adminEvents.sort.asc', '升冪') : t('adminEvents.sort.desc', '降冪')}</span>
-                </button>
-              </div>
-            </div>
-          </div>
+          {/* Notion 搜尋、篩選、排序、重新整理與發布活動列 */}
+          <NotionFilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="搜尋活動名稱或代號..."
+            filters={eventFilters}
+            sortOptions={EVENT_SORT_OPTIONS}
+            sortBy={eventSortBy}
+            sortOrder={eventSortOrder}
+            onSortChange={(k, o) => {
+              setEventSortBy(k as any);
+              setEventSortOrder(o);
+            }}
+            onRefresh={() => fetchEvents(true)}
+            isRefreshing={isRefreshingEvents || loadingEvents}
+            onAdd={resetFormForCreate}
+            addTooltip="發布新活動"
+          />
 
           {loadingEvents ? (
             <div className="loading-state" style={{ minHeight: '40vh' }}>
@@ -1114,16 +976,43 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
       {/* 區塊二：發布新活動 / 編輯活動表單 (Tab: create) */}
       {activeTab === 'create' && (
-        <AdminEventForm
-          isEditing={isEditing}
-          formData={formData}
-          setFormData={setFormData}
-          previewImage={previewImage}
-          onImageChange={handleImageChange}
-          submittingForm={submittingForm}
-          onSubmit={handleSubmitEvent}
-          onCancelEdit={resetFormForCreate}
-        />
+        <div>
+          <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <button
+              type="button"
+              onClick={() => setActiveTab('list')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0',
+                backgroundColor: '#ffffff',
+                color: '#475569',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>返回活動列表</span>
+            </button>
+            <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>
+              {isEditing ? '編輯活動' : '發布新活動'}
+            </span>
+          </div>
+          <AdminEventForm
+            isEditing={isEditing}
+            formData={formData}
+            setFormData={setFormData}
+            previewImage={previewImage}
+            onImageChange={handleImageChange}
+            submittingForm={submittingForm}
+            onSubmit={handleSubmitEvent}
+            onCancelEdit={() => setActiveTab('list')}
+          />
+        </div>
       )}
 
       {/* 區塊三：報名社員審核名冊 Modal */}

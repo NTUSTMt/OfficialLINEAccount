@@ -1,9 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Plus,
   Edit2,
   Trash2,
-  RefreshCw,
   AlertCircle,
   CheckCircle2,
   X,
@@ -418,61 +416,6 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
         margin: '0 auto',
         padding: '16px 14px'
       }}>
-        {/* 頂部標題與新增按鈕 */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '14px'
-        }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 700, color: '#0f172a' }}>
-              裝備庫存管理
-            </h2>
-            <p style={{ margin: '3px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-              社團全部裝備 (含開放與不開放外借，共 {filteredItems.length} 件)
-            </p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={handleOpenAdd}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '7px 12px',
-                borderRadius: '8px',
-                border: 'none',
-                backgroundColor: '#059669',
-                color: '#ffffff',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              <Plus size={15} />
-              <span>新增裝備</span>
-            </button>
-            <button
-              onClick={loadData}
-              disabled={loading}
-              title="重新整理"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '7px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                backgroundColor: '#ffffff',
-                color: '#334155',
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        </div>
-
         {/* 訊息提示 */}
         {errorMessage && (
           <div style={{
@@ -514,7 +457,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
           </div>
         )}
 
-        {/* Notion 搜尋、篩選與排序列 */}
+        {/* Notion 搜尋、篩選、排序、重新整理與新增裝備列 */}
         <NotionFilterBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -527,6 +470,10 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
             setSortBy(k);
             setSortOrder(o);
           }}
+          onRefresh={loadData}
+          isRefreshing={loading}
+          onAdd={handleOpenAdd}
+          addTooltip="新增裝備"
         />
 
         {/* 裝備卡片列表 (沿用 Borrow 頁面視覺風格) */}

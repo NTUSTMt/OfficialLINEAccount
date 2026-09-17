@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ImageIcon,
   X,
@@ -12,7 +13,8 @@ import {
   Mountain,
   CheckCircle2,
   Clock4,
-  RotateCcw
+  RotateCcw,
+  ArrowRight
 } from 'lucide-react';
 import type { SignupApplicant } from '../../types/event';
 import { openExternalUrl, parseProofUrls } from '../../utils/applicantUtils';
@@ -37,6 +39,7 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
   onUpdateApplicantResult,
   updatingSignupCode
 }) => {
+  const navigate = useNavigate();
   const [copiedLineId, setCopiedLineId] = useState<string | null>(null);
 
   const formatDateSlash = (dateStr?: string): string => {
@@ -503,6 +506,39 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
                     </button>
                   </>
                 )}
+              </div>
+
+              {/* 移至詳細社員狀態 */}
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '4px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetId = profileModalApplicant.lineId || (profileModalApplicant as any).line_user_id || (profileModalApplicant as any).userId;
+                    if (targetId) {
+                      onCloseProfile();
+                      navigate(`/admin/members/${encodeURIComponent(targetId)}`);
+                    }
+                  }}
+                  disabled={!profileModalApplicant.lineId && !(profileModalApplicant as any).line_user_id && !(profileModalApplicant as any).userId}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    color: '#059669',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <span>移至詳細社員狀態</span>
+                  <ArrowRight size={14} />
+                </button>
               </div>
             </div>
           </div>

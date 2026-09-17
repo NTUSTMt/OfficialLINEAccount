@@ -92,7 +92,7 @@ SET search_path = public
 AS $$
 DECLARE
     v_is_officer BOOLEAN;
-    v_member RECORD;
+    v_member_json JSONB;
     v_active_events JSONB;
     v_active_loans JSONB;
     v_pending_count INT := 0;
@@ -107,9 +107,12 @@ BEGIN
         );
     END IF;
 
-    SELECT * INTO v_member FROM members WHERE line_user_id = trim(p_target_user_id) LIMIT 1;
+    SELECT row_to_json(m.*)::jsonb INTO v_member_json 
+    FROM members m 
+    WHERE m.line_user_id = trim(p_target_user_id) 
+    LIMIT 1;
 
-    IF NOT FOUND THEN
+    IF v_member_json IS NULL THEN
         RETURN jsonb_build_object(
             'status', 'error',
             'isOfficer', TRUE,
@@ -121,8 +124,8 @@ BEGIN
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
         'id', e.id,
         'title', e.title,
-        'startDate', to_char(e.start_date, 'YYYY-MM-DD'),
-        'endDate', to_char(e.end_date, 'YYYY-MM-DD'),
+        'startDate', to_char(e.start_date::timestamp, 'YYYY-MM-DD'),
+        'endDate', to_char(e.end_date::timestamp, 'YYYY-MM-DD'),
         'signupStatus', s.status::TEXT,
         'payStatus', s.payment_status::TEXT
     )), '[]'::jsonb)
@@ -130,22 +133,21 @@ BEGIN
     FROM event_signups s
     JOIN events e ON s.event_id = e.id
     WHERE s.line_user_id = trim(p_target_user_id)
-      AND e.end_date >= CURRENT_DATE
       AND s.status NOT IN ('已取消 Cancelled', '未錄取 Rejected');
 
     -- 查詢進行中租借
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
         'id', l.id,
-        'startDate', to_char(l.start_date, 'YYYY-MM-DD'),
-        'endDate', to_char(l.end_date, 'YYYY-MM-DD'),
+        'startDate', to_char(l.start_date::timestamp, 'YYYY-MM-DD'),
+        'endDate', to_char(l.end_date::timestamp, 'YYYY-MM-DD'),
         'status', l.status::TEXT,
         'payStatus', l.payment_status::TEXT,
-        'itemsSummary', (
+        'itemsSummary', COALESCE((
             SELECT string_agg(eq.name || ' x ' || li.quantity, ', ')
             FROM loan_items li
             JOIN equipments eq ON li.equipment_id = eq.id
             WHERE li.loan_id = l.id
-        )
+        ), '裝備租借')
     )), '[]'::jsonb)
     INTO v_active_loans
     FROM loans l
@@ -154,14 +156,14 @@ BEGIN
 
     -- 計算未繳費筆數
     SELECT 
-        (SELECT count(*) FROM event_signups s JOIN events e ON s.event_id = e.id WHERE s.line_user_id = trim(p_target_user_id) AND e.end_date >= CURRENT_DATE AND s.status = '正取 Confirmed' AND s.payment_status != '已繳費 Paid') +
-        (SELECT count(*) FROM loans l WHERE l.line_user_id = trim(p_target_user_id) AND l.status IN ('待領取 To Be Collected', '租借中 Borrowed') AND l.payment_status != '已繳費 Paid')
+        COALESCE((SELECT count(*) FROM event_signups s JOIN events e ON s.event_id = e.id WHERE s.line_user_id = trim(p_target_user_id) AND s.status = '正取 Confirmed' AND s.payment_status != '已繳費 Paid'), 0) +
+        COALESCE((SELECT count(*) FROM loans l WHERE l.line_user_id = trim(p_target_user_id) AND l.status IN ('待領取 To Be Collected', '租借中 Borrowed') AND l.payment_status != '已繳費 Paid'), 0)
     INTO v_pending_count;
 
     RETURN jsonb_build_object(
         'status', 'success',
         'isOfficer', TRUE,
-        'member', to_jsonb(v_member),
+        'member', v_member_json,
         'activeStats', jsonb_build_object(
             'unfinishedEvents', v_active_events,
             'activeLoans', v_active_loans,
@@ -528,7 +530,13 @@ GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
 
--- 確保 payments, loans, loan_items, event_signups 具備 SELECT 與 UPDATE 策略
+-- 確保 payments, loans, loan_items, event_signups, members 具備 SELECT 與 UPDATE 策略
+DROP POLICY IF EXISTS "Allow anon read members" ON members;
+CREATE POLICY "Allow anon read members" ON members FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow anon update members" ON members;
+CREATE POLICY "Allow anon update members" ON members FOR UPDATE USING (true) WITH CHECK (true);
+
 DROP POLICY IF EXISTS "Allow anon read payments" ON payments;
 CREATE POLICY "Allow anon read payments" ON payments FOR SELECT USING (true);
 

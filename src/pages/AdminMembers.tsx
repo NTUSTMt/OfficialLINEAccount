@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ChevronRight, RefreshCw, AlertCircle, ShieldCheck } from 'lucide-react';
+import { ChevronRight, AlertCircle, ShieldCheck } from 'lucide-react';
 import { fetchAdminMembersFromSupabase } from '../utils/supabaseClient';
 import type { AdminMemberListItem } from '../types/admin';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
 import { AdminSubNav } from '../components/admin/AdminSubNav';
+import { MemberProfileModal } from '../components/admin/MemberProfileModal';
 
 const SORT_OPTIONS: SortOption[] = [
   { key: 'created_at', label: '依加入時間' },
@@ -13,10 +13,10 @@ const SORT_OPTIONS: SortOption[] = [
 ];
 
 export default function AdminMembers({ userId }: { userId?: string }) {
-  const navigate = useNavigate();
   const [members, setMembers] = useState<AdminMemberListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedMemberForProfile, setSelectedMemberForProfile] = useState<AdminMemberListItem | null>(null);
 
   // 搜尋、篩選與排序狀態
   const [searchQuery, setSearchQuery] = useState('');
@@ -146,42 +146,6 @@ export default function AdminMembers({ userId }: { userId?: string }) {
         margin: '0 auto',
         padding: '16px 14px'
       }}>
-        {/* 頂部標題與重新整理 */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '14px'
-        }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 700, color: '#0f172a' }}>
-              社員資料管理
-            </h2>
-            <p style={{ margin: '3px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-              共 {filteredMembers.length} 位名冊資料
-            </p>
-          </div>
-          <button
-            onClick={loadMembers}
-            disabled={loading}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 12px',
-              borderRadius: '8px',
-              border: '1px solid #e2e8f0',
-              backgroundColor: '#ffffff',
-              color: '#334155',
-              fontSize: '13px',
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>重新整理</span>
-          </button>
-        </div>
-
         {/* 錯誤直接顯示 (依規範嚴禁遮蔽) */}
         {errorMessage && (
           <div style={{
@@ -204,7 +168,7 @@ export default function AdminMembers({ userId }: { userId?: string }) {
           </div>
         )}
 
-        {/* Notion 搜尋、篩選與排序列 */}
+        {/* Notion 搜尋、篩選、排序與重新整理列 */}
         <NotionFilterBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -217,6 +181,8 @@ export default function AdminMembers({ userId }: { userId?: string }) {
             setSortBy(k);
             setSortOrder(o);
           }}
+          onRefresh={loadMembers}
+          isRefreshing={loading}
         />
 
         {/* 列表載入中或空狀態 */}
@@ -246,7 +212,7 @@ export default function AdminMembers({ userId }: { userId?: string }) {
             查無符合條件的社員資料
           </div>
         ) : (
-          /* 社員卡片清單 (下方以卡片方式呈現) */
+          /* 社員卡片清單 (下方以卡片方式呈現，點擊先彈窗預覽，點按鈕移至詳細狀態) */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {filteredMembers.map((m) => {
               const isOfficial = Boolean(m.is_official_member);
@@ -255,7 +221,7 @@ export default function AdminMembers({ userId }: { userId?: string }) {
               return (
                 <div
                   key={m.line_user_id}
-                  onClick={() => navigate(`/admin/members/${encodeURIComponent(m.line_user_id)}`)}
+                  onClick={() => setSelectedMemberForProfile(m)}
                   style={{
                     backgroundColor: '#ffffff',
                     borderRadius: '12px',
@@ -345,6 +311,15 @@ export default function AdminMembers({ userId }: { userId?: string }) {
             })}
           </div>
         )}
+
+        {/* 社員個人資料彈窗 (點卡片展開，可撥打電話、複製 Line ID、查閱病史/想說的話，底部移至詳細狀態) */}
+        <MemberProfileModal
+          isOpen={Boolean(selectedMemberForProfile)}
+          onClose={() => setSelectedMemberForProfile(null)}
+          userId={selectedMemberForProfile?.line_user_id}
+          officerUserId={userId}
+          initialMember={selectedMemberForProfile}
+        />
       </div>
     </div>
   );
