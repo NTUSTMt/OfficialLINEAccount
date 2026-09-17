@@ -1,15 +1,6 @@
 -- ==============================================================================
--- 台科登山社社團系統：個人主頁 Dashboard 極速秒開 RPC 函式
--- 目的：以 50ms 極速聚合會員數位社員證、已報名活動與租借中裝備
+-- 取得個人主頁儀表板整合資料 RPC 函式 (支援 100ms 內一次取回個資、活動清單與裝備紀錄)
 -- ==============================================================================
-
--- 0. 資料表結構自我修復與自動遷移 (Self-healing Schema Migration)
-ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS name TEXT;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS name TEXT;
-
--- 自 members 自動回填姓名
-UPDATE event_signups s SET name = m.name FROM members m WHERE s.line_user_id = m.line_user_id AND (s.name IS NULL OR s.name = '');
-UPDATE loans l SET name = m.name FROM members m WHERE l.line_user_id = m.line_user_id AND (l.name IS NULL OR l.name = '');
 
 CREATE OR REPLACE FUNCTION get_my_dashboard(p_line_user_id TEXT)
 RETURNS JSONB
@@ -18,13 +9,20 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+    v_member members%ROWTYPE;
     v_profile JSONB;
     v_activities JSONB;
     v_equipments JSONB;
-    v_member members%ROWTYPE;
 BEGIN
-    -- 1. 查詢會員個人資料與數位社員證狀態
-    SELECT * INTO v_member FROM members WHERE line_user_id = p_line_user_id;
+    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
+        RETURN jsonb_build_object(
+            'status', 'error',
+            'message', '缺少 LINE User ID'
+        );
+    END IF;
+
+    -- 1. 查詢該社員基本身分資訊
+    SELECT * INTO v_member FROM members WHERE line_user_id = p_line_user_id LIMIT 1;
 
     IF FOUND THEN
         v_profile := jsonb_build_object(
@@ -32,6 +30,8 @@ BEGIN
             'department', COALESCE(v_member.department, ''),
             'studentId', COALESCE(v_member.student_id, ''),
             'isOfficial', COALESCE(v_member.is_official_member, FALSE) AND (v_member.membership_expires_at IS NULL OR v_member.membership_expires_at >= CURRENT_DATE),
+            'isOfficer', COALESCE(v_member.is_officer, FALSE),
+            'officerRole', COALESCE(v_member.officer_role, ''),
             'expireDate', CASE 
                 WHEN v_member.membership_expires_at IS NOT NULL THEN to_char(v_member.membership_expires_at, 'YYYY/MM/DD')
                 ELSE '尚未核發/尚未繳費 (Not issued/Unpaid)'
@@ -43,11 +43,13 @@ BEGIN
             'department', '',
             'studentId', '',
             'isOfficial', FALSE,
+            'isOfficer', FALSE,
+            'officerRole', '',
             'expireDate', '尚未核發/尚未繳費 (Not issued/Unpaid)'
         );
     END IF;
 
-    -- 2. 查詢該社員所報名的歷史與近期活動 (直接由 s.payment_status 判定繳費狀態)
+    -- 2. 查詢該社員所報名的歷史與近期活動 (正取且非取消者才釋出 lineGroupUrl)
     SELECT COALESCE(jsonb_agg(act), '[]'::jsonb)
     INTO v_activities
     FROM (
@@ -103,7 +105,7 @@ BEGIN
         ORDER BY l.start_date DESC
     ) t;
 
-    -- 組合回傳前端 DashboardData 結構
+    -- 4. 組合回傳前端 DashboardData 結構
     RETURN jsonb_build_object(
         'profile', v_profile,
         'activities', v_activities,

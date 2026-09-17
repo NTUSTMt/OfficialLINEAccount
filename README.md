@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.133-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.137-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.133)](#7-最新版本異動紀錄-changelog-v01133)
+- [7. 最新版本異動紀錄 (Changelog v0.1.137)](#7-最新版本異動紀錄-changelog-v01137)
 
 ---
 
@@ -185,7 +185,56 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.133)
+## 7. 最新版本異動紀錄 (Changelog v0.1.137)
+
+### v0.1.137 (2026-09-17)
+- **活動獨立試算表自動建立解耦與手動一鍵生成 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**:
+  - **取消新活動建立時自動建立試算表**: 修改 `_handleSaveEvent`，建立新活動時不再自動生成 Google Drive 資料夾與試算表，避免活動尚未發布前產生幽靈試算表，並大幅加快新活動建立速度。
+  - **全新實作 `create_event_sheet` API**: 幹部可由活動管理頁面一鍵觸發建立。後端自動進行幹部身分校驗，在 Google Drive 建立專屬活動資料夾與 22 欄「報名名冊」工作表（包含隱藏 `_CONFIG` 系統設定頁）。
+  - **自動全量匯入既有名冊資料**: 建立試算表時，自動自 Supabase `event_signups` 撈取該活動目前既有的所有報名者資料，並連動 `members` 取得完整姓名、身分證字號、電話、生日、性別、緊急聯絡人、體能與審核繳費狀態，全量批次寫入試算表。
+  - **自動回寫 Supabase 單一信任源**: 建立完成後自動將 `spreadsheet_url`、`spreadsheet_id`、`drive_folder_url` 寫入 Supabase `events` 表，後續新報名即可無縫自動追加同步。
+- **前端活動管理卡片按鈕自適應狀態切換 ([AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx), [AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx))**:
+  - **建立按鈕與載入防呆**: 若活動尚未建立試算表（`!evt.spreadsheetUrl`），顯示「建立獨立試算表」按鈕；點擊後呈現 Loading 狀態並防重複提交。
+  - **即時狀態切換**: 建立成功後，按鈕即時轉為「報名試算表」與「活動資料夾」超連結按鈕，供幹部隨時點擊開啟。
+  - **免使用者授權機制**: 全程透過 GAS 後端 Web App 以社團伺服器身分執行，幹部端無需個人 Google 帳號授權或彈出視窗。
+- **單元測試全數覆蓋**:
+  - 新增 [test/63_manual_create_event_sheet_and_import.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/63_manual_create_event_sheet_and_import.test.mjs)，包含新活動解耦、幹部身分校驗、名冊全量欄位格式匯入與冪等性測試，全專案 180 項單元測試全數通過。
+
+### v0.1.136 (2026-09-17)
+- 🏔️ **小岳 AI 客服活動瀏覽範圍擴充與智能過濾 ([gas_modules/04_Ai_Gemini.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/04_Ai_Gemini.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+  - **支援瀏覽近期報名截止但尚未開始出隊之活動**：
+    - 全新實作 `_filterEventsForAiContext`：小岳 AI 知識庫上下文除包含「開放報名中」活動外，現在亦能主動讀取「報名已截止/已關閉，但活動尚未開始出隊（`start_date >= 今日` 或 `end_date >= 今日`）」的近期活動。
+    - 方便已報名社員或有興趣之社員向小岳詢問出隊行程安排、注意事項與登山裝備準備。
+  - **嚴格排除已結束之歷史關閉活動**：
+    - 活動結束日或開始日小於今日（`end_date < 今日` 且 `start_date < 今日`）的已過期關閉活動一律嚴格過濾排除，不載入上下文，杜絕歷史陳年舊活動干擾 AI 判斷。
+  - **System Instruction 新增狀態應答指引**：
+    - 明確規範小岳：當社員詢問「報名已截止/已關閉但尚未開始」的活動內容時，可熱情介紹行程與裝備；但若社員詢問「是否還能報名」，小岳必須明確禮貌告知「該活動目前報名已截止/關閉，無法再報名」，若有特殊個案需求請直接在聊天室留言洽詢社團幹部。
+- 🌐 **落實透明錯誤處理與中英雙語 Fallback 提示 ([gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js), [gas_modules/04_Ai_Gemini.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/04_Ai_Gemini.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
+  - **中英雙語對照**：當 AI 客服發生連線異常或伺服器超載時，提示訊息全面升級為中英雙語對照版本，體貼國際生與英語使用者。
+  - **杜絕空泛錯誤遮蔽**：徹底落實專案核心規範第一條，將原先空泛的「小岳目前連線稍微忙碌」升級為直接帶出具體錯誤狀態代碼與原因（例如 `HTTP 503: No capacity available` 或 `GEMINI_API_KEY 未設定`），便於使用者與維護團隊快速排查。
+- ⚡ **Gemini 模型端點升級**：
+  - 後端端點統一採用 Google AI Studio 高配額、低延遲主力模型 **`gemini-3.5-flash-lite`**（每日 500 次 RPD、250K TPM），徹底解決過去旗艦版 20 RPD 配額過低及伺服器 503 超載問題。
+- 🧪 **單元測試全數覆蓋**：
+  - 新增 [test/62_ai_closed_upcoming_events_and_bilingual_fallback.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/62_ai_closed_upcoming_events_and_bilingual_fallback.test.mjs)，覆蓋開放中活動、截止但未開始活動、歷史過期活動排除、上下文標籤以及雙語錯誤透明輸出測試，全專案 175 項單元測試全數通過。
+
+### v0.1.135 (2026-09-16)
+- 🔗 **幹部活動管理 RPC 完整整合 `line_group_url` ([supabase/add_line_group_url_to_events.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/add_line_group_url_to_events.sql), [supabase/admin_events_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql))**：
+  - **解決活動編輯表單無法反向帶出群組連結問題**：
+    - 更新 `get_admin_events_rpc` 查詢，將 `e.line_group_url` 納入 `GROUP BY` 與 `jsonb_build_object`，使幹部後台活動清單與編輯表單能精確取得已儲存的群組連結。
+    - 更新 `save_admin_event_rpc`，確保活動 UPSERT 時 `line_group_url` 欄位更新維持一致。
+    - 全面賦予 `service_role` 執行權限，保證跨環境 RPC 調用順暢。
+  - **全鏈路遷移腳本合一**：
+    - 將 `events.line_group_url` 欄位新增、`get_my_dashboard`、`get_admin_events_rpc` 與 `save_admin_event_rpc` 整合至單一遷移腳本 [supabase/add_line_group_url_to_events.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/add_line_group_url_to_events.sql)，幹部僅需在 Supabase 執行單次即可完成所有權限與功能配置。
+
+### v0.1.134 (2026-09-16)
+- 🛠️ **修復 `get_my_dashboard` RPC 裝備資料表欄位錯誤 ([supabase/add_line_group_url_to_events.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/add_line_group_url_to_events.sql), [supabase/get_my_dashboard.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/get_my_dashboard.sql))**：
+  - **解決 PostgreSQL `column l.pickup_date does not exist` 致命錯誤**：
+    - 修復遷移腳本中 `get_my_dashboard` RPC 錯誤引用 `l.pickup_date` 與 `l.return_date` 的問題，校正為資料庫實際欄位 **`l.start_date`** 與 **`l.end_date`**。
+    - 聚合回傳之 JSON 結構完全對齊前端 TypeScript `DashboardEquipmentData` 介面（`orderId`, `itemName`, `pickupDate`, `returnDate`, `status`, `payStatus`）。
+  - **補齊幹部身分資訊回傳**：
+    - 於個人資料回傳結構 `v_profile` 中加入 `isOfficer`（是否具幹部身分）與 `officerRole`（幹部職銜角色），確保主頁面與管理端介面狀態一致。
+  - **測試與建置驗證**：
+    - 167 項單元測試全數通過，TypeScript 型別檢查與 Vite build 正常。
 
 ### v0.1.133 (2026-09-16)
 - 🌐 **報名資料未完整防呆推播中英對稱健全化 ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：

@@ -12,7 +12,8 @@ import {
   ClipboardCheck,
   ImageIcon,
   Folder,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 import type { AdminEvent } from '../../types/event';
 import { getDirectImageUrl } from '../../utils/image';
@@ -22,13 +23,17 @@ interface AdminEventCardProps {
   onEdit: (evt: AdminEvent) => void;
   onOpenSignups: (evt: AdminEvent) => void;
   onQuickStatusChange: (eventId: string, newStatus: string) => void;
+  onCreateSheet?: (eventId: string) => void;
+  isCreatingSheet?: boolean;
 }
 
 export const AdminEventCard: React.FC<AdminEventCardProps> = ({
   evt,
   onEdit,
   onOpenSignups,
-  onQuickStatusChange
+  onQuickStatusChange,
+  onCreateSheet,
+  isCreatingSheet = false
 }) => {
   const { t } = useTranslation();
   const [now] = useState(() => Date.now());
@@ -378,7 +383,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               <span>活動資料夾</span>
             </a>
           )}
-          {evt.spreadsheetUrl && (
+          {evt.spreadsheetUrl ? (
             <a
               href={evt.spreadsheetUrl}
               target="_blank"
@@ -403,6 +408,43 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               <FileSpreadsheet size={13} />
               <span>報名試算表</span>
             </a>
+          ) : (
+            onCreateSheet && (
+              <button
+                type="button"
+                onClick={() => onCreateSheet(evt.id)}
+                disabled={isCreatingSheet}
+                style={{
+                  flex: 1,
+                  minWidth: '130px',
+                  padding: '7px 10px',
+                  borderRadius: '8px',
+                  border: '1px solid #2563eb',
+                  backgroundColor: '#eff6ff',
+                  color: '#1d4ed8',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: isCreatingSheet ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px',
+                  opacity: isCreatingSheet ? 0.7 : 1
+                }}
+              >
+                {isCreatingSheet ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>正在建立試算表...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileSpreadsheet size={13} />
+                    <span>建立獨立試算表</span>
+                  </>
+                )}
+              </button>
+            )
           )}
           {evt.lineGroupUrl && (
             <a

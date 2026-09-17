@@ -476,10 +476,10 @@ END;
 $$;
 
 -- 9. 授權執行 RPC 函式
-GRANT EXECUTE ON FUNCTION is_officer(TEXT) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION sync_officer_cache_rpc(TEXT, TEXT, TEXT) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION get_admin_events_rpc(TEXT) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION get_admin_event_signups_rpc(TEXT, TEXT) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION update_signup_status_rpc(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION update_event_status_rpc(TEXT, TEXT, TEXT) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION save_admin_event_rpc(TEXT, JSONB) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION is_officer(TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION sync_officer_cache_rpc(TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION get_admin_events_rpc(TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION get_admin_event_signups_rpc(TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION update_signup_status_rpc(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION update_event_status_rpc(TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION save_admin_event_rpc(TEXT, JSONB) TO anon, authenticated, service_role;

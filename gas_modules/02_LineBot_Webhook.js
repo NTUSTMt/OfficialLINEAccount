@@ -266,14 +266,27 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     }
 
     if (GEMINI_API_KEY) {
-      var aiReply = _handleGeminiChat(userId, cleanText);
-      if (aiReply) {
-        _replyMessage(replyToken, aiReply);
+      var aiRes = _handleGeminiChat(userId, cleanText);
+      var replyContent = (aiRes && typeof aiRes === "object" && aiRes.reply) ? aiRes.reply : (typeof aiRes === "string" ? aiRes : null);
+      if (replyContent) {
+        _replyMessage(replyToken, replyContent);
         return;
       } else {
-        _replyMessage(replyToken, "小岳目前連線稍微忙碌，請稍後再試，或直接在此留言洽詢社團幹部喔！🏔️");
+        var errReason = (aiRes && typeof aiRes === "object" && aiRes.error) ?
+          aiRes.error :
+          "連線逾時或模型無回應 (Timeout or No Response)";
+        var fallbackMsg = "小岳目前連線稍微忙碌（原因：" + errReason + "），請稍後再試，或直接在此留言洽詢社團幹部喔！🏔️\n\n" +
+          "─────────────\n" +
+          "Yue is currently busy or unavailable (Reason: " + errReason + "). Please try again later, or leave a message here for club officers! 🏔️";
+        _replyMessage(replyToken, fallbackMsg);
         return;
       }
+    } else {
+      var noKeyMsg = "小岳目前連線稍微忙碌（原因：GEMINI_API_KEY 未設定），請稍後再試，或直接在此留言洽詢社團幹部喔！🏔️\n\n" +
+        "─────────────\n" +
+        "Yue is currently busy or unavailable (Reason: GEMINI_API_KEY Not Configured). Please try again later, or leave a message here for club officers! 🏔️";
+      _replyMessage(replyToken, noKeyMsg);
+      return;
     }
   }
 

@@ -6,10 +6,12 @@
  * 處理 Gemini AI 問答核心
  */
 function _handleGeminiChat(userId, userQuery) {
-  if (!GEMINI_API_KEY) return null;
+  if (!GEMINI_API_KEY) {
+    return { success: false, error: "GEMINI_API_KEY 未設定 (GEMINI_API_KEY Not Configured)" };
+  }
 
   try {
-    // 1. 取得 Docs 知識庫與開放活動摘要
+    // 1. 取得 Docs 知識庫與活動摘要（含開放中與尚未開始出隊之活動）
     var knowledgeBase = _fetchDocsKnowledgeBase();
     var eventsContext = _fetchOpenEventsContext();
 
@@ -22,11 +24,15 @@ function _handleGeminiChat(userId, userQuery) {
       "   • 嚴禁使用標題語法（禁止出現 #、##、###）。\n" +
       "   • 嚴禁使用反引號程式碼語法（禁止出現 `code` 或 ```code```）。\n" +
       "   • 嚴禁使用 Markdown 格式超連結（禁止出現 [名稱](網址)，若需提供連結請直接輸出原始 URL）。\n" +
-      "   • 排版僅允許使用自然換行、條列符號（• 或 1. 2. 3.）、適量 emoji 與空行分隔，呈現乾淨易讀的純文字視覺效果。\n\n" +
-      "【當前開放活動資訊】：\n" + eventsContext + "\n\n" +
+      "   • 排版僅允許使用自然換行、條列符號（• 或 1. 2. 3.）、適量 emoji 與空行分隔，呈現乾淨易讀的純文字視覺效果。\n" +
+      "3. 活動諮詢與報名狀態指引：\n" +
+      "   • 若使用者詢問「開放報名中」的活動，請熱情介紹行程亮點，並引導點擊圖文選單進行報名。\n" +
+      "   • 若使用者詢問「報名已截止/已關閉 (Registration Closed)，但尚未開始出隊」的活動，你可以回答該活動的行程規劃、注意事項、裝備準備等資訊；但若使用者詢問是否還能報名，必須明確且禮貌告知「該活動目前報名已截止/已關閉，無法再報名」，若有特殊個案需求請直接在聊天室留言洽詢社團幹部。\n" +
+      "   • 對於已結束之歷史活動，系統已排除未載入，若使用者詢問請告知無該近期活動資訊。\n\n" +
+      "【當前活動資訊（開放報名中與近期即將出隊）】：\n" + eventsContext + "\n\n" +
       "【社團知識庫規章】：\n" + knowledgeBase + "\n";
 
-    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=" + GEMINI_API_KEY;
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + GEMINI_API_KEY;
     var payload = {
       contents: [
         {
@@ -50,20 +56,39 @@ function _handleGeminiChat(userId, userQuery) {
       muteHttpExceptions: true
     });
 
-    if (res.getResponseCode() === 200) {
+    var resCode = res.getResponseCode();
+    if (resCode === 200) {
       var data = JSON.parse(res.getContentText());
       if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
         var rawReply = data.candidates[0].content.parts[0].text;
         var cleanReply = _stripMarkdown(rawReply);
-        return cleanReply + "\n\n─────────────\n小岳是 AI，小岳可以出錯\nYue is AI. Yue can make mistake.";
+        var finalReply = cleanReply + "\n\n─────────────\n小岳是 AI，小岳可以出錯\nYue is AI. Yue can make mistake.";
+        return {
+          success: true,
+          reply: finalReply,
+          toString: function() { return finalReply; }
+        };
+      } else {
+        return { success: false, error: "模型未產生候選回覆內容 (Empty candidate response)" };
       }
     } else {
-      console.warn("Gemini API 回應異常 (HTTP " + res.getResponseCode() + "):", res.getContentText());
+      var errorDetail = "HTTP " + resCode;
+      try {
+        var errJson = JSON.parse(res.getContentText());
+        if (errJson.error && errJson.error.message) {
+          errorDetail += ": " + errJson.error.message;
+        }
+      } catch (e) {
+        var rawErr = res.getContentText();
+        if (rawErr) errorDetail += ": " + rawErr.slice(0, 120);
+      }
+      console.warn("Gemini API 回應異常:", errorDetail);
+      return { success: false, error: errorDetail };
     }
   } catch (err) {
     console.error("Gemini AI 客服執行失敗:", err);
+    return { success: false, error: err.message || err.toString() };
   }
-  return null;
 }
 
 /**
@@ -84,24 +109,77 @@ function _stripMarkdown(text) {
 }
 
 /**
- * 讀取開放活動摘要作為 AI 上下文
+ * 依業務規則篩選供小岳 AI 讀取的活動清單：
+ * 1. 開放報名中的活動 (status = 開放 / 開放中)
+ * 2. 最近報名截止／關閉但尚未開始出隊之活動 (status = 關閉，但 end_date 或 start_date >= 今日)
+ * 3. 嚴格過濾排除已過期結束的歷史關閉活動 (end_date < 今日 且 start_date < 今日)
+ */
+function _filterEventsForAiContext(eventsList, todayStr) {
+  if (!Array.isArray(eventsList) || eventsList.length === 0) return [];
+  if (!todayStr) {
+    var now = new Date();
+    // 轉為台灣時間 GMT+8
+    var twTime = new Date(now.getTime() + (8 * 60 + now.getTimezoneOffset()) * 60 * 1000);
+    todayStr = (typeof Utilities !== "undefined" && Utilities.formatDate) ?
+      Utilities.formatDate(twTime, "GMT+8", "yyyy-MM-dd") :
+      twTime.toISOString().slice(0, 10);
+  }
+
+  return eventsList.filter(function(ev) {
+    if (!ev) return false;
+    var st = (ev.status || "").trim();
+    var isOpen = (st === "開放" || st === "開放中" || st === "Open");
+    var sDate = (ev.start_date || "").slice(0, 10);
+    var eDate = (ev.end_date || ev.start_date || "").slice(0, 10);
+
+    // 1. 若為開放中活動，無論日期均納入
+    if (isOpen) return true;
+
+    // 2. 若為關閉／截止活動：僅允許「尚未結束」之活動（即尚未出隊，或出隊進行中）
+    // 只要活動結束日或開始日 >= 今日，即可提供小岳解答行程與注意事項
+    var isUpcomingOrOngoing = (eDate >= todayStr || sDate >= todayStr);
+    if (isUpcomingOrOngoing) {
+      return true;
+    }
+
+    // 3. 其他關閉的歷史過期活動一律排除，不載入上下文
+    return false;
+  });
+}
+
+/**
+ * 讀取開放活動及尚未開始出隊之活動摘要作為 AI 上下文
  */
 function _fetchOpenEventsContext() {
   try {
     // 100% 直通 Supabase events (SSOT)，杜絕試算表依賴
     if (typeof _supabaseGet === "function") {
-      var sbEvents = _supabaseGet("events", { status: "eq.開放", select: "title,fee,start_date,summary,itinerary" });
+      var sbEvents = _supabaseGet("events", {
+        select: "title,fee,start_date,end_date,deadline,status,summary,itinerary",
+        order: "start_date.asc"
+      });
       if (Array.isArray(sbEvents) && sbEvents.length > 0) {
-        return sbEvents.map(function(ev) {
-          var title = ev.title || "";
-          var fee = ev.fee || 0;
-          var start = ev.start_date || "";
-          var desc = ev.summary || "";
-          return "• " + title + " (開始日：" + start + "，費用：$" + fee + ")：" + desc;
-        }).join("\n");
+        var validEvents = _filterEventsForAiContext(sbEvents);
+        if (validEvents.length > 0) {
+          return validEvents.map(function(ev) {
+            var title = ev.title || "";
+            var fee = ev.fee || 0;
+            var start = ev.start_date || "";
+            var end = ev.end_date || start;
+            var desc = ev.summary || "";
+            var itin = ev.itinerary ? (" 行程概要：" + ev.itinerary) : "";
+            var st = (ev.status || "").trim();
+            var isOpen = (st === "開放" || st === "開放中" || st === "Open");
+            var statusLabel = isOpen ?
+              "開放報名中 (Registration Open)" :
+              "報名已截止/關閉 (Registration Closed，但活動尚未開始出隊)";
+            var dateDisplay = start + (end && end !== start ? " ~ " + end : "");
+            return "• " + title + " 【" + statusLabel + "】 (活動日期：" + dateDisplay + "，費用：$" + fee + ")：" + desc + itin;
+          }).join("\n\n");
+        }
       }
     }
-    return "目前無開放報名中的活動資料。";
+    return "目前無開放報名或近期即將開始的活動資料。";
   } catch (e) {
     console.error("[_fetchOpenEventsContext] 直查 Supabase 失敗:", e);
     return "無法讀取活動清單：" + (e.message || e);
