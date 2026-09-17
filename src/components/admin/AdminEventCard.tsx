@@ -348,7 +348,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
       </div>
 
       {/* 4. Google Drive 資料夾與試算表與活動群組外部連結 */}
-      {(evt.driveFolderUrl || evt.spreadsheetUrl || evt.lineGroupUrl) && (
+      {(evt.driveFolderUrl || evt.spreadsheetUrl || evt.lineGroupUrl || onCreateSheet) && (
         <div style={{
           display: 'flex',
           gap: '8px',
@@ -435,12 +435,12 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
                 {isCreatingSheet ? (
                   <>
                     <Loader2 size={13} className="animate-spin" />
-                    <span>正在建立試算表...</span>
+                    <span>正在建立資料夾與試算表...</span>
                   </>
                 ) : (
                   <>
                     <FileSpreadsheet size={13} />
-                    <span>建立獨立試算表</span>
+                    <span>建立資料夾與試算表</span>
                   </>
                 )}
               </button>

@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.137-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.138-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.137)](#7-最新版本異動紀錄-changelog-v01137)
+- [7. 最新版本異動紀錄 (Changelog v0.1.138)](#7-最新版本異動紀錄-changelog-v01138)
 
 ---
 
@@ -306,6 +306,13 @@ pnpm test
   - 更多服務次級選單卡片與 Webhook 指令同步更新為「🤖 小岳說明 AI Guide」，提升對外客服品牌認知一致性。
 - 🧪 **單元測試全數覆蓋**：
   - [test/60_ai_mention_and_chat_keyword_cleanup.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/60_ai_mention_and_chat_keyword_cleanup.test.mjs) 擴充最新活動指令與容錯測試，160 項單元測試全數 Pass。
+
+### v0.1.138 (2026-09-17)
+- **活動獨立試算表與雲端資料夾手動生成健全化 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js), [src/components/admin/AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx))**：
+  - **解耦自動建立流程**：活動新增與儲存時不再強制自動生成 Google 試算表與資料夾，避免活動建立時產生無謂試算表及等待時間。
+  - **幹部手動一鍵生成**：於幹部後台活動卡片新增「建立資料夾與試算表」按鈕，幹部點擊後透過 GAS 免個人 Google 帳號授權建立該活動專屬 Google Drive 資料夾與試算表。
+  - **名冊與個資自動拉取**：建立時自動從 Supabase `event_signups` 與 `members` 拉取該活動既有之報名資料與個人資訊，完整填入 22 個欄位至「報名名冊」工作表，並將試算表與資料夾連結自動回寫至 Supabase `events` 資料表。
+  - **修復卡片操作列顯示門檻**：修復 `AdminEventCard.tsx` 外層條件守衛，確保新建立且尚未具有任何外部雲端連結的活動卡片，亦能穩定顯示「建立資料夾與試算表」按鈕，建立完成後立即無縫切換為「活動資料夾」與「報名試算表」連結。
 
 ### v0.1.127 (2026-09-16)
 - 🛠️ **Supabase `admin_events_rpc.sql` 參數名稱一致性與防禦修復 ([supabase/admin_events_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql))**：
