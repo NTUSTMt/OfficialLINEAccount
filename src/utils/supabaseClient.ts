@@ -8,7 +8,8 @@ import type {
   MemberActiveStats,
   AdminFinanceItem,
   AdminLoanItem,
-  AdminInventoryItem
+  AdminInventoryItem,
+  MemberTimelineRecord
 } from '../types/admin';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -1936,6 +1937,235 @@ export const deleteEquipmentFromSupabase = async (
   } catch (err: any) {
     const msg = err instanceof Error ? err.message : String(err);
     return { success: false, error: `[刪除裝備例外]: ${msg}` };
+  }
+};
+
+export interface MemberTimelineResult {
+  member: {
+    line_user_id: string;
+    name: string;
+    student_id?: string;
+    department?: string;
+    phone?: string;
+    email?: string;
+    role?: string;
+    avatar_url?: string;
+  } | null;
+  records: MemberTimelineRecord[];
+}
+
+/**
+ * 幹部後台：取得單一社員之個人歷史全紀錄 (活動、裝備、繳費混合歷程)
+ */
+export const fetchMemberTimelineRecordsFromSupabase = async (
+  targetUserId: string,
+  officerUserId?: string
+): Promise<MemberTimelineResult> => {
+  if (!supabase || !targetUserId) {
+    return { member: null, records: [] };
+  }
+
+  // 1. 優先嘗試由專屬 RPC 函式取得整合全紀錄
+  if (officerUserId && officerUserId !== 'TEST_USER_ID') {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('get_admin_member_records_rpc', {
+        p_officer_line_user_id: officerUserId,
+        p_target_user_id: targetUserId
+      });
+      if (!rpcErr && rpcRes && rpcRes.status === 'success' && Array.isArray(rpcRes.records)) {
+        return {
+          member: rpcRes.member || null,
+          records: rpcRes.records as MemberTimelineRecord[]
+        };
+      }
+      if (rpcErr) {
+        console.warn('[Supabase] get_admin_member_records_rpc 呼叫失敗，嘗試直接讀取表:', rpcErr.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] get_admin_member_records_rpc 例外，啟用直查備援:', err);
+    }
+  }
+
+  // 2. 直查資料表備援邏輯
+  try {
+    // 查詢社員基本資料
+    const { data: memberData } = await supabase
+      .from('members')
+      .select('line_user_id, name, student_id, department, phone, email, role, avatar_url')
+      .eq('line_user_id', targetUserId)
+      .maybeSingle();
+
+    const allRecords: MemberTimelineRecord[] = [];
+
+    // 查詢活動紀錄 (event_signups JOIN events)
+    const { data: signupsData } = await supabase
+      .from('event_signups')
+      .select(`
+        id,
+        created_at,
+        status,
+        payment_status,
+        notes,
+        events:event_id (
+          id,
+          title,
+          start_date,
+          end_date,
+          fee,
+          status,
+          location
+        )
+      `)
+      .eq('line_user_id', targetUserId);
+
+    if (signupsData && Array.isArray(signupsData)) {
+      signupsData.forEach((s: any) => {
+        const ev = s.events;
+        const title = ev?.title || '社團活動';
+        const startStr = ev?.start_date ? ev.start_date.split('T')[0].replace(/-/g, '/') : '';
+        const endStr = ev?.end_date ? ev.end_date.split('T')[0].replace(/-/g, '/') : '';
+        const dateDisplay = (startStr && endStr && startStr !== endStr) ? `${startStr} ~ ${endStr}` : (startStr || '未定日期');
+
+        allRecords.push({
+          id: `activity_${s.id}`,
+          category: 'activity',
+          categoryLabel: '活動紀錄',
+          title,
+          timestamp: s.created_at || new Date().toISOString(),
+          dateDisplay,
+          status: s.status || '已報名 Signed Up',
+          paymentStatus: s.payment_status || '未繳費 Unpaid',
+          amount: ev?.fee ? Number(ev.fee) : 0,
+          notes: s.notes || null,
+          officerNotes: null,
+          details: {
+            eventId: ev?.id,
+            eventStatus: ev?.status,
+            location: ev?.location,
+            signupStatus: s.status,
+            paymentStatus: s.payment_status,
+            signupDate: s.created_at
+          }
+        });
+      });
+    }
+
+    // 查詢裝備借用紀錄 (loans JOIN loan_items)
+    const { data: loansData } = await supabase
+      .from('loans')
+      .select(`
+        id,
+        created_at,
+        start_date,
+        end_date,
+        days,
+        purpose,
+        total_deposit,
+        total_rent,
+        total_fee,
+        status,
+        payment_status,
+        notes,
+        loan_items (
+          equipment_id,
+          quantity,
+          subtotal,
+          equipments (name)
+        )
+      `)
+      .eq('line_user_id', targetUserId);
+
+    if (loansData && Array.isArray(loansData)) {
+      loansData.forEach((l: any) => {
+        let itemsSummary = '裝備租借';
+        if (Array.isArray(l.loan_items) && l.loan_items.length > 0) {
+          itemsSummary = l.loan_items
+            .map((li: any) => `${li.equipments?.name || li.equipment_id || '裝備'} x ${li.quantity || 1}`)
+            .join(', ');
+        }
+
+        const startStr = l.start_date ? l.start_date.split('T')[0].replace(/-/g, '/') : '';
+        const endStr = l.end_date ? l.end_date.split('T')[0].replace(/-/g, '/') : '';
+        const computedDays = l.days || (l.start_date && l.end_date
+          ? Math.max(1, Math.round((new Date(l.end_date).getTime() - new Date(l.start_date).getTime()) / 86400000) + 1)
+          : 1);
+
+        const dateDisplay = (startStr && endStr)
+          ? `${startStr} ~ ${endStr} (共 ${computedDays} 天)`
+          : (startStr || '未定日期');
+
+        allRecords.push({
+          id: `loan_${l.id}`,
+          category: 'equipment',
+          categoryLabel: '裝備借用',
+          title: itemsSummary,
+          timestamp: l.created_at || new Date().toISOString(),
+          dateDisplay,
+          status: l.status || '待領取 To Be Collected',
+          paymentStatus: l.payment_status || '未繳費 Unpaid',
+          amount: l.total_fee ? Number(l.total_fee) : 0,
+          notes: l.notes || null,
+          officerNotes: null,
+          details: {
+            loanId: l.id,
+            purpose: l.purpose,
+            totalDeposit: l.total_deposit,
+            totalRent: l.total_rent,
+            totalFee: l.total_fee,
+            days: computedDays,
+            items: l.loan_items
+          }
+        });
+      });
+    }
+
+    // 查詢繳費紀錄 (payments)
+    const { data: paymentsData } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('line_user_id', targetUserId);
+
+    if (paymentsData && Array.isArray(paymentsData)) {
+      paymentsData.forEach((p: any) => {
+        const createdDate = p.created_at
+          ? p.created_at.substring(0, 16).replace('T', ' ').replace(/-/g, '/')
+          : '申報紀錄';
+
+        allRecords.push({
+          id: `payment_${p.id}`,
+          category: 'payment',
+          categoryLabel: '繳費紀錄',
+          title: p.type || '款項申報',
+          timestamp: p.created_at || new Date().toISOString(),
+          dateDisplay: createdDate,
+          status: p.status || '待確認 Checking',
+          paymentStatus: p.status || '待確認 Checking',
+          amount: p.amount ? Number(p.amount) : 0,
+          notes: p.notes || null,
+          officerNotes: p.officer_notes || null,
+          details: {
+            paymentId: p.id,
+            bankLast5: p.bank_last5,
+            proofImageUrl: p.proof_image_url,
+            targetType: p.target_type,
+            targetId: p.target_id,
+            notificationStatus: p.notification_status || '未通知'
+          }
+        });
+      });
+    }
+
+    // 預設依時間排序：上新下舊
+    allRecords.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    return {
+      member: memberData || null,
+      records: allRecords
+    };
+  } catch (err: any) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Supabase] fetchMemberTimelineRecordsFromSupabase 異常:', msg);
+    throw new Error(`[載入社員歷程失敗]: ${msg}`);
   }
 };
 

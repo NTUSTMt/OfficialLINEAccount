@@ -136,3 +136,22 @@ export interface AdminInventoryItem {
   sort_order?: number;
   created_at?: string;
 }
+
+export type MemberTimelineCategory = 'activity' | 'equipment' | 'payment';
+
+export interface MemberTimelineRecord {
+  id: string;
+  category: MemberTimelineCategory;
+  categoryLabel: string;
+  title: string;
+  timestamp: string; // 排序基準時間 (ISO 字串)
+  dateDisplay: string; // 畫面上顯示的關鍵日期 (起訖日或申報日)
+  status: string; // 主狀態 (例如 正取 Confirmed, 租借中 Borrowed, 已核銷 Confirmed)
+  paymentStatus?: string; // 繳費狀態 (已繳費 Paid, 待確認 Checking, 未繳費 Unpaid)
+  amount?: number; // 款項金額或費用 (若有)
+  notes?: string | null; // 申請人備註或款項備註
+  officerNotes?: string | null; // 幹部審核備註
+  details: {
+    [key: string]: any;
+  };
+}

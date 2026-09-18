@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.149-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.150-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.149)](#7-最新版本異動紀錄-changelog-v01149)
+- [7. 最新版本異動紀錄 (Changelog v0.1.150)](#7-最新版本異動紀錄-changelog-v01150)
 
 ---
 
@@ -377,6 +377,29 @@ pnpm test
   - **中英文 Part I / Part II 100% 鏡像對齊**：同步修正英文版對應章節、狀態清單、導航方式與 FAQ。
 - 🧪 **單元測試擴充**：
   - 新增 `test/60_ai_mention_and_chat_keyword_cleanup.test.mjs`，測試全數 158 項通過，前端打包建置無錯誤。
+### v0.1.150 (2026-09-18)
+- 社員詳細資料「個人歷史全紀錄」專屬獨立頁面與動態概況調整 (src/pages/MemberDetailEdit.tsx, src/pages/MemberRecords.tsx, src/App.tsx):
+  - 於「社員詳細資料編輯頁面」的動態概況區塊，移除左側社員姓名，標準化為「進行中動態概況」。
+  - 標題列右側新增「查看個人歷史全紀錄」按鈕，點擊後平滑跳轉至專屬獨立路由 `/admin/members/:userId/records`，並保留原進行中動態概況顯示方式。
+  - 全域導覽列自動適配，路由命中 `/admin/members/:userId/records` 時顯示標題「個人歷史全紀錄」與副標題「活動、裝備與繳費歷程」。
+- 混合歷史時間軸與 NotionFilterBar 控制列 (src/pages/MemberRecords.tsx):
+  - 整合呈現該名使用者的活動紀錄、裝備借用紀錄與繳費紀錄，混合呈現於單一時間軸中。
+  - 嵌入 NotionFilterBar 整合控制列：
+    - 關鍵字搜尋：即時過濾活動名稱、裝備品項、款項類別、金額、處理狀態與社員/幹部備註。
+    - 類別篩選：提供全部、活動紀錄、裝備借用、繳費紀錄等維度篩選。
+    - 狀態篩選：提供全部、進行中/待處理、已完成/已核銷切換。
+    - 排序控制：預設依紀錄時間上新下舊（降冪），支援切換為上舊下新（升冪）或依紀錄類別排序。
+    - 重新整理：支援一鍵自 Supabase 重新載入該社員之完整歷史紀錄。
+  - 卡片視覺呈現：以不同顏色標籤區隔類別（活動為翠綠、裝備為深藍、繳費為琥珀金），直觀標註狀態徽章、日期區間、金額與備註。
+  - 支援點擊展開/收合詳細細項：展開活動集合地點、裝備個別品項清單與租借天數/押金、轉帳末五碼與繳費憑證連結。
+  - 全頁面與卡片內容強制宣告 `textAlign: 'left'`，根除文字置中跑版。
+- 資料庫專屬 RPC 與多層備援機制 (supabase/admin_portal_rpc.sql, src/utils/supabaseClient.ts, src/types/admin.ts):
+  - 新增 `get_admin_member_records_rpc(p_officer_line_user_id, p_target_user_id)` SECURITY DEFINER 函式，整合聯合查詢 `event_signups`、`loans` 與 `payments`，並加入幹部權限校驗。
+  - 在 `src/types/admin.ts` 定義 `MemberTimelineCategory` 與 `MemberTimelineRecord` 介面。
+  - 在 `src/utils/supabaseClient.ts` 實作 `fetchMemberTimelineRecordsFromSupabase`，優先調用 RPC，並具備直查資料表之穩健備援邏輯。
+- 單元測試與建置驗證：
+  - 於 `test/65_officer_system_modules.test.mjs` 新增 v0.1.150 完整單元測試，全數 204 項測試通過，TypeScript 與 Vite 打包建置零錯誤。
+
 ### v0.1.149 (2026-09-18)
 - 財務對帳備註欄位分離與申報寫入修復 (supabase/verify_payment_rpc.sql, supabase/payment_rpc.sql, supabase/admin_portal_rpc.sql, src/pages/AdminFinance.tsx)：
   - 診斷並修正社員申報繳費時誤將備註寫入 `officer_notes` 之資料庫缺陷，正名寫入 `payments.notes` 欄位。

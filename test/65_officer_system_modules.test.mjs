@@ -270,3 +270,39 @@ test('幹部系統模組測試：財務對帳備註區分、通知狀態防重�
   assert.ok(!loansCode.match(emojiRegex), 'AdminLoans.tsx 不得包含表情符號');
 });
 
+test('幹部系統模組測試：個人歷史全紀錄新頁面、動態概況按鈕與混合時間軸 (v0.1.150)', async () => {
+  const fs = await import('fs/promises');
+  const editCode = await fs.readFile('src/pages/MemberDetailEdit.tsx', 'utf8');
+  const recordsCode = await fs.readFile('src/pages/MemberRecords.tsx', 'utf8');
+  const appCode = await fs.readFile('src/App.tsx', 'utf8');
+  const sbCode = await fs.readFile('src/utils/supabaseClient.ts', 'utf8');
+  const portalSql = await fs.readFile('supabase/admin_portal_rpc.sql', 'utf8');
+  const typesCode = await fs.readFile('src/types/admin.ts', 'utf8');
+
+  // 1. 動態概況標題移除左側姓名，並新增查看個人歷史全紀錄按鈕
+  assert.ok(editCode.includes('進行中動態概況'), 'MemberDetailEdit 必須包含進行中動態概況標題');
+  assert.ok(!editCode.includes("{formData.name || '社員'} 進行中動態概況"), 'MemberDetailEdit 必須移除左側社員姓名');
+  assert.ok(editCode.includes('查看個人歷史全紀錄'), 'MemberDetailEdit 必須包含查看個人歷史全紀錄按鈕');
+  assert.ok(editCode.includes('/admin/members/${userId}/records'), 'MemberDetailEdit 點擊按鈕必須跳轉至 records 路由');
+
+  // 2. 獨立路由與導航標題設定
+  assert.ok(appCode.includes('/admin/members/:userId/records'), 'App.tsx 必須註冊 records 路由');
+  assert.ok(appCode.includes('個人歷史全紀錄'), 'App.tsx 導航標題必須包含個人歷史全紀錄');
+
+  // 3. MemberRecords 頁面架構與靠左對齊
+  assert.ok(recordsCode.includes("textAlign: 'left'"), 'MemberRecords 必須設定 textAlign: left');
+  assert.ok(recordsCode.includes('NotionFilterBar'), 'MemberRecords 必須嵌入 NotionFilterBar');
+  assert.ok(recordsCode.includes('返回社員詳細資料'), 'MemberRecords 必須具備返回社員按鈕');
+  assert.ok(recordsCode.includes('toggleExpand'), 'MemberRecords 必須支援展開詳情');
+
+  // 4. Supabase RPC 與客戶端函式檢驗
+  assert.ok(portalSql.includes('get_admin_member_records_rpc'), 'admin_portal_rpc.sql 必須包含 get_admin_member_records_rpc 函式');
+  assert.ok(sbCode.includes('fetchMemberTimelineRecordsFromSupabase'), 'supabaseClient.ts 必須提供 fetchMemberTimelineRecordsFromSupabase');
+  assert.ok(typesCode.includes('MemberTimelineRecord'), 'admin.ts 必須定義 MemberTimelineRecord 介面');
+
+  // 5. 全檔零表情符號檢驗
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  assert.ok(!recordsCode.match(emojiRegex), 'MemberRecords.tsx 不得包含表情符號');
+  assert.ok(!editCode.match(emojiRegex), 'MemberDetailEdit.tsx 不得包含表情符號');
+});
+

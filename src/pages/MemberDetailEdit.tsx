@@ -11,6 +11,7 @@ import {
   CreditCard,
   ChevronDown,
   ChevronUp,
+  History,
   X
 } from 'lucide-react';
 import {
@@ -348,8 +349,46 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
           marginBottom: '16px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
         }}>
-          <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-            {formData.name || '社員'} 進行中動態概況
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '12px',
+            flexWrap: 'wrap',
+            gap: '8px'
+          }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+              進行中動態概況
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(`/admin/members/${userId}/records`)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                backgroundColor: '#f1f5f9',
+                color: '#0f172a',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#e2e8f0';
+                e.currentTarget.style.borderColor = '#94a3b8';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = '#f1f5f9';
+                e.currentTarget.style.borderColor = '#cbd5e1';
+              }}
+            >
+              <History size={14} color="#059669" />
+              <span>查看個人歷史全紀錄</span>
+            </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>

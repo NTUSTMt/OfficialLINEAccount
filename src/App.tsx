@@ -20,6 +20,7 @@ const AdminEvents = lazy(() => import('./pages/AdminEvents'));
 const ConfirmPayment = lazy(() => import('./pages/ConfirmPayment'));
 const AdminMembers = lazy(() => import('./pages/AdminMembers'));
 const MemberDetailEdit = lazy(() => import('./pages/MemberDetailEdit'));
+const MemberRecords = lazy(() => import('./pages/MemberRecords'));
 const AdminFinance = lazy(() => import('./pages/AdminFinance'));
 const AdminLoans = lazy(() => import('./pages/AdminLoans'));
 const AdminInventory = lazy(() => import('./pages/AdminInventory'));
@@ -57,6 +58,9 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
   // 根據當前路由，動態決定左側的 Logo、標題與副標題（子路由如 /dashboard/achievements, /payment/history 需優先判斷）
   const getHeaderDetails = () => {
     const path = location.pathname;
+    if (path.includes('/admin/members') && path.includes('/records')) {
+      return { title: '個人歷史全紀錄', subtitle: '活動、裝備與繳費歷程', icon: <ShieldCheck size={24} color="#059669" /> };
+    }
     if (path.includes('/admin/members')) {
       return { title: '社員資料管理', subtitle: '社員名冊與權限維護', icon: <ShieldCheck size={24} color="#059669" /> };
     }
@@ -617,6 +621,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
           } />
           <Route path="/admin/events" element={<AdminEvents userId={liffInit.userId} />} />
           <Route path="/admin/members" element={<AdminMembers userId={liffInit.userId} />} />
+          <Route path="/admin/members/:userId/records" element={<MemberRecords officerUserId={liffInit.userId} />} />
           <Route path="/admin/members/:userId" element={<MemberDetailEdit officerUserId={liffInit.userId} />} />
           <Route path="/admin/finance" element={<AdminFinance userId={liffInit.userId} />} />
           <Route path="/admin/loans" element={<AdminLoans userId={liffInit.userId} />} />
