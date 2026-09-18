@@ -113,7 +113,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               backgroundColor: isActuallyOpen ? '#16a34a' : isExpiredOpen ? '#dc2626' : evt.status === '未來開放' ? '#ea580c' : '#94a3b8',
               display: 'inline-block'
             }} />
-            <span>{isActuallyOpen ? '開放報名' : isExpiredOpen ? '已截止 (過期)' : evt.status === '未來開放' ? '未來開放' : '已關閉'}</span>
+            <span>{isActuallyOpen ? '開放報名' : isExpiredOpen ? '已截止' : evt.status === '未來開放' ? '未來開放' : '已關閉'}</span>
           </span>
           <span style={{
             fontSize: '12px',
