@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.152-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.153-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.152)](#7-最新版本異動紀錄-changelog-v01152)
+- [7. 最新版本異動紀錄 (Changelog v0.1.153)](#7-最新版本異動紀錄-changelog-v01153)
 
 ---
 
@@ -373,7 +373,18 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-  - **小岳 AI 調用說明更新**：明確標註私聊提問必須以「小岳」開頭方會答覆，一般提問將由幹部回覆。
+### v0.1.153 (2026-09-18)
+- 修復 Google Drive 上傳 Action 名稱與雙向相容 (src/pages/AdminInventory.tsx, gas_modules/06_Helper_Services.js, src/gas.js):
+  - 診斷並修正前端呼叫 GAS 時誤傳複數形 `upload_drive_files` 導致之「未支援的 Helper Action」例外，正名為單數形 `upload_drive_file`。
+  - 同步於後端 GAS `06_Helper_Services.js` 與 `src/gas.js` 補充 `upload_drive_files` 別名相容，提升伺服器端防禦性。
+- 移除輪播分頁指示器內之綠色+號按鈕 (src/pages/AdminInventory.tsx):
+  - 移除 `.photo-carousel-dots` 容器中之綠色圓形 `+` 按鈕，徹底根治手機端因 Flex 排版造成的按鈕位移跑版，讓輪播指示器純粹用於相片頁數切換。
+- 簡化相片管理控制條與介面去重 (src/pages/AdminInventory.tsx):
+  - 依使用者反饋移除相片管理列多餘之藍色「新增相片」按鈕，統一使用下方縮圖列之 `+ 新增` 虛線卡片與 0 張時中央滿版大虛線卡片。
+  - 保留「刪除當前照片」紅色按鈕與每張縮圖的獨立 X 刪除按鈕，整體視覺更俐落清爽。
+- 單元測試與建置驗證:
+  - 於 `test/65_officer_system_modules.test.mjs` 新增 v0.1.153 專屬單元測試，全數 207 項測試通過，TypeScript 與 Vite 建置零錯誤。
+
 ### v0.1.152 (2026-09-18)
 - 裝備編輯正方形相片防壓縮修復 (src/pages/AdminInventory.tsx):
   - 診斷並修復手機端 (iOS Safari / WebKit) 彈窗 flex 佈局導致相片容器高度遭擠壓變形之缺陷。
@@ -384,7 +395,7 @@ pnpm test
   - 選取相片後立即以 Data URL 產生 0ms 本地預覽並自動跳轉至新相片，使用者體驗流暢如原生 App。
 - 專屬相片管理控制條與多圖快速刪除機制 (src/pages/AdminInventory.tsx):
   - 於正方形大圖下方新增獨立相片管理工具條，清楚標示「相片管理 (已上傳 X/5 張)」。
-  - 提供醒目的「刪除當前張」紅色文字按鈕與「新增相片」按鈕。
+  - 提供醒目的「刪除當前照片」紅色文字按鈕與「新增相片」按鈕。
   - 整合橫向滾動縮圖預覽條，當前選中相片顯示亮藍色邊框，且每張縮圖右上角皆具備獨立半透明圓形 X 刪除按鈕，支援快速刪除任意一張照片。
   - 輪播大圖右上角保留直覺的垃圾桶刪除按鈕，並在 0 張相片時呈現醒目大正方形虛線引導上傳區塊。
 - Google Drive 上傳鑑權標頭與直存最佳化 (src/pages/AdminInventory.tsx):

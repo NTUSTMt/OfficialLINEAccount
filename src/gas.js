@@ -3850,7 +3850,7 @@ function handleLiffHelperApi(json) {
   var action = json.action;
 
   // 1. Google Drive 照片上傳 Helper (純上傳，不碰試算表)
-  if (action === "upload_drive_file") {
+  if (action === "upload_drive_file" || action === "upload_drive_files") {
     return _handleDriveUploadHelper(json);
   }
 

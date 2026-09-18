@@ -365,7 +365,7 @@ test('幹部系統模組測試：大頭貼選單圖示與名稱一致、歷史�
   const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
   assert.ok(!recordsCode.match(emojiRegex), 'MemberRecords.tsx 不得包含表情符號');
   assert.ok(!inventoryCode.match(emojiRegex), 'AdminInventory.tsx 不得包含表情符號');
-});test('幹部系統模組測試：裝備編輯大正方形防壓縮、相片壓縮上傳、專屬管理條與刪除機制 (v0.1.152)', async () => {
+}); test('幹部系統模組測試：裝備編輯大正方形防壓縮、相片壓縮上傳、專屬管理條與刪除機制 (v0.1.152)', async () => {
   const fs = await import('fs/promises');
   const inventoryCode = await fs.readFile('src/pages/AdminInventory.tsx', 'utf8');
 
@@ -381,8 +381,7 @@ test('幹部系統模組測試：大頭貼選單圖示與名稱一致、歷史�
 
   // 3. 正方形相片輪播與右上方刪除按鈕
   assert.ok(inventoryCode.includes('handleRemovePhoto(activePhotoIdx)'), 'AdminInventory 輪播圖右上角必須具備刪除當前相片按鈕');
-  assert.ok(inventoryCode.includes('刪除當前張'), 'AdminInventory 必須具備刪除當前張管理按鈕');
-  assert.ok(inventoryCode.includes('新增相片'), 'AdminInventory 必須具備新增相片按鈕');
+  assert.ok(inventoryCode.includes('刪除當前照片'), 'AdminInventory 必須具備刪除當前照片管理按鈕');
 
   // 4. 縮圖管理條與每張獨立刪除按鈕
   assert.ok(inventoryCode.includes('photo-thumbnail-strip'), 'AdminInventory 必須具備相片縮圖管理條');
@@ -396,3 +395,30 @@ test('幹部系統模組測試：大頭貼選單圖示與名稱一致、歷史�
   const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
   assert.ok(!inventoryCode.match(emojiRegex), 'AdminInventory.tsx 不得包含表情符號');
 });
+
+test('幹部系統模組測試：修復 Drive 上傳 Action 名稱、移除輪播圖綠色+號與藍色新增按鈕 (v0.1.153)', async () => {
+  const fs = await import('fs/promises');
+  const inventoryCode = await fs.readFile('src/pages/AdminInventory.tsx', 'utf8');
+  const helperCode = await fs.readFile('gas_modules/06_Helper_Services.js', 'utf8');
+  const gasCode = await fs.readFile('src/gas.js', 'utf8');
+
+  // 1. 修復 GAS 上傳 Action 名稱為單數形 upload_drive_file
+  assert.ok(inventoryCode.includes("action: 'upload_drive_file'"), 'AdminInventory 必須傳送正確的 upload_drive_file action');
+  assert.ok(!inventoryCode.includes("action: 'upload_drive_files'"), 'AdminInventory 絕不可包含複數形 upload_drive_files');
+
+  // 2. 後端 GAS 支援 upload_drive_files 別名以求防禦性最大化
+  assert.ok(helperCode.includes('action === "upload_drive_file" || action === "upload_drive_files"'), '06_Helper_Services 必須支援別名相容');
+  assert.ok(gasCode.includes('action === "upload_drive_file" || action === "upload_drive_files"'), 'gas.js 必須支援別名相容');
+
+  // 3. 移除輪播圖圓點內之綠色+號按鈕 (防止手機端排版偏移)
+  assert.ok(!inventoryCode.includes("backgroundColor: '#10b981'"), 'AdminInventory 輪播圖指示器內不得包含綠色按鈕');
+
+  // 4. 移除多餘之藍色新增相片按鈕，由縮圖列之虛線卡片統一處理
+  assert.ok(!inventoryCode.includes('>新增相片</span>'), 'AdminInventory 不得包含多餘的藍色新增相片按鈕');
+  assert.ok(inventoryCode.includes('>新增</span>'), 'AdminInventory 縮圖列必須包含標準的 + 新增 虛線方框');
+
+  // 5. 零表情符號檢驗
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  assert.ok(!inventoryCode.match(emojiRegex), 'AdminInventory.tsx 不得包含表情符號');
+});
+

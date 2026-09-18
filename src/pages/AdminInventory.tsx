@@ -266,7 +266,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(withAuthPayload({
-              action: 'upload_drive_files',
+              action: 'upload_drive_file',
               folderType: 'equipments',
               files: newItemsToUpload.map(p => ({
                 data: p.base64.split(',')[1] || p.base64,
@@ -964,28 +964,6 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                         }}
                       />
                     ))}
-                    {formState.images.length < 5 && (
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        title="上傳新相片"
-                        style={{
-                          backgroundColor: '#10b981',
-                          border: 'none',
-                          borderRadius: '50%',
-                          width: '20px',
-                          height: '20px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#ffffff',
-                          cursor: 'pointer',
-                          marginLeft: '4px'
-                        }}
-                      >
-                        <Plus size={13} />
-                      </button>
-                    )}
                   </div>
                 </div>
               ) : (
@@ -1100,29 +1078,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                       }}
                     >
                       <Trash2 size={13} />
-                      <span>刪除當前張</span>
-                    </button>
-                  )}
-                  {formState.images.length < 5 && (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        border: '1px solid #bfdbfe',
-                        backgroundColor: '#eff6ff',
-                        color: '#2563eb',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Camera size={13} />
-                      <span>新增相片</span>
+                      <span>刪除當前照片</span>
                     </button>
                   )}
                 </div>
