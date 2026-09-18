@@ -530,7 +530,7 @@ BEGIN
             NULL AS proof_image_url,
             'loan' AS target_type,
             l.id AS target_id,
-            '待確認 Checking' AS status,
+            CASE WHEN l.payment_status = '待確認 Checking' THEN '待確認 Checking' ELSE '待繳費 Unpaid' END AS status,
             l.payment_status::TEXT AS payment_status,
             l.notes,
             NULL AS officer_notes,
@@ -560,11 +560,11 @@ BEGIN
             NULL AS proof_image_url,
             'event' AS target_type,
             e.id AS target_id,
-            '待確認 Checking' AS status,
+            CASE WHEN s.payment_status = '待確認 Checking' THEN '待確認 Checking' ELSE '待繳費 Unpaid' END AS status,
             s.payment_status::TEXT AS payment_status,
             s.notes,
             NULL AS officer_notes,
-            COALESCE(s.notification_status, '未通知') AS notification_status,
+            '未通知' AS notification_status,
             to_char(s.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             'event_signup' AS source_type,
             'activity' AS item_category
@@ -690,7 +690,11 @@ BEGIN
     END IF;
 
     v_is_confirmed := (p_status = '已核銷 Confirmed');
-    v_mapped_pay_status := CASE WHEN v_is_confirmed THEN '已繳費 Paid'::payment_status_enum ELSE '待確認 Checking'::payment_status_enum END;
+    v_mapped_pay_status := CASE 
+        WHEN p_status = '已核銷 Confirmed' THEN '已繳費 Paid'::payment_status_enum 
+        WHEN p_status = '待繳費 Unpaid' THEN '未繳費 Unpaid'::payment_status_enum
+        ELSE '待確認 Checking'::payment_status_enum 
+    END;
 
     IF p_source_type = 'payment' THEN
         -- 讀取繳費單既有紀錄備援

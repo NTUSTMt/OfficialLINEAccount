@@ -82,7 +82,7 @@ export interface AdminFinanceItem {
   proof_image_url?: string | null;
   target_type?: string | null;
   target_id?: string | null;
-  status: '待確認 Checking' | '已核銷 Confirmed';
+  status: '待繳費 Unpaid' | '待確認 Checking' | '已核銷 Confirmed';
   payment_status?: '未繳費 Unpaid' | '待確認 Checking' | '已繳費 Paid';
   officer_notes?: string | null;
   notes?: string | null;

@@ -40,7 +40,7 @@ export default function AdminFinance({ userId }: { userId?: string }) {
 
   // 詳細對帳彈窗
   const [selectedItem, setSelectedItem] = useState<AdminFinanceItem | null>(null);
-  const [editStatus, setEditStatus] = useState<'待確認 Checking' | '已核銷 Confirmed'>('待確認 Checking');
+  const [editStatus, setEditStatus] = useState<'待繳費 Unpaid' | '待確認 Checking' | '已核銷 Confirmed'>('待確認 Checking');
   const [editNotificationStatus, setEditNotificationStatus] = useState<'未通知' | '已通知'>('未通知');
   const [officerNotes, setOfficerNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -148,6 +148,7 @@ export default function AdminFinance({ userId }: { userId?: string }) {
       onChange: setStatusFilter,
       options: [
         { value: 'all', label: '全部狀態' },
+        { value: '待繳費 Unpaid', label: '待繳費 Unpaid' },
         { value: '待確認 Checking', label: '待確認 Checking' },
         { value: '已核銷 Confirmed', label: '已核銷 Confirmed' }
       ]
@@ -311,7 +312,6 @@ export default function AdminFinance({ userId }: { userId?: string }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {filteredItems.map((it) => {
-              const isConfirmed = it.status === '已核銷 Confirmed';
               const categoryBadge = it.itemCategory === 'activity'
                 ? { label: '[活動]', bg: '#eff6ff', color: '#2563eb' }
                 : it.itemCategory === 'equipment'
@@ -357,8 +357,8 @@ export default function AdminFinance({ userId }: { userId?: string }) {
                         fontSize: '11px',
                         padding: '2px 7px',
                         borderRadius: '6px',
-                        backgroundColor: isConfirmed ? '#ecfdf5' : '#fffbeb',
-                        color: isConfirmed ? '#059669' : '#b45309',
+                        backgroundColor: it.status === '已核銷 Confirmed' ? '#ecfdf5' : it.status === '待繳費 Unpaid' ? '#fef2f2' : '#fffbeb',
+                        color: it.status === '已核銷 Confirmed' ? '#059669' : it.status === '待繳費 Unpaid' ? '#dc2626' : '#b45309',
                         fontWeight: 600
                       }}>
                         {it.status}
@@ -573,10 +573,11 @@ export default function AdminFinance({ userId }: { userId?: string }) {
                     fontSize: '14px',
                     backgroundColor: '#ffffff',
                     fontWeight: 600,
-                    color: editStatus === '已核銷 Confirmed' ? '#059669' : '#d97706',
+                    color: editStatus === '已核銷 Confirmed' ? '#059669' : editStatus === '待繳費 Unpaid' ? '#dc2626' : '#d97706',
                     boxSizing: 'border-box'
                   }}
                 >
+                  <option value="待繳費 Unpaid">待繳費 Unpaid</option>
                   <option value="待確認 Checking">待確認 Checking</option>
                   <option value="已核銷 Confirmed">已核銷 Confirmed</option>
                 </select>

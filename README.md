@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.156-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.158-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.156)](#7-最新版本異動紀錄-changelog-v01156)
+- [7. 最新版本異動紀錄 (Changelog v0.1.158)](#7-最新版本異動紀錄-changelog-v01158)
 
 ---
 
@@ -373,6 +373,34 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
+## 7. 最新版本異動紀錄 (Changelog v0.1.158)
+
+### v0.1.158 (2026-09-18)
+- 財務對帳未申報項目狀態正名為「待繳費 Unpaid」與通知狀態解耦 (觀點 B 全社應收帳款管理架構) (supabase/admin_portal_rpc.sql, src/pages/AdminFinance.tsx, src/utils/supabaseClient.ts, src/types/admin.ts):
+  - 根本原因排查：
+    1. **狀態硬編碼誤導**：`get_admin_finance_rpc` 原先將「未填報 payments 之正取待繳費活動報名（event_signups）」與「未結清之裝備租借單（loans）」直接無差別賦予 `'待確認 Checking'`。導致學員正取後尚未匯款或申報，財務後台卻直接顯示黃色「待確認 Checking」標籤，使幹部誤以為學員已付款待查帳，造成嚴重混淆。
+    2. **通知狀態領域綁錯（Domain Leakage）**：`get_admin_finance_rpc` 在活動報名區段直接讀取 `COALESCE(s.notification_status, '未通知')`。此欄位在 event_signups 表中代表「活動正備取錄取推播通知」，而非「繳費核銷完成通知」。當活動管理員發送正取通知信後，該欄位變為 `'已通知'`，導致財務對帳卡片合併顯示為荒謬的「【待確認】【已通知】」；更嚴重的是，AdminFinance.tsx 內部判定僅在 `editNotificationStatus === '未通知'` 時才觸發核銷推播，造成日後幹部核銷該筆款項時跳過發送 LINE 繳費核銷成功訊息，形成連鎖推播 Bug。
+  - 資料庫 RPC 修正 (supabase/admin_portal_rpc.sql)：
+    1. 狀態動態對應：在 `get_admin_finance_rpc` 的 event_signups 與 loans 區段，改以 `CASE WHEN ... = '待確認 Checking' THEN '待確認 Checking' ELSE '待繳費 Unpaid' END AS status` 動態產出狀態，未填報者正式正名為 `'待繳費 Unpaid'`。
+    2. 通知狀態解耦：將活動報名區段之通知狀態強制解耦為固定 `'未通知' AS notification_status`，切斷與活動錄取通知信的張冠李戴，確保核銷推播機制正常工作。
+    3. 核銷連動支援：在 `update_admin_payment_status_rpc` 中新增 `WHEN p_status = '待繳費 Unpaid' THEN '未繳費 Unpaid'::payment_status_enum` 映射，確保幹部切換狀態時不會被強迫轉換成待確認。
+  - 前端介面與型別連動 (src/types/admin.ts, src/pages/AdminFinance.tsx, src/utils/supabaseClient.ts)：
+    1. 前端型別擴充：`AdminFinanceItem.status` 與狀態選單正式納入 `'待繳費 Unpaid'`。
+    2. 視覺化徽章更新：卡片徽章針對 `'待繳費 Unpaid'` 呈現淺紅色警示背景 (`#fef2f2`) 與深紅文字 (`#dc2626`)，與已核銷綠色標籤及待確認黃色標籤鮮明區隔。
+    3. Notion 篩選器與彈窗支援：狀態篩選下拉清單新增「待繳費 Unpaid」，詳細對帳彈窗下拉選單同步支援在待繳費、待確認與已核銷間切換。
+    4. 直查備援機制補全：`fetchFinanceItemsFromSupabase` 與 `updatePaymentAndLinkedStatusInSupabase` 完整支援 `'待繳費 Unpaid'` 解析，並補齊 event_signups 直查與更新備援邏輯。
+  - 單元測試與打包建置:
+    - 新增 test/66_finance_unpaid_and_notification_decoupling.test.mjs 專屬單元測試，全面驗證 RPC 狀態正名、通知狀態解耦、前端型別、篩選選單與色彩徽章。全專案 215 項單元測試 100% 通過，前端 `tsc -b && vite build` 成功打包。
+
+### v0.1.157 (2026-09-18)
+- 修復觸發器 sync_queue 寫入遭受 RLS 阻斷問題 (supabase/triggers.sql, supabase/schema.sql, supabase/fix_sync_queue_rls.sql):
+  - 根本原因排查：管理員在裝備管理頁面更新裝備（或任何觸發資料庫 trg_sync_* 觸發器之操作）時，資料庫觸發函式 trg_fn_enqueue_sync 預設以呼叫者權限（SECURITY INVOKER）執行。由於前端使用匿名 anon key 連線，遭遇 sync_queue 資料表的 Row-Level Security 政策阻擋，引發 PostgreSQL 42501 (new row violates row-level security policy for table "sync_queue") 致命錯誤，導致整個資料庫交易被 rollback。
+  - 觸發函式宣告 SECURITY DEFINER：在 triggers.sql 的 trg_fn_enqueue_sync 函式明確宣告 SECURITY DEFINER 與 SET search_path = public，賦予觸發函式使用系統建立者最高權限排入背景同步佇列，杜絕前端 anon 權限不足問題。
+  - 補充 RLS INSERT 政策：在 schema.sql 中針對 sync_queue 資料表補充 Allow insert to sync_queue 政策，雙重防護確保系統觸發與業務寫入不受阻。
+  - 獨立遷移腳本：新增 supabase/fix_sync_queue_rls.sql 供線上環境即時執行修復與備份。
+- 單元測試與打包建置:
+  - 於 test/65_officer_system_modules.test.mjs 擴充 v0.1.157 專屬單元測試，全專案 211 項單元測試 100% 通過，前端 tsc -b && vite build 成功打包。
+
 ### v0.1.156 (2026-09-18)
 - 徹底修復裝備無法刪除照片與備註問題 (src/pages/AdminInventory.tsx, src/utils/supabaseClient.ts):
   - 根本原因排查：Supabase equipments 資料表中僅有 notes 欄位，並不存在 specs 欄位。先前儲存裝備時在 updateFields 與 payload 同時傳入 specs: formState.notes，導致 PostgREST 拋出 PGRST204 (Could not find the 'specs' column of 'equipments' in the schema cache) 致命例外，使得整筆更新被中斷中止，造成刪除照片、清空備註與其他欄位修改無法寫入資料庫。

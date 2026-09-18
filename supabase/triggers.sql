@@ -6,7 +6,10 @@
 
 -- 1. 通用背景同步觸發函式
 CREATE OR REPLACE FUNCTION trg_fn_enqueue_sync()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
     rec_id TEXT;
     target_payload JSONB;

@@ -1422,8 +1422,12 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
           proof_image_url: it.proof_image_url,
           target_type: it.target_type,
           target_id: it.target_id,
-          status: it.status === '已核銷 Confirmed' ? '已核銷 Confirmed' : '待確認 Checking',
-          payment_status: it.payment_status || (it.status === '已核銷 Confirmed' ? '已繳費 Paid' : '待確認 Checking'),
+          status: it.status === '已核銷 Confirmed'
+            ? '已核銷 Confirmed'
+            : it.status === '待繳費 Unpaid'
+              ? '待繳費 Unpaid'
+              : '待確認 Checking',
+          payment_status: it.payment_status || (it.status === '已核銷 Confirmed' ? '已繳費 Paid' : (it.status === '待繳費 Unpaid' ? '未繳費 Unpaid' : '待確認 Checking')),
           officer_notes: it.officer_notes,
           notes: it.notes || it.member_notes || '',
           notification_status: it.notification_status || '未通知',
@@ -1507,14 +1511,58 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
             name: l.name || '借用人',
             type: `裝備租借：${l.id}`,
             amount: l.total_rent || 0,
-            status: l.payment_status === '已繳費 Paid' ? '已核銷 Confirmed' : '待確認 Checking',
+            status: l.payment_status === '已繳費 Paid'
+              ? '已核銷 Confirmed'
+              : l.payment_status === '待確認 Checking'
+                ? '待確認 Checking'
+                : '待繳費 Unpaid',
             payment_status: l.payment_status || '未繳費 Unpaid',
+            notification_status: '未通知',
             created_at: l.created_at || new Date().toISOString(),
             sourceType: 'loan',
             itemCategory: 'equipment',
             target_type: 'loan',
             target_id: l.id
           });
+        }
+      });
+    }
+
+    // 3. 補充未填報 payments 之正取待繳費活動報名
+    const { data: unpaidSignups } = await supabase
+      .from('event_signups')
+      .select('id, event_id, line_user_id, name, status, payment_status, notes, created_at, events(title, fee)')
+      .eq('status', '正取 Confirmed')
+      .neq('payment_status', '已繳費 Paid')
+      .order('created_at', { ascending: false });
+
+    if (unpaidSignups && Array.isArray(unpaidSignups)) {
+      unpaidSignups.forEach((s: any) => {
+        const fee = Number(s.events?.fee) || 0;
+        if (fee > 0) {
+          const alreadyInPayments = items.some(it => it.target_id === s.event_id && it.line_user_id === s.line_user_id);
+          if (!alreadyInPayments) {
+            items.push({
+              id: s.id,
+              line_user_id: s.line_user_id,
+              name: s.name || '活動參加者',
+              type: `活動費用 (${s.events?.title || s.event_id})`,
+              amount: fee,
+              status: s.payment_status === '已繳費 Paid'
+                ? '已核銷 Confirmed'
+                : s.payment_status === '待確認 Checking'
+                  ? '待確認 Checking'
+                  : '待繳費 Unpaid',
+              payment_status: s.payment_status || '未繳費 Unpaid',
+              notes: s.notes || '',
+              notification_status: '未通知',
+              created_at: s.created_at || new Date().toISOString(),
+              sourceType: 'event_signup',
+              itemCategory: 'activity',
+              target_type: 'event',
+              target_id: s.event_id
+            });
+          }
         }
       });
     }
@@ -1534,7 +1582,7 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
   sourceType: 'payment' | 'loan' | 'event_signup';
   targetType?: string | null;
   targetId?: string | null;
-  newStatus: '待確認 Checking' | '已核銷 Confirmed';
+  newStatus: '待繳費 Unpaid' | '待確認 Checking' | '已核銷 Confirmed';
   officerName?: string;
   lineUserId?: string | null;
   notes?: string | null;
@@ -1572,7 +1620,11 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
 
   try {
     const isConfirmed = params.newStatus === '已核銷 Confirmed';
-    const mappedPayStatus = isConfirmed ? '已繳費 Paid' : '待確認 Checking';
+    const mappedPayStatus = isConfirmed
+      ? '已繳費 Paid'
+      : params.newStatus === '待繳費 Unpaid'
+        ? '未繳費 Unpaid'
+        : '待確認 Checking';
     const nowIso = new Date().toISOString();
 
     if (params.sourceType === 'payment') {
@@ -1678,6 +1730,26 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
         return {
           success: false,
           error: `[更新 loans 失敗]: 資料庫未變更任何資料列 (可能缺少 RLS 寫入權限或該租借單不存在)`
+        };
+      }
+    } else if (params.sourceType === 'event_signup') {
+      const { data: updatedSignupRows, error: sErr } = await supabase
+        .from('event_signups')
+        .update({
+          payment_status: mappedPayStatus,
+          updated_at: nowIso
+        })
+        .eq('id', params.paymentId)
+        .select('id');
+
+      if (sErr) {
+        return { success: false, error: `[更新 event_signups 繳費狀態失敗]: ${sErr.message} (代碼: ${sErr.code || 'UNKNOWN'})` };
+      }
+
+      if (!updatedSignupRows || updatedSignupRows.length === 0) {
+        return {
+          success: false,
+          error: `[更新 event_signups 失敗]: 資料庫未變更任何資料列 (可能缺少 RLS 寫入權限或該活動報名紀錄不存在)`
         };
       }
     }

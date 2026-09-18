@@ -376,3 +376,7 @@ CREATE POLICY "Service role full access payments" ON payments
 DROP POLICY IF EXISTS "Service role full access sync_queue" ON sync_queue;
 CREATE POLICY "Service role full access sync_queue" ON sync_queue
     FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "Allow insert to sync_queue" ON sync_queue;
+CREATE POLICY "Allow insert to sync_queue" ON sync_queue
+    FOR INSERT WITH CHECK (true);

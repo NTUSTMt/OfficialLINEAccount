@@ -504,4 +504,29 @@ test('幹部系統模組測試：修復裝備無法刪除照片與備註、徹�
   assert.ok(!supabaseCode.match(emojiRegex), 'supabaseClient.ts 不得包含表情符號');
 });
 
+test('資料庫架構測試：修復 sync_queue RLS 阻斷並宣告 SECURITY DEFINER (v0.1.157)', async () => {
+  const fs = await import('fs/promises');
+  const triggersSql = await fs.readFile('supabase/triggers.sql', 'utf8');
+  const schemaSql = await fs.readFile('supabase/schema.sql', 'utf8');
+  const fixSql = await fs.readFile('supabase/fix_sync_queue_rls.sql', 'utf8');
+
+  // 1. triggers.sql SECURITY DEFINER 檢驗
+  assert.ok(triggersSql.includes('SECURITY DEFINER'), 'triggers.sql 的 trg_fn_enqueue_sync 必須包含 SECURITY DEFINER');
+  assert.ok(triggersSql.includes('SET search_path = public'), 'triggers.sql 的 trg_fn_enqueue_sync 必須包含 SET search_path = public');
+
+  // 2. schema.sql 政策檢驗
+  assert.ok(schemaSql.includes('CREATE POLICY "Allow insert to sync_queue" ON sync_queue'), 'schema.sql 必須包含 Allow insert to sync_queue 政策');
+
+  // 3. fix_sync_queue_rls.sql 遷移腳本檢驗
+  assert.ok(fixSql.includes('SECURITY DEFINER'), 'fix_sync_queue_rls.sql 必須包含 SECURITY DEFINER');
+  assert.ok(fixSql.includes('CREATE POLICY "Allow insert to sync_queue" ON sync_queue'), 'fix_sync_queue_rls.sql 必須包含 Allow insert to sync_queue 政策');
+
+  // 4. 零表情符號檢驗
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  assert.ok(!triggersSql.match(emojiRegex), 'triggers.sql 不得包含表情符號');
+  assert.ok(!schemaSql.match(emojiRegex), 'schema.sql 不得包含表情符號');
+  assert.ok(!fixSql.match(emojiRegex), 'fix_sync_queue_rls.sql 不得包含表情符號');
+});
+
+
 

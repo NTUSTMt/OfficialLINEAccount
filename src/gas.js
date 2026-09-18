@@ -698,8 +698,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
       "📖 Member Guide (Quick Summary):\n" +
       "• Navigation: Use the Rich Menu at the bottom or the top-right Avatar dropdown on any web page.\n" +
       "• 6 Key Features: Events, Gear Loan (50% member discount), Dashboard, Payment, Footprints/Reflections, and AI Assistant.\n" +
-      "• Required: Complete your Profile (6 mandatory fields) before booking gear or joining hikes!\n\n" +
-      "💡 更多詳細圖文指南與流程說明，可參閱社團專屬手冊 MEMBER_GUIDE.md！";
+      "• Required: Complete your Profile (6 mandatory fields) before booking gear or joining hikes!";
     _replyMessage(replyToken, memberGuideMsg);
     return;
   }
