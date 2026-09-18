@@ -401,7 +401,6 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
           is_borrowable: Boolean(formState.is_borrowable),
           price_2day: Number(formState.price_2day) || 0,
           price_extra_day: Number(formState.price_extra_day) || 0,
-          specs: formState.notes,
           notes: formState.notes,
           images: finalImages
         };
@@ -423,7 +422,6 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
           is_borrowable: Boolean(formState.is_borrowable),
           price_2day: Number(formState.price_2day) || 0,
           price_extra_day: Number(formState.price_extra_day) || 0,
-          specs: formState.notes,
           notes: formState.notes,
           images: finalImages
         };

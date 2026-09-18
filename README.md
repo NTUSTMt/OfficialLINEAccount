@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.155-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.156-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.155)](#7-最新版本異動紀錄-changelog-v01155)
+- [7. 最新版本異動紀錄 (Changelog v0.1.156)](#7-最新版本異動紀錄-changelog-v01156)
 
 ---
 
@@ -373,6 +373,14 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
+### v0.1.156 (2026-09-18)
+- 徹底修復裝備無法刪除照片與備註問題 (src/pages/AdminInventory.tsx, src/utils/supabaseClient.ts):
+  - 根本原因排查：Supabase equipments 資料表中僅有 notes 欄位，並不存在 specs 欄位。先前儲存裝備時在 updateFields 與 payload 同時傳入 specs: formState.notes，導致 PostgREST 拋出 PGRST204 (Could not find the 'specs' column of 'equipments' in the schema cache) 致命例外，使得整筆更新被中斷中止，造成刪除照片、清空備註與其他欄位修改無法寫入資料庫。
+  - 前端 Payload 清理：自 AdminInventory.tsx 的 updateFields 與 payload 中徹底移除不存在的 specs 欄位，僅保留合法的 notes 備註欄位。
+  - 底層防呆過濾與受影響列數驗證：於 supabaseClient.ts 的 updateEquipmentFullInSupabase 與 insertEquipmentToSupabase 中加入 delete payload.specs 防禦性過濾，並串接 .select() 校驗實際更新列數，徹底杜絕靜默失敗。
+- 單元測試與打包建置:
+  - 於 test/65_officer_system_modules.test.mjs 擴充 v0.1.156 專屬單元測試，全專案 210 項單元測試 100% 通過，前端 tsc -b && vite build 成功打包。
+
 ### v0.1.155 (2026-09-18)
 - 裝備編輯正方形照片框新增觸控與滑鼠左右滑動切換手勢 (src/pages/AdminInventory.tsx):
   - 完整對齊裝備瀏覽詳細彈窗 (EquipmentDetailModal.tsx) 的原生滑動互動體驗。

@@ -1859,15 +1859,17 @@ export const insertEquipmentToSupabase = async (
   if (!supabase) return { success: false, error: '缺少 Supabase 連線' };
 
   try {
+    const insertPayload: Record<string, any> = {
+      ...item,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    // 防呆過濾：equipments 資料表不存在 specs 欄位，僅有 notes 欄位
+    delete insertPayload.specs;
+
     const { error } = await supabase
       .from('equipments')
-      .insert([
-        {
-          ...item,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ]);
+      .insert([insertPayload]);
 
     if (error) {
       console.error('[Supabase] 新增裝備失敗:', error.message);
@@ -1896,15 +1898,22 @@ export const updateEquipmentFullInSupabase = async (
       updated_at: new Date().toISOString()
     };
     delete updatePayload.id;
+    // 防呆過濾：equipments 資料表不存在 specs 欄位，僅有 notes 欄位
+    delete updatePayload.specs;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('equipments')
       .update(updatePayload)
-      .eq('id', id);
+      .eq('id', id)
+      .select();
 
     if (error) {
       console.error('[Supabase] 更新裝備失敗:', error.message);
       return { success: false, error: `[更新裝備失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})` };
+    }
+
+    if (!data || data.length === 0) {
+      return { success: false, error: `[更新裝備失敗]: 找不到裝備編號 ${id} 或無更新權限` };
     }
 
     return { success: true };

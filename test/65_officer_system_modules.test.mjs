@@ -484,4 +484,24 @@ test('幹部系統模組測試：裝備照片左右滑動手勢切換與 Google 
   assert.ok(!modalCode.match(emojiRegex), 'EquipmentDetailModal.tsx 不得包含表情符號');
 });
 
+test('幹部系統模組測試：修復裝備無法刪除照片與備註、徹底移除不存在之 specs 欄位與防呆過濾 (v0.1.156)', async () => {
+  const fs = await import('fs/promises');
+  const inventoryCode = await fs.readFile('src/pages/AdminInventory.tsx', 'utf8');
+  const supabaseCode = await fs.readFile('src/utils/supabaseClient.ts', 'utf8');
+
+  // 1. AdminInventory.tsx updateFields 檢驗：絕不可傳入不存在之 specs
+  assert.ok(!inventoryCode.includes('specs: formState.notes'), 'AdminInventory updateFields 與 payload 絕不可傳入不存在之 specs');
+  assert.ok(inventoryCode.includes('notes: formState.notes'), 'AdminInventory 必須傳送合法的 notes 備註欄位');
+
+  // 2. supabaseClient.ts 防禦性過濾檢驗
+  assert.ok(supabaseCode.includes('delete updatePayload.specs;'), 'updateEquipmentFullInSupabase 必須防呆過濾 specs 欄位');
+  assert.ok(supabaseCode.includes('delete insertPayload.specs;'), 'insertEquipmentToSupabase 必須防呆過濾 specs 欄位');
+  assert.ok(supabaseCode.includes('.select()'), 'updateEquipmentFullInSupabase 必須使用 .select() 驗證更新受影響列數');
+
+  // 3. 零表情符號檢驗
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  assert.ok(!inventoryCode.match(emojiRegex), 'AdminInventory.tsx 不得包含表情符號');
+  assert.ok(!supabaseCode.match(emojiRegex), 'supabaseClient.ts 不得包含表情符號');
+});
+
 
