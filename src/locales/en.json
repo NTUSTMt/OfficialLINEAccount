@@ -31,10 +31,30 @@
     "menuHistory": "History",
     "menuAchievements": "Footprint",
     "adminEvents": {
-      "title": "Events Admin",
-      "subtitle": "Events Management"
+      "title": "Events",
+      "subtitle": "Events"
     },
-    "menuAdminEvents": "Officer"
+    "adminMembers": {
+      "title": "Members",
+      "subtitle": "Members"
+    },
+    "adminFinance": {
+      "title": "Finance",
+      "subtitle": "Finance"
+    },
+    "adminLoans": {
+      "title": "Loans",
+      "subtitle": "Loans"
+    },
+    "adminInventory": {
+      "title": "Inventory",
+      "subtitle": "Inventory"
+    },
+    "menuAdminEvents": "Events",
+    "menuAdminMembers": "Members",
+    "menuAdminFinance": "Finance",
+    "menuAdminLoans": "Loans",
+    "menuAdminInventory": "Inventory"
   },
   "register": {
     "loading": "Loading profile, please wait...",

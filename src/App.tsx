@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense, lazy, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ShieldCheck, Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle } from 'lucide-react';
+import { Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle, Calendar, Users, PackageCheck, Layers } from 'lucide-react';
 import liff from '@line/liff';
 import { appendAuthToken } from './utils/api';
 import { getCache, setCache } from './utils/cacheUtils';
@@ -59,22 +59,22 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
   const getHeaderDetails = () => {
     const path = location.pathname;
     if (path.includes('/admin/members') && path.includes('/records')) {
-      return { title: '個人歷史全紀錄', subtitle: '活動、裝備與繳費歷程', icon: <ShieldCheck size={24} color="#059669" /> };
+      return { title: '個人歷史全紀錄', subtitle: '活動、裝備與繳費歷程', icon: <FileText size={24} color="#059669" /> };
     }
     if (path.includes('/admin/members')) {
-      return { title: '社員資料管理', subtitle: '社員名冊與權限維護', icon: <ShieldCheck size={24} color="#059669" /> };
+      return { title: t('nav.adminMembers.title', '社員資料'), subtitle: t('nav.adminMembers.subtitle', 'Members'), icon: <Users size={24} color="#059669" /> };
     }
     if (path.includes('/admin/finance')) {
-      return { title: '財務對帳審核', subtitle: '活動與裝備款項對帳', icon: <ShieldCheck size={24} color="#059669" /> };
+      return { title: t('nav.adminFinance.title', '財務對帳'), subtitle: t('nav.adminFinance.subtitle', 'Finance'), icon: <CreditCard size={24} color="#059669" /> };
     }
     if (path.includes('/admin/loans')) {
-      return { title: '裝備租借管理', subtitle: '租借訂單與歸還追蹤', icon: <ShieldCheck size={24} color="#059669" /> };
+      return { title: t('nav.adminLoans.title', '租借管理'), subtitle: t('nav.adminLoans.subtitle', 'Loans'), icon: <PackageCheck size={24} color="#059669" /> };
     }
     if (path.includes('/admin/inventory')) {
-      return { title: '裝備庫存管理', subtitle: '社團裝備資產維護', icon: <ShieldCheck size={24} color="#059669" /> };
+      return { title: t('nav.adminInventory.title', '裝備庫存'), subtitle: t('nav.adminInventory.subtitle', 'Inventory'), icon: <Layers size={24} color="#059669" /> };
     }
     if (path.includes('/admin')) {
-      return { title: t('nav.adminEvents.title'), subtitle: t('nav.adminEvents.subtitle'), icon: <ShieldCheck size={24} color="#059669" /> };
+      return { title: t('nav.adminEvents.title', '活動管理'), subtitle: t('nav.adminEvents.subtitle', 'Events'), icon: <Calendar size={24} color="#059669" /> };
     }
     if (path.includes('/achievements')) {
       return { title: t('nav.achievements.title'), subtitle: t('nav.achievements.subtitle'), icon: <Award size={24} color="#059669" /> };
@@ -202,135 +202,161 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
                 border: '1px solid #e2e8f0',
                 padding: '6px 0',
-                width: '140px',
+                width: '160px',
                 zIndex: 1000,
                 textAlign: 'left'
               }}>
                 <div
                   onClick={() => handleNav('/dashboard', LIFF_URLS.DASHBOARD)}
-                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
-                  {t('nav.menuDashboard')}
+                  <User size={15} color="#64748b" />
+                  <span>{t('nav.menuDashboard')}</span>
                 </div>
                 <div
                   onClick={() => handleNav('/register', LIFF_URLS.REGISTER)}
-                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
-                  {t('nav.menuRegister')}
+                  <ClipboardList size={15} color="#64748b" />
+                  <span>{t('nav.menuRegister')}</span>
                 </div>
                 <div
                   onClick={() => handleNav('/borrow', LIFF_URLS.BORROW)}
-                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
-                  {t('nav.menuBorrow')}
+                  <Compass size={15} color="#64748b" />
+                  <span>{t('nav.menuBorrow')}</span>
                 </div>
                 <div
                   onClick={() => handleNav('/payment', LIFF_URLS.PAYMENT)}
-                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
-                  {t('nav.menuPayment')}
+                  <CreditCard size={15} color="#64748b" />
+                  <span>{t('nav.menuPayment')}</span>
                 </div>
                 <div
                   onClick={() => handleNav('/history', LIFF_URLS.HISTORY)}
-                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
-                  {t('nav.menuHistory')}
+                  <FileText size={15} color="#64748b" />
+                  <span>{t('nav.menuHistory')}</span>
                 </div>
                 <div
                   onClick={() => handleNav('/achievements', LIFF_URLS.ACHIEVEMENTS)}
-                  style={{ padding: '10px 16px', cursor: 'pointer', fontSize: '14px', color: '#334155', fontWeight: 'bold', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
-                  {t('nav.menuAchievements')}
+                  <Award size={15} color="#64748b" />
+                  <span>{t('nav.menuAchievements')}</span>
                 </div>
                 {isOfficer && (
                   <>
+                    <div style={{ margin: '4px 0', borderTop: '1px solid #e2e8f0' }} />
                     <div
                       onClick={() => handleNav('/admin/events', LIFF_URLS.ADMIN_EVENTS)}
                       style={{
-                        padding: '10px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '9px 16px',
                         cursor: 'pointer',
-                        fontSize: '14px',
+                        fontSize: '13px',
                         color: '#059669',
-                        fontWeight: 'bold',
-                        borderTop: '1px solid #e2e8f0',
-                        transition: 'background 0.2s'
+                        fontWeight: 600,
+                        transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
                       onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      {t('nav.menuAdminEvents')}
+                      <Calendar size={15} color="#059669" />
+                      <span>{t('nav.menuAdminEvents', '活動管理')}</span>
                     </div>
                     <div
                       onClick={() => handleNav('/admin/members')}
                       style={{
-                        padding: '10px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '9px 16px',
                         cursor: 'pointer',
-                        fontSize: '14px',
+                        fontSize: '13px',
                         color: '#059669',
-                        fontWeight: 'bold',
-                        transition: 'background 0.2s'
+                        fontWeight: 600,
+                        transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
                       onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      社員資料管理
+                      <Users size={15} color="#059669" />
+                      <span>{t('nav.menuAdminMembers', '社員資料')}</span>
                     </div>
                     <div
                       onClick={() => handleNav('/admin/finance')}
                       style={{
-                        padding: '10px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '9px 16px',
                         cursor: 'pointer',
-                        fontSize: '14px',
+                        fontSize: '13px',
                         color: '#059669',
-                        fontWeight: 'bold',
-                        transition: 'background 0.2s'
+                        fontWeight: 600,
+                        transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
                       onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      財務對帳管理
+                      <CreditCard size={15} color="#059669" />
+                      <span>{t('nav.menuAdminFinance', '財務對帳')}</span>
                     </div>
                     <div
                       onClick={() => handleNav('/admin/loans')}
                       style={{
-                        padding: '10px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '9px 16px',
                         cursor: 'pointer',
-                        fontSize: '14px',
+                        fontSize: '13px',
                         color: '#059669',
-                        fontWeight: 'bold',
-                        transition: 'background 0.2s'
+                        fontWeight: 600,
+                        transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
                       onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      裝備租借管理
+                      <PackageCheck size={15} color="#059669" />
+                      <span>{t('nav.menuAdminLoans', '租借管理')}</span>
                     </div>
                     <div
                       onClick={() => handleNav('/admin/inventory')}
                       style={{
-                        padding: '10px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '9px 16px',
                         cursor: 'pointer',
-                        fontSize: '14px',
+                        fontSize: '13px',
                         color: '#059669',
-                        fontWeight: 'bold',
-                        transition: 'background 0.2s'
+                        fontWeight: 600,
+                        transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
                       onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      裝備庫存管理
+                      <Layers size={15} color="#059669" />
+                      <span>{t('nav.menuAdminInventory', '裝備庫存')}</span>
                     </div>
                   </>
                 )}

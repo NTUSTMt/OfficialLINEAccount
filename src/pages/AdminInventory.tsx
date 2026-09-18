@@ -5,7 +5,10 @@ import {
   AlertCircle,
   CheckCircle2,
   X,
-  Camera
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  Plus
 } from 'lucide-react';
 import {
   fetchAllInventoryFromSupabase,
@@ -57,6 +60,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
   const [editingItem, setEditingItem] = useState<AdminInventoryItem | null>(null);
+  const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
   const [formState, setFormState] = useState<{
     id: string;
     name: string;
@@ -112,6 +116,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
     setIsProcessing(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setActivePhotoIdx(0);
     try {
       const nextId = await getNextEquipmentIdFromSupabase();
       setFormState({
@@ -144,6 +149,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
     setIsAddMode(false);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setActivePhotoIdx(0);
 
     let imgList: string[] = [];
     if (Array.isArray(it.images)) {
@@ -162,7 +168,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
       price_2day: it.price_2day ?? 0,
       price_extra_day: it.price_extra_day ?? 0,
       specs: it.specs || '',
-      notes: it.notes || '',
+      notes: it.notes || it.specs || '',
       images: imgList
     });
     setIsEditModalOpen(true);
@@ -192,10 +198,14 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
           });
           const result = await res.json();
           if (result.status === 'success' && result.urls && result.urls.length > 0) {
-            setFormState(prev => ({
-              ...prev,
-              images: [...prev.images, result.urls[0]]
-            }));
+            setFormState(prev => {
+              const newImages = [...prev.images, result.urls[0]];
+              setActivePhotoIdx(newImages.length - 1);
+              return {
+                ...prev,
+                images: newImages
+              };
+            });
           } else {
             setErrorMessage(result.message || '相片上傳失敗');
           }
@@ -214,10 +224,14 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
 
   // 刪除相片
   const handleRemovePhoto = (idxToRemove: number) => {
-    setFormState(prev => ({
-      ...prev,
-      images: prev.images.filter((_, idx) => idx !== idxToRemove)
-    }));
+    setFormState(prev => {
+      const nextImages = prev.images.filter((_, idx) => idx !== idxToRemove);
+      setActivePhotoIdx(currentIdx => Math.max(0, Math.min(currentIdx, nextImages.length - 1)));
+      return {
+        ...prev,
+        images: nextImages
+      };
+    });
   };
 
   // 儲存裝備 (新增或更新)
@@ -714,58 +728,339 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            textAlign: 'left'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a' }}>
-                {isAddMode ? '新增裝備品項' : `編輯裝備：${editingItem?.name}`}
-              </h3>
+            {/* 1:1 正方形相片輪播與管理區 (比照 Borrow 頁面風格) */}
+            <div
+              className="detail-modal-image-wrapper"
+              style={{
+                width: '100%',
+                aspectRatio: '1 / 1',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                position: 'relative',
+                backgroundColor: '#f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '14px'
+              }}
+            >
+              {/* 裝備代號懸浮膠囊 (左上角) */}
+              {formState.id && (
+                <span className="equipment-code-capsule">
+                  裝備代號：{formState.id}
+                </span>
+              )}
+
+              {/* 關閉按鈕 (右上角) */}
               <button
+                type="button"
                 onClick={() => setIsEditModalOpen(false)}
                 disabled={isProcessing}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  right: '10px',
+                  zIndex: 15,
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                  backdropFilter: 'blur(6px)',
+                  border: 'none',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+                title="關閉"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
+
+              {/* 當前相片展示或預設圖 */}
+              {formState.images.length > 0 ? (
+                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                  <img
+                    src={getDirectImageUrl(formState.images[activePhotoIdx]) || formState.images[activePhotoIdx]}
+                    alt={formState.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+
+                  {/* 刪除當前照片按鈕 (右上角關閉按鈕下方) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemovePhoto(activePhotoIdx);
+                    }}
+                    title="刪除此相片"
+                    style={{
+                      position: 'absolute',
+                      top: '48px',
+                      right: '10px',
+                      zIndex: 15,
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      backgroundColor: 'rgba(239, 68, 68, 0.85)',
+                      backdropFilter: 'blur(6px)',
+                      border: 'none',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+
+                  {/* 左右切換箭頭 */}
+                  {formState.images.length > 1 && activePhotoIdx > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActivePhotoIdx(p => Math.max(0, p - 1))}
+                      style={{
+                        position: 'absolute',
+                        left: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        zIndex: 14,
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                        border: 'none',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                  )}
+                  {formState.images.length > 1 && activePhotoIdx < formState.images.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setActivePhotoIdx(p => Math.min(formState.images.length - 1, p + 1))}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        zIndex: 14,
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                        border: 'none',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  )}
+
+                  {/* 底部小圓點與新增按鈕 */}
+                  <div
+                    className="photo-carousel-dots"
+                    style={{
+                      position: 'absolute',
+                      bottom: '10px',
+                      left: 0,
+                      right: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      zIndex: 14
+                    }}
+                  >
+                    {formState.images.map((_, idx) => (
+                      <span
+                        key={idx}
+                        className={`carousel-dot ${idx === activePhotoIdx ? 'active' : ''}`}
+                        onClick={() => setActivePhotoIdx(idx)}
+                        style={{
+                          width: idx === activePhotoIdx ? '16px' : '6px',
+                          height: '6px',
+                          borderRadius: '3px',
+                          backgroundColor: idx === activePhotoIdx ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      />
+                    ))}
+                    {formState.images.length < 5 && (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingPhoto}
+                        title="上傳新相片"
+                        style={{
+                          backgroundColor: '#10b981',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '18px',
+                          height: '18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ffffff',
+                          cursor: isUploadingPhoto ? 'not-allowed' : 'pointer',
+                          marginLeft: '4px'
+                        }}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ProductImage name={formState.name || '裝備'} imageUrl="" />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                    style={{
+                      position: 'absolute',
+                      bottom: '16px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      zIndex: 14,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 16px',
+                      borderRadius: '20px',
+                      backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                      backdropFilter: 'blur(6px)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      color: '#ffffff',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: isUploadingPhoto ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    <Camera size={15} />
+                    <span>{isUploadingPhoto ? '上傳相片中...' : '點擊上傳相片'}</span>
+                  </button>
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                style={{ display: 'none' }}
+              />
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px' }}>
-              {/* 自動配發裝備代號 (唯讀顯示) */}
-              <div style={{ backgroundColor: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '12px', color: '#64748b' }}>裝備編號代碼 (系統自動流水號)</div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#2563eb', fontFamily: 'monospace' }}>
-                  {formState.id}
-                </div>
-              </div>
+            {/* 彈窗標題 */}
+            <div style={{ marginBottom: '14px', textAlign: 'left' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a', textAlign: 'left' }}>
+                {isAddMode ? '新增裝備品項' : `編輯裝備：${editingItem?.name || formState.name}`}
+              </h3>
+              <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b', textAlign: 'left' }}>
+                {isAddMode ? '設定新裝備基本規格、庫存與租借費率' : `代號 ${formState.id} 之裝備規格與設定`}
+              </p>
+            </div>
 
+            {/* 相片快速縮圖列表 */}
+            {formState.images.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '14px' }}>
+                {formState.images.map((imgUrl, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setActivePhotoIdx(idx)}
+                    style={{
+                      position: 'relative',
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: idx === activePhotoIdx ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                      cursor: 'pointer',
+                      flexShrink: 0
+                    }}
+                  >
+                    <img
+                      src={getDirectImageUrl(imgUrl)}
+                      alt={`相片 ${idx + 1}`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </div>
+                ))}
+                {formState.images.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '6px',
+                      border: '1px dashed #cbd5e1',
+                      backgroundColor: '#f8fafc',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#64748b',
+                      fontSize: '10px',
+                      cursor: isUploadingPhoto ? 'not-allowed' : 'pointer',
+                      flexShrink: 0,
+                      gap: '2px'
+                    }}
+                  >
+                    <Plus size={16} />
+                    <span>新增</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px', textAlign: 'left' }}>
               {/* 裝備名稱 */}
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>裝備名稱 *</label>
+              <div style={{ textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', textAlign: 'left' }}>裝備名稱 *</label>
                 <input
                   type="text"
                   value={formState.name}
                   onChange={e => setFormState(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="如：MSR 雙人帳篷"
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', textAlign: 'left' }}
                 />
               </div>
 
               {/* 分類與是否開放外借 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>裝備分類</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', textAlign: 'left' }}>
+                <div style={{ textAlign: 'left' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', textAlign: 'left' }}>裝備分類</label>
                   <select
                     value={formState.category}
                     onChange={e => setFormState(prev => ({ ...prev, category: e.target.value as any }))}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', textAlign: 'left' }}
                   >
                     {CATEGORIES.map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>開放外借借用</label>
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'left' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px', textAlign: 'left' }}>開放外借借用</label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#0f172a', cursor: 'pointer' }}>
                     <input
                       type="checkbox"
@@ -779,157 +1074,65 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
               </div>
 
               {/* 庫存數量 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>總庫存量</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', textAlign: 'left' }}>
+                <div style={{ textAlign: 'left' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', textAlign: 'left' }}>總庫存量</label>
                   <input
                     type="number"
                     min="0"
                     value={formState.total_qty}
                     onChange={e => setFormState(prev => ({ ...prev, total_qty: parseInt(e.target.value, 10) || 0 }))}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', textAlign: 'left' }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>目前可借數量</label>
+                <div style={{ textAlign: 'left' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', textAlign: 'left' }}>目前可借數量</label>
                   <input
                     type="number"
                     min="0"
                     value={formState.available_qty}
                     onChange={e => setFormState(prev => ({ ...prev, available_qty: parseInt(e.target.value, 10) || 0 }))}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', textAlign: 'left' }}
                   />
                 </div>
               </div>
 
               {/* 租金計費 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>2天基本租金 (元)</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', textAlign: 'left' }}>
+                <div style={{ textAlign: 'left' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', textAlign: 'left' }}>2天基本租金 (元)</label>
                   <input
                     type="number"
                     min="0"
                     value={formState.price_2day}
                     onChange={e => setFormState(prev => ({ ...prev, price_2day: parseInt(e.target.value, 10) || 0 }))}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', textAlign: 'left' }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>續租每日加成 (元)</label>
+                <div style={{ textAlign: 'left' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', textAlign: 'left' }}>續租每日加成 (元)</label>
                   <input
                     type="number"
                     min="0"
                     value={formState.price_extra_day}
                     onChange={e => setFormState(prev => ({ ...prev, price_extra_day: parseInt(e.target.value, 10) || 0 }))}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', textAlign: 'left' }}
                   />
                 </div>
               </div>
 
-              {/* 規格與注意事項 */}
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>規格描述 (重量、材質、尺寸)</label>
+              {/* 備註 (規格、注意事項合併為備註) */}
+              <div style={{ textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', textAlign: 'left' }}>
+                  備註
+                </label>
                 <textarea
-                  rows={2}
-                  value={formState.specs}
-                  onChange={e => setFormState(prev => ({ ...prev, specs: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>注意事項與保養備註</label>
-                <textarea
-                  rows={2}
+                  rows={3}
                   value={formState.notes}
-                  onChange={e => setFormState(prev => ({ ...prev, notes: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  onChange={e => setFormState(prev => ({ ...prev, notes: e.target.value, specs: e.target.value }))}
+                  placeholder="填寫規格描述、尺寸、材質、保養與注意事項等備註..."
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box', textAlign: 'left' }}
                 />
-              </div>
-
-              {/* 相片管理 (新增與刪除相片，沿用 Borrow 頁面樣式) */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>
-                    裝備相片 ({formState.images.length})
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadingPhoto}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      border: '1px solid #cbd5e1',
-                      backgroundColor: '#f8fafc',
-                      color: '#2563eb',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: isUploadingPhoto ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    <Camera size={13} />
-                    <span>{isUploadingPhoto ? '上傳相片中...' : '上傳新相片'}</span>
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoUpload}
-                    style={{ display: 'none' }}
-                  />
-                </div>
-
-                {/* 相片列表縮圖與刪除按鈕 */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {formState.images.map((imgUrl, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        position: 'relative',
-                        width: '70px',
-                        height: '70px',
-                        borderRadius: '6px',
-                        overflow: 'hidden',
-                        border: '1px solid #e2e8f0'
-                      }}
-                    >
-                      <img
-                        src={getDirectImageUrl(imgUrl)}
-                        alt={`相片 ${idx + 1}`}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePhoto(idx)}
-                        style={{
-                          position: 'absolute',
-                          top: '2px',
-                          right: '2px',
-                          backgroundColor: 'rgba(0,0,0,0.6)',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: '50%',
-                          width: '20px',
-                          height: '20px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          padding: 0
-                        }}
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                  {formState.images.length === 0 && (
-                    <div style={{ fontSize: '12px', color: '#94a3b8' }}>目前無相片</div>
-                  )}
-                </div>
               </div>
             </div>
 

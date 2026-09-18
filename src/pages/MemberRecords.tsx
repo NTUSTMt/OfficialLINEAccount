@@ -5,8 +5,6 @@ import {
   Calendar,
   Package,
   CreditCard,
-  ChevronDown,
-  ChevronUp,
   AlertCircle,
   FileText,
   Clock,
@@ -292,10 +290,6 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
           <ArrowLeft size={16} />
           <span>返回社員詳細資料</span>
         </button>
-
-        <div style={{ fontSize: '12px', color: '#64748b' }}>
-          LINE ID: <code style={{ backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>{userId}</code>
-        </div>
       </div>
 
       {/* 社員基本資訊看板 */}
@@ -452,13 +446,16 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
             return (
               <div
                 key={r.id}
+                onClick={() => toggleExpand(r.id)}
                 style={{
                   backgroundColor: '#ffffff',
                   borderRadius: '12px',
                   border: '1px solid #e2e8f0',
                   padding: '14px 16px',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                  transition: 'all 0.15s ease'
+                  transition: 'all 0.15s ease',
+                  cursor: 'pointer',
+                  userSelect: 'none'
                 }}
               >
                 {/* 卡片標頭列 */}
@@ -518,60 +515,30 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
                 </div>
 
                 {/* 卡片主要內容 */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'space-between',
-                  gap: '12px'
-                }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
-                      {r.title}
-                    </div>
-
-                    {/* 金額顯示 */}
-                    {r.amount !== undefined && r.amount > 0 && (
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#d97706', marginBottom: '4px' }}>
-                        金額: NT$ {r.amount.toLocaleString()}
-                      </div>
-                    )}
-
-                    {/* 備註預覽 */}
-                    {r.notes && (
-                      <div style={{ fontSize: '12px', color: '#475569', backgroundColor: '#f8fafc', padding: '6px 8px', borderRadius: '6px', border: '1px solid #f1f5f9', marginTop: '4px' }}>
-                        <span style={{ fontWeight: 600, color: '#64748b' }}>社員備註:</span> {r.notes}
-                      </div>
-                    )}
-
-                    {r.officerNotes && (
-                      <div style={{ fontSize: '12px', color: '#047857', backgroundColor: '#ecfdf5', padding: '6px 8px', borderRadius: '6px', border: '1px solid #d1fae5', marginTop: '4px' }}>
-                        <span style={{ fontWeight: 600, color: '#065f46' }}>幹部備註:</span> {r.officerNotes}
-                      </div>
-                    )}
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                    {r.title}
                   </div>
 
-                  {/* 展開細節按鈕 */}
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(r.id)}
-                    style={{
-                      background: 'none',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '8px',
-                      padding: '4px 8px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: '#475569',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      flexShrink: 0
-                    }}
-                  >
-                    <span>{isExpanded ? '收合' : '詳情'}</span>
-                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
+                  {/* 金額顯示 */}
+                  {r.amount !== undefined && r.amount > 0 && (
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#d97706', marginBottom: '4px' }}>
+                      金額: NT$ {r.amount.toLocaleString()}
+                    </div>
+                  )}
+
+                  {/* 備註預覽 */}
+                  {r.notes && (
+                    <div style={{ fontSize: '12px', color: '#475569', backgroundColor: '#f8fafc', padding: '6px 8px', borderRadius: '6px', border: '1px solid #f1f5f9', marginTop: '4px' }}>
+                      <span style={{ fontWeight: 600, color: '#64748b' }}>社員備註:</span> {r.notes}
+                    </div>
+                  )}
+
+                  {r.officerNotes && (
+                    <div style={{ fontSize: '12px', color: '#047857', backgroundColor: '#ecfdf5', padding: '6px 8px', borderRadius: '6px', border: '1px solid #d1fae5', marginTop: '4px' }}>
+                      <span style={{ fontWeight: 600, color: '#065f46' }}>幹部備註:</span> {r.officerNotes}
+                    </div>
+                  )}
                 </div>
 
                 {/* 展開之完整詳細資訊抽屜 */}

@@ -1973,8 +1973,27 @@ export const fetchMemberTimelineRecordsFromSupabase = async (
         p_target_user_id: targetUserId
       });
       if (!rpcErr && rpcRes && rpcRes.status === 'success' && Array.isArray(rpcRes.records)) {
+        let member = rpcRes.member || null;
+        if (!member || !member.name) {
+          try {
+            const fallbackMember = await fetchMemberFullDetailFromSupabase(targetUserId, officerUserId);
+            if (fallbackMember) {
+              member = {
+                line_user_id: fallbackMember.line_user_id,
+                name: fallbackMember.name,
+                student_id: fallbackMember.student_id || undefined,
+                department: fallbackMember.department || undefined,
+                phone: fallbackMember.phone || undefined,
+                email: fallbackMember.email || undefined,
+                role: fallbackMember.is_officer ? (fallbackMember.officer_role || '幹部') : (fallbackMember.identity_status || '一般社員')
+              };
+            }
+          } catch (e) {
+            console.warn('[Supabase] memberDetail fallback 例外:', e);
+          }
+        }
         return {
-          member: rpcRes.member || null,
+          member,
           records: rpcRes.records as MemberTimelineRecord[]
         };
       }
@@ -1988,12 +2007,44 @@ export const fetchMemberTimelineRecordsFromSupabase = async (
 
   // 2. 直查資料表備援邏輯
   try {
-    // 查詢社員基本資料
-    const { data: memberData } = await supabase
-      .from('members')
-      .select('line_user_id, name, student_id, department, phone, email, role, avatar_url')
-      .eq('line_user_id', targetUserId)
-      .maybeSingle();
+    // 查詢社員基本資料 (優先調用成熟之全欄位詳情函式)
+    let memberInfo: MemberTimelineResult['member'] = null;
+    try {
+      const fullDetail = await fetchMemberFullDetailFromSupabase(targetUserId, officerUserId);
+      if (fullDetail) {
+        memberInfo = {
+          line_user_id: fullDetail.line_user_id,
+          name: fullDetail.name,
+          student_id: fullDetail.student_id || undefined,
+          department: fullDetail.department || undefined,
+          phone: fullDetail.phone || undefined,
+          email: fullDetail.email || undefined,
+          role: fullDetail.is_officer ? (fullDetail.officer_role || '幹部') : (fullDetail.identity_status || '一般社員')
+        };
+      }
+    } catch (mErr) {
+      console.warn('[Supabase] fetchMemberFullDetailFromSupabase 備援例外:', mErr);
+    }
+
+    if (!memberInfo) {
+      const { data: memberData } = await supabase
+        .from('members')
+        .select('line_user_id, name, student_id, department, phone, email, identity_status, is_officer, officer_role')
+        .eq('line_user_id', targetUserId)
+        .maybeSingle();
+
+      if (memberData) {
+        memberInfo = {
+          line_user_id: memberData.line_user_id,
+          name: memberData.name,
+          student_id: memberData.student_id || undefined,
+          department: memberData.department || undefined,
+          phone: memberData.phone || undefined,
+          email: memberData.email || undefined,
+          role: memberData.is_officer ? (memberData.officer_role || '幹部') : (memberData.identity_status || '一般社員')
+        };
+      }
+    }
 
     const allRecords: MemberTimelineRecord[] = [];
 
@@ -2159,7 +2210,7 @@ export const fetchMemberTimelineRecordsFromSupabase = async (
     allRecords.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     return {
-      member: memberData || null,
+      member: memberInfo || null,
       records: allRecords
     };
   } catch (err: any) {

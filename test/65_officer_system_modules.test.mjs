@@ -306,3 +306,65 @@ test('幹部系統模組測試：個人歷史全紀錄新頁面、動態概況�
   assert.ok(!editCode.match(emojiRegex), 'MemberDetailEdit.tsx 不得包含表情符號');
 });
 
+test('幹部系統模組測試：大頭貼選單圖示與名稱一致、歷史紀錄優化、裝備編輯彈窗正方形相片與備註合併 (v0.1.151)', async () => {
+  const fs = await import('fs/promises');
+  const appCode = await fs.readFile('src/App.tsx', 'utf8');
+  const zhLocale = JSON.parse(await fs.readFile('src/locales/zh.json', 'utf8'));
+  const enLocale = JSON.parse(await fs.readFile('src/locales/en.json', 'utf8'));
+  const recordsCode = await fs.readFile('src/pages/MemberRecords.tsx', 'utf8');
+  const inventoryCode = await fs.readFile('src/pages/AdminInventory.tsx', 'utf8');
+  const sbCode = await fs.readFile('src/utils/supabaseClient.ts', 'utf8');
+  const portalSql = await fs.readFile('supabase/admin_portal_rpc.sql', 'utf8');
+
+  // 1. 幹部系統名稱統一為 4 個字，英文副標題簡練，圖示與頂部一致
+  assert.strictEqual(zhLocale.nav.adminEvents.title, '活動管理');
+  assert.strictEqual(zhLocale.nav.adminEvents.subtitle, 'Events');
+  assert.strictEqual(zhLocale.nav.adminMembers.title, '社員資料');
+  assert.strictEqual(zhLocale.nav.adminMembers.subtitle, 'Members');
+  assert.strictEqual(zhLocale.nav.adminFinance.title, '財務對帳');
+  assert.strictEqual(zhLocale.nav.adminFinance.subtitle, 'Finance');
+  assert.strictEqual(zhLocale.nav.adminLoans.title, '租借管理');
+  assert.strictEqual(zhLocale.nav.adminLoans.subtitle, 'Loans');
+  assert.strictEqual(zhLocale.nav.adminInventory.title, '裝備庫存');
+  assert.strictEqual(zhLocale.nav.adminInventory.subtitle, 'Inventory');
+
+  assert.strictEqual(zhLocale.nav.menuAdminEvents, '活動管理');
+  assert.strictEqual(zhLocale.nav.menuAdminMembers, '社員資料');
+  assert.strictEqual(zhLocale.nav.menuAdminFinance, '財務對帳');
+  assert.strictEqual(zhLocale.nav.menuAdminLoans, '租借管理');
+  assert.strictEqual(zhLocale.nav.menuAdminInventory, '裝備庫存');
+
+  assert.strictEqual(enLocale.nav.adminEvents.title, 'Events');
+  assert.strictEqual(enLocale.nav.adminMembers.title, 'Members');
+  assert.strictEqual(enLocale.nav.adminFinance.title, 'Finance');
+  assert.strictEqual(enLocale.nav.adminLoans.title, 'Loans');
+  assert.strictEqual(enLocale.nav.adminInventory.title, 'Inventory');
+
+  // App.tsx 大頭貼選單寬度與圖示
+  assert.ok(appCode.includes("width: '160px'"), 'App.tsx 大頭貼下拉選單寬度應設為 160px');
+  assert.ok(appCode.includes('PackageCheck'), 'App.tsx 必須引入 PackageCheck 圖示');
+  assert.ok(appCode.includes('Layers'), 'App.tsx 必須引入 Layers 圖示');
+
+  // 2. 社員個人歷史全紀錄：移除頂部 LINE ID、點擊卡片直接展開、修復未知社員
+  assert.ok(!recordsCode.includes('LINE ID: {userId}'), 'MemberRecords 必須移除頂部 LINE ID 標籤');
+  assert.ok(!recordsCode.includes('ChevronDown'), 'MemberRecords 不得包含展開收合箭頭');
+  assert.ok(recordsCode.includes("cursor: 'pointer'"), 'MemberRecords 歷史紀錄卡片必須可整張點擊展開');
+  assert.ok(portalSql.includes("CASE WHEN m.is_officer = TRUE THEN COALESCE(m.officer_role, '幹部')"), 'admin_portal_rpc.sql 必須使用正確的社員角色欄位');
+  assert.ok(sbCode.includes('fetchMemberFullDetailFromSupabase(targetUserId, officerUserId)'), 'supabaseClient 必須具備未知社員兜底查詢機制');
+
+  // 3. 裝備庫存編輯彈窗：最上方大正方形相片 (aspectRatio: 1 / 1)、內容靠左、規格與注意事項合併為備註
+  assert.ok(inventoryCode.includes("aspectRatio: '1 / 1'"), 'AdminInventory 編輯彈窗最上方必須為 1:1 正方形相片輪播區');
+  assert.ok(inventoryCode.includes('equipment-code-capsule'), 'AdminInventory 正方形相片左上角必須包含代號懸浮膠囊');
+  assert.ok(inventoryCode.includes('photo-carousel-dots'), 'AdminInventory 正方形相片底部必須具備圓點指示器');
+  assert.ok(inventoryCode.includes("textAlign: 'left'"), 'AdminInventory 編輯彈窗內容必須全面靠左對齊');
+  assert.ok(inventoryCode.includes('備註'), 'AdminInventory 必須包含備註欄位');
+  assert.ok(!inventoryCode.includes('規格描述 (重量、材質、尺寸)'), 'AdminInventory 必須移除獨立的規格描述輸入框');
+  assert.ok(!inventoryCode.includes('注意事項與保養備註'), 'AdminInventory 必須移除獨立的注意事項輸入框');
+
+  // 4. 全檔零表情符號檢驗
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  assert.ok(!recordsCode.match(emojiRegex), 'MemberRecords.tsx 不得包含表情符號');
+  assert.ok(!inventoryCode.match(emojiRegex), 'AdminInventory.tsx 不得包含表情符號');
+});
+
+

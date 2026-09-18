@@ -12,8 +12,16 @@
     "menuPayment": "繳費系統",
     "menuHistory": "繳費紀錄",
     "menuAchievements": "出隊足跡",
-    "adminEvents": { "title": "活動管理", "subtitle": "Events Management" },
-    "menuAdminEvents": "幹部系統"
+    "adminEvents": { "title": "活動管理", "subtitle": "Events" },
+    "adminMembers": { "title": "社員資料", "subtitle": "Members" },
+    "adminFinance": { "title": "財務對帳", "subtitle": "Finance" },
+    "adminLoans": { "title": "租借管理", "subtitle": "Loans" },
+    "adminInventory": { "title": "裝備庫存", "subtitle": "Inventory" },
+    "menuAdminEvents": "活動管理",
+    "menuAdminMembers": "社員資料",
+    "menuAdminFinance": "財務對帳",
+    "menuAdminLoans": "租借管理",
+    "menuAdminInventory": "裝備庫存"
   },
   "register": {
     "loading": "載入個人資料中，請稍候...",

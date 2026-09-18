@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.150-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.151-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.150)](#7-最新版本異動紀錄-changelog-v01150)
+- [7. 最新版本異動紀錄 (Changelog v0.1.151)](#7-最新版本異動紀錄-changelog-v01151)
 
 ---
 
@@ -375,8 +375,22 @@ pnpm test
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
   - **小岳 AI 調用說明更新**：明確標註私聊提問必須以「小岳」開頭方會答覆，一般提問將由幹部回覆。
   - **中英文 Part I / Part II 100% 鏡像對齊**：同步修正英文版對應章節、狀態清單、導航方式與 FAQ。
-- 🧪 **單元測試擴充**：
-  - 新增 `test/60_ai_mention_and_chat_keyword_cleanup.test.mjs`，測試全數 158 項通過，前端打包建置無錯誤。
+### v0.1.151 (2026-09-18)
+- 右側大頭貼選單圖示與名稱一致性 (src/App.tsx, src/locales/zh.json, src/locales/en.json)：
+  - 幹部系統選單名稱全面統一為 4 個字（活動管理、社員資料、財務對帳、租借管理、裝備庫存），英文副標題採精簡風格（Events, Members, Finance, Loans, Inventory）。
+  - 右側大頭貼下拉選單寬度最佳化為 160px，為所有社員項目與幹部系統項目全面配置現代幾何圖示（Calendar, Users, CreditCard, PackageCheck, Layers），確保下拉選單名稱與圖示與全域頂部導覽列 100% 嚴格一致。
+- 社員個人歷史紀錄優化與未知社員修復 (src/pages/MemberRecords.tsx, src/utils/supabaseClient.ts, supabase/admin_portal_rpc.sql)：
+  - 頂部導航列移除 LINE ID: {userId} 冗餘標籤，保留最清晰之返回按鈕與頁面導航。
+  - 歷史紀錄卡片移除多餘的「詳情/收合」按鈕與箭頭，改為點擊整張卡片直覺展開/收合細項，並加上 hover / active 觸控回饋與指標游標。
+  - 診斷並修復頂部社員概況卡片顯示「未知社員」問題：修正 `get_admin_member_records_rpc` 因查詢 members 表中不存在之 role 與 avatar_url 欄位導致之報錯，並於前端加入 `fetchMemberFullDetailFromSupabase` 雙重兜底查詢機制。
+- 裝備庫存編輯與新增彈窗重構 (src/pages/AdminInventory.tsx)：
+  - 比照 Borrow 頁面之裝備詳細彈窗風格：最上方配置 1:1 正方形相片輪播展示與相片管理區 (aspectRatio: 1 / 1)，左上角懸浮裝備代號膠囊，右上角配置半透明關閉按鈕。
+  - 正方形相片支援左右箭頭與小圓點指示切換、右上角一鍵刪除當前相片、無相片時居中上傳相片，並在圖片下方提供橫向相片縮圖快速預覽列與新增相片按鈕。
+  - 編輯彈窗內容全面強制靠左排版 (textAlign: 'left')，杜絕任何標籤與輸入內容置中。
+  - 欄位架構優化：依照 Supabase 資料庫 schema 將原本分開的「規格描述」與「注意事項」合併為單一「備註」欄位，介面簡潔且寫入一致。
+- 單元測試與建置驗證：
+  - 於 test/65_officer_system_modules.test.mjs 新增 v0.1.151 完整單元測試，全數 205 項測試通過，tsc -b && vite build 打包建置零錯誤。
+
 ### v0.1.150 (2026-09-18)
 - 社員詳細資料「個人歷史全紀錄」專屬獨立頁面與動態概況調整 (src/pages/MemberDetailEdit.tsx, src/pages/MemberRecords.tsx, src/App.tsx):
   - 於「社員詳細資料編輯頁面」的動態概況區塊，移除左側社員姓名，標準化為「進行中動態概況」。

@@ -247,8 +247,8 @@ BEGIN
         'department', m.department,
         'phone', m.phone,
         'email', m.email,
-        'role', m.role,
-        'avatar_url', m.avatar_url
+        'role', CASE WHEN m.is_officer = TRUE THEN COALESCE(m.officer_role, '幹部') ELSE COALESCE(m.identity_status, '一般社員') END,
+        'avatar_url', NULL
     ) INTO v_member_json
     FROM members m
     WHERE m.line_user_id = trim(p_target_user_id)
