@@ -479,6 +479,8 @@
     "alert": {
       "minContentLength": "Reflection content must be at least 10 characters!",
       "submitSuccess": "Thank you for your feedback! It has been added to your achievement wall!",
+      "updateSuccess": "Reflection and ratings updated successfully!",
+      "updateSuccessMock": "Reflection and ratings updated successfully! (Local mock update)",
       "submitFailed": "Submission failed: {{message}}",
       "submitSuccessMock": "Thank you for your feedback! (Local mock submission successful)"
     },
@@ -501,11 +503,16 @@
     "modal": {
       "viewTitle": "Review Trip Reflection",
       "writeTitle": "Write Trip Reflection",
+      "editTitle": "Edit Trip Reflection",
+      "editBtn": "Edit Reflection",
+      "cancelEditBtn": "Cancel Edit",
+      "saveEditBtn": "Save Changes",
       "difficultyLabel": "Difficulty (1~5 Stars)",
       "beautyLabel": "Scenic Recommendation (1~5 Stars)",
       "contentLabel": "Reflection Share (Min 10 characters)",
       "contentPlaceholder": "Share your gains, interesting stories on the mountain, or special thanks to officers/guides! Happy climbing!",
       "imageLabel": "Summit/Group Photo URL (Optional)",
+      "existingPhotos": "Existing photos:",
       "imagePlaceholder": "https://example.com/your-summit-photo.jpg",
       "closeBtn": "Close",
       "cancelBtn": "Cancel",

@@ -9,7 +9,8 @@ import {
   FileText,
   Clock,
   User,
-  ExternalLink
+  ExternalLink,
+  CheckCircle2
 } from 'lucide-react';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
 import {
@@ -36,6 +37,13 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => setSuccessMessage(null), 2500);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
 
   // 搜尋、篩選與排序狀態
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,6 +68,9 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
       const res = await fetchMemberTimelineRecordsFromSupabase(userId, officerUserId);
       setMemberInfo(res.member);
       setRecords(res.records || []);
+      if (isManualRefresh) {
+        setSuccessMessage('已同步最新資料！');
+      }
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(msg);
@@ -382,6 +393,27 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
         onRefresh={() => loadData(true)}
         isRefreshing={isRefreshing}
       />
+
+      {/* 成功訊息 Toast */}
+      {successMessage && (
+        <div style={{
+          backgroundColor: '#ecfdf5',
+          border: '1px solid #a7f3d0',
+          borderRadius: '10px',
+          padding: '10px 14px',
+          marginBottom: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          color: '#065f46',
+          fontSize: '13px',
+          fontWeight: 600,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+        }}>
+          <CheckCircle2 size={16} color="#059669" />
+          <span>{successMessage}</span>
+        </div>
+      )}
 
       {/* 錯誤訊息輸出 */}
       {errorMessage && (

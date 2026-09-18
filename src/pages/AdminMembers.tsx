@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronRight, AlertCircle, ShieldCheck } from 'lucide-react';
+import { ChevronRight, AlertCircle, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { fetchAdminMembersFromSupabase } from '../utils/supabaseClient';
 import type { AdminMemberListItem } from '../types/admin';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
@@ -16,6 +16,7 @@ export default function AdminMembers({ userId }: { userId?: string }) {
   const [members, setMembers] = useState<AdminMemberListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedMemberForProfile, setSelectedMemberForProfile] = useState<AdminMemberListItem | null>(null);
 
   // 搜尋、篩選與排序狀態
@@ -26,12 +27,21 @@ export default function AdminMembers({ userId }: { userId?: string }) {
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const loadMembers = async () => {
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => setSuccessMessage(null), 2500);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
+
+  const loadMembers = async (isManual = true) => {
     setLoading(true);
     setErrorMessage(null);
     try {
       const data = await fetchAdminMembersFromSupabase(userId);
       setMembers(data);
+      if (isManual) {
+        setSuccessMessage('已同步最新資料！');
+      }
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(msg);
@@ -41,7 +51,7 @@ export default function AdminMembers({ userId }: { userId?: string }) {
   };
 
   useEffect(() => {
-    loadMembers();
+    loadMembers(false);
   }, [userId]);
 
   // 篩選群組定義
@@ -177,6 +187,26 @@ export default function AdminMembers({ userId }: { userId?: string }) {
               <div style={{ fontWeight: 600 }}>載入失敗</div>
               <div style={{ marginTop: '2px', wordBreak: 'break-all' }}>{errorMessage}</div>
             </div>
+          </div>
+        )}
+
+        {successMessage && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: '#ecfdf5',
+            border: '1px solid #a7f3d0',
+            color: '#065f46',
+            borderRadius: '10px',
+            padding: '10px 14px',
+            marginBottom: '12px',
+            fontSize: '13px',
+            fontWeight: 600,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+          }}>
+            <CheckCircle2 size={16} color="#059669" />
+            <span>{successMessage}</span>
           </div>
         )}
 

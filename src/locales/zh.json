@@ -446,6 +446,8 @@
     "alert": {
       "minContentLength": "心得內容請至少輸入 10 個字喔！",
       "submitSuccess": "感謝您的心得回饋！已經為您寫入成就牆囉！",
+      "updateSuccess": "心得與評分已成功更新！",
+      "updateSuccessMock": "心得與評分已成功更新！(本地模擬寫入成功)",
       "submitFailed": "提交失敗：{{message}}",
       "submitSuccessMock": "感謝您的心得回饋！(本地模擬寫入成功)"
     },
@@ -468,11 +470,16 @@
     "modal": {
       "viewTitle": "路線出隊心得回顧",
       "writeTitle": "填寫出隊心得回饋",
+      "editTitle": "編輯出隊心得回饋",
+      "editBtn": "編輯心得",
+      "cancelEditBtn": "取消編輯",
+      "saveEditBtn": "儲存修改",
       "difficultyLabel": "路線難易度 (1~5 星)",
       "beautyLabel": "風景推薦度 (1~5 星)",
       "contentLabel": "心得分享 (最少 10 字)",
       "contentPlaceholder": "跟大家分享一下這次的收穫、山上的趣事，或是想特別感謝哪位幹部/嚮導吧！祝登山愉快！",
       "imageLabel": "登頂照 / 團體合照網址 (選填)",
+      "existingPhotos": "既有照片：",
       "imagePlaceholder": "https://example.com/your-summit-photo.jpg",
       "closeBtn": "關閉視窗",
       "cancelBtn": "取消",

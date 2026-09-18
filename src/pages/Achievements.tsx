@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Award, Star } from 'lucide-react';
+import { AlertCircle, Award, Star, Edit3 } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
@@ -42,8 +42,10 @@ function Achievements({ userId }: { userId: string }) {
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [photoFiles, setPhotoFiles] = useState<{ base64: string; name: string }[]>([]);
+  const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [isViewOnly, setIsViewOnly] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -157,26 +159,49 @@ function Achievements({ userId }: { userId: string }) {
   const openForm = (activity: Activity, viewOnly = false) => {
     setSelectedActivity(activity);
     setIsViewOnly(viewOnly);
+    setIsEditing(false);
     if (viewOnly && activity.reflection) {
       setDifficulty(activity.reflection.difficulty);
       setBeauty(activity.reflection.beauty);
       setContent(activity.reflection.content);
-      setImageUrl(activity.reflection.imageUrl);
+      setImageUrl(activity.reflection.imageUrl || '');
+      const parsedPhotos = (activity.reflection.imageUrl || '')
+        .split(/[\n,]/)
+        .map(u => u.trim())
+        .filter(Boolean);
+      setExistingPhotos(parsedPhotos);
       setPhotoFiles([]);
     } else {
       setDifficulty(5);
       setBeauty(5);
       setContent('');
       setImageUrl('');
+      setExistingPhotos([]);
       setPhotoFiles([]);
     }
+  };
+
+  const handleCancelEdit = () => {
+    if (selectedActivity && selectedActivity.reflection) {
+      setDifficulty(selectedActivity.reflection.difficulty);
+      setBeauty(selectedActivity.reflection.beauty);
+      setContent(selectedActivity.reflection.content);
+      setImageUrl(selectedActivity.reflection.imageUrl || '');
+      const parsedPhotos = (selectedActivity.reflection.imageUrl || '')
+        .split(/[\n,]/)
+        .map(u => u.trim())
+        .filter(Boolean);
+      setExistingPhotos(parsedPhotos);
+      setPhotoFiles([]);
+    }
+    setIsEditing(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const remainingLimit = 5 - photoFiles.length;
+    const remainingLimit = Math.max(0, 5 - existingPhotos.length - photoFiles.length);
     if (files.length > remainingLimit) {
       alert(t('register.alert.maxFiles', { limit: remainingLimit }) || `最多只能再上傳 ${remainingLimit} 張照片！`);
       e.target.value = '';
@@ -274,15 +299,7 @@ function Achievements({ userId }: { userId: string }) {
     setSubmitting(true);
     let sbSuccess = false;
     try {
-      const detailsPayload = {
-        eventId: selectedActivity.eventId,
-        eventName: selectedActivity.title,
-        eventDate: selectedActivity.date,
-        difficulty,
-        beauty,
-        content: content.trim(),
-        imageUrl: imageUrl.trim()
-      };
+      let finalPhotoUrls = [...existingPhotos];
 
       // 1. 若有新上傳的心得相片，呼叫輕量 Helper 上傳 Drive 取得連結 (純 Drive API，不接觸試算表)
       if (photoFiles.length > 0) {
@@ -299,15 +316,24 @@ function Achievements({ userId }: { userId: string }) {
           });
           const uploadResult = await uploadRes.json();
           if (uploadResult.status === 'success' && uploadResult.urls) {
-            const combinedPhotos = [detailsPayload.imageUrl, ...uploadResult.urls]
-              .filter(Boolean)
-              .join('\n');
-            detailsPayload.imageUrl = combinedPhotos;
+            finalPhotoUrls = [...finalPhotoUrls, ...uploadResult.urls];
           }
         } catch (uploadErr) {
           console.warn('[Achievements] 上傳心得相片例外，繼續儲存心得:', uploadErr);
         }
       }
+
+      const combinedImageUrl = finalPhotoUrls.join('\n');
+
+      const detailsPayload = {
+        eventId: selectedActivity.eventId,
+        eventName: selectedActivity.title,
+        eventDate: selectedActivity.date,
+        difficulty,
+        beauty,
+        content: content.trim(),
+        imageUrl: combinedImageUrl
+      };
 
       // ⚡ 2. 100% 直寫 Supabase 心得評分 (< 50ms)
       if (userId && userId !== 'TEST_USER_ID') {
@@ -318,31 +344,35 @@ function Achievements({ userId }: { userId: string }) {
         }
 
         if (sbSuccess) {
-          // ⭐️ 發送心得提交推播通知給幹部群組
-          try {
-            const finalImg = detailsPayload.imageUrl || '';
-            const photoList = finalImg ? finalImg.split(',') : [];
-            const payload = withAuthPayload({
-              action: 'notify_reflection_submitted',
-              userId: userId,
-              userName: '社員',
-              eventName: selectedActivity.title,
-              difficulty: difficulty,
-              beauty: beauty,
-              content: content,
-              photoUrls: photoList
-            });
-            fetch(GAS_API_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify(payload),
-              mode: 'no-cors'
-            }).catch(e => console.warn('通知心得失敗:', e));
-          } catch (notifErr) {
-            console.warn('發送心得推播例外:', notifErr);
+          // ⭐️ 僅首次提交時發送心得推播通知給幹部群組，編輯更新不重複發送通知
+          if (!isEditing) {
+            try {
+              const photoList = combinedImageUrl
+                ? combinedImageUrl.split(/[\n,]/).map(u => u.trim()).filter(Boolean)
+                : [];
+              const payload = withAuthPayload({
+                action: 'notify_reflection_submitted',
+                userId: userId,
+                userName: '社員',
+                eventName: selectedActivity.title,
+                difficulty: difficulty,
+                beauty: beauty,
+                content: content,
+                photoUrls: photoList
+              });
+              fetch(GAS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload),
+                mode: 'no-cors'
+              }).catch(e => console.warn('通知心得失敗:', e));
+            } catch (notifErr) {
+              console.warn('發送心得推播例外:', notifErr);
+            }
           }
 
-          alert(t('achievements.alert.submitSuccess'));
+          alert(isEditing ? (t('achievements.alert.updateSuccess') || '心得與評分已成功更新！') : t('achievements.alert.submitSuccess'));
+          setIsEditing(false);
           closeForm();
           setRefreshKey(k => k + 1); // 重新整理
         } else {
@@ -350,11 +380,13 @@ function Achievements({ userId }: { userId: string }) {
         }
       } else {
         // 假資料本地模擬提交
-        alert(t('achievements.alert.submitSuccessMock'));
+        alert(isEditing ? (t('achievements.alert.updateSuccessMock') || '心得與評分已成功更新！(本地模擬寫入成功)') : t('achievements.alert.submitSuccessMock'));
+        setIsEditing(false);
         closeForm();
         // 更新本地 state 模擬
         if (data) {
-          const mockImgUrl = photoFiles.length > 0 ? photoFiles.map(f => f.base64).join(',') : imageUrl;
+          const mockNewImgUrls = photoFiles.map(f => f.base64);
+          const mockImgUrl = [...existingPhotos, ...mockNewImgUrls].join('\n');
           const updated = data.activities.map(act => {
             if (act.eventId === selectedActivity.eventId) {
               return {
@@ -367,7 +399,7 @@ function Achievements({ userId }: { userId: string }) {
           });
           setData({
             totalAttended: data.totalAttended,
-            reflectionsCount: data.reflectionsCount + 1,
+            reflectionsCount: isEditing ? data.reflectionsCount : data.reflectionsCount + 1,
             activities: updated
           });
         }
@@ -574,9 +606,37 @@ function Achievements({ userId }: { userId: string }) {
             boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
             position: 'relative'
           }}>
-            <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>
-              {isViewOnly ? t('achievements.modal.viewTitle') : t('achievements.modal.writeTitle')}
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>
+                {isEditing
+                  ? t('achievements.modal.editTitle')
+                  : isViewOnly
+                    ? t('achievements.modal.viewTitle')
+                    : t('achievements.modal.writeTitle')}
+              </h3>
+              {isViewOnly && !isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #3b82f6',
+                    backgroundColor: '#eff6ff',
+                    color: '#2563eb',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Edit3 size={13} />
+                  <span>{t('achievements.modal.editBtn')}</span>
+                </button>
+              )}
+            </div>
             <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
               {selectedActivity.title}
             </p>
@@ -594,12 +654,12 @@ function Achievements({ userId }: { userId: string }) {
                       <button
                         key={star}
                         type="button"
-                        disabled={isViewOnly}
+                        disabled={isViewOnly && !isEditing}
                         onClick={() => setDifficulty(star)}
                         style={{
                           background: 'none',
                           border: 'none',
-                          cursor: isViewOnly ? 'default' : 'pointer',
+                          cursor: (isViewOnly && !isEditing) ? 'default' : 'pointer',
                           padding: '2px',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -621,12 +681,12 @@ function Achievements({ userId }: { userId: string }) {
                       <button
                         key={star}
                         type="button"
-                        disabled={isViewOnly}
+                        disabled={isViewOnly && !isEditing}
                         onClick={() => setBeauty(star)}
                         style={{
                           background: 'none',
                           border: 'none',
-                          cursor: isViewOnly ? 'default' : 'pointer',
+                          cursor: (isViewOnly && !isEditing) ? 'default' : 'pointer',
                           padding: '2px',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -647,7 +707,7 @@ function Achievements({ userId }: { userId: string }) {
                 </label>
                 <textarea
                   id="modalContent"
-                  disabled={isViewOnly}
+                  disabled={isViewOnly && !isEditing}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   placeholder={t('achievements.modal.contentPlaceholder')}
@@ -660,7 +720,8 @@ function Achievements({ userId }: { userId: string }) {
                     fontSize: '13px',
                     fontFamily: 'inherit',
                     resize: 'none',
-                    outline: 'none'
+                    outline: 'none',
+                    backgroundColor: (isViewOnly && !isEditing) ? '#f8fafc' : 'white'
                   }}
                   required
                 />
@@ -671,14 +732,59 @@ function Achievements({ userId }: { userId: string }) {
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155', display: 'block', marginBottom: '6px' }}>
                   {t('achievements.modal.imageLabel') || '登頂照 / 團體合照 (選填，最多5張)'}
                 </label>
-                {!isViewOnly ? (
+                {(!isViewOnly || isEditing) ? (
                   <>
+                    {/* 既有照片 (可單張刪除) */}
+                    {existingPhotos.length > 0 && (
+                      <div style={{ marginBottom: '10px' }}>
+                        <p style={{ fontWeight: 'bold', fontSize: '12px', color: '#374151', margin: '0 0 6px 0' }}>
+                          {t('achievements.modal.existingPhotos') || '既有照片：'}
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
+                          {existingPhotos.map((url, idx) => (
+                            <div key={`existing-${idx}`} style={{ position: 'relative', height: '80px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                              <img
+                                src={getDirectImageUrl(url, 200) || url}
+                                alt="Existing photo"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                              />
+                              <button
+                                type="button"
+                                title="刪除此照片"
+                                onClick={() => setExistingPhotos(prev => prev.filter((_, i) => i !== idx))}
+                                style={{
+                                  position: 'absolute',
+                                  top: '2px',
+                                  right: '2px',
+                                  width: '18px',
+                                  height: '18px',
+                                  borderRadius: '50%',
+                                  backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                                  color: 'white',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  lineHeight: '18px',
+                                  textAlign: 'center',
+                                  padding: 0,
+                                  fontWeight: 'bold'
+                                }}
+                              >
+                                &times;
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <input
                       type="file"
                       accept="image/*"
                       multiple
                       onChange={handleFileChange}
-                      disabled={photoFiles.length >= 5}
+                      disabled={existingPhotos.length + photoFiles.length >= 5}
                       style={{
                         width: '100%',
                         borderRadius: '8px',
@@ -686,16 +792,17 @@ function Achievements({ userId }: { userId: string }) {
                         padding: '8px 10px',
                         fontSize: '13px',
                         outline: 'none',
-                        backgroundColor: photoFiles.length >= 5 ? '#e2e8f0' : 'white'
+                        backgroundColor: (existingPhotos.length + photoFiles.length >= 5) ? '#e2e8f0' : 'white'
                       }}
                     />
                     <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
                       {t('register.step4.uploadTip') || '單檔最大 10MB。自動壓縮且轉換為 .jpg'}
+                      {` (已保留 ${existingPhotos.length} 張，還可上傳 ${Math.max(0, 5 - existingPhotos.length - photoFiles.length)} 張)`}
                     </p>
                     {photoFiles.length > 0 && (
                       <div className="selected-files-list" style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <p style={{ fontWeight: 'bold', fontSize: '12px', color: '#374151' }}>
-                          {t('register.step4.selectedFiles', { count: photoFiles.length }) || `已選取 ${photoFiles.length} 張圖片：`}
+                          {t('register.step4.selectedFiles', { count: photoFiles.length }) || `新選取 ${photoFiles.length} 張圖片：`}
                         </p>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
                           {photoFiles.map((file, idx) => (
@@ -737,7 +844,7 @@ function Achievements({ userId }: { userId: string }) {
                 ) : (
                   imageUrl && (
                     <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {imageUrl.split(',').map((url, idx) => (
+                      {imageUrl.split(/[\n,]/).map((url) => url.trim()).filter(Boolean).map((url, idx) => (
                         <div key={idx} style={{ borderRadius: '8px', overflow: 'hidden', height: '220px', border: '1px solid #e2e8f0' }}>
                           <img
                             src={getDirectImageUrl(url, 1000) || url}
@@ -755,40 +862,80 @@ function Achievements({ userId }: { userId: string }) {
 
               {/* 按鈕組 */}
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={closeForm}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: 'white',
-                    color: '#475569',
-                    fontSize: '13px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {isViewOnly ? t('achievements.modal.closeBtn') : t('achievements.modal.cancelBtn')}
-                </button>
-                {!isViewOnly && (
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    style={{
-                      padding: '8px 20px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      fontSize: '13px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
-                    }}
-                  >
-                    {submitting ? t('achievements.modal.submittingBtn') : t('achievements.modal.submitBtn')}
-                  </button>
+                {isEditing ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: 'white',
+                        color: '#475569',
+                        fontSize: '13px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('achievements.modal.cancelEditBtn')}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      style={{
+                        padding: '8px 20px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        backgroundColor: '#3b82f6',
+                        color: 'white',
+                        fontSize: '13px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
+                      }}
+                    >
+                      {submitting ? t('achievements.modal.submittingBtn') : t('achievements.modal.saveEditBtn')}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={closeForm}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: 'white',
+                        color: '#475569',
+                        fontSize: '13px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {isViewOnly ? t('achievements.modal.closeBtn') : t('achievements.modal.cancelBtn')}
+                    </button>
+                    {!isViewOnly && (
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        style={{
+                          padding: '8px 20px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          fontSize: '13px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
+                        }}
+                      >
+                        {submitting ? t('achievements.modal.submittingBtn') : t('achievements.modal.submitBtn')}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
 

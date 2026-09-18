@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.158-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.159-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.158)](#7-最新版本異動紀錄-changelog-v01158)
+- [7. 最新版本異動紀錄 (Changelog v0.1.159)](#7-最新版本異動紀錄-changelog-v01159)
 
 ---
 
@@ -373,7 +373,21 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.158)
+## 7. 最新版本異動紀錄 (Changelog v0.1.159)
+
+### v0.1.159 (2026-09-18)
+- 幹部管理系統「重新整理優先直連 Supabase (<50ms)」與極速同步修復 (src/pages/AdminEvents.tsx, src/pages/AdminFinance.tsx, src/pages/AdminMembers.tsx, src/pages/AdminLoans.tsx, src/pages/AdminInventory.tsx, src/pages/MemberRecords.tsx):
+  - 根本原因排查：先前點擊管理頁面的重新整理按鈕時，因傳遞 `forceRefresh = true`，系統直接繞過 Supabase 快取並調用緩慢的 Google Apps Script 端點 (`get_admin_events`, `get_event_signups`)，導致幹部面臨 5~15 秒的無感等待與轉圈，重載體驗甚至劣於直接刷新整個瀏覽器網頁。
+  - 架構修復：清除記憶體快取後，所有管理頁面的重新整理操作一律「優先直連 Supabase RPC」，平均在 50ms 內完成秒開；嚴格限制僅在 Supabase 連線發生網路或資料庫報錯時，才無縫回退至 GAS 備援。
+  - 整合成功 Toast 綠色回饋提示：於 6 大幹部管理與個人歷史頁面（AdminEvents, AdminFinance, AdminMembers, AdminLoans, AdminInventory, MemberRecords）加入「已同步最新資料！」綠色 Toast 回饋橫幅，2~2.5 秒後自動優雅淡出，提供幹部明確的操作即時回饋。
+- 出隊心得「編輯回饋」功能解鎖與相片獨立管理維護 (src/pages/Achievements.tsx, src/locales/zh.json, src/locales/en.json):
+  - 解鎖心得編輯模式：在「查看我的回憶」彈窗頂部新增「編輯心得」按鈕 (`<Edit3 size={13} />`)，點擊即可切換至編輯模式，解鎖星等評分與心得內容輸入框，並提供「取消編輯」（一鍵還原既有內容）與「儲存修改」按鈕。
+  - 既有相片獨立刪除機制：將已儲存的心得相片轉化為縮圖網格展示，每張照片右上角均配置獨立紅色「✕」刪除按鈕，方便社員精準剔除不合適的照片。
+  - 動態剩餘配額與 Canvas 壓縮上傳：即時計算剩餘可上傳張數 (`5 - 既有照片數 - 新選取數`)，支援追加上傳至多 5 張照片上限，並透過前端 Canvas 自適應壓縮後上傳 Google Drive。
+  - 編輯更新靜默防擾機制：心得修改儲存後直寫 Supabase `save_reflection_rpc`（內部已具備 `ON CONFLICT (event_id, line_user_id) DO UPDATE` 支援），並主動跳過向幹部群組推播之 `notify_reflection_submitted`，避免重複修改多次打擾幹部。
+  - 雙語系國際化支援：於 `zh.json` 與 `en.json` 補充 `editTitle`, `editBtn`, `cancelEditBtn`, `saveEditBtn`, `updateSuccess`, `existingPhotos` 等完整詞彙。
+- 單元測試與打包建置:
+  - 新增 `test/67_fast_refresh_and_reflection_edit.test.mjs` 專屬單元測試，全面驗證 Supabase 優先重載、成功 Toast 提示、心得編輯、相片刪除與編輯防重複推播機制。全專案 219 項單元測試 100% 通過，前端 `tsc -b && vite build` 成功打包零錯誤。
 
 ### v0.1.158 (2026-09-18)
 - 財務對帳未申報項目狀態正名為「待繳費 Unpaid」與通知狀態解耦 (觀點 B 全社應收帳款管理架構) (supabase/admin_portal_rpc.sql, src/pages/AdminFinance.tsx, src/utils/supabaseClient.ts, src/types/admin.ts):

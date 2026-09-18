@@ -98,12 +98,21 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadData = async () => {
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => setSuccessMessage(null), 2500);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
+
+  const loadData = async (isManual = true) => {
     setLoading(true);
     setErrorMessage(null);
     try {
       const data = await fetchAllInventoryFromSupabase();
       setItems(data);
+      if (isManual) {
+        setSuccessMessage('已同步最新資料！');
+      }
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(msg);
@@ -113,7 +122,7 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
   };
 
   useEffect(() => {
-    loadData();
+    loadData(false);
   }, []);
 
   // 開啟新增裝備

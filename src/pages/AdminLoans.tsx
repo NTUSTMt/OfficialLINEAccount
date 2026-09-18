@@ -44,12 +44,21 @@ export default function AdminLoans({ userId }: { userId?: string }) {
   const [editNotes, setEditNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const loadData = async () => {
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => setSuccessMessage(null), 2500);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
+
+  const loadData = async (isManual = true) => {
     setLoading(true);
     setErrorMessage(null);
     try {
       const data = await fetchAllLoansFromSupabase(userId);
       setLoans(data);
+      if (isManual) {
+        setSuccessMessage('已同步最新資料！');
+      }
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(msg);
@@ -59,7 +68,7 @@ export default function AdminLoans({ userId }: { userId?: string }) {
   };
 
   useEffect(() => {
-    loadData();
+    loadData(false);
   }, [userId]);
 
   const handleOpenDetail = (l: AdminLoanItem) => {

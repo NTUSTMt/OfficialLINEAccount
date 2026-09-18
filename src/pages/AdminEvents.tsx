@@ -25,7 +25,8 @@ import { NotionFilterBar, type FilterGroup, type SortOption } from '../component
 import {
   Lock,
   Mountain,
-  ArrowLeft
+  ArrowLeft,
+  CheckCircle2
 } from 'lucide-react';
 
 interface AdminEventsProps {
@@ -72,6 +73,13 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const [eventSortBy, setEventSortBy] = useState<'startDate' | 'deadline' | 'status'>('deadline');
   const [eventSortOrder, setEventSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isRefreshingEvents, setIsRefreshingEvents] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 2000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
 
   // 活動狀態篩選群組
   const eventFilters: FilterGroup[] = useMemo(() => [
@@ -144,29 +152,30 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     try {
       let loadedFromSb = false;
       let sbErrorDetail: string | null = null;
-      if (!forceRefresh) {
-        try {
-          // 1. 優先從 Supabase 秒級讀取活動清單與報名人數統計 (< 50ms)
-          const sbRes = await fetchAdminEventsFromSupabase(userId);
-          if (sbRes && sbRes.isOfficer) {
-            loadedFromSb = true;
-            setIsOfficer(true);
-            setEvents(sbRes.events);
-            setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
-            setLoadingEvents(false);
-            setAuthLoading(false);
-            setErrorNotice(null);
-          } else {
-            sbErrorDetail = getLastSupabaseError();
+      try {
+        // 1. 無論是否 forceRefresh，一律優先從 Supabase 秒級讀取活動清單與報名人數統計 (< 50ms)
+        const sbRes = await fetchAdminEventsFromSupabase(userId);
+        if (sbRes && sbRes.isOfficer) {
+          loadedFromSb = true;
+          setIsOfficer(true);
+          setEvents(sbRes.events);
+          setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
+          setLoadingEvents(false);
+          setAuthLoading(false);
+          setErrorNotice(null);
+          if (forceRefresh) {
+            setToastMessage('已同步最新資料！');
           }
-        } catch (sbErr: any) {
-          console.warn('[AdminEvents] Supabase 活動讀取例外:', sbErr);
-          sbErrorDetail = sbErr?.message || String(sbErr);
+        } else {
+          sbErrorDetail = getLastSupabaseError();
         }
+      } catch (sbErr: any) {
+        console.warn('[AdminEvents] Supabase 活動讀取例外:', sbErr);
+        sbErrorDetail = sbErr?.message || String(sbErr);
       }
 
-      // 2. 若 Supabase 未配置、未命中幹部或強制重新整理，無縫由 GAS 備援
-      if (!loadedFromSb || forceRefresh) {
+      // 2. 僅在 Supabase 讀取失敗或未命中幹部時，才無縫由 GAS 備援
+      if (!loadedFromSb) {
         try {
           const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId}`));
           const data = await res.json();
@@ -174,6 +183,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             setIsOfficer(true);
             setEvents(data.events);
             setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
+            if (forceRefresh) {
+              setToastMessage('已同步最新資料！');
+            }
             if (sbErrorDetail) {
               setErrorNotice(`[Supabase 載入異常已改走 GAS 備援]: ${sbErrorDetail}`);
             } else {
@@ -565,28 +577,32 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     }
     let loadedFromSb = false;
     try {
-      if (!forceRefresh) {
-        try {
-          // 1. 優先從 Supabase 秒開讀取報名名冊 (< 50ms)
-          const sbSignups = await fetchAdminEventSignupsFromSupabase(userId || 'TEST_USER_ID', evt.id);
-          if (sbSignups) {
-            loadedFromSb = true;
-            setSignupsList(sbSignups);
-            setCache(cacheKey, sbSignups, 120);
-            setLoadingSignups(false);
+      try {
+        // 1. 無論是否 forceRefresh，一律優先從 Supabase 秒開讀取報名名冊 (< 50ms)
+        const sbSignups = await fetchAdminEventSignupsFromSupabase(userId || 'TEST_USER_ID', evt.id);
+        if (sbSignups) {
+          loadedFromSb = true;
+          setSignupsList(sbSignups);
+          setCache(cacheKey, sbSignups, 120);
+          setLoadingSignups(false);
+          if (forceRefresh) {
+            setToastMessage('已同步最新資料！');
           }
-        } catch (sbErr) {
-          console.warn('[AdminEvents] Supabase 報名名冊讀取例外:', sbErr);
         }
+      } catch (sbErr) {
+        console.warn('[AdminEvents] Supabase 報名名冊讀取例外:', sbErr);
       }
 
-      // 2. 若 Supabase 尚未配置或強制重新整理，無縫由 GAS 備援
-      if (!loadedFromSb || forceRefresh) {
+      // 2. 僅在 Supabase 尚未配置或讀取失敗時，由 GAS 備援
+      if (!loadedFromSb) {
         const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_event_signups&eventId=${evt.id}&userId=${userId || 'TEST_USER_ID'}`));
         const data = await res.json();
         if (data.status === 'success' && Array.isArray(data.signups)) {
           setSignupsList(data.signups);
           setCache(cacheKey, data.signups, 120);
+          if (forceRefresh) {
+            setToastMessage('已同步最新資料！');
+          }
         } else if (!loadedFromSb) {
           setSignupsList([]);
         }
@@ -919,6 +935,27 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       {/* 區塊一：活動列表與審核總覽 (Tab: list) */}
       {activeTab === 'list' && (
         <div>
+          {/* 同步成功提示 Toast */}
+          {toastMessage && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              backgroundColor: '#ecfdf5',
+              border: '1px solid #a7f3d0',
+              color: '#065f46',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              marginBottom: '12px',
+              fontSize: '13px',
+              fontWeight: 600,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+            }}>
+              <CheckCircle2 size={16} color="#059669" />
+              <span>{toastMessage}</span>
+            </div>
+          )}
+
           {/* Notion 搜尋、篩選、排序、重新整理與發布活動列 */}
           <NotionFilterBar
             searchQuery={searchQuery}
