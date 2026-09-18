@@ -4,11 +4,9 @@ import {
   Trash2,
   AlertCircle,
   CheckCircle2,
-  X,
   Camera,
-  ChevronLeft,
-  ChevronRight,
-  Plus
+  Plus,
+  X
 } from 'lucide-react';
 import {
   fetchAllInventoryFromSupabase,
@@ -43,7 +41,7 @@ const SORT_OPTIONS: SortOption[] = [
   { key: 'id', label: '依裝備編號' }
 ];
 
-export default function AdminInventory(_props: { userId?: string } = {}) {
+export default function AdminInventory({ userId }: { userId?: string } = {}) {
   const [items, setItems] = useState<AdminInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -60,7 +58,6 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
   // 新增 / 編輯彈窗狀態
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
-  const [editingItem, setEditingItem] = useState<AdminInventoryItem | null>(null);
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
   const [newPhotos, setNewPhotos] = useState<Array<{ base64: string; name: string }>>([]);
   const [formState, setFormState] = useState<{
@@ -136,7 +133,6 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
         images: []
       });
       setIsAddMode(true);
-      setEditingItem(null);
       setIsEditModalOpen(true);
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -148,7 +144,6 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
 
   // 開啟編輯裝備
   const handleOpenEdit = (it: AdminInventoryItem) => {
-    setEditingItem(it);
     setIsAddMode(false);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -262,16 +257,22 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
       if (newItemsToUpload.length > 0) {
         setIsUploadingPhoto(true);
         try {
+          const keptUrls = finalImages.filter(img => !img.startsWith('data:image/'));
+          const newPhotoFiles = newItemsToUpload.map(p => ({
+            base64: p.base64,
+            name: p.name || 'equipment_photo.jpg'
+          }));
+
           const res = await fetch(appendAuthToken(GAS_API_URL), {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(withAuthPayload({
-              action: 'upload_drive_file',
-              folderType: 'equipments',
-              files: newItemsToUpload.map(p => ({
-                data: p.base64.split(',')[1] || p.base64,
-                name: p.name || 'equipment_photo.jpg'
-              }))
+              action: 'update_equipment_images',
+              equipId: formState.id,
+              equipName: formState.name.trim(),
+              keptUrls,
+              newPhotoFiles,
+              userId: userId || 'officer'
             })),
             redirect: 'follow'
           });
@@ -283,16 +284,11 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
             throw new Error(text.slice(0, 120) || '相片上傳伺服器回應異常');
           }
 
-          if (result.status === 'success' && Array.isArray(result.urls)) {
-            let urlIdx = 0;
-            finalImages = finalImages.map(img => {
-              if (img.startsWith('data:image/')) {
-                const uploadedUrl = result.urls[urlIdx] || img;
-                urlIdx++;
-                return uploadedUrl;
-              }
-              return img;
-            });
+          if (result.status === 'success') {
+            const uploadedUrls: string[] = result.images || (result.imageUrl ? result.imageUrl.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+            if (uploadedUrls.length > 0) {
+              finalImages = uploadedUrls;
+            }
           } else {
             throw new Error(result.message || '相片上傳 Google Drive 失敗');
           }
@@ -852,119 +848,43 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   />
 
-                  {/* 刪除當前照片按鈕 (右上角關閉按鈕下方) */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemovePhoto(activePhotoIdx);
-                    }}
-                    title="刪除此相片"
-                    style={{
-                      position: 'absolute',
-                      top: '50px',
-                      right: '10px',
-                      zIndex: 16,
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '50%',
-                      backgroundColor: 'rgba(239, 68, 68, 0.9)',
-                      backdropFilter: 'blur(6px)',
-                      border: 'none',
-                      color: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
-                    }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-
-                  {/* 左右切換箭頭 */}
-                  {formState.images.length > 1 && activePhotoIdx > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActivePhotoIdx(p => Math.max(0, p - 1))}
+                  {/* 中央底部白色小圓點（頁碼指示） */}
+                  {formState.images.length > 1 && (
+                    <div
+                      className="photo-carousel-dots"
                       style={{
                         position: 'absolute',
-                        left: '10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        zIndex: 14,
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                        border: 'none',
-                        color: '#ffffff',
+                        bottom: '12px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
+                        gap: '6px',
+                        backgroundColor: 'rgba(15, 23, 42, 0.5)',
+                        padding: '4px 10px',
+                        borderRadius: '9999px',
+                        backdropFilter: 'blur(4px)',
+                        WebkitBackdropFilter: 'blur(4px)',
+                        zIndex: 10
                       }}
                     >
-                      <ChevronLeft size={20} />
-                    </button>
+                      {formState.images.map((_, idx) => (
+                        <span
+                          key={idx}
+                          className={`carousel-dot ${idx === activePhotoIdx ? 'active' : ''}`}
+                          onClick={() => setActivePhotoIdx(idx)}
+                          style={{
+                            width: idx === activePhotoIdx ? '8px' : '6px',
+                            height: idx === activePhotoIdx ? '8px' : '6px',
+                            borderRadius: '50%',
+                            backgroundColor: idx === activePhotoIdx ? '#ffffff' : 'rgba(255, 255, 255, 0.45)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                        />
+                      ))}
+                    </div>
                   )}
-                  {formState.images.length > 1 && activePhotoIdx < formState.images.length - 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setActivePhotoIdx(p => Math.min(formState.images.length - 1, p + 1))}
-                      style={{
-                        position: 'absolute',
-                        right: '10px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        zIndex: 14,
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                        border: 'none',
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <ChevronRight size={20} />
-                    </button>
-                  )}
-
-                  {/* 底部小圓點與新增按鈕 */}
-                  <div
-                    className="photo-carousel-dots"
-                    style={{
-                      position: 'absolute',
-                      bottom: '10px',
-                      left: 0,
-                      right: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      zIndex: 14
-                    }}
-                  >
-                    {formState.images.map((_, idx) => (
-                      <span
-                        key={idx}
-                        className={`carousel-dot ${idx === activePhotoIdx ? 'active' : ''}`}
-                        onClick={() => setActivePhotoIdx(idx)}
-                        style={{
-                          width: idx === activePhotoIdx ? '16px' : '6px',
-                          height: '6px',
-                          borderRadius: '3px',
-                          backgroundColor: idx === activePhotoIdx ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                      />
-                    ))}
-                  </div>
                 </div>
               ) : (
                 <div
@@ -1042,15 +962,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
               />
             </div>
 
-            {/* 彈窗標題 */}
-            <div style={{ marginBottom: '14px', textAlign: 'left' }}>
-              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a', textAlign: 'left' }}>
-                {isAddMode ? '新增裝備品項' : `編輯裝備：${editingItem?.name || formState.name}`}
-              </h3>
-              <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b', textAlign: 'left' }}>
-                {isAddMode ? '設定新裝備基本規格、庫存與租借費率' : `代號 ${formState.id} 之裝備規格與設定`}
-              </p>
-            </div>
+
 
             {/* 專屬相片管理列與縮圖預覽列 */}
             <div style={{ marginBottom: '16px', textAlign: 'left' }}>

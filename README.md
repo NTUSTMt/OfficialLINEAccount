@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.153-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.154-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.153)](#7-最新版本異動紀錄-changelog-v01153)
+- [7. 最新版本異動紀錄 (Changelog v0.1.154)](#7-最新版本異動紀錄-changelog-v01154)
 
 ---
 
@@ -373,6 +373,19 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
+### v0.1.154 (2026-09-18)
+- 對齊 Borrow.tsx 裝備照片上傳管道與修復上傳失敗 (src/pages/AdminInventory.tsx):
+  - 診斷並徹底修復照片上傳失敗問題：將上傳 API 正式改採 Borrow.tsx (EquipmentDetailModal.tsx) 經線上驗證成熟運作之 `action: 'update_equipment_images'`。
+  - 傳遞 `equipId`, `equipName`, `keptUrls`, `newPhotoFiles`, `userId`，由 GAS 將相片寫入 Google Drive 裝備專屬目錄（`系統圖庫/裝備照片/{裝備名稱}/`），並同步更新 Supabase 與 Google Sheets。
+  - 支援 `result.images` 與 `result.imageUrl` 雙向回傳解析，並於前端即時替換為 Drive 正式網址。
+- 裝備編輯彈窗頂部標題與副標題清理 (src/pages/AdminInventory.tsx):
+  - 依使用者指示完全刪除彈窗頂部「編輯裝備：裝備名稱」(`<h3>`) 與「代號 G032 之裝備規格與設定」副標題 (`<div>`)，讓介面聚焦於大正方形照片與規格表單。
+- 正方形相片框按鈕清理與中央底部白點分頁 (src/pages/AdminInventory.tsx):
+  - 刪除正方形照片框右上角紅色垃圾桶按鈕與左右切換箭頭按鈕 (`ChevronLeft` / `ChevronRight`)，避免畫面過多圖示遮擋照片。
+  - 於正方形照片框中間底部加入半透明圓角膠囊與純白色圓點 (`.photo-carousel-dots`)，當前頁面為高亮白（8px），其餘頁面為半透明白（6px），點擊即可切換頁數。
+- 單元測試與建置驗證:
+  - 於 `test/65_officer_system_modules.test.mjs` 新增 v0.1.154 專屬單元測試，全數 208 項測試通過，TypeScript 與 Vite 建置零錯誤。
+
 ### v0.1.153 (2026-09-18)
 - 修復 Google Drive 上傳 Action 名稱與雙向相容 (src/pages/AdminInventory.tsx, gas_modules/06_Helper_Services.js, src/gas.js):
   - 診斷並修正前端呼叫 GAS 時誤傳複數形 `upload_drive_files` 導致之「未支援的 Helper Action」例外，正名為單數形 `upload_drive_file`。
