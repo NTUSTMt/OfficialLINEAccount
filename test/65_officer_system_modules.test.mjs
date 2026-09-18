@@ -365,6 +365,34 @@ test('幹部系統模組測試：大頭貼選單圖示與名稱一致、歷史�
   const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
   assert.ok(!recordsCode.match(emojiRegex), 'MemberRecords.tsx 不得包含表情符號');
   assert.ok(!inventoryCode.match(emojiRegex), 'AdminInventory.tsx 不得包含表情符號');
+});test('幹部系統模組測試：裝備編輯大正方形防壓縮、相片壓縮上傳、專屬管理條與刪除機制 (v0.1.152)', async () => {
+  const fs = await import('fs/promises');
+  const inventoryCode = await fs.readFile('src/pages/AdminInventory.tsx', 'utf8');
+
+  // 1. 裝備編輯正方形相片容器防壓縮 (flexShrink: 0) 與 1:1 比例
+  assert.ok(inventoryCode.includes("flexShrink: 0"), 'AdminInventory 編輯相片容器必須設定 flexShrink: 0 防止 flexbox 壓扁');
+  assert.ok(inventoryCode.includes("aspectRatio: '1 / 1'"), 'AdminInventory 編輯相片容器必須設定 1:1 正方形比例');
+  assert.ok(inventoryCode.includes("boxSizing: 'border-box'"), 'AdminInventory 編輯相片容器必須設定 boxSizing: border-box');
+
+  // 2. 前端 Canvas 輕量化壓縮與即時預覽機制 (0ms 本地預覽)
+  assert.ok(inventoryCode.includes('document.createElement(\'canvas\')'), 'AdminInventory 必須具備 Canvas 縮圖壓縮處理');
+  assert.ok(inventoryCode.includes('toDataURL(\'image/jpeg\', 0.8)'), 'AdminInventory 必須壓縮為 0.8 品質 JPEG');
+  assert.ok(inventoryCode.includes('setNewPhotos'), 'AdminInventory 必須暫存待上傳新相片清單');
+
+  // 3. 正方形相片輪播與右上方刪除按鈕
+  assert.ok(inventoryCode.includes('handleRemovePhoto(activePhotoIdx)'), 'AdminInventory 輪播圖右上角必須具備刪除當前相片按鈕');
+  assert.ok(inventoryCode.includes('刪除當前張'), 'AdminInventory 必須具備刪除當前張管理按鈕');
+  assert.ok(inventoryCode.includes('新增相片'), 'AdminInventory 必須具備新增相片按鈕');
+
+  // 4. 縮圖管理條與每張獨立刪除按鈕
+  assert.ok(inventoryCode.includes('photo-thumbnail-strip'), 'AdminInventory 必須具備相片縮圖管理條');
+  assert.ok(inventoryCode.includes('handleRemovePhoto(idx)'), 'AdminInventory 縮圖必須具備獨立 X 刪除按鈕');
+
+  // 5. GAS 授權標頭健全化 (防範 iOS WebKit 302 重導向阻斷)
+  assert.ok(inventoryCode.includes('appendAuthToken(GAS_API_URL)'), 'AdminInventory 必須使用 appendAuthToken 補齊授權標頭');
+  assert.ok(inventoryCode.includes('withAuthPayload'), 'AdminInventory 必須使用 withAuthPayload');
+
+  // 6. 全檔零表情符號檢驗
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  assert.ok(!inventoryCode.match(emojiRegex), 'AdminInventory.tsx 不得包含表情符號');
 });
-
-

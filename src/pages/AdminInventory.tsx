@@ -21,6 +21,7 @@ import type { AdminInventoryItem } from '../types/admin';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
 import { AdminSubNav } from '../components/admin/AdminSubNav';
 import { GAS_API_URL } from '../constants/api';
+import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { ProductImage } from '../components/borrow/ProductImage';
 
@@ -61,6 +62,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
   const [isAddMode, setIsAddMode] = useState(false);
   const [editingItem, setEditingItem] = useState<AdminInventoryItem | null>(null);
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
+  const [newPhotos, setNewPhotos] = useState<Array<{ base64: string; name: string }>>([]);
   const [formState, setFormState] = useState<{
     id: string;
     name: string;
@@ -117,6 +119,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
     setErrorMessage(null);
     setSuccessMessage(null);
     setActivePhotoIdx(0);
+    setNewPhotos([]);
     try {
       const nextId = await getNextEquipmentIdFromSupabase();
       setFormState({
@@ -150,6 +153,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
     setErrorMessage(null);
     setSuccessMessage(null);
     setActivePhotoIdx(0);
+    setNewPhotos([]);
 
     let imgList: string[] = [];
     if (Array.isArray(it.images)) {
@@ -174,59 +178,64 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
     setIsEditModalOpen(true);
   };
 
-  // 處理相片上傳至 Google Drive
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 處理相片選取並透過 HTML Canvas 進行前端等比壓縮 (即時預覽)
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsUploadingPhoto(true);
+    if (formState.images.length >= 5) {
+      alert('最多只能上傳 5 張裝備相片');
+      e.target.value = '';
+      return;
+    }
+
     setErrorMessage(null);
 
-    try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64 = (reader.result as string).split(',')[1];
-          const res = await fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-              action: 'upload_drive_files',
-              folderType: 'equipments',
-              files: [{ data: base64, name: file.name }]
-            })
-          });
-          const result = await res.json();
-          if (result.status === 'success' && result.urls && result.urls.length > 0) {
-            setFormState(prev => {
-              const newImages = [...prev.images, result.urls[0]];
-              setActivePhotoIdx(newImages.length - 1);
-              return {
-                ...prev,
-                images: newImages
-              };
-            });
-          } else {
-            setErrorMessage(result.message || '相片上傳失敗');
-          }
-        } catch (uploadErr: any) {
-          setErrorMessage(uploadErr instanceof Error ? uploadErr.message : String(uploadErr));
-        } finally {
-          setIsUploadingPhoto(false);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
         }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, width, height);
+        const base64 = canvas.toDataURL('image/jpeg', 0.8);
+
+        setFormState(prev => {
+          const nextImages = [...prev.images, base64];
+          setActivePhotoIdx(nextImages.length - 1);
+          return {
+            ...prev,
+            images: nextImages
+          };
+        });
+        setNewPhotos(prev => [...prev, { base64, name: file.name }]);
       };
-      reader.readAsDataURL(file);
-    } catch (err: any) {
-      setErrorMessage(err instanceof Error ? err.message : String(err));
-      setIsUploadingPhoto(false);
-    }
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  // 刪除相片
+  // 刪除相片 (支援即時刪除與索引調整)
   const handleRemovePhoto = (idxToRemove: number) => {
     setFormState(prev => {
+      const targetImg = prev.images[idxToRemove];
       const nextImages = prev.images.filter((_, idx) => idx !== idxToRemove);
       setActivePhotoIdx(currentIdx => Math.max(0, Math.min(currentIdx, nextImages.length - 1)));
+      setNewPhotos(np => np.filter(p => p.base64 !== targetImg));
       return {
         ...prev,
         images: nextImages
@@ -234,7 +243,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
     });
   };
 
-  // 儲存裝備 (新增或更新)
+  // 儲存裝備 (新增或更新，僅新相片送往 GAS 上傳 Google Drive，無新圖直更 Supabase)
   const handleSaveEquipment = async () => {
     if (!formState.name.trim()) {
       alert('請填寫裝備名稱');
@@ -246,6 +255,58 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
     setSuccessMessage(null);
 
     try {
+      let finalImages = [...formState.images];
+      const newItemsToUpload = newPhotos.filter(p => finalImages.includes(p.base64));
+
+      // 若有新選取的本地相片，送往 GAS 上傳 Google Drive
+      if (newItemsToUpload.length > 0) {
+        setIsUploadingPhoto(true);
+        try {
+          const res = await fetch(appendAuthToken(GAS_API_URL), {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(withAuthPayload({
+              action: 'upload_drive_files',
+              folderType: 'equipments',
+              files: newItemsToUpload.map(p => ({
+                data: p.base64.split(',')[1] || p.base64,
+                name: p.name || 'equipment_photo.jpg'
+              }))
+            })),
+            redirect: 'follow'
+          });
+          const text = await res.text();
+          let result: any;
+          try {
+            result = JSON.parse(text);
+          } catch {
+            throw new Error(text.slice(0, 120) || '相片上傳伺服器回應異常');
+          }
+
+          if (result.status === 'success' && Array.isArray(result.urls)) {
+            let urlIdx = 0;
+            finalImages = finalImages.map(img => {
+              if (img.startsWith('data:image/')) {
+                const uploadedUrl = result.urls[urlIdx] || img;
+                urlIdx++;
+                return uploadedUrl;
+              }
+              return img;
+            });
+          } else {
+            throw new Error(result.message || '相片上傳 Google Drive 失敗');
+          }
+        } catch (uploadErr: any) {
+          const msg = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
+          setErrorMessage(`[相片上傳失敗]: ${msg}`);
+          setIsProcessing(false);
+          setIsUploadingPhoto(false);
+          return;
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      }
+
       if (isAddMode) {
         const payload: Omit<AdminInventoryItem, 'created_at'> = {
           id: formState.id,
@@ -256,9 +317,9 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
           is_borrowable: Boolean(formState.is_borrowable),
           price_2day: Number(formState.price_2day) || 0,
           price_extra_day: Number(formState.price_extra_day) || 0,
-          specs: formState.specs,
+          specs: formState.notes,
           notes: formState.notes,
-          images: formState.images
+          images: finalImages
         };
 
         const res = await insertEquipmentToSupabase(payload);
@@ -278,9 +339,9 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
           is_borrowable: Boolean(formState.is_borrowable),
           price_2day: Number(formState.price_2day) || 0,
           price_extra_day: Number(formState.price_extra_day) || 0,
-          specs: formState.specs,
+          specs: formState.notes,
           notes: formState.notes,
-          images: formState.images
+          images: finalImages
         };
 
         const res = await updateEquipmentFullInSupabase(formState.id, updateFields);
@@ -731,20 +792,21 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
             boxSizing: 'border-box',
             textAlign: 'left'
           }}>
-            {/* 1:1 正方形相片輪播與管理區 (比照 Borrow 頁面風格) */}
+            {/* 1:1 正方形相片輪播與管理區 (比照 Borrow 頁面風格，強制 flexShrink: 0 確保 1:1 正方形不被擠壓) */}
             <div
               className="detail-modal-image-wrapper"
               style={{
                 width: '100%',
                 aspectRatio: '1 / 1',
-                borderRadius: '12px',
+                borderRadius: '16px',
                 overflow: 'hidden',
                 position: 'relative',
-                backgroundColor: '#f1f5f9',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '14px'
+                backgroundColor: '#f8fafc',
+                flexShrink: 0,
+                display: 'block',
+                boxSizing: 'border-box',
+                marginBottom: '14px',
+                border: formState.images.length === 0 ? '2px dashed #cbd5e1' : '1px solid #e2e8f0'
               }}
             >
               {/* 裝備代號懸浮膠囊 (左上角) */}
@@ -763,7 +825,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                   position: 'absolute',
                   top: '10px',
                   right: '10px',
-                  zIndex: 15,
+                  zIndex: 16,
                   width: '32px',
                   height: '32px',
                   borderRadius: '50%',
@@ -781,13 +843,13 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                 <X size={18} />
               </button>
 
-              {/* 當前相片展示或預設圖 */}
+              {/* 當前相片展示或無相片時之大尺寸上傳虛線卡片 */}
               {formState.images.length > 0 ? (
-                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
                   <img
                     src={getDirectImageUrl(formState.images[activePhotoIdx]) || formState.images[activePhotoIdx]}
                     alt={formState.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   />
 
                   {/* 刪除當前照片按鈕 (右上角關閉按鈕下方) */}
@@ -800,23 +862,24 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                     title="刪除此相片"
                     style={{
                       position: 'absolute',
-                      top: '48px',
+                      top: '50px',
                       right: '10px',
-                      zIndex: 15,
-                      width: '32px',
-                      height: '32px',
+                      zIndex: 16,
+                      width: '34px',
+                      height: '34px',
                       borderRadius: '50%',
-                      backgroundColor: 'rgba(239, 68, 68, 0.85)',
+                      backgroundColor: 'rgba(239, 68, 68, 0.9)',
                       backdropFilter: 'blur(6px)',
                       border: 'none',
                       color: '#ffffff',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
                     }}
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={16} />
                   </button>
 
                   {/* 左右切換箭頭 */}
@@ -830,10 +893,10 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                         top: '50%',
                         transform: 'translateY(-50%)',
                         zIndex: 14,
-                        width: '30px',
-                        height: '30px',
+                        width: '32px',
+                        height: '32px',
                         borderRadius: '50%',
-                        backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
                         border: 'none',
                         color: '#ffffff',
                         display: 'flex',
@@ -842,7 +905,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                         cursor: 'pointer'
                       }}
                     >
-                      <ChevronLeft size={18} />
+                      <ChevronLeft size={20} />
                     </button>
                   )}
                   {formState.images.length > 1 && activePhotoIdx < formState.images.length - 1 && (
@@ -855,10 +918,10 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                         top: '50%',
                         transform: 'translateY(-50%)',
                         zIndex: 14,
-                        width: '30px',
-                        height: '30px',
+                        width: '32px',
+                        height: '32px',
                         borderRadius: '50%',
-                        backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
                         border: 'none',
                         color: '#ffffff',
                         display: 'flex',
@@ -867,7 +930,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                         cursor: 'pointer'
                       }}
                     >
-                      <ChevronRight size={18} />
+                      <ChevronRight size={20} />
                     </button>
                   )}
 
@@ -905,56 +968,89 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploadingPhoto}
                         title="上傳新相片"
                         style={{
                           backgroundColor: '#10b981',
                           border: 'none',
                           borderRadius: '50%',
-                          width: '18px',
-                          height: '18px',
+                          width: '20px',
+                          height: '20px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           color: '#ffffff',
-                          cursor: isUploadingPhoto ? 'not-allowed' : 'pointer',
+                          cursor: 'pointer',
                           marginLeft: '4px'
                         }}
                       >
-                        <Plus size={12} />
+                        <Plus size={13} />
                       </button>
                     )}
                   </div>
                 </div>
               ) : (
-                <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ProductImage name={formState.name || '裝備'} imageUrl="" />
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '12px',
+                    cursor: 'pointer',
+                    padding: '20px',
+                    boxSizing: 'border-box',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    backgroundColor: '#eff6ff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#2563eb'
+                  }}>
+                    <Camera size={32} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#1e293b', marginBottom: '4px' }}>
+                      點擊此處上傳裝備相片
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                      支援相機拍照或相簿選取 (最多 5 張)
+                    </div>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadingPhoto}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fileInputRef.current?.click();
+                    }}
                     style={{
-                      position: 'absolute',
-                      bottom: '16px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      zIndex: 14,
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '6px',
-                      padding: '7px 16px',
+                      padding: '8px 20px',
                       borderRadius: '20px',
-                      backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                      backdropFilter: 'blur(6px)',
-                      border: '1px solid rgba(255,255,255,0.2)',
+                      backgroundColor: '#2563eb',
                       color: '#ffffff',
                       fontSize: '13px',
                       fontWeight: 600,
-                      cursor: isUploadingPhoto ? 'not-allowed' : 'pointer'
+                      border: 'none',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)'
                     }}
                   >
-                    <Camera size={15} />
-                    <span>{isUploadingPhoto ? '上傳相片中...' : '點擊上傳相片'}</span>
+                    <Plus size={16} />
+                    <span>選擇相片</span>
                   </button>
                 </div>
               )}
@@ -978,18 +1074,71 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
               </p>
             </div>
 
-            {/* 相片快速縮圖列表 */}
-            {formState.images.length > 0 && (
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '14px' }}>
+            {/* 專屬相片管理列與縮圖預覽列 */}
+            <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                  裝備相片清單 ({formState.images.length}/5 張)
+                </span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {formState.images.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhoto(activePhotoIdx)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #fecaca',
+                        backgroundColor: '#fef2f2',
+                        color: '#dc2626',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Trash2 size={13} />
+                      <span>刪除當前張</span>
+                    </button>
+                  )}
+                  {formState.images.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #bfdbfe',
+                        backgroundColor: '#eff6ff',
+                        color: '#2563eb',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Camera size={13} />
+                      <span>新增相片</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 縮圖列表 */}
+              <div className="photo-thumbnail-strip" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
                 {formState.images.map((imgUrl, idx) => (
                   <div
                     key={idx}
                     onClick={() => setActivePhotoIdx(idx)}
                     style={{
                       position: 'relative',
-                      width: '56px',
-                      height: '56px',
-                      borderRadius: '6px',
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '8px',
                       overflow: 'hidden',
                       border: idx === activePhotoIdx ? '2px solid #2563eb' : '1px solid #e2e8f0',
                       cursor: 'pointer',
@@ -997,30 +1146,55 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                     }}
                   >
                     <img
-                      src={getDirectImageUrl(imgUrl)}
+                      src={getDirectImageUrl(imgUrl) || imgUrl}
                       alt={`相片 ${idx + 1}`}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemovePhoto(idx);
+                      }}
+                      title="刪除此相片"
+                      style={{
+                        position: 'absolute',
+                        top: '2px',
+                        right: '2px',
+                        backgroundColor: 'rgba(0,0,0,0.65)',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '18px',
+                        height: '18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
+                    >
+                      <X size={11} />
+                    </button>
                   </div>
                 ))}
                 {formState.images.length < 5 && (
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadingPhoto}
                     style={{
-                      width: '56px',
-                      height: '56px',
-                      borderRadius: '6px',
-                      border: '1px dashed #cbd5e1',
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '8px',
+                      border: '1.5px dashed #cbd5e1',
                       backgroundColor: '#f8fafc',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: '#64748b',
-                      fontSize: '10px',
-                      cursor: isUploadingPhoto ? 'not-allowed' : 'pointer',
+                      fontSize: '11px',
+                      cursor: 'pointer',
                       flexShrink: 0,
                       gap: '2px'
                     }}
@@ -1030,7 +1204,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                   </button>
                 )}
               </div>
-            )}
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px', textAlign: 'left' }}>
               {/* 裝備名稱 */}
@@ -1172,7 +1346,7 @@ export default function AdminInventory(_props: { userId?: string } = {}) {
                   cursor: isProcessing ? 'not-allowed' : 'pointer'
                 }}
               >
-                {isProcessing ? '儲存中...' : (isAddMode ? '確認新增裝備' : '確認儲存修改')}
+                {isUploadingPhoto ? '相片上傳雲端中...' : (isProcessing ? '儲存中...' : (isAddMode ? '確認新增裝備' : '確認儲存修改'))}
               </button>
             </div>
           </div>

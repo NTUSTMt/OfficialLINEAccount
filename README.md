@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.151-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.152-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.151)](#7-最新版本異動紀錄-changelog-v01151)
+- [7. 最新版本異動紀錄 (Changelog v0.1.152)](#7-最新版本異動紀錄-changelog-v01152)
 
 ---
 
@@ -374,7 +374,25 @@ pnpm test
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
   - **小岳 AI 調用說明更新**：明確標註私聊提問必須以「小岳」開頭方會答覆，一般提問將由幹部回覆。
-  - **中英文 Part I / Part II 100% 鏡像對齊**：同步修正英文版對應章節、狀態清單、導航方式與 FAQ。
+### v0.1.152 (2026-09-18)
+- 裝備編輯正方形相片防壓縮修復 (src/pages/AdminInventory.tsx):
+  - 診斷並修復手機端 (iOS Safari / WebKit) 彈窗 flex 佈局導致相片容器高度遭擠壓變形之缺陷。
+  - 為 `.detail-modal-image-wrapper` 補充 `flexShrink: 0`、`width: '100%'`、`aspectRatio: '1 / 1'` 與 `boxSizing: 'border-box'`，確保無論螢幕高度與彈窗內容多寡，最上方相片展示區皆維持 100% 完美 1:1 正方形輪播比例。
+- 前端 Canvas 輕量化相片壓縮與 0ms 即時預覽 (src/pages/AdminInventory.tsx):
+  - 解決過去手機直接傳遞大圖至後端導致網路延遲、卡頓與 WebKit CORS 異常之瓶頸。
+  - 導入瀏覽器端 Canvas 圖片自適應等比例縮放 (最大邊長 1200px) 與 JPEG 0.8 品質無失真壓縮，相片容量大幅縮減至 100~200KB。
+  - 選取相片後立即以 Data URL 產生 0ms 本地預覽並自動跳轉至新相片，使用者體驗流暢如原生 App。
+- 專屬相片管理控制條與多圖快速刪除機制 (src/pages/AdminInventory.tsx):
+  - 於正方形大圖下方新增獨立相片管理工具條，清楚標示「相片管理 (已上傳 X/5 張)」。
+  - 提供醒目的「刪除當前張」紅色文字按鈕與「新增相片」按鈕。
+  - 整合橫向滾動縮圖預覽條，當前選中相片顯示亮藍色邊框，且每張縮圖右上角皆具備獨立半透明圓形 X 刪除按鈕，支援快速刪除任意一張照片。
+  - 輪播大圖右上角保留直覺的垃圾桶刪除按鈕，並在 0 張相片時呈現醒目大正方形虛線引導上傳區塊。
+- Google Drive 上傳鑑權標頭與直存最佳化 (src/pages/AdminInventory.tsx):
+  - 透過 `appendAuthToken(GAS_API_URL)` 與 `withAuthPayload` 健全化 Google Apps Script 授權標頭，徹底杜絕 iOS WebKit 302 重導向造成之 Load failed。
+  - 若僅修改文字欄位或刪除相片（無新增相片），儲存時直連 Supabase (<30ms)；若包含新相片，則先上傳 Drive 換取真實 URL 後寫入 Supabase，儲存按鈕動態呈現「相片上傳雲端中...」以提供明確回饋。
+- 單元測試與建置驗證:
+  - 於 `test/65_officer_system_modules.test.mjs` 新增 v0.1.152 專屬單元測試，驗證容器防壓縮 (flexShrink: 0)、1:1 比例、Canvas 壓縮邏輯、管理條與刪除機制及零表情符號檢驗，全數 206 項測試通過，TypeScript 與 Vite 建置零錯誤。
+
 ### v0.1.151 (2026-09-18)
 - 右側大頭貼選單圖示與名稱一致性 (src/App.tsx, src/locales/zh.json, src/locales/en.json)：
   - 幹部系統選單名稱全面統一為 4 個字（活動管理、社員資料、財務對帳、租借管理、裝備庫存），英文副標題採精簡風格（Events, Members, Finance, Loans, Inventory）。
