@@ -215,7 +215,7 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
 
     setIsSavingPhotos(true);
     try {
-      // 🚀 分流優化 1：若無新照片需上傳至 Drive（純刪除既有照片或調整順序）
+      // 分流優化 1：若無新照片需上傳至 Drive（純刪除既有照片或調整順序）
       // 直接透過 Supabase 更新 equipments 資料表（耗時 < 30ms，0% 依賴 GAS，徹底免除 iOS WebKit 跨域 302 重導向之 Load failed 阻斷）
       if (newPhotoFiles.length === 0) {
         const sbRes = await updateEquipmentImagesInSupabase(equipment.id, keptUrls);
@@ -248,8 +248,9 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
         }
       }
 
-      // 🚀 分流優化 2：若有新上傳照片檔案，送往 GAS 上傳 Google Drive 並寫回 Supabase
-      const res = await fetch(appendAuthToken(GAS_API_URL), {
+      // 分流優化 2：若有新上傳照片檔案，送往 GAS 上傳 Google Drive 並寫回 Supabase
+      const postUrl = GAS_API_URL.includes('?') ? `${GAS_API_URL}&_t=${Date.now()}` : `${GAS_API_URL}?_t=${Date.now()}`;
+      const res = await fetch(postUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(withAuthPayload({
@@ -267,6 +268,9 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
       try {
         data = JSON.parse(text);
       } catch {
+        if (text.startsWith('<!DOCTYPE') || text.includes('window[\'ppConfig\']') || text.includes('accounts.google.com') || text.includes('ServiceLogin')) {
+          throw new Error('Google Apps Script 存取權限不足（伺服器重導向至 Google 帳號登入頁面）。請確認 GAS「管理部署」設定：執行為設為「我 (Me)」，且誰可以存取設為「所有人 (Anyone)」，並建立新版本！');
+        }
         if (text.includes('找不到以下指令碼函式：doPost')) {
           throw new Error('Google Apps Script 尚未部署最新版程式碼（找不到 doPost 函式），請於 GAS 管理部署中建立新版本！');
         }

@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.154-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.155-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.154)](#7-最新版本異動紀錄-changelog-v01154)
+- [7. 最新版本異動紀錄 (Changelog v0.1.155)](#7-最新版本異動紀錄-changelog-v01155)
 
 ---
 
@@ -373,6 +373,21 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
+### v0.1.155 (2026-09-18)
+- 裝備編輯正方形照片框新增觸控與滑鼠左右滑動切換手勢 (src/pages/AdminInventory.tsx):
+  - 完整對齊裝備瀏覽詳細彈窗 (EquipmentDetailModal.tsx) 的原生滑動互動體驗。
+  - 支援行動裝置觸控事件 (onTouchStart, onTouchMove, onTouchEnd) 與桌面滑鼠拖曳事件 (onMouseDown, onMouseMove, onMouseUp)。
+  - 具備即時水平位移、邊界阻尼回彈、滑動超過 40px 自動切換上一張/下一張照片，並與底部白色分頁圓點及縮圖清單即時同步連動。
+  - 圖片元素設置 draggable={false} 與 userSelect: 'none'，防止觸發瀏覽器原生拖曳影像或選取反藍干擾。
+- 診斷並修復 Google Apps Script HTML 登入重導向與上傳失敗問題 (src/pages/AdminInventory.tsx, src/components/borrow/EquipmentDetailModal.tsx):
+  - 根本原因分析：使用者遇到之 `[相片上傳失敗]: <!DOCTYPE html><html lang="zh">...window['ppConfig']...` 係因 Google Apps Script Web App 部署存取權限若非「所有人 (Anyone)」或 POST URL 附帶過長 JWT Query String，Google 伺服器在閘道層強制重導向至 Google Accounts 登入驗證頁面。
+  - 最佳化 POST 請求呼叫機制：POST Payload 透過 withAuthPayload 已在 Body 攜帶授權憑證，URL 改採純淨端點加輕量防快取參數，避免過長 Query String 觸發 Google 安全阻斷。
+  - 前端加固錯誤攔截與友善具體指引：當伺服器回傳 HTML 頁面時，精確偵測並顯示明確的繁體中文引導（指示幹部檢查 GAS 部署「執行為：我」與「誰可以存取：所有人」），不再遮蔽或拋出未處理的 HTML 原始碼。
+- 移除既有註解中的表情符號與全域零表情符號合規 (src/components/borrow/EquipmentDetailModal.tsx):
+  - 徹底移除既有程式碼中遺留之火箭表情符號，嚴格落實全域零表情符號規範。
+- 單元測試與打包建置:
+  - 於 test/65_officer_system_modules.test.mjs 擴充 v0.1.155 專屬單元測試，全專案 209 項單元測試 100% 通過，前端 tsc -b && vite build 成功打包。
+
 ### v0.1.154 (2026-09-18)
 - 對齊 Borrow.tsx 裝備照片上傳管道與修復上傳失敗 (src/pages/AdminInventory.tsx):
   - 診斷並徹底修復照片上傳失敗問題：將上傳 API 正式改採 Borrow.tsx (EquipmentDetailModal.tsx) 經線上驗證成熟運作之 `action: 'update_equipment_images'`。

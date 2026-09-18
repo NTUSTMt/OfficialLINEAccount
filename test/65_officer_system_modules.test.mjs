@@ -449,4 +449,39 @@ test('幹部系統模組測試：對齊 Borrow.tsx 之 update_equipment_images�
   assert.ok(!inventoryCode.match(emojiRegex), 'AdminInventory.tsx 不得包含表情符號');
 });
 
+test('幹部系統模組測試：裝備照片左右滑動手勢切換與 Google Apps Script HTML 錯誤攔截加固 (v0.1.155)', async () => {
+  const fs = await import('fs/promises');
+  const inventoryCode = await fs.readFile('src/pages/AdminInventory.tsx', 'utf8');
+  const modalCode = await fs.readFile('src/components/borrow/EquipmentDetailModal.tsx', 'utf8');
+
+  // 1. 手勢切換事件與狀態檢驗
+  assert.ok(inventoryCode.includes('handleCarouselTouchStart'), 'AdminInventory 必須包含觸控開始事件');
+  assert.ok(inventoryCode.includes('handleCarouselTouchMove'), 'AdminInventory 必須包含觸控移動事件');
+  assert.ok(inventoryCode.includes('handleCarouselTouchEnd'), 'AdminInventory 必須包含觸控結束事件');
+  assert.ok(inventoryCode.includes('handleCarouselMouseDown'), 'AdminInventory 必須包含滑鼠按下事件');
+  assert.ok(inventoryCode.includes('handleCarouselMouseMove'), 'AdminInventory 必須包含滑鼠拖曳事件');
+  assert.ok(inventoryCode.includes('handleCarouselMouseUp'), 'AdminInventory 必須包含滑鼠放開事件');
+
+  // 2. 軌道樣式與位移控制
+  assert.ok(inventoryCode.includes('photo-carousel-track'), 'AdminInventory 必須包含 photo-carousel-track 軌道');
+  assert.ok(inventoryCode.includes('photo-carousel-slide'), 'AdminInventory 必須包含 photo-carousel-slide 滑片');
+  assert.ok(inventoryCode.includes('dragOffset'), 'AdminInventory 必須計算 dragOffset 像素偏移');
+  assert.ok(inventoryCode.includes('userSelect: \'none\''), '圖片必須設定 userSelect 為 none 防止瀏覽器選取反藍');
+  assert.ok(inventoryCode.includes('draggable={false}'), '圖片必須設定 draggable={false} 防止觸發原生拖曳圖示');
+
+  // 3. GAS 上傳 POST 端點檢驗
+  assert.ok(inventoryCode.includes('appendAuthToken(GAS_API_URL)'), 'AdminInventory 必須包含 appendAuthToken 授權機制');
+  assert.ok(inventoryCode.includes('postUrl'), 'AdminInventory POST 請求必須使用 postUrl');
+
+  // 4. Google 帳號登入 HTML 頁面攔截與友善指示檢驗
+  assert.ok(inventoryCode.includes('window[\'ppConfig\']') || inventoryCode.includes('accounts.google.com'), 'AdminInventory 必須偵測 Google 帳號登入頁面 HTML');
+  assert.ok(inventoryCode.includes('誰可以存取設為「所有人 (Anyone)」'), 'AdminInventory 錯誤訊息必須清楚指示檢查誰可以存取設定');
+  assert.ok(modalCode.includes('window[\'ppConfig\']') || modalCode.includes('accounts.google.com'), 'EquipmentDetailModal 亦必須具備 Google 登入 HTML 頁面攔截');
+
+  // 5. 零表情符號檢驗
+  const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  assert.ok(!inventoryCode.match(emojiRegex), 'AdminInventory.tsx 不得包含表情符號');
+  assert.ok(!modalCode.match(emojiRegex), 'EquipmentDetailModal.tsx 不得包含表情符號');
+});
+
 

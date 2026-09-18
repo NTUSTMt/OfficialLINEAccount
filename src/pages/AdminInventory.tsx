@@ -60,6 +60,12 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
   const [isAddMode, setIsAddMode] = useState(false);
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
   const [newPhotos, setNewPhotos] = useState<Array<{ base64: string; name: string }>>([]);
+
+  // 照片輪播滑動手勢控制 (完全對齊 EquipmentDetailModal)
+  const [dragOffset, setDragOffset] = useState<number>(0);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const didDrag = useRef<boolean>(false);
   const [formState, setFormState] = useState<{
     id: string;
     name: string;
@@ -238,6 +244,78 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
     });
   };
 
+  // 照片輪播滑動手勢處理 (完全對齊 EquipmentDetailModal)
+  const handleCarouselTouchStart = (e: React.TouchEvent) => {
+    if (formState.images.length <= 1) return;
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    didDrag.current = false;
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+
+  const handleCarouselTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPos.current || formState.images.length <= 1) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartPos.current.x;
+    const dy = touch.clientY - touchStartPos.current.y;
+
+    if (Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
+      didDrag.current = true;
+      if ((activePhotoIdx === 0 && dx > 0) || (activePhotoIdx === formState.images.length - 1 && dx < 0)) {
+        setDragOffset(dx * 0.3);
+      } else {
+        setDragOffset(dx);
+      }
+    }
+  };
+
+  const handleCarouselTouchEnd = () => {
+    if (!touchStartPos.current) return;
+    setIsDragging(false);
+
+    if (Math.abs(dragOffset) > 40) {
+      if (dragOffset < 0 && activePhotoIdx < formState.images.length - 1) {
+        setActivePhotoIdx(prev => prev + 1);
+      } else if (dragOffset > 0 && activePhotoIdx > 0) {
+        setActivePhotoIdx(prev => prev - 1);
+      }
+    }
+
+    setDragOffset(0);
+    touchStartPos.current = null;
+    setTimeout(() => {
+      didDrag.current = false;
+    }, 120);
+  };
+
+  const handleCarouselMouseDown = (e: React.MouseEvent) => {
+    if (formState.images.length <= 1) return;
+    touchStartPos.current = { x: e.clientX, y: e.clientY };
+    didDrag.current = false;
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+
+  const handleCarouselMouseMove = (e: React.MouseEvent) => {
+    if (!touchStartPos.current || !isDragging || formState.images.length <= 1) return;
+    const dx = e.clientX - touchStartPos.current.x;
+    if (Math.abs(dx) > 5) {
+      didDrag.current = true;
+      if ((activePhotoIdx === 0 && dx > 0) || (activePhotoIdx === formState.images.length - 1 && dx < 0)) {
+        setDragOffset(dx * 0.3);
+      } else {
+        setDragOffset(dx);
+      }
+    }
+  };
+
+  const handleCarouselMouseUp = () => {
+    if (isDragging) {
+      handleCarouselTouchEnd();
+    }
+  };
+
   // 儲存裝備 (新增或更新，僅新相片送往 GAS 上傳 Google Drive，無新圖直更 Supabase)
   const handleSaveEquipment = async () => {
     if (!formState.name.trim()) {
@@ -263,7 +341,8 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
             name: p.name || 'equipment_photo.jpg'
           }));
 
-          const res = await fetch(appendAuthToken(GAS_API_URL), {
+          const postUrl = appendAuthToken(GAS_API_URL);
+          const res = await fetch(postUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(withAuthPayload({
@@ -281,6 +360,15 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
           try {
             result = JSON.parse(text);
           } catch {
+            if (text.startsWith('<!DOCTYPE') || text.includes('window[\'ppConfig\']') || text.includes('accounts.google.com') || text.includes('ServiceLogin')) {
+              throw new Error('Google Apps Script 存取權限不足（伺服器重導向至 Google 帳號登入頁面）。請確認 GAS「管理部署」設定：執行為設為「我 (Me)」，且誰可以存取設為「所有人 (Anyone)」，並建立新版本！');
+            }
+            if (text.includes('找不到以下指令碼函式：doPost')) {
+              throw new Error('Google Apps Script 尚未部署最新版程式碼（找不到 doPost 函式），請於 GAS 管理部署中建立新版本！');
+            }
+            if (text.includes('未支援的 Helper Action')) {
+              throw new Error('線上 GAS 尚未發布包含 update_equipment_images 的新版本，請至 GAS 管理部署建立新版本！');
+            }
             throw new Error(text.slice(0, 120) || '相片上傳伺服器回應異常');
           }
 
@@ -791,6 +879,13 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
             {/* 1:1 正方形相片輪播與管理區 (比照 Borrow 頁面風格，強制 flexShrink: 0 確保 1:1 正方形不被擠壓) */}
             <div
               className="detail-modal-image-wrapper"
+              onTouchStart={handleCarouselTouchStart}
+              onTouchMove={handleCarouselTouchMove}
+              onTouchEnd={handleCarouselTouchEnd}
+              onMouseDown={handleCarouselMouseDown}
+              onMouseMove={handleCarouselMouseMove}
+              onMouseUp={handleCarouselMouseUp}
+              onMouseLeave={handleCarouselMouseUp}
               style={{
                 width: '100%',
                 aspectRatio: '1 / 1',
@@ -841,12 +936,30 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
 
               {/* 當前相片展示或無相片時之大尺寸上傳虛線卡片 */}
               {formState.images.length > 0 ? (
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-                  <img
-                    src={getDirectImageUrl(formState.images[activePhotoIdx]) || formState.images[activePhotoIdx]}
-                    alt={formState.name}
-                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'hidden' }}>
+                  <div
+                    className={`photo-carousel-track ${isDragging ? 'dragging' : ''}`}
+                    style={{
+                      transform: `translateX(calc(-${activePhotoIdx * 100}% + ${dragOffset}px))`
+                    }}
+                  >
+                    {formState.images.map((imgUrl, idx) => (
+                      <div key={idx} className="photo-carousel-slide">
+                        <img
+                          src={getDirectImageUrl(imgUrl) || imgUrl}
+                          alt={`${formState.name} ${idx + 1}`}
+                          draggable={false}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                            userSelect: 'none'
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
 
                   {/* 中央底部白色小圓點（頁碼指示） */}
                   {formState.images.length > 1 && (
