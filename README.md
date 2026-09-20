@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.164-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.165-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.164)](#7-最新版本異動紀錄-changelog-v01164)
+- [7. 最新版本異動紀錄 (Changelog v0.1.165)](#7-最新版本異動紀錄-changelog-v01165)
 
 ---
 
@@ -373,7 +373,24 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.164)
+## 7. 最新版本異動紀錄 (Changelog v0.1.165)
+
+### v0.1.165 (2026-09-20)
+- 統一全系統活動編號 (Unified Event ID Format)：
+  - 全系統強制統一僅使用一種活動編號格式：`E{yyMM}-{兩位流水號}`（例如 `E2609-01`、`E2609-05`）。
+  - Supabase RPC `save_admin_event_rpc`：建立或暫存活動且未傳入編號時，以當月前綴 `E{yyMM}-` 查詢 `events` 資料表最大序號自動累加並 `lpad(..., 2, '0')` 取號。
+  - GAS 後端 `_handleSaveEvent`：取號邏輯完全以 Supabase `events` 表作為唯一真實來源 (SSOT)，同步生成對齊之 `E{yyMM}-{兩位流水號}`。
+  - 歷史既有資料維持原樣不強制更動，所有新建立或暫存之活動一律套用全新統一編號。
+- 最新活動 (Activities) 輪播卡片過濾規則優化：
+  - 手動關閉活動排除：狀態為「關閉 (Closed)」或「草稿 (Draft)」的活動不再顯示於輪播卡片中。
+  - 活動結束逾 2 週排除：活動結束超過 14 天（`> 14 天`，以 `end_date || start_date` 判定）的活動自動排除，保持輪播清單整潔。
+  - 報名截止但尚未關閉之活動友善呈現：
+    - 報名截止但尚未手動關閉之活動保留在輪播卡片中。
+    - 狀態標籤顯示為「報名截止 Registration Closed」(灰色 `#999999`)。
+    - 點進查看詳情卡片時，「一鍵報名 Sign Up」按鈕自動轉為反灰且不可點擊之「報名已截止 Closed」提示，保留「查看詳情」供社員回顧行程。
+- 完整單元測試與建置驗證：
+  - 新增 `test/72_unified_event_id_and_activities_filter.test.mjs`，驗證取號格式、過濾條件、標籤顏色與按鈕狀態。
+  - 全專案 53 個測試套件、247 個單元測試 100% 通過，`tsc -b && vite build` 建置零錯誤。
 
 ### v0.1.164 (2026-09-20)
 - 活動中英文雙語欄位分開填寫與草稿暫存機制 (AdminEventForm, AdminEvents, supabase/bilingual_events_and_preferred_language.sql):

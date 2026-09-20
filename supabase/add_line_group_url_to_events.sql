@@ -219,10 +219,26 @@ BEGIN
         RETURN jsonb_build_object('status', 'error', 'message', '權限不足');
     END IF;
 
-    -- 解析活動編號
+    -- 解析活動編號：若未提供，全系統統一以 E{yyMM}-{兩位流水號} 格式自 Supabase events 表取號
     v_event_id := trim(COALESCE(p_event_data->>'eventId', ''));
     IF v_event_id = '' THEN
-        v_event_id := 'E' || to_char(NOW(), 'YYYYMMDD_HH24MISS');
+        DECLARE
+            v_prefix TEXT := 'E' || to_char(NOW(), 'YYMM') || '-';
+            v_max_seq INTEGER := 0;
+            v_curr_seq INTEGER;
+            r RECORD;
+        BEGIN
+            FOR r IN SELECT id FROM events WHERE id LIKE v_prefix || '%' LOOP
+                BEGIN
+                    v_curr_seq := (regexp_replace(substring(r.id from length(v_prefix) + 1), '[^0-9]', '', 'g'))::INTEGER;
+                    IF v_curr_seq > v_max_seq THEN
+                        v_max_seq := v_curr_seq;
+                    END IF;
+                EXCEPTION WHEN OTHERS THEN
+                END;
+            END LOOP;
+            v_event_id := v_prefix || lpad((v_max_seq + 1)::TEXT, 2, '0');
+        END;
     END IF;
 
     -- 解析費用

@@ -1269,6 +1269,57 @@ function _isEventExpired(deadlineVal) {
 }
 
 /**
+ * 輔助函式：解析活動日期字串或 Date 物件
+ * @param {string|Date} dateVal - 日期字串或 Date 物件
+ * @param {boolean} endOfDay - 若為 true，設定為當日 23:59:59.999
+ * @returns {Date|null}
+ */
+function _parseEventDate(dateVal, endOfDay) {
+  if (!dateVal) return null;
+  try {
+    if (dateVal instanceof Date) {
+      var d = new Date(dateVal.getTime());
+      if (endOfDay) d.setHours(23, 59, 59, 999);
+      return d;
+    }
+    var str = String(dateVal).trim();
+    if (!str) return null;
+
+    // 容錯歷史舊資料 23:59:59Z (原意為台北時間 23:59:59)
+    if (str.indexOf("23:59:59Z") > -1) {
+      var datePartOld = str.split("T")[0];
+      var pOld = datePartOld.split("-");
+      if (pOld.length >= 3) {
+        return new Date(parseInt(pOld[0], 10), parseInt(pOld[1], 10) - 1, parseInt(pOld[2], 10), 23, 59, 59, 999);
+      }
+    }
+
+    var cleanStr = str.replace(/[\/\.]/g, "-");
+    var datePart = cleanStr.split("T")[0].split(" ")[0];
+    var parts = datePart.split("-");
+    if (parts.length >= 3) {
+      var year = parseInt(parts[0], 10);
+      var month = parseInt(parts[1], 10) - 1;
+      var day = parseInt(parts[2], 10);
+      if (endOfDay) {
+        return new Date(year, month, day, 23, 59, 59, 999);
+      } else {
+        return new Date(year, month, day, 0, 0, 0, 0);
+      }
+    }
+
+    var isoDate = new Date(str);
+    if (!isNaN(isoDate.getTime())) {
+      if (endOfDay) isoDate.setHours(23, 59, 59, 999);
+      return isoDate;
+    }
+  } catch (e) {
+    console.error("解析活動日期失敗:", dateVal, e);
+  }
+  return null;
+}
+
+/**
  * 輔助函式：日期字串格式化 (依台灣時區轉換為 YYYY/MM/DD)
  */
 function _formatEventDate(dateVal) {
@@ -1312,131 +1363,140 @@ function sendEventList(replyToken) {
   }
 
   var bubbles = [];
+  var now = new Date();
 
   for (var i = 0; i < sbEvents.length; i++) {
     var ev = sbEvents[i];
-    var status = String(ev.status || "").trim();
+    var rawStatus = String(ev.status || "").trim().toLowerCase();
+
+    // 1. 關閉或草稿的活動不需要顯示出來 (排除「關閉」、「closed」、「draft」、「草稿」)
+    var isClosed = rawStatus.indexOf("關閉") > -1 || rawStatus.indexOf("closed") > -1 || rawStatus.indexOf("draft") > -1 || rawStatus.indexOf("草稿") > -1;
+    if (isClosed) {
+      continue;
+    }
+
+    // 2. 活動結束2週以上 (超過 14 天) 的活動不需要出現 (以 end_date || start_date 判定)
+    var targetEndDate = _parseEventDate(ev.end_date || ev.start_date, true);
+    if (targetEndDate && (now.getTime() - targetEndDate.getTime()) > 14 * 24 * 60 * 60 * 1000) {
+      continue;
+    }
+
     var deadlineStr = ev.deadline || "";
     var isExpired = _isEventExpired(deadlineStr);
 
-    // 判斷是否為未來開放或已過期
-    var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
-    if (isExpired) {
-      status = "關閉";
+    // 3. 判斷是否為未來開放或開放
+    var isFuture = rawStatus.indexOf("未來") > -1 || rawStatus.indexOf("coming") > -1 || rawStatus.indexOf("future") > -1;
+    var isOpen = !isFuture && !isExpired && (rawStatus.indexOf("開放") > -1 || rawStatus.indexOf("open") > -1);
+
+    // 報名截止但尚未關閉的活動可以繼續顯示，標籤顯示「報名截止 Registration Closed」(灰色 #999999)
+    var eventId = ev.id || "";
+    var eventName = ev.title || "未命名活動";
+    var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
+    var displayStatus = isFuture ? "未來開放 Coming Soon" : (isOpen ? "開放 Open" : "報名截止 Registration Closed");
+    var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
+    var startFormatted = _formatEventDate(ev.start_date);
+    var endFormatted = _formatEventDate(ev.end_date);
+    var deadlineFormatted = _formatEventDate(ev.deadline);
+
+    var dateDisplay = startFormatted;
+    if (endFormatted && endFormatted !== startFormatted) {
+      dateDisplay += " ~ " + endFormatted;
     }
 
-    // 僅顯示「開放」或「未來開放」之活動
-    if (isFuture || status === "開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1 || isExpired) {
-      var eventId = ev.id || "";
-      var eventName = ev.title || "未命名活動";
-      var isOpen = !isFuture && !isExpired && (status === "開放" || status.indexOf("開放") > -1);
-      var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
-      var displayStatus = isFuture ? "未來開放 Coming Soon" : (isOpen ? "開放 Open" : "已截止 Closed");
-      var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
-      var startFormatted = _formatEventDate(ev.start_date);
-      var endFormatted = _formatEventDate(ev.end_date);
-      var deadlineFormatted = _formatEventDate(ev.deadline);
-
-      var dateDisplay = startFormatted;
-      if (endFormatted && endFormatted !== startFormatted) {
-        dateDisplay += " ~ " + endFormatted;
-      }
-
-      var bubble = {
-        "type": "bubble",
-        "body": {
+    var bubble = {
+      "type": "bubble",
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [{
+          "type": "text",
+          "text": displayStatus,
+          "weight": "bold",
+          "color": tagColor,
+          "size": "sm"
+        }, {
+          "type": "text",
+          "text": eventName,
+          "weight": "bold",
+          "size": "xl",
+          "margin": "sm",
+          "wrap": true
+        }, {
           "type": "box",
           "layout": "vertical",
+          "margin": "md",
+          "spacing": "xs",
           "contents": [{
             "type": "text",
-            "text": displayStatus,
-            "weight": "bold",
-            "color": tagColor,
-            "size": "sm"
-          }, {
-            "type": "text",
-            "text": eventName,
-            "weight": "bold",
-            "size": "xl",
-            "margin": "sm",
-            "wrap": true
-          }, {
-            "type": "box",
-            "layout": "vertical",
-            "margin": "md",
-            "spacing": "xs",
-            "contents": [{
-              "type": "text",
-              "text": "費用 Cost: " + costStr,
-              "size": "sm",
-              "color": "#666666",
-              "weight": "bold"
-            }, {
-              "type": "text",
-              "text": "活動時間 Event Date:",
-              "size": "sm",
-              "color": "#666666",
-              "margin": "sm"
-            }, {
-              "type": "text",
-              "text": dateDisplay,
-              "size": "sm",
-              "color": "#1DB446",
-              "weight": "bold"
-            }, {
-              "type": "text",
-              "text": "報名截止 Sign Up Deadline:",
-              "size": "sm",
-              "color": "#666666",
-              "margin": "sm"
-            }, {
-              "type": "text",
-              "text": deadlineFormatted,
-              "size": "sm",
-              "color": "#E53935",
-              "weight": "bold"
-            }]
-          }, {
-            "type": "separator",
-            "margin": "md"
-          }, {
-            "type": "text",
-            "text": ev.summary || "",
+            "text": "費用 Cost: " + costStr,
             "size": "sm",
-            "color": "#999999",
-            "margin": "md",
-            "wrap": true,
-            "maxLines": 3
+            "color": "#666666",
+            "weight": "bold"
+          }, {
+            "type": "text",
+            "text": "活動時間 Event Date:",
+            "size": "sm",
+            "color": "#666666",
+            "margin": "sm"
+          }, {
+            "type": "text",
+            "text": dateDisplay,
+            "size": "sm",
+            "color": "#1DB446",
+            "weight": "bold"
+          }, {
+            "type": "text",
+            "text": "報名截止 Sign Up Deadline:",
+            "size": "sm",
+            "color": "#666666",
+            "margin": "sm"
+          }, {
+            "type": "text",
+            "text": deadlineFormatted,
+            "size": "sm",
+            "color": "#E53935",
+            "weight": "bold"
           }]
-        },
-        "footer": {
-          "type": "box",
-          "layout": "vertical",
-          "contents": [{
-            "type": "button",
-            "style": "secondary",
-            "action": {
-              "type": "postback",
-              "label": "查看詳情 View",
-              "data": "action=view&eventId=" + eventId,
-              "displayText": "我想查看 " + eventName + " 的資訊 / I want to view details"
-            }
-          }]
-        }
-      };
-
-      var imageUrl = String(ev.cover_image_url || "").trim();
-      if (imageUrl && imageUrl.startsWith("http") && !imageUrl.includes("drive.google.com")) {
-        bubble.hero = {
-          "type": "image",
-          "url": imageUrl,
-          "size": "full",
-          "aspectRatio": "20:13",
-          "aspectMode": "cover"
-        };
+        }, {
+          "type": "separator",
+          "margin": "md"
+        }, {
+          "type": "text",
+          "text": ev.summary || "",
+          "size": "sm",
+          "color": "#999999",
+          "margin": "md",
+          "wrap": true,
+          "maxLines": 3
+        }]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [{
+          "type": "button",
+          "style": "secondary",
+          "action": {
+            "type": "postback",
+            "label": "查看詳情 View",
+            "data": "action=view&eventId=" + eventId,
+            "displayText": "我想查看 " + eventName + " 的資訊 / I want to view details"
+          }
+        }]
       }
-      bubbles.push(bubble);
+    };
+
+    var imageUrl = String(ev.cover_image_url || "").trim();
+    if (imageUrl && imageUrl.startsWith("http") && !imageUrl.includes("drive.google.com")) {
+      bubble.hero = {
+        "type": "image",
+        "url": imageUrl,
+        "size": "full",
+        "aspectRatio": "20:13",
+        "aspectMode": "cover"
+      };
     }
+    bubbles.push(bubble);
   }
 
   if (bubbles.length === 0) {
@@ -1466,14 +1526,12 @@ function sendEventDetail(replyToken, eventId) {
 
   var ev = sbList[0];
   var eventName = ev.title || "未命名活動 (Untitled Event)";
-  var status = String(ev.status || "").trim();
+  var rawStatus = String(ev.status || "").trim().toLowerCase();
   var deadlineStr = ev.deadline || "";
   var isExpired = _isEventExpired(deadlineStr);
 
-  var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
-  if (isExpired) {
-    status = "關閉";
-  }
+  var isFuture = rawStatus.indexOf("未來") > -1 || rawStatus.indexOf("coming") > -1 || rawStatus.indexOf("future") > -1;
+  var isOpen = !isFuture && !isExpired && (rawStatus.indexOf("開放") > -1 || rawStatus.indexOf("open") > -1);
 
   var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
   var startFormatted = _formatEventDate(ev.start_date);
@@ -1486,7 +1544,7 @@ function sendEventDetail(replyToken, eventId) {
   }
 
   var buttonBox;
-  if (!isFuture && !isExpired && (status === "開放" || status.indexOf("開放") > -1)) {
+  if (isOpen) {
     buttonBox = {
       "type": "button",
       "style": "primary",

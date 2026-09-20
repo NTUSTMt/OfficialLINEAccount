@@ -387,10 +387,26 @@ BEGIN
         RETURN jsonb_build_object('status', 'error', 'message', '權限不足');
     END IF;
 
-    -- 解析活動編號
+    -- 解析活動編號：若未提供，全系統統一以 E{yyMM}-{兩位流水號} 格式自 Supabase events 表取號
     v_event_id := trim(COALESCE(p_event_data->>'eventId', ''));
     IF v_event_id = '' THEN
-        v_event_id := 'E' || to_char(NOW(), 'YYYYMMDD_HH24MISS');
+        DECLARE
+            v_prefix TEXT := 'E' || to_char(NOW(), 'YYMM') || '-';
+            v_max_seq INTEGER := 0;
+            v_curr_seq INTEGER;
+            r RECORD;
+        BEGIN
+            FOR r IN SELECT id FROM events WHERE id LIKE v_prefix || '%' LOOP
+                BEGIN
+                    v_curr_seq := (regexp_replace(substring(r.id from length(v_prefix) + 1), '[^0-9]', '', 'g'))::INTEGER;
+                    IF v_curr_seq > v_max_seq THEN
+                        v_max_seq := v_curr_seq;
+                    END IF;
+                EXCEPTION WHEN OTHERS THEN
+                END;
+            END LOOP;
+            v_event_id := v_prefix || lpad((v_max_seq + 1)::TEXT, 2, '0');
+        END;
     END IF;
 
     -- 解析費用 (純數字)
@@ -401,24 +417,30 @@ BEGIN
     END;
 
     -- 解析日期
-    v_start_date := (replace(p_event_data->>'startDate', '/', '-'))::DATE;
+    v_start_date := COALESCE((replace(p_event_data->>'startDate', '/', '-'))::DATE, CURRENT_DATE);
+    v_end_date := COALESCE((replace(p_event_data->>'endDate', '/', '-'))::DATE, v_start_date);
     IF (p_event_data->>'deadline') ~ 'T|\+|:\d{2}' THEN
         v_deadline := (p_event_data->>'deadline')::TIMESTAMPTZ;
-    ELSE
+    ELSIF p_event_data->>'deadline' IS NOT NULL AND trim(p_event_data->>'deadline') != '' THEN
         v_deadline := (replace(p_event_data->>'deadline', '/', '-') || ' 23:59:59+08')::TIMESTAMPTZ;
+    ELSE
+        v_deadline := (v_start_date || ' 23:59:59+08')::TIMESTAMPTZ;
     END IF;
 
     -- UPSERT 進入 events 表
     INSERT INTO events (
         id,
         title,
+        title_en,
         fee,
         start_date,
         end_date,
         deadline,
         status,
         summary,
+        summary_en,
         itinerary,
+        itinerary_en,
         cover_image_url,
         drive_folder_url,
         spreadsheet_url,
@@ -429,13 +451,16 @@ BEGIN
     VALUES (
         v_event_id,
         COALESCE(p_event_data->>'name', '未命名活動'),
+        NULLIF(trim(COALESCE(p_event_data->>'nameEn', '')), ''),
         v_cost_num,
         v_start_date,
         v_end_date,
         v_deadline,
         COALESCE(p_event_data->>'status', '未來開放'),
         COALESCE(p_event_data->>'shortDesc', ''),
+        NULLIF(trim(COALESCE(p_event_data->>'shortDescEn', '')), ''),
         COALESCE(p_event_data->>'fullDesc', ''),
+        NULLIF(trim(COALESCE(p_event_data->>'fullDescEn', '')), ''),
         COALESCE(p_event_data->>'imageUrl', ''),
         NULLIF(trim(COALESCE(p_event_data->>'driveFolderUrl', '')), ''),
         NULLIF(trim(COALESCE(p_event_data->>'spreadsheetUrl', '')), ''),
@@ -445,13 +470,16 @@ BEGIN
     )
     ON CONFLICT (id) DO UPDATE
     SET title = EXCLUDED.title,
+        title_en = COALESCE(EXCLUDED.title_en, events.title_en),
         fee = EXCLUDED.fee,
         start_date = EXCLUDED.start_date,
         end_date = EXCLUDED.end_date,
         deadline = EXCLUDED.deadline,
         status = EXCLUDED.status,
         summary = EXCLUDED.summary,
+        summary_en = COALESCE(EXCLUDED.summary_en, events.summary_en),
         itinerary = EXCLUDED.itinerary,
+        itinerary_en = COALESCE(EXCLUDED.itinerary_en, events.itinerary_en),
         cover_image_url = CASE WHEN EXCLUDED.cover_image_url != '' THEN EXCLUDED.cover_image_url ELSE events.cover_image_url END,
         drive_folder_url = COALESCE(EXCLUDED.drive_folder_url, events.drive_folder_url),
         spreadsheet_url = COALESCE(EXCLUDED.spreadsheet_url, events.spreadsheet_url),
