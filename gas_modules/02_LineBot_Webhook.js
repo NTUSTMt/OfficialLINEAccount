@@ -311,7 +311,7 @@ function _handlePostback(replyToken, userId, postbackData) {
   var eventId = params.eventId || (parts.length > 1 && parts[1].indexOf("=") > -1 ? parts[1].split("=")[1] : "");
 
   if (action === "view" || action === "view_event_detail") {
-    sendEventDetail(replyToken, eventId);
+    sendEventDetail(replyToken, eventId, userId);
     return;
   }
   if (action === "signup") {

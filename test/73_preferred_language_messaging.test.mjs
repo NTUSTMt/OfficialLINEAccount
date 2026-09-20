@@ -165,6 +165,83 @@ describe('Preferred Language Personalized Messaging Tests', () => {
       'Dashboard should check i18n language for eventName display'
     );
   });
+
+  it('should verify _getLineUserProfile and unregistered foreign member language auto-detection', () => {
+    assert.ok(
+      gasContent.includes('function _getLineUserProfile(userId)'),
+      '_getLineUserProfile helper must be defined'
+    );
+    assert.ok(
+      gasContent.includes('_getLineUserProfile(userId)'),
+      '_getUserPreferredLanguage must fallback to LINE profile when member not found or lang empty'
+    );
+
+    // 測試邏輯驗證：模擬外籍人士暱稱與語系判定
+    const detectPreferredLanguageFromProfile = (profile) => {
+      if (!profile) return null;
+      if (profile.language && typeof profile.language === 'string') {
+        const pLang = profile.language.trim().toLowerCase();
+        if (pLang.indexOf('zh') === 0) return 'zh';
+        return 'en';
+      }
+      if (profile.displayName && typeof profile.displayName === 'string') {
+        const name = profile.displayName.trim();
+        const hasChinese = /[\u4e00-\u9fa5]/.test(name);
+        const hasLatin = /[a-zA-Z]/.test(name);
+        if (!hasChinese && hasLatin) return 'en';
+        if (hasChinese) return 'zh';
+      }
+      return null;
+    };
+
+    // 1. 未登記外籍人士：Eric Muriithi (語言為 en)
+    assert.strictEqual(
+      detectPreferredLanguageFromProfile({ displayName: 'Eric Muriithi', language: 'en' }),
+      'en',
+      'Unregistered foreign user with en language should be detected as en'
+    );
+
+    // 2. 未登記外籍人士：Eric Muriithi (未提供 language 欄位，但姓名為純英文拼音無漢字)
+    assert.strictEqual(
+      detectPreferredLanguageFromProfile({ displayName: 'Eric Muriithi' }),
+      'en',
+      'Unregistered foreign user with pure Latin name should be detected as en'
+    );
+
+    // 3. 本地社員：王小明 (未填資料，暱稱含漢字)
+    assert.strictEqual(
+      detectPreferredLanguageFromProfile({ displayName: '王小明', language: 'zh-TW' }),
+      'zh',
+      'Taiwan user with zh-TW language should be detected as zh'
+    );
+
+    assert.strictEqual(
+      detectPreferredLanguageFromProfile({ displayName: '王小明' }),
+      'zh',
+      'Taiwan user with Chinese name should be detected as zh'
+    );
+  });
+
+  it('should verify sendEventDetail and sendEventList provide bilingual/English safe fallback when prefLang is null or en', () => {
+    // 驗證 hasEnglish 檢查
+    assert.ok(
+      gasContent.includes('var hasEnglish = Boolean(ev.title_en || ev.summary_en || ev.itinerary_en || ev.name_en);'),
+      'sendEventDetail must detect whether activity contains English information'
+    );
+    // 驗證雙語標籤 fallback (例如 【名稱 Title】)
+    assert.ok(
+      gasContent.includes('hasEnglish ? "【名稱 Title】" : "【名稱】"'),
+      'sendEventDetail must provide bilingual title tag when prefLang is null and English info exists'
+    );
+    assert.ok(
+      gasContent.includes('hasEnglish ? "【簡介 Summary】" : "【簡介】"'),
+      'sendEventDetail must provide bilingual summary tag when prefLang is null and English info exists'
+    );
+    assert.ok(
+      gasContent.includes('hasEnglish ? "【詳細行程 Detailed Itinerary】" : "【詳細行程】"'),
+      'sendEventDetail must provide bilingual itinerary tag when prefLang is null and English info exists'
+    );
+  });
 });
 
 

@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.172-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.173-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.172)](#7-最新版本異動紀錄-changelog-v01172)
+- [7. 最新版本異動紀錄 (Changelog v0.1.173)](#7-最新版本異動紀錄-changelog-v01173)
 
 ---
 
@@ -373,7 +373,24 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.172)
+## 7. 最新版本異動紀錄 (Changelog v0.1.173)
+
+### v0.1.173 (2026-09-20)
+- 外籍人士（未填個資）語言智慧自動辨識與活動卡片英文/雙語平滑回退：
+  - **外籍人士語言自動判定機制 (`src/gas.js`, `_getUserPreferredLanguage`, `_getLineUserProfile`)**：
+    - **問題排查**：外籍人士初次加入官方 LINE 時尚未填寫 `members` 個人資料，系統查詢 `preferred_language` 回傳 `null`，原本在活動詳情與活動列表直接強制回退至中文分支，導致外籍人士收到純中文 Flex 卡片無法閱讀。
+    - **新增 `_getLineUserProfile(userId)` 函式**：當使用者在 `members` 表查無紀錄或語言未登記時，自動向 LINE Messaging API (`GET https://api.line.me/v2/bot/profile/{userId}`) 取得個人檔案。
+    - **雙重智慧判定邏輯**：
+      1. **LINE 語系判定**：若 `profile.language` 存在且非中文語系（例如 `en`, `ja`, `ko`, `id`, `vi`, `th` 等），自動將其視為國際通用英語 (`"en"`)。
+      2. **暱稱拼音判定**：若手機端未回傳語系欄位，自動檢驗 `profile.displayName`，若暱稱不包含任何漢字 `[\u4e00-\u9fa5]` 且包含拉丁字母（如 "Eric Muriithi"），自動判定為 `"en"`；若含漢字則判定為 `"zh"`。
+      3. **執行階段快取**：判定結果自動存入 `_userLangCache[userId]`，避免重複請求 LINE API。
+  - **活動詳情與活動清單雙語/英文安全回退 (`sendEventDetail`, `sendEventList`)**：
+    - 當判定為 `"en"` 時，卡片標籤全面顯示純英文（【Title】、【Summary】、【Detailed Itinerary】、Cost、Event Date、Sign Up Deadline、Sign Up 按鈕）。
+    - 當遇極端狀況完全無法識別語系 (`prefLang === null`) 且該活動具備英文資料（`ev.title_en`、`ev.summary_en` 或 `ev.itinerary_en`）時，系統自動啟動**中英雙語對照呈現**（標籤顯示【名稱 Title】、【簡介 Summary】、【詳細行程 Detailed Itinerary】），絕不再強行輸出純中文。
+    - 按鈕文字亦同步支援雙語與純英文點擊文案（如 `I want to view details for ...` / `Sign up for ...`）。
+  - **測試與建置驗證**：
+    - 擴充 `test/73_preferred_language_messaging.test.mjs`，完整覆蓋外籍人士未填個資語系判定、純英文拼音辨識及雙語回退標籤斷言。
+    - 全專案 56 個測試套件、263 個單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤。
 
 ### v0.1.172 (2026-09-20)
 - 修復心得牆內點擊「編輯/撰寫我的心得」表單層級 (z-index) 遮蔽問題：

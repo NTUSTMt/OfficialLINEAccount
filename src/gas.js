@@ -408,7 +408,51 @@ function _supabaseGet(table, queryParams) {
 var _userLangCache = {};
 
 /**
+ * 輔助函式：取得 LINE 使用者個人公開資料 (displayName, language, pictureUrl 等)
+ * @param {string} userId - LINE User ID (U123456...)
+ * @returns {{ displayName?: string, language?: string, pictureUrl?: string, statusMessage?: string } | null}
+ */
+function _getLineUserProfile(userId) {
+  if (!userId || typeof userId !== "string" || userId.indexOf("U") !== 0) {
+    return null;
+  }
+  var token = MEMBER_BOT_TOKEN || ADMIN_BOT_TOKEN;
+  if (!token) {
+    try {
+      token = PropertiesService.getScriptProperties().getProperty('MEMBER_BOT_TOKEN') ||
+              PropertiesService.getScriptProperties().getProperty('ADMIN_BOT_TOKEN');
+    } catch (e) {
+      // 於部分本機單元測試 mock 環境容錯
+    }
+  }
+  if (!token) return null;
+
+  try {
+    var response = UrlFetchApp.fetch('https://api.line.me/v2/bot/profile/' + encodeURIComponent(userId), {
+      'headers': {
+        'Authorization': 'Bearer ' + token
+      },
+      'method': 'get',
+      'muteHttpExceptions': true
+    });
+    if (response && response.getResponseCode() === 200) {
+      var content = response.getContentText();
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.warn("⚠️ [_getLineUserProfile] 取得 LINE 個人資料失敗 (" + userId + "): " + err.toString());
+  }
+  return null;
+}
+
+/**
  * 輔助函式：取得使用者的偏好語言 ('zh' | 'en' | null)
+ * 優先序：
+ * 1. 查詢 members 表的 preferred_language (若為 'en' 或 'zh' 則直接採用)
+ * 2. 若未填寫資料或查無社員，自動向 LINE Messaging API 請求 Profile：
+ *    - 依 profile.language 判斷（非 zh 語系如 en, ja, ko 等均視為英文 'en'）
+ *    - 若 language 未提供，依 profile.displayName 判定（純英文/拉丁姓名如 'Eric Muriithi' 且不含漢字，視為 'en'）
+ * 3. 取得結果後寫入執行階段快取 _userLangCache
  * @param {string} userId - LINE User ID (U123456...)
  * @returns {string|null}
  */
@@ -437,8 +481,42 @@ function _getUserPreferredLanguage(userId) {
       }
     }
   } catch (e) {
-    console.warn("⚠️ 取得使用者偏好語言失敗:", userId, e);
+    console.warn("⚠️ 取得使用者偏好語言失敗 (members 查詢):", userId, e);
   }
+
+  // 2. 若 members 未填寫或未登記，向 LINE 查詢 User Profile
+  try {
+    var profile = _getLineUserProfile(userId);
+    if (profile) {
+      if (profile.language && typeof profile.language === "string") {
+        var pLang = profile.language.trim().toLowerCase();
+        if (pLang.indexOf("zh") === 0) {
+          _userLangCache[userId] = "zh";
+          return "zh";
+        } else {
+          // 非中文語系（如 en, ja, ko, id, vi, th 等），外籍人士一律採用英文
+          _userLangCache[userId] = "en";
+          return "en";
+        }
+      }
+      if (profile.displayName && typeof profile.displayName === "string") {
+        var name = profile.displayName.trim();
+        var hasChinese = /[\u4e00-\u9fa5]/.test(name);
+        var hasLatin = /[a-zA-Z]/.test(name);
+        // 若暱稱為純英文字母/無漢字 (如 "Eric Muriithi")，判定為英文
+        if (!hasChinese && hasLatin) {
+          _userLangCache[userId] = "en";
+          return "en";
+        } else if (hasChinese) {
+          _userLangCache[userId] = "zh";
+          return "zh";
+        }
+      }
+    }
+  } catch (errProfile) {
+    console.warn("⚠️ 取得 LINE 使用者個人語系失敗:", userId, errProfile);
+  }
+
   _userLangCache[userId] = null;
   return null;
 }
@@ -1477,7 +1555,8 @@ function sendEventList(replyToken, userId) {
     var eventId = ev.id || "";
     var eventNameZh = ev.title || "未命名活動";
     var eventNameEn = ev.title_en || ev.name_en || eventNameZh;
-    var eventName = (prefLang === "en") ? eventNameEn : eventNameZh;
+    var hasEnglish = Boolean(ev.title_en || ev.summary_en || ev.name_en);
+    var eventName = (prefLang === "en") ? eventNameEn : (prefLang === "zh" ? eventNameZh : (hasEnglish ? (eventNameZh + " " + eventNameEn) : eventNameZh));
 
     var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
     var displayStatusZh = isFuture ? "未來開放" : (isOpen ? "開放" : "報名截止");
@@ -1493,12 +1572,16 @@ function sendEventList(replyToken, userId) {
     var deadlineLabel = (prefLang === "en") ? "Sign Up Deadline:" : (prefLang === "zh" ? "報名截止:" : "報名截止 Sign Up Deadline:");
     var viewBtnLabel = (prefLang === "en") ? "View Details" : (prefLang === "zh" ? "查看詳情" : "查看詳情 View");
     var viewDisplayText = (prefLang === "en")
-      ? ("I want to view details for " + eventName)
+      ? ("I want to view details for " + eventNameEn)
       : (prefLang === "zh"
-          ? ("我想查看 " + eventName + " 的資訊")
-          : ("我想查看 " + eventName + " 的資訊 / I want to view details"));
+          ? ("我想查看 " + eventNameZh + " 的資訊")
+          : ("我想查看 " + (hasEnglish ? (eventNameZh + " / " + eventNameEn) : eventNameZh) + " 的資訊 / I want to view details"));
 
-    var summaryText = (prefLang === "en") ? (ev.summary_en || ev.short_desc_en || ev.summary || "") : (ev.summary || "");
+    var summaryText = (prefLang === "en")
+      ? (ev.summary_en || ev.short_desc_en || ev.summary || "")
+      : (prefLang === "zh"
+          ? (ev.summary || "")
+          : (hasEnglish ? _formatBilingualMessage(ev.summary, ev.summary_en, null) : (ev.summary || "")));
 
     var startFormatted = _formatEventDate(ev.start_date);
     var endFormatted = _formatEventDate(ev.end_date);
@@ -1641,7 +1724,14 @@ function sendEventDetail(replyToken, eventId, userId) {
   var ev = sbList[0];
   var eventNameZh = ev.title || "未命名活動";
   var eventNameEn = ev.title_en || ev.name_en || eventNameZh;
-  var eventName = (prefLang === "en") ? eventNameEn : (prefLang === "zh" ? eventNameZh : (ev.title || "未命名活動 (Untitled Event)"));
+  var hasEnglish = Boolean(ev.title_en || ev.summary_en || ev.itinerary_en || ev.name_en);
+
+  var eventName = (prefLang === "en")
+    ? eventNameEn
+    : (prefLang === "zh"
+        ? eventNameZh
+        : (hasEnglish ? (eventNameZh + "\n" + eventNameEn) : (ev.title || "未命名活動 (Untitled Event)")));
+
   var rawStatus = String(ev.status || "").trim().toLowerCase();
   var deadlineStr = ev.deadline || "";
   var isExpired = _isEventExpired(deadlineStr);
@@ -1665,21 +1755,34 @@ function sendEventDetail(replyToken, eventId, userId) {
   var dateLabel = (prefLang === "en") ? "Event Date: " : (prefLang === "zh" ? "活動時間: " : "活動時間 Event Date: ");
   var deadlineLabel = (prefLang === "en") ? "Sign Up Deadline: " : (prefLang === "zh" ? "報名截止: " : "報名截止 Deadline: ");
 
-  var titleTag = (prefLang === "en") ? "【Title】" : "【名稱】";
-  var summaryTag = (prefLang === "en") ? "【Summary】" : "【簡介】";
-  var itineraryTag = (prefLang === "en") ? "【Detailed Itinerary】" : "【詳細行程】";
+  var titleTag = (prefLang === "en") ? "【Title】" : (prefLang === "zh" ? "【名稱】" : (hasEnglish ? "【名稱 Title】" : "【名稱】"));
+  var summaryTag = (prefLang === "en") ? "【Summary】" : (prefLang === "zh" ? "【簡介】" : (hasEnglish ? "【簡介 Summary】" : "【簡介】"));
+  var itineraryTag = (prefLang === "en") ? "【Detailed Itinerary】" : (prefLang === "zh" ? "【詳細行程】" : (hasEnglish ? "【詳細行程 Detailed Itinerary】" : "【詳細行程】"));
 
-  var summaryContent = (prefLang === "en") ? (ev.summary_en || ev.short_desc_en || ev.summary || "No summary") : (ev.summary || "尚無簡介");
-  var fullDescContent = (prefLang === "en") ? (ev.itinerary_en || ev.full_desc_en || ev.itinerary || ev.full_desc || "No detailed itinerary") : (ev.itinerary || ev.full_desc || "尚無詳細行程");
+  var summaryZh = ev.summary || "尚無簡介";
+  var summaryEn = ev.summary_en || ev.short_desc_en || ev.summary || "No summary";
+  var summaryContent = (prefLang === "en")
+    ? summaryEn
+    : (prefLang === "zh"
+        ? summaryZh
+        : (hasEnglish ? _formatBilingualMessage(summaryZh, summaryEn, null) : summaryZh));
+
+  var fullDescZh = ev.itinerary || ev.full_desc || "尚無詳細行程";
+  var fullDescEn = ev.itinerary_en || ev.full_desc_en || ev.itinerary || ev.full_desc || "No detailed itinerary";
+  var fullDescContent = (prefLang === "en")
+    ? fullDescEn
+    : (prefLang === "zh"
+        ? fullDescZh
+        : (hasEnglish ? _formatBilingualMessage(fullDescZh, fullDescEn, null) : fullDescZh));
 
   var buttonBox;
   if (isOpen) {
     var signupBtnLabel = (prefLang === "en") ? "Sign Up" : (prefLang === "zh" ? "一鍵報名" : "一鍵報名 Sign Up");
     var signupDisplayText = (prefLang === "en")
-      ? ("Sign up for: " + eventName)
+      ? ("Sign up for: " + eventNameEn)
       : (prefLang === "zh"
-          ? ("我要報名：" + eventName)
-          : ("我要報名 Sign up for: " + eventName));
+          ? ("我要報名：" + eventNameZh)
+          : ("我要報名 Sign up for: " + (hasEnglish ? eventNameEn : eventNameZh)));
 
     buttonBox = {
       "type": "button",
@@ -1703,7 +1806,7 @@ function sendEventDetail(replyToken, eventId, userId) {
       "action": {
         "type": "message",
         "label": closedLabel,
-        "text": eventName + " " + closedLabel
+        "text": ((prefLang === "en") ? eventNameEn : eventNameZh) + " " + closedLabel
       }
     };
   }
@@ -1810,7 +1913,7 @@ function sendEventDetail(replyToken, eventId, userId) {
     };
   }
 
-  var flexReplyTitle = (prefLang === "en") ? ("Event: " + eventName) : ("活動詳情: " + eventName);
+  var flexReplyTitle = (prefLang === "en") ? ("Event: " + eventNameEn) : ("活動詳情: " + eventNameZh);
   _replyFlexMessage(replyToken, flexReplyTitle, bubble);
 }
 
