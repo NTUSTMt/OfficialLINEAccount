@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.161-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.162-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.161)](#7-最新版本異動紀錄-changelog-v01161)
+- [7. 最新版本異動紀錄 (Changelog v0.1.162)](#7-最新版本異動紀錄-changelog-v01162)
 
 ---
 
@@ -373,7 +373,27 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.161)
+## 7. 最新版本異動紀錄 (Changelog v0.1.162)
+
+### v0.1.162 (2026-09-20)
+- 活動管理與歷史歸檔頁面 5 大介面優化與跳轉修復：
+  - **主頁工具列緊湊整合**：
+    - 移除「進行中活動（共 X 場）」頂部標題塊，消除重複留白。
+    - 「歷史活動」按鈕簡化為純圖示（`<History size={18} />`），支援標題浮動提示與場次徽章，直接整合置於 `NotionFilterBar` 之「新增活動」（`+`）按鈕左側。
+  - **修復跳轉社員編輯抓錯欄位缺陷 (ApplicantModals & supabaseClient)**：
+    - 排查修正 `ApplicantModals.tsx` 導航邏輯：將 `targetId` 取值順序調整為優先抓取 `line_user_id`（`U...` 系統唯一識別碼）而非 `lineId`（自訂帳號，如 `brianhung0975`），徹底根除「找不到使用者識別碼為 brianhung0975 的社員資料」之錯誤。
+    - 於 `supabaseClient.ts` 之 `fetchMemberFullDetailFromSupabase` 直讀備援擴充 `.or('line_user_id.eq.' + userId + ',line_id.eq.' + userId)` 雙軌支援，防禦各類識別碼查詢。
+  - **歷史頁面返回按鈕純圖示化並左移**：
+    - `NotionFilterBar` 擴充 `prefixElement` 屬性支援。
+    - 歷史活動頁「返回活動管理」按鈕改為純圖示按鈕（`<ArrowLeft size={18} />`），直接放置於搜尋框的最左側，形成簡約高雅的單行工具列。
+  - **移除歷史頁面搜尋框上方標題**：
+    - 刪除搜尋框上方之「歷史活動歸檔」標題與說明橫幅，全站幹部管理工具列規格完全一致。
+  - **歷史活動卡片箭頭與統計徽章靠左優化 (AdminHistoryEventCard)**：
+    - 移除「查看詳情 / 收合資訊」純文字，僅保留 `<ChevronDown size={18} />` / `<ChevronUp size={18} />` 展開箭頭。
+    - 頂部主卡片重構為上下結構：上半部為「縮圖 + 活動標題/日期/費用」，下半部獨立一行放置「報名人數框框、正取、備取徽章」，直接靠齊卡片最左側內距（不受上方 88px 圖片推擠影響），右側配置展開箭頭。
+- 單元測試與建置驗證：
+  - 新增 `test/70_admin_events_ui_refinement.test.mjs`，驗證跳轉優先抓取 `line_user_id`、直讀雙軌備援、標題移除、圖示按鈕位置與卡片統計指標佈局。
+  - 全專案 232 項單元測試 100% 通過，TypeScript 與 Vite 建置零錯誤。
 
 ### v0.1.161 (2026-09-20)
 - 活動管理頁面重新設計與歷史活動歸檔系統 (AdminEvents & AdminEventsHistory)：

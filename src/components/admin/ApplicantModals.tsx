@@ -517,13 +517,22 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    const targetId = profileModalApplicant.lineId || (profileModalApplicant as any).line_user_id || (profileModalApplicant as any).userId;
+                    const targetId =
+                      (profileModalApplicant as any).line_user_id ||
+                      profileModalApplicant.userId ||
+                      (profileModalApplicant as any).lineUserId ||
+                      profileModalApplicant.lineId;
                     if (targetId) {
                       onCloseProfile();
                       navigate(`/admin/members/${encodeURIComponent(targetId)}`);
                     }
                   }}
-                  disabled={!profileModalApplicant.lineId && !(profileModalApplicant as any).line_user_id && !(profileModalApplicant as any).userId}
+                  disabled={
+                    !(profileModalApplicant as any).line_user_id &&
+                    !profileModalApplicant.userId &&
+                    !(profileModalApplicant as any).lineUserId &&
+                    !profileModalApplicant.lineId
+                  }
                   style={{
                     width: '100%',
                     padding: '10px 14px',

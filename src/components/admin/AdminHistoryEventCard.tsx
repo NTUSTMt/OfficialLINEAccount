@@ -109,169 +109,174 @@ export const AdminHistoryEventCard: React.FC<AdminHistoryEventCardProps> = ({
           padding: '16px',
           cursor: 'pointer',
           display: 'flex',
-          gap: '14px',
-          alignItems: 'flex-start',
+          flexDirection: 'column',
           backgroundColor: isExpanded ? '#fafafa' : '#ffffff',
           borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none'
         }}
       >
-        {/* 活動主視覺縮圖 */}
-        {imgDirect ? (
-          <img
-            src={imgDirect}
-            alt={evt.name}
-            style={{
-              width: '88px',
-              height: '88px',
-              borderRadius: '12px',
-              objectFit: 'cover',
-              flexShrink: 0,
-              backgroundColor: '#f1f5f9'
-            }}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = 'none';
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              width: '88px',
-              height: '88px',
-              borderRadius: '12px',
-              backgroundColor: '#f1f5f9',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              color: '#94a3b8'
-            }}
-          >
-            <ImageIcon size={32} />
-          </div>
-        )}
-
-        {/* 活動主資訊 */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
-            <span
+        {/* 上半部：縮圖與活動文字標題 */}
+        <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', width: '100%' }}>
+          {/* 活動主視覺縮圖 */}
+          {imgDirect ? (
+            <img
+              src={imgDirect}
+              alt={evt.name}
               style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: '#64748b',
+                width: '88px',
+                height: '88px',
+                borderRadius: '12px',
+                objectFit: 'cover',
+                flexShrink: 0,
+                backgroundColor: '#f1f5f9'
+              }}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '88px',
+                height: '88px',
+                borderRadius: '12px',
                 backgroundColor: '#f1f5f9',
-                padding: '2px 8px',
-                borderRadius: '6px'
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                color: '#94a3b8'
               }}
             >
-              代號: {evt.id}
-            </span>
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: '#475569',
-                backgroundColor: '#e2e8f0',
-                padding: '2px 8px',
-                borderRadius: '6px'
-              }}
-            >
-              已歸檔歷史活動
-            </span>
-          </div>
+              <ImageIcon size={32} />
+            </div>
+          )}
 
-          <h3
-            style={{
-              margin: '0 0 6px',
-              fontSize: '16px',
-              fontWeight: 700,
-              color: '#0f172a',
-              lineHeight: 1.3,
-              wordBreak: 'break-word'
-            }}
-          >
-            {evt.name}
-          </h3>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Calendar size={13} color="#059669" />
-              <span>{formattedDates}</span>
-            </span>
-            {evt.cost && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <span>費用: {evt.cost}</span>
-              </span>
-            )}
-          </div>
-
-          {/* 統計指標與展開按鈕 */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* 活動主資訊 */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
               <span
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
                   fontSize: '11px',
-                  fontWeight: 600,
-                  color: '#1e293b',
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  fontWeight: 700,
+                  color: '#64748b',
+                  backgroundColor: '#f1f5f9',
                   padding: '2px 8px',
                   borderRadius: '6px'
                 }}
               >
-                <Users size={12} color="#059669" />
-                <span>報名 {evt.stats?.total ?? sortedApplicants.length} 人</span>
+                代號: {evt.id}
               </span>
               <span
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '3px',
                   fontSize: '11px',
-                  fontWeight: 600,
-                  color: '#15803d',
-                  backgroundColor: '#dcfce7',
-                  padding: '2px 7px',
+                  fontWeight: 700,
+                  color: '#475569',
+                  backgroundColor: '#e2e8f0',
+                  padding: '2px 8px',
                   borderRadius: '6px'
                 }}
               >
-                <CheckCircle2 size={11} />
-                <span>正取 {evt.stats?.accepted ?? acceptedCount}</span>
-              </span>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  color: '#c2410c',
-                  backgroundColor: '#ffedd5',
-                  padding: '2px 7px',
-                  borderRadius: '6px'
-                }}
-              >
-                <Clock4 size={11} />
-                <span>備取 {evt.stats?.waitlisted ?? waitlistedCount}</span>
+                已歸檔歷史活動
               </span>
             </div>
 
-            <div
+            <h3
+              style={{
+                margin: '0 0 6px',
+                fontSize: '16px',
+                fontWeight: 700,
+                color: '#0f172a',
+                lineHeight: 1.3,
+                wordBreak: 'break-word'
+              }}
+            >
+              {evt.name}
+            </h3>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '12px', color: '#64748b' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <Calendar size={13} color="#059669" />
+                <span>{formattedDates}</span>
+              </span>
+              {evt.cost && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <span>費用: {evt.cost}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 下半部：統計指標（靠齊卡片最左側，不受上方圖片影響）與展開箭頭 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: 600,
-                color: '#059669',
-                marginLeft: 'auto'
+                color: '#1e293b',
+                backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                padding: '2px 8px',
+                borderRadius: '6px'
               }}
             >
-              <span>{isExpanded ? '收合資訊' : '查看詳情'}</span>
-              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </div>
+              <Users size={12} color="#059669" />
+              <span>報名 {evt.stats?.total ?? sortedApplicants.length} 人</span>
+            </span>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#15803d',
+                backgroundColor: '#dcfce7',
+                padding: '2px 7px',
+                borderRadius: '6px'
+              }}
+            >
+              <CheckCircle2 size={11} />
+              <span>正取 {evt.stats?.accepted ?? acceptedCount}</span>
+            </span>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#c2410c',
+                backgroundColor: '#ffedd5',
+                padding: '2px 7px',
+                borderRadius: '6px'
+              }}
+            >
+              <Clock4 size={11} />
+              <span>備取 {evt.stats?.waitlisted ?? waitlistedCount}</span>
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              borderRadius: '8px',
+              color: '#059669',
+              backgroundColor: isExpanded ? '#ecfdf5' : '#f8fafc',
+              border: '1px solid #e2e8f0',
+              flexShrink: 0,
+              marginLeft: 'auto'
+            }}
+          >
+            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </div>
         </div>
       </div>

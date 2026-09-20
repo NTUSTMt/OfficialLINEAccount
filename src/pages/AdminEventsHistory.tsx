@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, History, Mountain, CheckCircle2, Lock } from 'lucide-react';
+import { ArrowLeft, Mountain, CheckCircle2, Lock } from 'lucide-react';
 import { appendAuthToken } from '../utils/api';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
@@ -370,55 +370,6 @@ export default function AdminEventsHistory({ userId }: AdminEventsHistoryProps) 
         className="admin-events-history-container animate-fade-in"
         style={{ maxWidth: '900px', margin: '0 auto', padding: '16px', textAlign: 'left' }}
       >
-        {/* 頂部導航與標題列 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '8px' }}>
-          <button
-            type="button"
-            onClick={() => navigate('/admin/events')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              backgroundColor: '#ffffff',
-              color: '#475569',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
-          >
-            <ArrowLeft size={16} />
-            <span>返回活動管理</span>
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: '#f1f5f9',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#475569'
-              }}
-            >
-              <History size={18} />
-            </div>
-            <div>
-              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
-                歷史活動歸檔
-              </h2>
-              <span style={{ fontSize: '11px', color: '#64748b' }}>
-                完全結束 2 週以上之活動（共 {historyEvents.length} 場）
-              </span>
-            </div>
-          </div>
-        </div>
-
         {/* 錯誤/診斷提示 Banner */}
         {errorNotice && (
           <div
@@ -462,8 +413,31 @@ export default function AdminEventsHistory({ userId }: AdminEventsHistoryProps) 
           </div>
         )}
 
-        {/* Notion 搜尋、篩選、排序、重新整理欄位 */}
+        {/* Notion 搜尋、篩選、排序、重新整理欄位（左側附帶返回活動管理純圖示按鈕） */}
         <NotionFilterBar
+          prefixElement={
+            <button
+              type="button"
+              onClick={() => navigate('/admin/events')}
+              title="返回活動管理"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0',
+                backgroundColor: '#ffffff',
+                color: '#475569',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <ArrowLeft size={18} />
+            </button>
+          }
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           searchPlaceholder="搜尋歷史活動名稱或代號..."

@@ -27,6 +27,8 @@ interface NotionFilterBarProps {
   isRefreshing?: boolean;
   onAdd?: () => void;
   addTooltip?: string;
+  prefixElement?: React.ReactNode;
+  extraBeforeAdd?: React.ReactNode;
 }
 
 export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
@@ -41,7 +43,9 @@ export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
   onRefresh,
   isRefreshing = false,
   onAdd,
-  addTooltip = '新增'
+  addTooltip = '新增',
+  prefixElement,
+  extraBeforeAdd
 }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
@@ -58,6 +62,9 @@ export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
         gap: '8px',
         width: '100%'
       }}>
+        {/* 前綴元素 (如歷史活動返回按鈕) */}
+        {prefixElement}
+
         {/* 搜尋框 */}
         <div style={{
           position: 'relative',
@@ -205,6 +212,9 @@ export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
             />
           </button>
         )}
+
+        {/* 新增項目按鈕前置自訂按鈕 (如歷史活動按鈕) */}
+        {extraBeforeAdd}
 
         {/* 新增項目按鈕 */}
         {onAdd && (

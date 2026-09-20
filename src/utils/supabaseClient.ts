@@ -1178,12 +1178,13 @@ export const fetchMemberFullDetailFromSupabase = async (
     console.warn('[Supabase] get_member_profile 備援查詢例外:', err);
   }
 
-  // 3. 直讀備援
+  // 3. 直讀備援 (支援 line_user_id 與 line_id 雙軌相容)
   try {
     const { data, error } = await supabase
       .from('members')
       .select('*')
-      .eq('line_user_id', userId)
+      .or(`line_user_id.eq.${userId},line_id.eq.${userId}`)
+      .limit(1)
       .maybeSingle();
 
     if (error) {

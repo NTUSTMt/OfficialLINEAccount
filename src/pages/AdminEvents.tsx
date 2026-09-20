@@ -967,60 +967,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             </div>
           )}
 
-          {/* 活動主頁標題列與歷史活動按鈕 */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '12px',
-            gap: '8px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
-                進行中活動
-              </h2>
-              <span style={{ fontSize: '12px', color: '#64748b' }}>
-                共 {activeEvents.length} 場
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => navigate('/admin/events/history')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '10px',
-                border: '1px solid #cbd5e1',
-                backgroundColor: '#ffffff',
-                color: '#334155',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <History size={15} color="#059669" />
-              <span>歷史活動</span>
-              {archivedCount > 0 && (
-                <span style={{
-                  backgroundColor: '#f1f5f9',
-                  color: '#475569',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  padding: '1px 6px',
-                  borderRadius: '10px'
-                }}>
-                  {archivedCount}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Notion 搜尋、篩選、排序、重新整理與發布活動列 */}
+          {/* Notion 搜尋、篩選、排序、重新整理、歷史活動與發布活動列 */}
           <NotionFilterBar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -1035,6 +982,46 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             }}
             onRefresh={() => fetchEvents(true)}
             isRefreshing={isRefreshingEvents || loadingEvents}
+            extraBeforeAdd={
+              <button
+                type="button"
+                onClick={() => navigate('/admin/events/history')}
+                title={`歷史活動歸檔 (${archivedCount} 場)`}
+                style={{
+                  position: 'relative',
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                  backgroundColor: '#ffffff',
+                  color: '#475569',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <History size={18} />
+                {archivedCount > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '-4px',
+                    right: '-4px',
+                    backgroundColor: '#64748b',
+                    color: '#ffffff',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    padding: '1px 5px',
+                    borderRadius: '10px',
+                    lineHeight: 1
+                  }}>
+                    {archivedCount}
+                  </span>
+                )}
+              </button>
+            }
             onAdd={resetFormForCreate}
             addTooltip="發布新活動"
           />
