@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.163-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.164-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.163)](#7-最新版本異動紀錄-changelog-v01163)
+- [7. 最新版本異動紀錄 (Changelog v0.1.164)](#7-最新版本異動紀錄-changelog-v01164)
 
 ---
 
@@ -373,7 +373,35 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.163)
+## 7. 最新版本異動紀錄 (Changelog v0.1.164)
+
+### v0.1.164 (2026-09-20)
+- 活動中英文雙語欄位分開填寫與草稿暫存機制 (AdminEventForm, AdminEvents, supabase/bilingual_events_and_preferred_language.sql):
+  - **中英文欄位分開填寫與完美對齊**：
+    - 活動名稱、精簡簡介與詳細行程全面支援中英文分開填寫（中文：`name`, `shortDesc`, `fullDesc`；英文：`nameEn`, `shortDescEn`, `fullDescEn`），資料庫對應寫入 `events` 表的 `title_en`, `summary_en`, `itinerary_en` 欄位。
+    - 頂部彈窗標題移除原先之「發布新活動」文字，換置為高雅精巧的 `[中文 (ZH)]` 與 `[English (EN)]` 分頁切換 Segmented Control。
+    - 共用欄位（出隊開始/結束日期、報名截止時間、預計費用、報名狀態、封面圖片、LINE 交流群組連結、雲端資料夾網址、試算表名冊連結）在切換語言分頁時完全共用且同步連動。
+  - **活動雙按鈕：「暫存活動」與「確認發布」**：
+    - 表單底部取消原先單一按鈕，改為並列之 `[暫存活動]`（Bookmark 圖示）與 `[確認發布]`（Send 圖示）。
+    - **草稿暫存 (Save Draft)**：幹部無需一次填完所有必填資訊，僅需填寫活動名稱即可隨時點擊暫存。草稿直接直寫至 Supabase `save_admin_event_rpc`，報名狀態設為「關閉 (Draft)」，不觸發耗時之 Google Drive 資料夾複製與試算表名冊建立，秒級安全儲存。
+    - **確認發布 (Confirm Publish)**：嚴格執行中英文全欄位必填驗證（中文名稱、日期、截止日、費用、狀態、中文簡介、中文行程，以及英文名稱、英文簡介、英文行程）。
+    - **缺漏智慧跳轉與提示**：若有缺漏欄位，彈窗會具體條列缺漏的項目名稱；若中文填妥但英文尚未填寫，系統會自動切換至 `[English (EN)]` 分頁並聚焦至未填欄位，降低幹部認知負擔。
+  - **即時預覽雙語連動與卡片雙語呈現**：
+    - 表單底部即時預覽卡片隨中英分頁即時切換呈現對應語言之活動資訊。
+    - 活動清單卡片（`AdminEventCard` 與 `AdminHistoryEventCard`）標題支援中英文並列對照（如：`活動中文名稱 / English Title`）。
+- 社員偏好語言設定與 LIFF / LINE 訊息雙語適配 (Register, MemberDetailEdit, MemberProfileModal, gas.js):
+  - **註冊表單必填偏好語言下拉選單 (Register.tsx)**：
+    - 於註冊與個資修改步驟 1（基本必填資料）新增「偏好語言 (Preferred Language)」必填下拉選單，嚴格提供且僅提供兩個選項：`中文` 與 `English`。
+    - 使用者提交資料並儲存成功後，系統自動呼叫 `i18n.changeLanguage(...)` 將整個 LIFF 介面無縫切換為使用者選擇之語系，並持久化至 `localStorage` (`i18nextLng`)。
+  - **幹部後台檢視與編輯支援**：
+    - `MemberDetailEdit.tsx`（社員詳細編輯）：在基本資料區塊新增「偏好語言 (Preferred Language)」下拉選單，幹部可隨時檢視與調整社員之預設語言。
+    - `MemberProfileModal.tsx`（個資預覽彈窗）：在基本資料區塊清晰呈現社員之「偏好語言：中文 / English」。
+  - **LINE 推播訊息語言適配 (src/gas.js)**：
+    - 在 LINE Bot Webhook 與資料變更推播處理常式中，讀取使用者設定之 `preferred_language`。
+    - 選擇 English 之社員接收純英文之官方通知訊息，選擇中文之社員接收繁體中文通知，未設定者維持中英雙語對照推播。
+- 單元測試與建置驗證：
+  - 新增 `test/69_bilingual_events_and_preferred_language.test.mjs` 專屬單元測試，全面驗證活動雙語欄位分頁切換、草稿暫存、發布必填防護、自動分頁跳轉、註冊表單偏好語言驗證與幹部端檢視。
+  - 全專案 244 項單元測試 100% 通過，`tsc -b && vite build` 打包建置零錯誤。
 
 ### v0.1.163 (2026-09-20)
 - 管理頁面返回上一頁智慧歷程導航 (Smart History Back Navigation)：

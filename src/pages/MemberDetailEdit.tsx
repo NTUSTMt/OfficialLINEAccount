@@ -32,6 +32,7 @@ const FIELD_LABELS: Record<string, string> = {
   email: '電子信箱',
   address: '聯絡地址',
   line_id: '自訂 LINE ID',
+  preferred_language: '偏好語言 (Preferred Language)',
   want_to_say: '想說的話 (留言)',
   identity_status: '身分狀態',
   department: '就讀系所',
@@ -111,6 +112,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
         email: detail.email || '',
         address: detail.address || '',
         line_id: detail.line_id || '',
+        preferred_language: detail.preferred_language || 'zh',
         want_to_say: detail.want_to_say || '',
         identity_status: detail.identity_status || '',
         department: detail.department || '',
@@ -572,6 +574,18 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                     onChange={e => handleFieldChange('address', e.target.value)}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
                   />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>偏好語言 (Preferred Language)</label>
+                  <select
+                    value={formData.preferred_language || 'zh'}
+                    onChange={e => handleFieldChange('preferred_language', e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', backgroundColor: '#ffffff' }}
+                  >
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                  </select>
                 </div>
 
                 <div>

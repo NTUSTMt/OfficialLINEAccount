@@ -1,17 +1,20 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, Info, ImageIcon, Check, Mountain, Link2, AlertCircle } from 'lucide-react';
+import { Sparkles, Info, ImageIcon, Check, Mountain, Link2, AlertCircle, Bookmark, Send } from 'lucide-react';
 
 export interface AdminEventFormData {
   eventId: string;
   name: string;
+  nameEn: string;
   startDate: string;
   endDate: string;
   deadline: string;
   cost: string;
   status: string;
   shortDesc: string;
+  shortDescEn: string;
   fullDesc: string;
+  fullDescEn: string;
   imageUrl: string;
   lineGroupUrl: string;
   notifyOfficerGroup: boolean;
@@ -26,6 +29,10 @@ interface AdminEventFormProps {
   submittingForm: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onCancelEdit: () => void;
+  activeLangTab: 'zh' | 'en';
+  setActiveLangTab: (tab: 'zh' | 'en') => void;
+  onSaveDraft: () => void;
+  savingDraft: boolean;
 }
 
 export const AdminEventForm: React.FC<AdminEventFormProps> = ({
@@ -36,7 +43,11 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
   onImageChange,
   submittingForm,
   onSubmit,
-  onCancelEdit
+  onCancelEdit,
+  activeLangTab,
+  setActiveLangTab: _setActiveLangTab,
+  onSaveDraft,
+  savingDraft
 }) => {
   const { t } = useTranslation();
 
@@ -44,8 +55,11 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
   const FULL_DESC_LIMIT = 700;
   const TOTAL_DESC_LIMIT = 1400;
 
-  const shortDescCount = useMemo(() => formData.shortDesc.trim().length, [formData.shortDesc]);
-  const fullDescCount = useMemo(() => formData.fullDesc.trim().length, [formData.fullDesc]);
+  const currentShortDesc = activeLangTab === 'en' ? (formData.shortDescEn || '') : (formData.shortDesc || '');
+  const currentFullDesc = activeLangTab === 'en' ? (formData.fullDescEn || '') : (formData.fullDesc || '');
+
+  const shortDescCount = useMemo(() => currentShortDesc.trim().length, [currentShortDesc]);
+  const fullDescCount = useMemo(() => currentFullDesc.trim().length, [currentFullDesc]);
   const totalDescCount = useMemo(() => shortDescCount + fullDescCount, [shortDescCount, fullDescCount]);
 
   const isShortDescOver = shortDescCount > SHORT_DESC_LIMIT;
@@ -101,14 +115,16 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
         {/* 活動名稱 */}
         <div>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
-            {t('adminEvents.nameLabel')}
+            {activeLangTab === 'en' ? t('adminEvents.nameEnLabel') : t('adminEvents.nameLabel')}
           </label>
           <input
             type="text"
-            required
-            value={formData.name}
-            placeholder={t('adminEvents.namePlaceholder')}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            value={activeLangTab === 'en' ? formData.nameEn : formData.name}
+            placeholder={activeLangTab === 'en' ? t('adminEvents.nameEnPlaceholder') : t('adminEvents.namePlaceholder')}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFormData((prev) => (activeLangTab === 'en' ? { ...prev, nameEn: val } : { ...prev, name: val }));
+            }}
             style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box', textAlign: 'left' }}
           />
         </div>
@@ -389,18 +405,20 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>
-              {t('adminEvents.shortDescLabel')}
+              {activeLangTab === 'en' ? t('adminEvents.shortDescEnLabel') : t('adminEvents.shortDescLabel')}
             </label>
             <span style={{ fontSize: '11px', color: isShortDescOver ? '#ef4444' : '#64748b' }}>
               （上限 1,000 字）
             </span>
           </div>
           <textarea
-            required
             rows={3}
-            value={formData.shortDesc}
-            placeholder={t('adminEvents.shortDescPlaceholder')}
-            onChange={(e) => setFormData({ ...formData, shortDesc: e.target.value })}
+            value={activeLangTab === 'en' ? formData.shortDescEn : formData.shortDesc}
+            placeholder={activeLangTab === 'en' ? t('adminEvents.shortDescEnPlaceholder') : t('adminEvents.shortDescPlaceholder')}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFormData((prev) => (activeLangTab === 'en' ? { ...prev, shortDescEn: val } : { ...prev, shortDesc: val }));
+            }}
             style={{
               width: '100%',
               minHeight: '80px',
@@ -431,7 +449,7 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>
-              {t('adminEvents.fullDescLabel')}
+              {activeLangTab === 'en' ? t('adminEvents.fullDescEnLabel') : t('adminEvents.fullDescLabel')}
             </label>
             <span style={{ fontSize: '11px', color: isFullDescOver ? '#ef4444' : '#64748b' }}>
               （上限 700 字）
@@ -439,9 +457,12 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
           </div>
           <textarea
             rows={6}
-            value={formData.fullDesc}
-            placeholder={t('adminEvents.fullDescPlaceholder')}
-            onChange={(e) => setFormData({ ...formData, fullDesc: e.target.value })}
+            value={activeLangTab === 'en' ? formData.fullDescEn : formData.fullDesc}
+            placeholder={activeLangTab === 'en' ? t('adminEvents.fullDescEnPlaceholder') : t('adminEvents.fullDescPlaceholder')}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFormData((prev) => (activeLangTab === 'en' ? { ...prev, fullDescEn: val } : { ...prev, fullDesc: val }));
+            }}
             style={{
               width: '100%',
               minHeight: '130px',
@@ -500,34 +521,73 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
           </label>
         )}
 
-        {/* 提交按鈕 */}
-        <button
-          type="submit"
-          disabled={submittingForm || isDescOverLimit}
-          className="btn btn-primary"
-          style={{
-            marginTop: '10px',
-            padding: '12px 24px',
-            borderRadius: '10px',
-            fontWeight: 'bold',
-            fontSize: '15px',
-            backgroundColor: isDescOverLimit ? '#94a3b8' : '#059669',
-            cursor: isDescOverLimit ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px'
-          }}
-        >
-          {submittingForm && <div className="spinner" style={{ width: '16px', height: '16px' }}></div>}
-          {submittingForm
-            ? t('adminEvents.submitting')
-            : isDescOverLimit
-            ? '字數超過上限不可送出'
-            : isEditing
-            ? t('adminEvents.submitUpdate')
-            : t('adminEvents.submitCreate')}
-        </button>
+        {/* 操作按鈕組：暫存活動與確認發布 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
+          {/* 暫存活動 */}
+          <button
+            type="button"
+            disabled={savingDraft || submittingForm}
+            onClick={onSaveDraft}
+            style={{
+              padding: '12px 18px',
+              borderRadius: '10px',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              border: '1.5px solid #cbd5e1',
+              backgroundColor: '#f8fafc',
+              color: '#334155',
+              cursor: (savingDraft || submittingForm) ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            {savingDraft ? (
+              <div className="spinner" style={{ width: '15px', height: '15px' }}></div>
+            ) : (
+              <Bookmark size={16} color="#64748b" />
+            )}
+            <span>{savingDraft ? t('adminEvents.savingDraft') : t('adminEvents.saveDraft')}</span>
+          </button>
+
+          {/* 確認發布 */}
+          <button
+            type="submit"
+            disabled={submittingForm || savingDraft || isDescOverLimit}
+            className="btn btn-primary"
+            style={{
+              padding: '12px 18px',
+              borderRadius: '10px',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              backgroundColor: isDescOverLimit ? '#94a3b8' : '#059669',
+              cursor: (isDescOverLimit || submittingForm || savingDraft) ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              border: 'none',
+              color: '#ffffff'
+            }}
+          >
+            {submittingForm ? (
+              <div className="spinner" style={{ width: '15px', height: '15px' }}></div>
+            ) : (
+              <Send size={16} />
+            )}
+            <span>
+              {submittingForm
+                ? t('adminEvents.submitting')
+                : isDescOverLimit
+                ? '字數超量不可送出'
+                : isEditing
+                ? t('adminEvents.submitUpdate')
+                : t('adminEvents.confirmPublish')}
+            </span>
+          </button>
+        </div>
       </form>
 
       {/* 右欄：LINE Carousel 卡片模擬預覽 */}
@@ -563,7 +623,9 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
           {/* 卡片主體 */}
           <div style={{ padding: '16px', textAlign: 'left' }}>
             <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 'bold', color: '#111111', lineHeight: '1.3' }}>
-              {formData.name || '未命名活動名稱'}
+              {activeLangTab === 'en'
+                ? (formData.nameEn || (formData.name ? `${formData.name} (EN)` : 'Event Name (EN)'))
+                : (formData.name || '未命名活動名稱')}
             </h3>
 
             <span style={{
@@ -595,7 +657,9 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
             </p>
 
             <p style={{ margin: '0', fontSize: '12px', color: '#777777', lineHeight: '1.4', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-              {formData.shortDesc || '這裡會呈現活動的重點亮點簡述...'}
+              {activeLangTab === 'en'
+                ? (formData.shortDescEn || (formData.shortDesc ? `${formData.shortDesc} (EN)` : 'Route highlights and target fitness in English...'))
+                : (formData.shortDesc || '這裡會呈現活動的重點亮點簡述...')}
             </p>
           </div>
 

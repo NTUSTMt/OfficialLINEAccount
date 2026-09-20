@@ -51,13 +51,16 @@ interface SupabaseEquipmentRow {
 interface SupabaseEventRow {
   id: string;
   title: string;
+  title_en?: string;
   fee?: number;
   start_date: string;
   end_date: string;
   deadline: string;
   status: string;
   summary?: string;
+  summary_en?: string;
   itinerary?: string;
+  itinerary_en?: string;
   cover_image_url?: string;
   line_group_url?: string;
   event_signups?: { status: string }[];
@@ -170,13 +173,16 @@ export const fetchEventsFromSupabase = async (): Promise<AdminEvent[] | null> =>
       .select(`
         id,
         title,
+        title_en,
         fee,
         start_date,
         end_date,
         deadline,
         status,
         summary,
+        summary_en,
         itinerary,
+        itinerary_en,
         cover_image_url,
         line_group_url
       `)
@@ -196,13 +202,16 @@ export const fetchEventsFromSupabase = async (): Promise<AdminEvent[] | null> =>
       return {
         id: row.id,
         name: row.title || '未命名活動',
+        nameEn: row.title_en || '',
         startDate: row.start_date || '',
         endDate: row.end_date || '',
         deadline: row.deadline || '',
         cost: costStr,
         status: row.status || '關閉',
         shortDesc: row.summary || '',
+        shortDescEn: row.summary_en || '',
         fullDesc: row.itinerary || '',
+        fullDescEn: row.itinerary_en || '',
         imageUrl: row.cover_image_url || '',
         lineGroupUrl: row.line_group_url || '',
         stats: {
@@ -332,7 +341,8 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
       medicalHistory: data.medical_history || '',
       intendOfficial: data.join_membership_intent || '',
       intendOfficer: data.officer_intent || '',
-      wantToSay: data.want_to_say || ''
+      wantToSay: data.want_to_say || '',
+      preferredLanguage: data.preferred_language || 'zh'
     };
 
     console.log('%c[DataSource: Supabase] 社員個人資料預填讀取成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', profile);
@@ -387,7 +397,8 @@ export const saveMemberProfileToSupabase = async (
       identity_status: formData.identityStatus.trim(),
       join_membership_intent: formData.intendOfficial.trim(),
       officer_intent: formData.intendOfficer.trim(),
-      want_to_say: formData.wantToSay ? formData.wantToSay.trim() : ''
+      want_to_say: formData.wantToSay ? formData.wantToSay.trim() : '',
+      preferred_language: formData.preferredLanguage || 'zh'
     };
 
     const { data, error } = await supabase.rpc('save_member_profile', {
@@ -950,13 +961,16 @@ export const saveEventToSupabase = async (
   eventData: {
     eventId?: string;
     name: string;
+    nameEn?: string;
     startDate: string;
     endDate?: string;
     deadline: string;
     cost: string;
     status: string;
     shortDesc?: string;
+    shortDescEn?: string;
     fullDesc?: string;
+    fullDescEn?: string;
     imageUrl?: string;
     driveFolderUrl?: string;
     spreadsheetUrl?: string;

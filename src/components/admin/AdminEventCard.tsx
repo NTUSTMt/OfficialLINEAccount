@@ -185,7 +185,7 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
             lineHeight: '1.4',
             wordBreak: 'break-word'
           }}>
-            {evt.name}
+            {evt.name}{evt.nameEn ? ` / ${evt.nameEn}` : ''}
           </h3>
           {evt.shortDesc && (
             <p style={{

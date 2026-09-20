@@ -101,16 +101,21 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   ], [statusFilter]);
 
   // 表單狀態
+  const [activeLangTab, setActiveLangTab] = useState<'zh' | 'en'>('zh');
+  const [savingDraft, setSavingDraft] = useState(false);
   const [formData, setFormData] = useState<AdminEventFormData>({
     eventId: '',
     name: '',
+    nameEn: '',
     startDate: '',
     endDate: '',
     deadline: '',
     cost: '',
     status: '未來開放',
     shortDesc: '',
+    shortDescEn: '',
     fullDesc: '',
+    fullDescEn: '',
     imageUrl: '',
     lineGroupUrl: '',
     notifyOfficerGroup: true
@@ -335,16 +340,20 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   // 重置表單為發布新活動
   const resetFormForCreate = () => {
     setIsEditing(false);
+    setActiveLangTab('zh');
     setFormData({
       eventId: '',
       name: '',
+      nameEn: '',
       startDate: '',
       endDate: '',
       deadline: '',
       cost: '',
       status: '未來開放',
       shortDesc: '',
+      shortDescEn: '',
       fullDesc: '',
+      fullDescEn: '',
       imageUrl: '',
       lineGroupUrl: '',
       notifyOfficerGroup: true
@@ -357,16 +366,20 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   // 進入編輯活動模式
   const handleStartEdit = (evt: AdminEvent) => {
     setIsEditing(true);
+    setActiveLangTab('zh');
     setFormData({
       eventId: evt.id,
       name: evt.name,
+      nameEn: evt.nameEn || '',
       startDate: evt.startDate ? evt.startDate.replace(/\//g, '-') : '',
       endDate: evt.endDate ? evt.endDate.replace(/\//g, '-') : '',
       deadline: evt.deadline ? evt.deadline.replace(/\//g, '-') : '',
       cost: evt.cost,
       status: evt.status,
       shortDesc: evt.shortDesc,
+      shortDescEn: evt.shortDescEn || '',
       fullDesc: evt.fullDesc,
+      fullDescEn: evt.fullDescEn || '',
       imageUrl: evt.imageUrl,
       lineGroupUrl: evt.lineGroupUrl || '',
       notifyOfficerGroup: false
@@ -377,12 +390,81 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 提交活動建立或更新
+  // 暫存活動草稿 (儲存至 Supabase，狀態為草稿/關閉，不需全填即可隨時存檔，不觸發 Google Drive / 試算表耗時建立)
+  const handleSaveDraft = async () => {
+    const trimmedNameZh = formData.name.trim();
+    const trimmedNameEn = formData.nameEn.trim();
+    if (!trimmedNameZh && !trimmedNameEn) {
+      alert('暫存草稿請至少填寫中文或英文活動名稱！');
+      return;
+    }
+
+    setSavingDraft(true);
+    try {
+      const groupUrlTrimmed = (formData.lineGroupUrl || '').trim();
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      const res = await saveEventToSupabase(userId || 'TEST_USER_ID', {
+        eventId: formData.eventId,
+        name: trimmedNameZh || trimmedNameEn || '未命名草稿活動',
+        nameEn: trimmedNameEn,
+        startDate: formData.startDate || todayStr,
+        endDate: formData.endDate || formData.startDate || todayStr,
+        deadline: formData.deadline || todayStr,
+        cost: formData.cost.trim() || '0',
+        status: formData.status || '關閉',
+        shortDesc: formData.shortDesc.trim(),
+        shortDescEn: formData.shortDescEn.trim(),
+        fullDesc: formData.fullDesc.trim(),
+        fullDescEn: formData.fullDescEn.trim(),
+        imageUrl: formData.imageUrl,
+        lineGroupUrl: groupUrlTrimmed
+      });
+
+      if (res.success) {
+        if (res.eventId && !formData.eventId) {
+          setFormData((prev) => ({ ...prev, eventId: res.eventId! }));
+        }
+        alert(t('adminEvents.draftSavedAlert', '活動草稿已成功暫存！'));
+        removeCache(CACHE_KEY_ADMIN_EVENTS);
+        fetchEvents(true);
+      } else {
+        alert('暫存草稿失敗，請檢查網路連線或稍後再試。');
+      }
+    } catch (draftErr: any) {
+      console.error('[AdminEvents] 暫存草稿例外:', draftErr);
+      alert(`暫存草稿失敗: ${draftErr?.message || String(draftErr)}`);
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  // 提交活動建立或更新 (確認發布：嚴格檢核中英文必填欄位完整度)
   const handleSubmitEvent = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name.trim() || !formData.startDate || !formData.deadline || !formData.cost.trim() || !formData.shortDesc.trim()) {
-      alert(t('adminEvents.alerts.fillRequired'));
+    // 1. 中文必填檢查
+    const missingZh: string[] = [];
+    if (!formData.name.trim()) missingZh.push('中文活動名稱');
+    if (!formData.startDate) missingZh.push('活動開始日期');
+    if (!formData.deadline) missingZh.push('報名截止日期');
+    if (!formData.cost.trim()) missingZh.push('預計費用');
+    if (!formData.shortDesc.trim()) missingZh.push('活動精簡簡介 (中文)');
+
+    if (missingZh.length > 0) {
+      alert(`請確認中文必填項目皆已填寫完畢：\n• ${missingZh.join('\n• ')}`);
+      setActiveLangTab('zh');
+      return;
+    }
+
+    // 2. 英文必填檢查 (依照需求：中英文皆須填寫完畢方可確認發布)
+    const missingEn: string[] = [];
+    if (!formData.nameEn.trim()) missingEn.push('活動英文名稱 (English Name)');
+    if (!formData.shortDescEn.trim()) missingEn.push('活動精簡簡介 (English Short Desc)');
+
+    if (missingEn.length > 0) {
+      alert(`確認發布需要中英文資料皆填寫完畢，請補填以下英文欄位：\n• ${missingEn.join('\n• ')}`);
+      setActiveLangTab('en');
       return;
     }
 
@@ -409,13 +491,16 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         saveEventToSupabase(userId || 'TEST_USER_ID', {
           eventId: formData.eventId,
           name: formData.name.trim(),
+          nameEn: formData.nameEn.trim(),
           startDate: formData.startDate,
           endDate: formData.endDate || formData.startDate,
           deadline: formData.deadline,
           cost: formData.cost.trim(),
           status: formData.status,
           shortDesc: formData.shortDesc.trim(),
+          shortDescEn: formData.shortDescEn.trim(),
           fullDesc: formData.fullDesc.trim(),
+          fullDescEn: formData.fullDescEn.trim(),
           imageUrl: formData.imageUrl,
           lineGroupUrl: groupUrlTrimmed
         }).catch(sbErr => {
@@ -429,13 +514,16 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         userId: userId || 'TEST_USER_ID',
         eventId: formData.eventId,
         name: formData.name.trim(),
+        nameEn: formData.nameEn.trim(),
         startDate: formData.startDate.replace(/-/g, '/'),
         endDate: formData.endDate ? formData.endDate.replace(/-/g, '/') : formData.startDate.replace(/-/g, '/'),
         deadline: formData.deadline.replace(/-/g, '/'),
         cost: formData.cost.trim(),
         status: formData.status,
         shortDesc: formData.shortDesc.trim(),
+        shortDescEn: formData.shortDescEn.trim(),
         fullDesc: formData.fullDesc.trim(),
+        fullDescEn: formData.fullDescEn.trim(),
         imageUrl: formData.imageUrl,
         lineGroupUrl: groupUrlTrimmed,
         coverImageFile: selectedFile,
@@ -457,13 +545,16 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           saveEventToSupabase(userId || 'TEST_USER_ID', {
             eventId: result.eventId,
             name: formData.name.trim(),
+            nameEn: formData.nameEn.trim(),
             startDate: formData.startDate,
             endDate: formData.endDate || formData.startDate,
             deadline: formData.deadline,
             cost: formData.cost.trim(),
             status: formData.status,
             shortDesc: formData.shortDesc.trim(),
+            shortDescEn: formData.shortDescEn.trim(),
             fullDesc: formData.fullDesc.trim(),
+            fullDescEn: formData.fullDescEn.trim(),
             imageUrl: result.imageUrl || formData.imageUrl,
             driveFolderUrl: result.driveFolderUrl,
             spreadsheetUrl: result.spreadsheetUrl,
@@ -1087,9 +1178,64 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               <ArrowLeft size={16} />
               <span>返回活動列表</span>
             </button>
-            <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>
-              {isEditing ? '編輯活動' : '發布新活動'}
-            </span>
+            {/* 中英分頁切換按鈕 (取代原本的「發布新活動」文字) */}
+            <div style={{
+              display: 'inline-flex',
+              padding: '3px',
+              backgroundColor: '#f1f5f9',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              gap: '4px'
+            }}>
+              <button
+                type="button"
+                onClick={() => setActiveLangTab('zh')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  border: 'none',
+                  backgroundColor: activeLangTab === 'zh' ? '#ffffff' : 'transparent',
+                  color: activeLangTab === 'zh' ? '#059669' : '#64748b',
+                  boxShadow: activeLangTab === 'zh' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>{t('adminEvents.tabZh', '中文 (ZH)')}</span>
+                {formData.name.trim() && formData.shortDesc.trim() && (
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveLangTab('en')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  border: 'none',
+                  backgroundColor: activeLangTab === 'en' ? '#ffffff' : 'transparent',
+                  color: activeLangTab === 'en' ? '#059669' : '#64748b',
+                  boxShadow: activeLangTab === 'en' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>{t('adminEvents.tabEn', 'English (EN)')}</span>
+                {formData.nameEn.trim() && formData.shortDescEn.trim() && (
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+                )}
+              </button>
+            </div>
           </div>
           <AdminEventForm
             isEditing={isEditing}
@@ -1100,6 +1246,10 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
             submittingForm={submittingForm}
             onSubmit={handleSubmitEvent}
             onCancelEdit={() => setActiveTab('list')}
+            activeLangTab={activeLangTab}
+            setActiveLangTab={setActiveLangTab}
+            onSaveDraft={handleSaveDraft}
+            savingDraft={savingDraft}
           />
         </div>
       )}

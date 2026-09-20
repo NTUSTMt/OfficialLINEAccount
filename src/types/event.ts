@@ -1,13 +1,16 @@
 export interface AdminEvent {
   id: string;
   name: string;
+  nameEn?: string;
   startDate: string;
   endDate: string;
   deadline: string;
   cost: string;
   status: '開放' | '未來開放' | '關閉' | string;
   shortDesc: string;
+  shortDescEn?: string;
   fullDesc: string;
+  fullDescEn?: string;
   imageUrl: string;
   driveFolderUrl?: string;
   spreadsheetUrl?: string;

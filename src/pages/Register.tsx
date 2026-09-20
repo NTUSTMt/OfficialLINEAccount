@@ -31,6 +31,7 @@ interface ProfileData {
   intendOfficial: string;
   intendOfficer: string;
   wantToSay?: string;
+  preferredLanguage?: string;
 }
 
 interface UploadedFile {
@@ -39,7 +40,7 @@ interface UploadedFile {
 }
 
 function Register({ userId }: { userId: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,6 +68,7 @@ function Register({ userId }: { userId: string }) {
     intendOfficial: '',
     intendOfficer: '',
     wantToSay: '',
+    preferredLanguage: 'zh',
   });
 
   // 上傳檔案狀態
@@ -165,6 +167,7 @@ function Register({ userId }: { userId: string }) {
                 intendOfficial: p.intendOfficial ? String(p.intendOfficial) : '',
                 intendOfficer: p.intendOfficer ? String(p.intendOfficer) : '',
                 wantToSay: p.wantToSay ? String(p.wantToSay) : '',
+                preferredLanguage: p.preferredLanguage || (p as any).preferred_language || 'zh',
               };
 
               setFormData(loadedData);
@@ -258,6 +261,7 @@ function Register({ userId }: { userId: string }) {
       intendOfficial: '',
       intendOfficer: '',
       wantToSay: '',
+      preferredLanguage: 'zh',
     });
   };
 
@@ -363,7 +367,7 @@ function Register({ userId }: { userId: string }) {
   const isStepValid = useMemo(() => {
     switch (step) {
       case 1:
-        // 姓名 (name)、身分狀態 (identityStatus)、系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId) 均為必填
+        // 姓名 (name)、身分狀態 (identityStatus)、系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId)、偏好語言 (preferredLanguage) 均為必填
         return (
           formData.name.trim() !== '' &&
           formData.identityStatus.trim() !== '' &&
@@ -371,7 +375,8 @@ function Register({ userId }: { userId: string }) {
           formData.studentId.trim() !== '' &&
           formData.phone.trim() !== '' &&
           formData.email.trim() !== '' &&
-          formData.realLineId.trim() !== ''
+          formData.realLineId.trim() !== '' &&
+          Boolean(formData.preferredLanguage && formData.preferredLanguage.trim() !== '')
         );
       case 2:
         // 步驟 2 皆為選填欄位
@@ -493,6 +498,7 @@ function Register({ userId }: { userId: string }) {
             if (norm(finalFormData.intendOfficial) !== norm(originalFormData.intendOfficial)) changedFields.push('intendOfficial');
             if (norm(finalFormData.intendOfficer) !== norm(originalFormData.intendOfficer)) changedFields.push('intendOfficer');
             if (norm(finalFormData.wantToSay) !== norm(originalFormData.wantToSay)) changedFields.push('wantToSay');
+            if (norm(finalFormData.preferredLanguage) !== norm(originalFormData.preferredLanguage)) changedFields.push('preferredLanguage');
           }
 
           fetch(GAS_API_URL, {
@@ -513,6 +519,16 @@ function Register({ userId }: { userId: string }) {
         const draftKey = 'register_draft_' + (userId || 'guest');
         localStorage.removeItem(draftKey);
         setHasDraftRestored(false);
+
+        // 儲存成功後依據偏好語言切換 LIFF 介面語系並持久化
+        const chosenLang = finalFormData.preferredLanguage === 'en' ? 'en' : 'zh';
+        try {
+          localStorage.setItem('i18nextLng', chosenLang);
+          i18n.changeLanguage(chosenLang);
+        } catch (langErr) {
+          console.warn('[Register] 切換介面語系例外:', langErr);
+        }
+
         alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
           liff.closeWindow();
@@ -526,6 +542,15 @@ function Register({ userId }: { userId: string }) {
         const draftKey = 'register_draft_' + (userId || 'guest');
         localStorage.removeItem(draftKey);
         setHasDraftRestored(false);
+
+        const chosenLang = formData.preferredLanguage === 'en' ? 'en' : 'zh';
+        try {
+          localStorage.setItem('i18nextLng', chosenLang);
+          i18n.changeLanguage(chosenLang);
+        } catch (langErr) {
+          console.warn('[Register] 切換介面語系例外:', langErr);
+        }
+
         alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
           liff.closeWindow();
@@ -698,6 +723,19 @@ function Register({ userId }: { userId: string }) {
                 placeholder={t('register.step1.lineIdPlaceholder')}
                 required
               />
+            </div>
+
+            <div className="form-group">
+              <label className="required">{t('register.step1.preferredLanguageLabel')}</label>
+              <select
+                name="preferredLanguage"
+                value={formData.preferredLanguage || 'zh'}
+                onChange={handleChange}
+                required
+              >
+                <option value="zh">{t('register.step1.preferredLanguageZh')}</option>
+                <option value="en">{t('register.step1.preferredLanguageEn')}</option>
+              </select>
             </div>
           </div>
         )}

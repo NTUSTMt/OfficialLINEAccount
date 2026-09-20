@@ -4543,6 +4543,11 @@ function _handleNotifyProfileSaved(json) {
         detailsZh.push("• 加入社員意願：" + offIntent);
         detailsEn.push("• Club Membership Intent: " + _translateValueToEn(offIntent));
       }
+      if (data.preferredLanguage || data.preferred_language) {
+        var isLangEn = (data.preferredLanguage === "en" || data.preferred_language === "en");
+        detailsZh.push("• 偏好語言：" + (isLangEn ? "English" : "中文"));
+        detailsEn.push("• Preferred Language: " + (isLangEn ? "English" : "中文 (Traditional Chinese)"));
+      }
       if (data.exp) {
         detailsZh.push("• 爬山經歷：已更新");
         detailsEn.push("• Hiking Experience: Updated");
@@ -4638,6 +4643,11 @@ function _handleNotifyProfileSaved(json) {
           detailsZh.push("• 想說的話：已更新");
           detailsEn.push("• I want to say...: Updated");
         }
+        if (cFields.indexOf("preferredLanguage") > -1 || cFields.indexOf("preferred_language") > -1) {
+          var isLangEn = (data.preferredLanguage === "en" || data.preferred_language === "en");
+          detailsZh.push("• 偏好語言：" + (isLangEn ? "English" : "中文"));
+          detailsEn.push("• Preferred Language: " + (isLangEn ? "English" : "中文 (Traditional Chinese)"));
+        }
       }
     } else {
       // 3. 既有使用者且未傳入 changedFields 之向下相容 fallback
@@ -4653,6 +4663,11 @@ function _handleNotifyProfileSaved(json) {
       detailsEn.push("• Emergency Contact: " + (emerName === "未填寫" ? "Not provided" : emerName) + " (" + _translateValueToEn(emerRel) + ")");
       detailsZh.push("• 加入社員意願：" + offIntent);
       detailsEn.push("• Club Membership Intent: " + _translateValueToEn(offIntent));
+      if (data.preferredLanguage || data.preferred_language) {
+        var isLangEn = (data.preferredLanguage === "en" || data.preferred_language === "en");
+        detailsZh.push("• 偏好語言：" + (isLangEn ? "English" : "中文"));
+        detailsEn.push("• Preferred Language: " + (isLangEn ? "English" : "中文 (Traditional Chinese)"));
+      }
       if (data.exp) {
         detailsZh.push("• 爬山經歷：已更新");
         detailsEn.push("• Hiking Experience: Updated");
@@ -4675,7 +4690,15 @@ function _handleNotifyProfileSaved(json) {
     }
     enBlock += "\n\n" + footerEn;
 
-    var msg = titleZh + "\n\n" + zhBlock + "\n─────────────\n" + titleEn + "\n\n" + enBlock;
+    var prefLang = (data.preferredLanguage || data.preferred_language || "").toLowerCase();
+    var msg = "";
+    if (prefLang === "en") {
+      msg = titleEn + "\n\n" + enBlock;
+    } else if (prefLang === "zh") {
+      msg = titleZh + "\n\n" + zhBlock;
+    } else {
+      msg = titleZh + "\n\n" + zhBlock + "\n─────────────\n" + titleEn + "\n\n" + enBlock;
+    }
 
     _pushMessage(userId, msg);
 
@@ -5663,7 +5686,10 @@ function _syncEventToSupabase(eventData) {
       deadline: deadlineIso,
       status: eventData.status || "開放",
       summary: eventData.shortDesc || "",
+      summary_en: eventData.shortDescEn || eventData.summary_en || null,
       itinerary: eventData.fullDesc || "",
+      itinerary_en: eventData.fullDescEn || eventData.itinerary_en || null,
+      title_en: eventData.nameEn || eventData.title_en || null,
       cover_image_url: eventData.imageUrl || "",
       drive_folder_url: eventData.driveFolderUrl || null,
       spreadsheet_url: eventData.spreadsheetUrl || null,
@@ -5735,7 +5761,10 @@ function _handleSaveEvent(json) {
           cost: getOrCreateColIdx(eventSheet, headers, "預計費用"),
           status: getOrCreateColIdx(eventSheet, headers, "報名狀態"),
           shortDesc: getOrCreateColIdx(eventSheet, headers, "簡介"),
+          shortDescEn: getOrCreateColIdx(eventSheet, headers, "英文簡介"),
           fullDesc: getOrCreateColIdx(eventSheet, headers, "詳細行程"),
+          fullDescEn: getOrCreateColIdx(eventSheet, headers, "英文行程"),
+          nameEn: getOrCreateColIdx(eventSheet, headers, "英文名稱"),
           img: getOrCreateColIdx(eventSheet, headers, "封面圖網址"),
           driveFolder: getOrCreateColIdx(eventSheet, headers, "雲端資料夾網址"),
           sheetUrl: getOrCreateColIdx(eventSheet, headers, "報名名冊網址"),
@@ -5833,7 +5862,10 @@ function _handleSaveEvent(json) {
       rowValues[hIdx.cost] = json.cost || "";
       rowValues[hIdx.status] = json.status || "開放";
       rowValues[hIdx.shortDesc] = json.shortDesc || "";
+      if (hIdx.shortDescEn > -1) rowValues[hIdx.shortDescEn] = json.shortDescEn || "";
       rowValues[hIdx.fullDesc] = json.fullDesc || "";
+      if (hIdx.fullDescEn > -1) rowValues[hIdx.fullDescEn] = json.fullDescEn || "";
+      if (hIdx.nameEn > -1) rowValues[hIdx.nameEn] = json.nameEn || "";
       if (imageUrl) rowValues[hIdx.img] = imageUrl;
       if (driveFolderUrl) rowValues[hIdx.driveFolder] = driveFolderUrl;
       if (spreadsheetUrl) rowValues[hIdx.sheetUrl] = spreadsheetUrl;
@@ -5851,13 +5883,16 @@ function _handleSaveEvent(json) {
       _syncEventToSupabase({
         id: eventId,
         name: json.name,
+        nameEn: json.nameEn,
         startDate: json.startDate,
         endDate: json.endDate,
         deadline: json.deadline,
         cost: json.cost,
         status: json.status,
         shortDesc: json.shortDesc,
+        shortDescEn: json.shortDescEn,
         fullDesc: json.fullDesc,
+        fullDescEn: json.fullDescEn,
         imageUrl: imageUrl,
         driveFolderUrl: driveFolderUrl,
         spreadsheetUrl: spreadsheetUrl,

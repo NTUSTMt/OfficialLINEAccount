@@ -43,6 +43,7 @@ export interface MemberFullRecord {
   join_membership_intent?: string | null;
   officer_intent?: string | null;
   want_to_say?: string | null;
+  preferred_language?: string | null;
   is_officer?: boolean | null;
   officer_role?: string | null;
 }

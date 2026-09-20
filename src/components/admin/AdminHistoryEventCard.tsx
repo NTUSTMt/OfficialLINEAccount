@@ -190,7 +190,7 @@ export const AdminHistoryEventCard: React.FC<AdminHistoryEventCardProps> = ({
                 wordBreak: 'break-word'
               }}
             >
-              {evt.name}
+              {evt.name}{evt.nameEn ? ` / ${evt.nameEn}` : ''}
             </h3>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '12px', color: '#64748b' }}>

@@ -118,6 +118,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
 
   const realLineId = merged.real_line_id || merged.line_id || merged.lineId || '';
   const lineName = merged.line_name || merged.lineName || '';
+  const preferredLang = merged.preferred_language || merged.preferredLanguage || 'zh';
   const phone = merged.phone || '';
   const email = merged.email || '';
   const address = merged.address || merged.studentAddr || '';
@@ -308,6 +309,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             <div><span style={{ color: '#64748b' }}>姓名：</span><span style={{ fontWeight: '600', color: '#0f172a' }}>{name}</span></div>
             <div><span style={{ color: '#64748b' }}>性別：</span><span style={{ color: '#0f172a' }}>{gender}</span></div>
             <div><span style={{ color: '#64748b' }}>身分：</span><span style={{ color: '#0f172a' }}>{identityStatus || '未設定'}</span></div>
+            <div><span style={{ color: '#64748b' }}>偏好語言：</span><span style={{ color: '#0f172a', fontWeight: '500' }}>{preferredLang === 'en' ? 'English' : '中文'}</span></div>
             <div><span style={{ color: '#64748b' }}>生日：</span><span style={{ color: '#0f172a' }}>{formatDateSlash(birthday)}</span></div>
             {studentId && (
               <div><span style={{ color: '#64748b' }}>學號：</span><span style={{ color: '#0f172a' }}>{studentId}</span></div>
