@@ -403,6 +403,23 @@ function Register({ userId }: { userId: string }) {
       return;
     }
 
+    const isStep1Complete = Boolean(
+      formData.name.trim() !== '' &&
+      formData.identityStatus.trim() !== '' &&
+      formData.department.trim() !== '' &&
+      formData.studentId.trim() !== '' &&
+      formData.phone.trim() !== '' &&
+      formData.email.trim() !== '' &&
+      formData.realLineId.trim() !== '' &&
+      Boolean(formData.preferredLanguage && formData.preferredLanguage.trim() !== '')
+    );
+
+    if (!isStep1Complete) {
+      setStep(1);
+      alert(t('register.alert.fillRequiredFields', '請先完成第一步驟的必填欄位！'));
+      return;
+    }
+
     if (!isStepValid) return;
 
     setIsSubmitting(true);
@@ -583,7 +600,20 @@ function Register({ userId }: { userId: string }) {
       {/* 步驟進度條 */}
       <div className="step-progress-bar">
         {[1, 2, 3, 4].map((s) => (
-          <div key={s} className={`step-dot-wrapper ${step >= s ? 'active' : ''} ${step === s ? 'current' : ''}`}>
+          <div
+            key={s}
+            className={`step-dot-wrapper ${step >= s ? 'active' : ''} ${step === s ? 'current' : ''}`}
+            onClick={() => setStep(s)}
+            role="button"
+            tabIndex={0}
+            title={s === 1 ? t('register.steps.required') : s === 2 ? t('register.steps.basic') : s === 3 ? t('register.steps.safety') : t('register.steps.experience')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setStep(s);
+              }
+            }}
+          >
             <div className="step-dot">{s}</div>
             <span className="step-label">
               {s === 1 ? t('register.steps.required') : s === 2 ? t('register.steps.basic') : s === 3 ? t('register.steps.safety') : t('register.steps.experience')}

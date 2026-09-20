@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Award, Star, Edit3 } from 'lucide-react';
+import { AlertCircle, Award, Star, Edit3, Globe, Lock, Sparkles } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
 import { fetchAchievementsFromSupabase, saveReflectionToSupabase, getLastSupabaseError } from '../utils/supabaseClient';
+import ReflectionWallModal from '../components/achievements/ReflectionWallModal';
 import '../App.css';
 
 interface Reflection {
@@ -12,6 +13,7 @@ interface Reflection {
   beauty: number;
   content: string;
   imageUrl: string;
+  isPublic?: boolean;
 }
 
 interface Activity {
@@ -46,7 +48,13 @@ function Achievements({ userId }: { userId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [isViewOnly, setIsViewOnly] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Reflection Wall Modal States
+  const [wallOpen, setWallOpen] = useState(false);
+  const [wallEvent, setWallEvent] = useState<Activity | null>(null);
+  const [wallRefreshKey, setWallRefreshKey] = useState(0);
 
   useEffect(() => {
     let ignore = false;
@@ -156,6 +164,11 @@ function Achievements({ userId }: { userId: string }) {
     };
   }, [userId, t, refreshKey]);
 
+  const openWall = (activity: Activity) => {
+    setWallEvent(activity);
+    setWallOpen(true);
+  };
+
   const openForm = (activity: Activity, viewOnly = false) => {
     setSelectedActivity(activity);
     setIsViewOnly(viewOnly);
@@ -165,6 +178,7 @@ function Achievements({ userId }: { userId: string }) {
       setBeauty(activity.reflection.beauty);
       setContent(activity.reflection.content);
       setImageUrl(activity.reflection.imageUrl || '');
+      setIsPublic(activity.reflection.isPublic !== false);
       const parsedPhotos = (activity.reflection.imageUrl || '')
         .split(/[\n,]/)
         .map(u => u.trim())
@@ -176,6 +190,7 @@ function Achievements({ userId }: { userId: string }) {
       setBeauty(5);
       setContent('');
       setImageUrl('');
+      setIsPublic(true);
       setExistingPhotos([]);
       setPhotoFiles([]);
     }
@@ -187,6 +202,7 @@ function Achievements({ userId }: { userId: string }) {
       setBeauty(selectedActivity.reflection.beauty);
       setContent(selectedActivity.reflection.content);
       setImageUrl(selectedActivity.reflection.imageUrl || '');
+      setIsPublic(selectedActivity.reflection.isPublic !== false);
       const parsedPhotos = (selectedActivity.reflection.imageUrl || '')
         .split(/[\n,]/)
         .map(u => u.trim())
@@ -332,7 +348,8 @@ function Achievements({ userId }: { userId: string }) {
         difficulty,
         beauty,
         content: content.trim(),
-        imageUrl: combinedImageUrl
+        imageUrl: combinedImageUrl,
+        isPublic
       };
 
       // ⚡ 2. 100% 直寫 Supabase 心得評分 (< 50ms)
@@ -374,7 +391,8 @@ function Achievements({ userId }: { userId: string }) {
           alert(isEditing ? (t('achievements.alert.updateSuccess') || '心得與評分已成功更新！') : t('achievements.alert.submitSuccess'));
           setIsEditing(false);
           closeForm();
-          setRefreshKey(k => k + 1); // 重新整理
+          setRefreshKey(k => k + 1); // 重新整理成就清單
+          setWallRefreshKey(k => k + 1); // 重新整理心得牆
         } else {
           alert(t('achievements.alert.submitFailed', { message: t('achievements.alert.contactAdmin', '儲存失敗，請稍後再試') }));
         }
@@ -392,7 +410,7 @@ function Achievements({ userId }: { userId: string }) {
               return {
                 ...act,
                 hasReflected: true,
-                reflection: { difficulty, beauty, content, imageUrl: mockImgUrl }
+                reflection: { difficulty, beauty, content, imageUrl: mockImgUrl, isPublic }
               };
             }
             return act;
@@ -403,6 +421,7 @@ function Achievements({ userId }: { userId: string }) {
             activities: updated
           });
         }
+        setWallRefreshKey(k => k + 1);
       }
     } catch (err) {
       console.error('送出心得失敗:', err);
@@ -502,6 +521,15 @@ function Achievements({ userId }: { userId: string }) {
           {data?.activities.map((item) => (
             <div
               key={item.eventId}
+              onClick={() => openWall(item)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openWall(item);
+                }
+              }}
               style={{
                 backgroundColor: 'white',
                 borderRadius: '16px',
@@ -510,7 +538,17 @@ function Achievements({ userId }: { userId: string }) {
                 boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
                 display: 'flex',
                 height: '110px',
-                textAlign: 'left'
+                textAlign: 'left',
+                cursor: 'pointer',
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 8px 16px -2px rgba(0,0,0,0.08)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)';
               }}
             >
               <div style={{
@@ -518,8 +556,28 @@ function Achievements({ userId }: { userId: string }) {
                 backgroundImage: `url(${item.img})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
-                flexShrink: 0
-              }}></div>
+                flexShrink: 0,
+                position: 'relative'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: '6px',
+                  left: '6px',
+                  backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                  backdropFilter: 'blur(4px)',
+                  color: 'white',
+                  borderRadius: '12px',
+                  padding: '2px 8px',
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <Sparkles size={11} color="#fbbf24" />
+                  <span>{t('achievements.wall.title', '心得牆')}</span>
+                </div>
+              </div>
 
               <div style={{ flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minWidth: 0 }}>
                 <div>
@@ -534,13 +592,20 @@ function Achievements({ userId }: { userId: string }) {
                   }}>
                     {item.title}
                   </h4>
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('achievements.list.dateLabel', { date: item.date })}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('achievements.list.dateLabel', { date: item.date })}</span>
+                    <span style={{ fontSize: '10px', color: '#2563eb', fontWeight: '500' }}>• {t('achievements.wall.flipHint', '點擊進心得牆')}</span>
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
                   {item.hasReflected ? (
                     <button
-                      onClick={() => openForm(item, true)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openForm(item, true);
+                      }}
                       style={{
                         padding: '6px 12px',
                         borderRadius: '20px',
@@ -556,7 +621,11 @@ function Achievements({ userId }: { userId: string }) {
                     </button>
                   ) : (
                     <button
-                      onClick={() => openForm(item, false)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openForm(item, false);
+                      }}
                       style={{
                         padding: '6px 14px',
                         borderRadius: '20px',
@@ -860,6 +929,87 @@ function Achievements({ userId }: { userId: string }) {
                 )}
               </div>
 
+              {/* 公開 / 僅自己可見切換開關 */}
+              <div style={{
+                marginBottom: '20px',
+                padding: '12px 14px',
+                backgroundColor: isPublic ? '#f0fdf4' : '#f8fafc',
+                borderRadius: '12px',
+                border: `1px solid ${isPublic ? '#bbf7d0' : '#e2e8f0'}`,
+                transition: 'all 0.2s ease'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      backgroundColor: isPublic ? '#dcfce7' : '#e2e8f0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      {isPublic ? <Globe size={18} color="#16a34a" /> : <Lock size={18} color="#64748b" />}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 'bold', color: isPublic ? '#166534' : '#334155' }}>
+                        {t('achievements.modal.isPublicLabel')}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', lineHeight: 1.3 }}>
+                        {t('achievements.modal.isPublicDesc')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(!isViewOnly || isEditing) ? (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isPublic}
+                      onClick={() => setIsPublic(!isPublic)}
+                      style={{
+                        width: '46px',
+                        height: '26px',
+                        borderRadius: '13px',
+                        backgroundColor: isPublic ? '#16a34a' : '#cbd5e1',
+                        border: 'none',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        transition: 'background-color 0.2s ease',
+                        flexShrink: 0,
+                        padding: '2px'
+                      }}
+                    >
+                      <div style={{
+                        width: '22px',
+                        height: '22px',
+                        borderRadius: '50%',
+                        backgroundColor: 'white',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                        transform: isPublic ? 'translateX(20px)' : 'translateX(0px)',
+                        transition: 'transform 0.2s ease'
+                      }} />
+                    </button>
+                  ) : (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      backgroundColor: isPublic ? '#dcfce7' : '#f1f5f9',
+                      color: isPublic ? '#15803d' : '#64748b',
+                      flexShrink: 0
+                    }}>
+                      {isPublic ? t('achievements.modal.publicBadge') : t('achievements.modal.privateBadge')}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               {/* 按鈕組 */}
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                 {isEditing ? (
@@ -942,6 +1092,20 @@ function Achievements({ userId }: { userId: string }) {
             </form>
           </div>
         </div>
+      )}
+
+      {/* 區塊四：全螢幕拍立得心得牆 Modal */}
+      {wallOpen && wallEvent && (
+        <ReflectionWallModal
+          eventId={wallEvent.eventId}
+          eventTitle={wallEvent.title}
+          eventDate={wallEvent.date}
+          eventImg={wallEvent.img}
+          currentUserId={userId}
+          onClose={() => setWallOpen(false)}
+          onOpenWriteModal={() => openForm(wallEvent, wallEvent.hasReflected)}
+          refreshTrigger={wallRefreshKey}
+        />
       )}
 
     </div>

@@ -215,7 +215,8 @@
       "date": "Event Date: {{date}}",
       "unscheduled": "TBD",
       "cancelBtn": "Cancel",
-      "payBtn": "Go to Payment"
+      "payBtn": "Go to Payment",
+      "joinGroup": "Join Group"
     },
     "equipment": {
       "title": "Gear Rental Status ({{count}})",
@@ -518,10 +519,26 @@
       "imageLabel": "Summit/Group Photo URL (Optional)",
       "existingPhotos": "Existing photos:",
       "imagePlaceholder": "https://example.com/your-summit-photo.jpg",
+      "isPublicLabel": "Make Reflection Public to Event Wall",
+      "isPublicDesc": "When enabled, teammates can appreciate your photos and story on the event reflection wall; when disabled, it remains private to you.",
+      "publicBadge": "Public",
+      "privateBadge": "Private",
       "closeBtn": "Close",
       "cancelBtn": "Cancel",
       "submittingBtn": "Submitting...",
       "submitBtn": "Submit"
+    },
+    "wall": {
+      "title": "Trip Reflection Wall",
+      "subtitle": "Footprints and cherished memories from teammates",
+      "emptyTitle": "No public reflections for this trip yet!",
+      "emptyDesc": "Be the first to share your stories and photos, keeping memories alive in every teammate's heart!",
+      "writeAction": "Share My Memory",
+      "editAction": "Edit My Memory",
+      "flipHint": "Tap card to flip and read, tap photos for high-res lightbox",
+      "anonymousAuthor": "Teammate",
+      "itemsCount": "{{count}} Shared Reflections",
+      "close": "Back to Footprint"
     }
   },
   "adminEvents": {

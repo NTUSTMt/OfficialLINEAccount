@@ -605,6 +605,7 @@ export interface SupabaseReflection {
   beauty: number;
   content: string;
   imageUrl: string;
+  isPublic?: boolean;
 }
 
 export interface SupabasePastActivity {
@@ -630,6 +631,22 @@ export interface ReflectionSubmitDetails {
   beauty: number;
   content: string;
   imageUrl?: string;
+  isPublic?: boolean;
+  authorName?: string;
+}
+
+export interface PublicReflectionItem {
+  id: number;
+  eventId: string;
+  lineUserId: string;
+  authorName: string;
+  difficulty: number;
+  beauty: number;
+  content: string;
+  photoUrls?: string[] | null;
+  imageUrl?: string | null;
+  isPublic: boolean;
+  createdAt: string;
 }
 
 /**
@@ -685,6 +702,29 @@ export const saveReflectionToSupabase = async (
   } catch (err) {
     console.warn('[Supabase] 儲存活動心得例外:', err);
     return false;
+  }
+};
+
+/**
+  * 從 Supabase 取得特定活動的所有公開心得 (透過 get_event_public_reflections_rpc，延遲 < 50ms)
+  */
+export const fetchEventPublicReflections = async (eventId: string): Promise<PublicReflectionItem[]> => {
+  if (!supabase || !eventId) return [];
+
+  try {
+    const { data, error } = await supabase.rpc('get_event_public_reflections_rpc', {
+      p_event_id: eventId
+    });
+
+    if (error) {
+      console.warn('[Supabase] 讀取活動公開心得失敗:', error.message);
+      return [];
+    }
+
+    return Array.isArray(data) ? (data as PublicReflectionItem[]) : [];
+  } catch (err) {
+    console.warn('[Supabase] 讀取活動公開心得例外:', err);
+    return [];
   }
 };
 

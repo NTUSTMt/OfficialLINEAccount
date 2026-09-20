@@ -207,13 +207,14 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
                 border: '1px solid #e2e8f0',
                 padding: '6px 0',
-                width: '160px',
+                width: 'max-content',
+                minWidth: '120px',
                 zIndex: 1000,
                 textAlign: 'left'
               }}>
                 <div
                   onClick={() => handleNav('/dashboard', LIFF_URLS.DASHBOARD)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
@@ -222,7 +223,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 </div>
                 <div
                   onClick={() => handleNav('/register', LIFF_URLS.REGISTER)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
@@ -231,7 +232,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 </div>
                 <div
                   onClick={() => handleNav('/borrow', LIFF_URLS.BORROW)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
@@ -240,7 +241,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 </div>
                 <div
                   onClick={() => handleNav('/payment', LIFF_URLS.PAYMENT)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
@@ -249,7 +250,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 </div>
                 <div
                   onClick={() => handleNav('/history', LIFF_URLS.HISTORY)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
@@ -258,7 +259,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                 </div>
                 <div
                   onClick={() => handleNav('/achievements', LIFF_URLS.ACHIEVEMENTS)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 16px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, transition: 'background 0.15s' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
                   onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                   onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
@@ -274,11 +275,12 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        padding: '9px 16px',
+                        padding: '8px 14px',
                         cursor: 'pointer',
                         fontSize: '13px',
                         color: '#059669',
                         fontWeight: 600,
+                        whiteSpace: 'nowrap',
                         transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
@@ -293,11 +295,12 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        padding: '9px 16px',
+                        padding: '8px 14px',
                         cursor: 'pointer',
                         fontSize: '13px',
                         color: '#059669',
                         fontWeight: 600,
+                        whiteSpace: 'nowrap',
                         transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
@@ -312,11 +315,12 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        padding: '9px 16px',
+                        padding: '8px 14px',
                         cursor: 'pointer',
                         fontSize: '13px',
                         color: '#059669',
                         fontWeight: 600,
+                        whiteSpace: 'nowrap',
                         transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
@@ -331,11 +335,12 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        padding: '9px 16px',
+                        padding: '8px 14px',
                         cursor: 'pointer',
                         fontSize: '13px',
                         color: '#059669',
                         fontWeight: 600,
+                        whiteSpace: 'nowrap',
                         transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
@@ -350,11 +355,12 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        padding: '9px 16px',
+                        padding: '8px 14px',
                         cursor: 'pointer',
                         fontSize: '13px',
                         color: '#059669',
                         fontWeight: 600,
+                        whiteSpace: 'nowrap',
                         transition: 'background 0.15s'
                       }}
                       onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#ecfdf5')}

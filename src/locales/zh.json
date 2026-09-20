@@ -182,7 +182,8 @@
       "date": "活動日期：{{date}}",
       "unscheduled": "未排定",
       "cancelBtn": "取消報名",
-      "payBtn": "前往「繳費系統」"
+      "payBtn": "前往「繳費系統」",
+      "joinGroup": "加入活動群組"
     },
     "equipment": {
       "title": "裝備租借狀態 ({{count}})",
@@ -485,10 +486,26 @@
       "imageLabel": "登頂照 / 團體合照網址 (選填)",
       "existingPhotos": "既有照片：",
       "imagePlaceholder": "https://example.com/your-summit-photo.jpg",
+      "isPublicLabel": "公開心得至活動心得牆",
+      "isPublicDesc": "開啟後，其他社員可在活動心得牆欣賞您的照片與故事；關閉則僅自己可見。",
+      "publicBadge": "公開",
+      "privateBadge": "僅自己可見",
       "closeBtn": "關閉視窗",
       "cancelBtn": "取消",
       "submittingBtn": "提交中...",
       "submitBtn": "送出心得"
+    },
+    "wall": {
+      "title": "活動出隊心得牆",
+      "subtitle": "來自山友們的足跡與珍貴回憶",
+      "emptyTitle": "這趟旅程還沒有公開心得喔！",
+      "emptyDesc": "快成為第一個留下故事與相片的人，讓回憶永遠珍藏在山友們心裡！",
+      "writeAction": "留下我的回憶",
+      "editAction": "編輯我的心得",
+      "flipHint": "點擊卡片翻面閱讀全文，點擊相片可開啟高畫質燈箱",
+      "anonymousAuthor": "登山山友",
+      "itemsCount": "共 {{count}} 則足跡分享",
+      "close": "返回出隊足跡"
     }
   },
   "adminEvents": {

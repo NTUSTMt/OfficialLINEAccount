@@ -737,7 +737,7 @@ function Dashboard({ userId }: { userId: string }) {
                         }}
                       >
                         <Users size={14} />
-                        <span>加入活動群組 Join Group</span>
+                        <span>{t('dashboard.activity.joinGroup', '加入活動群組')}</span>
                       </a>
                     )}
 

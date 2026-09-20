@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.168-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.170-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.168)](#7-最新版本異動紀錄-changelog-v01168)
+- [7. 最新版本異動紀錄 (Changelog v0.1.170)](#7-最新版本異動紀錄-changelog-v01170)
 
 ---
 
@@ -373,7 +373,46 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.168)
+## 7. 最新版本異動紀錄 (Changelog v0.1.170)
+
+### v0.1.170 (2026-09-20)
+- 活動出隊足跡「山系拍立得心得牆 (Reflection Wall)」與公開/私密設定重磅上線：
+  - **特色山系拍立得剪貼簿風 UI (`src/components/achievements/ReflectionWallModal.tsx`)**：
+    - **拍立得相紙卡片**：每筆公開心得採用復古白色拍立得相紙邊框，頂部搭配半透明磨砂紙膠帶，並根據卡片序號賦予自然隨機傾角（-2.1° ~ +2°），營造宛如實體山屋布告欄的溫暖手工感。
+    - **拍立得 3D 翻面互動 (Flip Card)**：點擊卡片正面平滑 3D 翻轉（`preserve-3d` 與 `rotateY(180deg)`），背面手寫字體排版展示心得全文、風景與路線星星評分、出隊日期與作者暱稱；無照片的心得則以溫暖鵝黃牛皮便條紙呈現。
+    - **全螢幕高畫質燈箱 (Lightbox)**：點擊拍立得相片即刻放大開啟黑底全螢幕相片燈箱，支援多張相片無縫左右切換、計數與關閉。
+    - **常駐懸浮撰寫按鈕 (FAB) 與溫暖空狀態**：心得牆右下角配置常駐綠色懸浮按鈕（FAB），隨時點擊開啟心得撰寫；尚無公開心得時展示溫暖插圖與第一位分享者引導按鈕。
+  - **出隊足跡卡片互動升級 (`src/pages/Achievements.tsx`)**：
+    - 點擊「出隊足跡」之歷史活動卡片一律全螢幕開啟該活動之「心得牆」，並提供微陰影浮起互動回饋（Hover lift effect）。
+    - 卡片右下角保留「查看我的回憶」/「留下回憶」捷徑按鈕（具備阻止事件冒泡 `stopPropagation`）。
+  - **心得公開/私密性切換 (Public / Private Visibility)**：
+    - 心得填寫與編輯表單新增「公開心得至活動心得牆」切換開關（Toggle switch），預設為開啟「公開」狀態，附帶綠色地球圖示與清晰說明，關閉則標記為「僅自己可見」。
+    - 提交心得後即刻同步更新資料庫並觸發心得牆即時重新聚合載入。
+  - **Supabase 資料庫層與 RPC 升級 (`supabase/reflections_wall_rpc.sql`, `src/utils/supabaseClient.ts`)**：
+    - `reflections` 表新增 `is_public BOOLEAN DEFAULT true` 欄位與複合索引 `idx_reflections_event_public (event_id, is_public)`。
+    - 升級 `save_reflection_rpc` 支援 `is_public` 與 `authorName` 儲存，自動從 `members` 表連動社員真實姓名。
+    - 新建 `get_event_public_reflections_rpc(p_event_id TEXT)` 安全定義函式，一鍵極速聚合回傳公開心得清單（延遲 < 50ms）。
+    - 前端擴充 `fetchEventPublicReflections` 與 `PublicReflectionItem` 介面。
+  - **中英雙語系完整支援 (`locales/zh.json`, `locales/en.json`)**：
+    - 新增 `achievements.wall`（標題、副標題、空狀態、翻面提示、FAB 文案）與 `achievements.modal.isPublicLabel`、`isPublicDesc` 等多國語言鍵值。
+  - **單元測試與打包驗證**：
+    - 新增 `test/75_event_reflection_wall.test.mjs`，驗證拍立得 3D 翻轉、相片燈箱、FAB 按鈕、卡片點擊、隱私切換、RPC 與語系鍵。
+    - 全專案 56 個測試套件、261 個單元測試 100% 通過，`pnpm build` 建置零錯誤。
+
+### v0.1.169 (2026-09-20)
+- 資料填寫頁碼點擊跳轉、大頭貼選單緊湊化與加入群組按鈕單語言化：
+  - **資料填寫頂部頁碼可點擊跳轉 (`Register.tsx`, `App.css`)**：
+    - 步驟進度條圓點與標籤（`.step-dot-wrapper`）全面支援點擊切換頁面，加入 `cursor: pointer`、鍵盤無障礙與懸浮微動畫（`hover scale`），使用者可自由於 1~4 步驟間穿梭填寫。
+    - 表單送出 (`handleSubmit`) 加入嚴密防呆校驗：若在後續步驟送出但第一步驟必填欄位尚未填妥，系統自動導航切回第 1 步並聚焦提示，確保資料完整寫入。
+  - **大頭貼選單寬度自適應緊湊化 (`App.tsx`)**：
+    - 將全域下拉選單 (`.dropdown-menu`) 寬度由固定 `160px` 重構為自適應內容寬度 `width: max-content` 與 `min-width: 120px`。
+    - 微調選單項目內邊距至 `padding: 8px 14px` 搭配 `white-space: nowrap`，消除英文模式與中文模式下右側大片多餘空白，視覺更緊湊和諧。
+  - **個人主頁「加入活動群組」按鈕單語言顯示 (`Dashboard.tsx`, `locales/zh.json`, `locales/en.json`)**：
+    - 擴充中英文語系字典之 `dashboard.activity.joinGroup`。
+    - 移除原本硬編碼的中英並陳字串（`加入活動群組 Join Group`），英文環境顯示「Join Group」，中文環境顯示「加入活動群組」。
+  - **單元測試與建置驗證**：
+    - 新增 `test/74_register_step_click_and_dashboard_ui.test.mjs`，同步更新既有測試之相容斷言。
+    - 全專案 55 個測試套件、257 個單元測試 100% 通過，`pnpm build` 建置零錯誤。
 
 ### v0.1.168 (2026-09-20)
 - 個人主頁 (Dashboard) 活動報名狀態支援偏好語言與中英雙語切換：

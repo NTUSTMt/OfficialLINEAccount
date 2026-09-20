@@ -75,7 +75,7 @@ describe('61. 活動專屬群組連結 (line_group_url) 與正取推播卡片一
     // 檢查 Dashboard.tsx 包含正取判斷與 Join Group 連結按鈕
     assert.ok(dashboardCode.includes("act.reviewStatus.indexOf('正取') > -1"));
     assert.ok(dashboardCode.includes("act.lineGroupUrl"));
-    assert.ok(dashboardCode.includes("加入活動群組 Join Group"));
+    assert.ok(dashboardCode.includes("joinGroup"));
   });
 
   test('5. 報名資料未完整提示：英文版完整包含缺漏欄位且杜絕暴露原始 URL 連結', () => {

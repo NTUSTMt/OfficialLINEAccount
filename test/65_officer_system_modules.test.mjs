@@ -341,7 +341,7 @@ test('幹部系統模組測試：大頭貼選單圖示與名稱一致、歷史�
   assert.strictEqual(enLocale.nav.adminInventory.title, 'Inventory');
 
   // App.tsx 大頭貼選單寬度與圖示
-  assert.ok(appCode.includes("width: '160px'"), 'App.tsx 大頭貼下拉選單寬度應設為 160px');
+  assert.ok(appCode.includes("width: 'max-content'"), 'App.tsx 大頭貼下拉選單寬度應自適應內容 max-content');
   assert.ok(appCode.includes('PackageCheck'), 'App.tsx 必須引入 PackageCheck 圖示');
   assert.ok(appCode.includes('Layers'), 'App.tsx 必須引入 Layers 圖示');
 

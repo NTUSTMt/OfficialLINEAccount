@@ -1105,6 +1105,12 @@ input[type="date"]::-webkit-date-and-time-value {
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.step-dot-wrapper:hover .step-dot {
+  transform: scale(1.1);
 }
 
 .step-dot {
