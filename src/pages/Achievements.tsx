@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Award, Star, Edit3, Globe, Lock, Sparkles } from 'lucide-react';
+import { AlertCircle, Award, Star, Edit3, Globe, Lock, ChevronRight } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
@@ -169,11 +169,11 @@ function Achievements({ userId }: { userId: string }) {
     setWallOpen(true);
   };
 
-  const openForm = (activity: Activity, viewOnly = false) => {
+  const openForm = (activity: Activity, viewOnly = false, directEdit = false) => {
     setSelectedActivity(activity);
-    setIsViewOnly(viewOnly);
-    setIsEditing(false);
-    if (viewOnly && activity.reflection) {
+    setIsViewOnly(viewOnly && !directEdit);
+    setIsEditing(directEdit);
+    if ((viewOnly || directEdit) && activity.reflection) {
       setDifficulty(activity.reflection.difficulty);
       setBeauty(activity.reflection.beauty);
       setContent(activity.reflection.content);
@@ -552,95 +552,47 @@ function Achievements({ userId }: { userId: string }) {
               }}
             >
               <div style={{
-                width: '120px',
+                width: '110px',
                 backgroundImage: `url(${item.img})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
-                flexShrink: 0,
-                position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  top: '6px',
-                  left: '6px',
-                  backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                  backdropFilter: 'blur(4px)',
-                  color: 'white',
-                  borderRadius: '12px',
-                  padding: '2px 8px',
-                  fontSize: '10px',
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}>
-                  <Sparkles size={11} color="#fbbf24" />
-                  <span>{t('achievements.wall.title', '心得牆')}</span>
-                </div>
-              </div>
+                flexShrink: 0
+              }} />
 
-              <div style={{ flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minWidth: 0 }}>
-                <div>
+              <div style={{
+                flex: 1,
+                padding: '16px 18px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                minWidth: 0,
+                gap: '12px'
+              }}>
+                <div style={{ minWidth: 0 }}>
                   <h4 style={{
-                    fontSize: '14px',
+                    fontSize: '15px',
                     fontWeight: 'bold',
                     color: '#0f172a',
-                    margin: '0 0 4px 0',
+                    margin: '0 0 6px 0',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis'
                   }}>
                     {item.title}
                   </h4>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('achievements.list.dateLabel', { date: item.date })}</span>
-                    <span style={{ fontSize: '10px', color: '#2563eb', fontWeight: '500' }}>• {t('achievements.wall.flipHint', '點擊進心得牆')}</span>
-                  </div>
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                    {t('achievements.list.dateLabel', { date: item.date })}
+                  </span>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
-                  {item.hasReflected ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openForm(item, true);
-                      }}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '20px',
-                        border: '1px solid #cbd5e1',
-                        backgroundColor: '#f8fafc',
-                        color: '#475569',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {t('achievements.list.viewBtn')}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openForm(item, false);
-                      }}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: '20px',
-                        border: 'none',
-                        backgroundColor: '#3b82f6',
-                        color: 'white',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
-                      }}
-                    >
-                      {t('achievements.list.writeBtn')}
-                    </button>
-                  )}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#94a3b8',
+                  flexShrink: 0
+                }}>
+                  <ChevronRight size={18} />
                 </div>
               </div>
             </div>
@@ -1095,6 +1047,7 @@ function Achievements({ userId }: { userId: string }) {
       )}
 
       {/* 區塊四：全螢幕拍立得心得牆 Modal */}
+      {/* 區塊四：全螢幕拍立得心得牆 Modal */}
       {wallOpen && wallEvent && (
         <ReflectionWallModal
           eventId={wallEvent.eventId}
@@ -1102,8 +1055,15 @@ function Achievements({ userId }: { userId: string }) {
           eventDate={wallEvent.date}
           eventImg={wallEvent.img}
           currentUserId={userId}
+          hasReflected={wallEvent.hasReflected}
           onClose={() => setWallOpen(false)}
-          onOpenWriteModal={() => openForm(wallEvent, wallEvent.hasReflected)}
+          onOpenWriteModal={() => {
+            if (wallEvent.hasReflected) {
+              openForm(wallEvent, false, true);
+            } else {
+              openForm(wallEvent, false, false);
+            }
+          }}
           refreshTrigger={wallRefreshKey}
         />
       )}

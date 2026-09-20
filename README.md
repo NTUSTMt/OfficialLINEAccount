@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.170-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.171-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.170)](#7-最新版本異動紀錄-changelog-v01170)
+- [7. 最新版本異動紀錄 (Changelog v0.1.171)](#7-最新版本異動紀錄-changelog-v01171)
 
 ---
 
@@ -373,7 +373,20 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.170)
+## 7. 最新版本異動紀錄 (Changelog v0.1.171)
+
+### v0.1.171 (2026-09-20)
+- 活動出隊足跡卡片極簡化與心得牆 FAB 智慧切換（撰寫/直接編輯）：
+  - **出隊足跡活動卡片視覺極簡化 (`src/pages/Achievements.tsx`)**：
+    - **移除多餘干擾元素**：徹底刪除照片左上角之「✨ 活動出隊心得牆」標籤、出隊日期旁之長串藍字提示文字，以及右下角的「查看我的回憶 / 留下回憶」按鈕。
+    - **簡約向右箭頭指示 (`ChevronRight`)**：卡片右側改為水平兩端對齊（左側標題與出隊日期、右側配置淡灰向右箭頭），直觀示意點擊整張卡片一律全螢幕開啟該活動之心得牆。
+  - **心得牆右下角 FAB 智慧切換與直接進入編輯模式 (`src/pages/Achievements.tsx`, `src/components/achievements/ReflectionWallModal.tsx`)**：
+    - 正確將活動之 `hasReflected` 狀態傳遞至 `ReflectionWallModal`。
+    - **未撰寫過心得者**：FAB 按鈕顯示「留下我的回憶」，點擊開啟全新空白填寫表單。
+    - **已撰寫過心得者**：FAB 按鈕顯示「編輯我的心得」，點擊**直接開啟編輯模式表單**（自動載入既有評分、心得全文與照片，並支援即時修改與儲存）。
+  - **單元測試與建置驗證**：
+    - 更新 `test/75_event_reflection_wall.test.mjs`，驗證卡片極簡 ChevronRight 佈局與 FAB directEdit 連動。
+    - 全專案 56 個測試套件、261 個單元測試 100% 通過，`pnpm build` 建置零錯誤。
 
 ### v0.1.170 (2026-09-20)
 - 活動出隊足跡「山系拍立得心得牆 (Reflection Wall)」與公開/私密設定重磅上線：

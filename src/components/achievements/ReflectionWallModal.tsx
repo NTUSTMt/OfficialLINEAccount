@@ -568,7 +568,7 @@ export const ReflectionWallModal: React.FC<ReflectionWallModalProps> = ({
         }}
       >
         <Edit3 size={16} />
-        <span>{hasReflected ? t('achievements.wall.editMyReflection', '編輯我的心得') : t('achievements.wall.writeMyReflection', '撰寫我的心得')}</span>
+        <span>{hasReflected ? t('achievements.wall.editAction', '編輯我的心得') : t('achievements.wall.writeAction', '留下我的回憶')}</span>
       </button>
 
       {/* 相片全螢幕燈箱 (Photo Lightbox) */}

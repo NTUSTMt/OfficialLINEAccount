@@ -43,7 +43,7 @@ describe('75. 活動出隊足跡「山系拍立得心得牆 (Reflection Wall)」
     );
   });
 
-  it('2. 出隊足跡卡片應可點擊開啟全螢幕心得牆，且心得撰寫 Modal 包含公開/私密切換', () => {
+  it('2. 出隊足跡卡片應極簡化且具備 ChevronRight，點擊開啟全螢幕心得牆，且心得撰寫 Modal 包含公開/私密切換', () => {
     // 檢查活動卡片點擊觸發 openWall
     assert.ok(
       achievementsContent.includes('onClick={() => openWall(item)}'),
@@ -54,10 +54,24 @@ describe('75. 活動出隊足跡「山系拍立得心得牆 (Reflection Wall)」
       'Achievements.tsx should mount ReflectionWallModal'
     );
 
-    // 檢查卡片按鈕阻止事件冒泡
+    // 檢查卡片已移除舊有的文字提示與子按鈕，改為簡約向右箭頭指示
     assert.ok(
-      achievementsContent.includes('e.stopPropagation()'),
-      'Action buttons inside activity card should stopPropagation to prevent double modal trigger'
+      achievementsContent.includes('<ChevronRight size={18} />'),
+      'Activity card should feature a clean ChevronRight arrow'
+    );
+    assert.ok(
+      !achievementsContent.includes('• {t(\'achievements.wall.flipHint\''),
+      'Activity card should not contain redundant tip text'
+    );
+
+    // 檢查心得牆組件接收 hasReflected 且 FAB 點擊直接開啟編輯模式
+    assert.ok(
+      achievementsContent.includes('hasReflected={wallEvent.hasReflected}'),
+      'Achievements should pass hasReflected to ReflectionWallModal'
+    );
+    assert.ok(
+      achievementsContent.includes('openForm(wallEvent, false, true)'),
+      'Achievements should open directEdit mode if hasReflected is true'
     );
 
     // 檢查心得表單包含 isPublic 狀態與切換開關
