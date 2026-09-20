@@ -524,6 +524,8 @@ function Register({ userId }: { userId: string }) {
         const chosenLang = finalFormData.preferredLanguage === 'en' ? 'en' : 'zh';
         try {
           localStorage.setItem('i18nextLng', chosenLang);
+          localStorage.setItem('app_lang', chosenLang);
+          localStorage.removeItem('app_lang_manual');
           i18n.changeLanguage(chosenLang);
         } catch (langErr) {
           console.warn('[Register] 切換介面語系例外:', langErr);
@@ -546,6 +548,8 @@ function Register({ userId }: { userId: string }) {
         const chosenLang = formData.preferredLanguage === 'en' ? 'en' : 'zh';
         try {
           localStorage.setItem('i18nextLng', chosenLang);
+          localStorage.setItem('app_lang', chosenLang);
+          localStorage.removeItem('app_lang_manual');
           i18n.changeLanguage(chosenLang);
         } catch (langErr) {
           console.warn('[Register] 切換介面語系例外:', langErr);

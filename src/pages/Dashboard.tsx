@@ -29,11 +29,14 @@ interface ProfileData {
   isOfficer?: boolean;
   officerRole?: string;
   expireDate: string;
+  preferredLanguage?: string;
 }
 
 interface ActivityData {
   eventId: string;
   eventName: string;
+  eventNameEn?: string;
+  eventNameZh?: string;
   date: string;
   reviewStatus: string;
   payStatus: string;
@@ -57,7 +60,7 @@ interface DashboardData {
 }
 
 function Dashboard({ userId }: { userId: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +137,15 @@ function Dashboard({ userId }: { userId: string }) {
             setData(sbData);
             setLoading(false);
             loadedFromSupabase = true;
+
+            // 依社員偏好語言同步前端 i18n 語系 (若使用者未手動點擊切換過)
+            const prefLang = sbData.profile.preferredLanguage;
+            if (prefLang && localStorage.getItem('app_lang_manual') !== 'true') {
+              if (i18n.language !== prefLang) {
+                i18n.changeLanguage(prefLang);
+                localStorage.setItem('app_lang', prefLang);
+              }
+            }
           } else {
             sbErrorDetail = getLastSupabaseError();
           }
@@ -616,7 +628,11 @@ function Dashboard({ userId }: { userId: string }) {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{act.eventName}</h4>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                        {(i18n.language || '').startsWith('en')
+                          ? (act.eventNameEn || act.eventName)
+                          : (act.eventNameZh || act.eventName)}
+                      </h4>
                       <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Calendar size={13} color="#64748b" />
                         <span>{t('dashboard.activity.date', { date: act.date || t('dashboard.activity.unscheduled') })}</span>

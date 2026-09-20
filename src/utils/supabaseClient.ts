@@ -240,11 +240,14 @@ export interface DashboardProfileData {
   isOfficer?: boolean;
   officerRole?: string;
   expireDate: string;
+  preferredLanguage?: string;
 }
 
 export interface DashboardActivityData {
   eventId: string;
   eventName: string;
+  eventNameEn?: string;
+  eventNameZh?: string;
   date: string;
   reviewStatus: string;
   payStatus: string;

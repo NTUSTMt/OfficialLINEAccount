@@ -404,6 +404,87 @@ function _supabaseGet(table, queryParams) {
   }
 }
 
+// 全域快取：當次執行期間快取使用者的偏好語言，減少 Supabase API 往返
+var _userLangCache = {};
+
+/**
+ * 輔助函式：取得使用者的偏好語言 ('zh' | 'en' | null)
+ * @param {string} userId - LINE User ID (U123456...)
+ * @returns {string|null}
+ */
+function _getUserPreferredLanguage(userId) {
+  if (!userId || typeof userId !== "string" || userId.indexOf("U") !== 0) {
+    return null;
+  }
+  if (_userLangCache[userId] !== undefined) {
+    return _userLangCache[userId];
+  }
+  try {
+    var list = _supabaseGet("members", {
+      select: "preferred_language",
+      line_user_id: "eq." + String(userId).trim(),
+      limit: "1"
+    });
+    if (list && Array.isArray(list) && list.length > 0 && list[0].preferred_language) {
+      var lang = String(list[0].preferred_language).trim().toLowerCase();
+      if (lang === "en" || lang.indexOf("en") === 0) {
+        _userLangCache[userId] = "en";
+        return "en";
+      }
+      if (lang === "zh" || lang.indexOf("zh") === 0) {
+        _userLangCache[userId] = "zh";
+        return "zh";
+      }
+    }
+  } catch (e) {
+    console.warn("⚠️ 取得使用者偏好語言失敗:", userId, e);
+  }
+  _userLangCache[userId] = null;
+  return null;
+}
+
+/**
+ * 輔助函式：依偏好語言輸出中文、英文或中英雙語對照
+ * @param {string} zhText - 現有中文段落
+ * @param {string} enText - 現有英文段落
+ * @param {string|null} prefLang - 'zh' | 'en' | null
+ * @returns {string}
+ */
+function _formatBilingualMessage(zhText, enText, prefLang) {
+  var zh = (zhText || "").trim();
+  var en = (enText || "").trim();
+  if (prefLang === "en") {
+    return en || zh;
+  }
+  if (prefLang === "zh") {
+    return zh || en;
+  }
+  if (zh && en) {
+    return zh + "\n─────────────\n" + en;
+  }
+  return zh || en;
+}
+
+/**
+ * 輔助函式：從現有中英雙語訊息中依分隔線精準拆分
+ * @param {string} fullBilingualMsg - 包含 ───────────── 的現有雙語訊息
+ * @param {string|null} prefLang - 'zh' | 'en' | null
+ * @returns {string}
+ */
+function _splitBilingualMessage(fullBilingualMsg, prefLang) {
+  if (!fullBilingualMsg || !prefLang) return fullBilingualMsg;
+  var str = String(fullBilingualMsg);
+  var divider = "\n─────────────\n";
+  var idx = str.indexOf(divider);
+  if (idx > -1) {
+    var zhPart = str.substring(0, idx).trim();
+    var enPart = str.substring(idx + divider.length).trim();
+    if (prefLang === "zh") return zhPart;
+    if (prefLang === "en") return enPart;
+  }
+  return fullBilingualMsg;
+}
+
 // 輕量呼叫 Supabase REST API (PATCH)
 function _supabasePatch(table, queryParams, payload) {
   var props = PropertiesService.getScriptProperties();
@@ -623,7 +704,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     lowerText === "events" ||
     lowerQueryText === "events"
   ) {
-    sendEventList(replyToken);
+    sendEventList(replyToken, userId);
     return;
   }
 
@@ -765,7 +846,7 @@ function _handlePostback(replyToken, userId, postbackData) {
   var eventId = params.eventId || (parts.length > 1 && parts[1].indexOf("=") > -1 ? parts[1].split("=")[1] : "");
 
   if (action === "view" || action === "view_event_detail") {
-    sendEventDetail(replyToken, eventId);
+    sendEventDetail(replyToken, eventId, userId);
     return;
   }
   if (action === "signup") {
@@ -954,14 +1035,16 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
     var selectedItems = payment.type || (payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團活動/裝備費用"));
 
     if (targetUserId && targetUserId.indexOf("U") === 0) {
-      var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
+      var prefLang = _getUserPreferredLanguage(targetUserId);
+      var successMsgZh = "🎉 繳費成功通知\n\n" +
         "親愛的 " + targetUserName + " 您好：\n" +
-        "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
+        "幹部已確認收到您的款項囉！\n\n" +
         "• 繳費單號：" + paymentId + "\n" +
         "• 核銷金額：$" + totalAmount + " 元\n" +
         "• 核銷項目：" + selectedItems + "\n\n" +
-        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
-        "─────────────\n" +
+        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨";
+
+      var successMsgEn = "🎉 Payment Confirmed\n\n" +
         "Dear " + targetUserName + ",\n" +
         "Your payment has been successfully confirmed by the officers!\n\n" +
         "• Payment ID: " + paymentId + "\n" +
@@ -969,7 +1052,7 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
         "• Items: " + selectedItems + "\n\n" +
         "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
 
-      _pushMessage(targetUserId, successMsg);
+      _pushMessage(targetUserId, _formatBilingualMessage(successMsgZh, successMsgEn, prefLang));
     }
 
     // 4. 若有 LINE replyToken，回覆幹部成功
@@ -1351,14 +1434,17 @@ function _formatEventDate(dateVal) {
 /**
  * 產生最新活動卡片輪播 (100% 直連 Supabase events 表，絕不讀取主試算表)
  */
-function sendEventList(replyToken) {
+function sendEventList(replyToken, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
   var sbEvents = _supabaseGet("events", {
-    select: "id,title,fee,start_date,end_date,deadline,status,summary,cover_image_url",
+    select: "id,title,title_en,fee,start_date,end_date,deadline,status,summary,summary_en,cover_image_url",
     order: "start_date.desc"
   });
 
   if (!sbEvents || !Array.isArray(sbEvents) || sbEvents.length === 0) {
-    _replyMessage(replyToken, "目前這學期還沒有排定的活動喔！\n─────────────\nThere are no scheduled activities for this semester yet!");
+    var emptyMsgZh = "目前這學期還沒有排定的活動喔！";
+    var emptyMsgEn = "There are no scheduled activities for this semester yet!";
+    _replyMessage(replyToken, _formatBilingualMessage(emptyMsgZh, emptyMsgEn, prefLang));
     return;
   }
 
@@ -1388,12 +1474,32 @@ function sendEventList(replyToken) {
     var isFuture = rawStatus.indexOf("未來") > -1 || rawStatus.indexOf("coming") > -1 || rawStatus.indexOf("future") > -1;
     var isOpen = !isFuture && !isExpired && (rawStatus.indexOf("開放") > -1 || rawStatus.indexOf("open") > -1);
 
-    // 報名截止但尚未關閉的活動可以繼續顯示，標籤顯示「報名截止 Registration Closed」(灰色 #999999)
     var eventId = ev.id || "";
-    var eventName = ev.title || "未命名活動";
+    var eventNameZh = ev.title || "未命名活動";
+    var eventNameEn = ev.title_en || ev.name_en || eventNameZh;
+    var eventName = (prefLang === "en") ? eventNameEn : eventNameZh;
+
     var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
-    var displayStatus = isFuture ? "未來開放 Coming Soon" : (isOpen ? "開放 Open" : "報名截止 Registration Closed");
-    var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
+    var displayStatusZh = isFuture ? "未來開放" : (isOpen ? "開放" : "報名截止");
+    var displayStatusEn = isFuture ? "Coming Soon" : (isOpen ? "Open" : "Registration Closed");
+    var displayStatus = (prefLang === "en") ? displayStatusEn : (prefLang === "zh" ? displayStatusZh : (displayStatusZh + " " + displayStatusEn));
+
+    var costStrZh = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費";
+    var costStrEn = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "Free";
+    var costStr = (prefLang === "en") ? costStrEn : (prefLang === "zh" ? costStrZh : ((ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free"));
+
+    var costLabel = (prefLang === "en") ? "Cost: " : (prefLang === "zh" ? "費用: " : "費用 Cost: ");
+    var dateLabel = (prefLang === "en") ? "Event Date:" : (prefLang === "zh" ? "活動時間:" : "活動時間 Event Date:");
+    var deadlineLabel = (prefLang === "en") ? "Sign Up Deadline:" : (prefLang === "zh" ? "報名截止:" : "報名截止 Sign Up Deadline:");
+    var viewBtnLabel = (prefLang === "en") ? "View Details" : (prefLang === "zh" ? "查看詳情" : "查看詳情 View");
+    var viewDisplayText = (prefLang === "en")
+      ? ("I want to view details for " + eventName)
+      : (prefLang === "zh"
+          ? ("我想查看 " + eventName + " 的資訊")
+          : ("我想查看 " + eventName + " 的資訊 / I want to view details"));
+
+    var summaryText = (prefLang === "en") ? (ev.summary_en || ev.short_desc_en || ev.summary || "") : (ev.summary || "");
+
     var startFormatted = _formatEventDate(ev.start_date);
     var endFormatted = _formatEventDate(ev.end_date);
     var deadlineFormatted = _formatEventDate(ev.deadline);
@@ -1428,13 +1534,13 @@ function sendEventList(replyToken) {
           "spacing": "xs",
           "contents": [{
             "type": "text",
-            "text": "費用 Cost: " + costStr,
+            "text": costLabel + costStr,
             "size": "sm",
             "color": "#666666",
             "weight": "bold"
           }, {
             "type": "text",
-            "text": "活動時間 Event Date:",
+            "text": dateLabel,
             "size": "sm",
             "color": "#666666",
             "margin": "sm"
@@ -1446,7 +1552,7 @@ function sendEventList(replyToken) {
             "weight": "bold"
           }, {
             "type": "text",
-            "text": "報名截止 Sign Up Deadline:",
+            "text": deadlineLabel,
             "size": "sm",
             "color": "#666666",
             "margin": "sm"
@@ -1462,7 +1568,7 @@ function sendEventList(replyToken) {
           "margin": "md"
         }, {
           "type": "text",
-          "text": ev.summary || "",
+          "text": summaryText,
           "size": "sm",
           "color": "#999999",
           "margin": "md",
@@ -1478,9 +1584,9 @@ function sendEventList(replyToken) {
           "style": "secondary",
           "action": {
             "type": "postback",
-            "label": "查看詳情 View",
+            "label": viewBtnLabel,
             "data": "action=view&eventId=" + eventId,
-            "displayText": "我想查看 " + eventName + " 的資訊 / I want to view details"
+            "displayText": viewDisplayText
           }
         }]
       }
@@ -1500,9 +1606,12 @@ function sendEventList(replyToken) {
   }
 
   if (bubbles.length === 0) {
-    _replyMessage(replyToken, "目前這學期還沒有排定的活動喔！\n─────────────\nThere are no scheduled activities for this semester yet!");
+    var noEventsZh = "目前這學期還沒有排定的活動喔！";
+    var noEventsEn = "There are no scheduled activities for this semester yet!";
+    _replyMessage(replyToken, _formatBilingualMessage(noEventsZh, noEventsEn, prefLang));
   } else {
-    _replyFlexMessage(replyToken, "請查看本學期活動列表 / Event List", {
+    var flexTitle = (prefLang === "en") ? "Event List" : (prefLang === "zh" ? "請查看本學期活動列表" : "請查看本學期活動列表 / Event List");
+    _replyFlexMessage(replyToken, flexTitle, {
       "type": "carousel",
       "contents": bubbles
     });
@@ -1512,20 +1621,27 @@ function sendEventList(replyToken) {
 /**
  * 產生單一活動詳細資訊卡片 (100% 直連 Supabase events 表，絕不讀取主試算表)
  */
-function sendEventDetail(replyToken, eventId) {
+function sendEventDetail(replyToken, eventId, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
   if (!eventId) {
-    _replyMessage(replyToken, "找不到該活動的詳細資訊！\n─────────────\nEvent details not found!");
+    var notFoundZh = "找不到該活動的詳細資訊！";
+    var notFoundEn = "Event details not found!";
+    _replyMessage(replyToken, _formatBilingualMessage(notFoundZh, notFoundEn, prefLang));
     return;
   }
 
   var sbList = _supabaseGet("events", { id: "eq." + String(eventId).trim() });
   if (!sbList || !Array.isArray(sbList) || sbList.length === 0) {
-    _replyMessage(replyToken, "找不到該活動的詳細資訊！\n─────────────\nEvent details not found!");
+    var notFoundZh2 = "找不到該活動的詳細資訊！";
+    var notFoundEn2 = "Event details not found!";
+    _replyMessage(replyToken, _formatBilingualMessage(notFoundZh2, notFoundEn2, prefLang));
     return;
   }
 
   var ev = sbList[0];
-  var eventName = ev.title || "未命名活動 (Untitled Event)";
+  var eventNameZh = ev.title || "未命名活動";
+  var eventNameEn = ev.title_en || ev.name_en || eventNameZh;
+  var eventName = (prefLang === "en") ? eventNameEn : (prefLang === "zh" ? eventNameZh : (ev.title || "未命名活動 (Untitled Event)"));
   var rawStatus = String(ev.status || "").trim().toLowerCase();
   var deadlineStr = ev.deadline || "";
   var isExpired = _isEventExpired(deadlineStr);
@@ -1533,7 +1649,9 @@ function sendEventDetail(replyToken, eventId) {
   var isFuture = rawStatus.indexOf("未來") > -1 || rawStatus.indexOf("coming") > -1 || rawStatus.indexOf("future") > -1;
   var isOpen = !isFuture && !isExpired && (rawStatus.indexOf("開放") > -1 || rawStatus.indexOf("open") > -1);
 
-  var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
+  var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0)
+    ? "$" + ev.fee
+    : ((prefLang === "en") ? "Free" : (prefLang === "zh" ? "免費" : "免費 Free"));
   var startFormatted = _formatEventDate(ev.start_date);
   var endFormatted = _formatEventDate(ev.end_date);
   var deadlineFormatted = _formatEventDate(ev.deadline);
@@ -1543,21 +1661,41 @@ function sendEventDetail(replyToken, eventId) {
     dateDisplay += " ~ " + endFormatted;
   }
 
+  var costLabel = (prefLang === "en") ? "Cost: " : (prefLang === "zh" ? "費用: " : "費用 Cost: ");
+  var dateLabel = (prefLang === "en") ? "Event Date: " : (prefLang === "zh" ? "活動時間: " : "活動時間 Event Date: ");
+  var deadlineLabel = (prefLang === "en") ? "Sign Up Deadline: " : (prefLang === "zh" ? "報名截止: " : "報名截止 Deadline: ");
+
+  var titleTag = (prefLang === "en") ? "【Title】" : "【名稱】";
+  var summaryTag = (prefLang === "en") ? "【Summary】" : "【簡介】";
+  var itineraryTag = (prefLang === "en") ? "【Detailed Itinerary】" : "【詳細行程】";
+
+  var summaryContent = (prefLang === "en") ? (ev.summary_en || ev.short_desc_en || ev.summary || "No summary") : (ev.summary || "尚無簡介");
+  var fullDescContent = (prefLang === "en") ? (ev.itinerary_en || ev.full_desc_en || ev.itinerary || ev.full_desc || "No detailed itinerary") : (ev.itinerary || ev.full_desc || "尚無詳細行程");
+
   var buttonBox;
   if (isOpen) {
+    var signupBtnLabel = (prefLang === "en") ? "Sign Up" : (prefLang === "zh" ? "一鍵報名" : "一鍵報名 Sign Up");
+    var signupDisplayText = (prefLang === "en")
+      ? ("Sign up for: " + eventName)
+      : (prefLang === "zh"
+          ? ("我要報名：" + eventName)
+          : ("我要報名 Sign up for: " + eventName));
+
     buttonBox = {
       "type": "button",
       "style": "primary",
       "color": "#1DB446",
       "action": {
         "type": "postback",
-        "label": "一鍵報名 Sign Up",
+        "label": signupBtnLabel,
         "data": "action=signup&eventId=" + eventId,
-        "displayText": "我要報名 Sign up for: " + eventName
+        "displayText": signupDisplayText
       }
     };
   } else {
-    var closedLabel = isFuture ? "即將開放 Coming Soon" : (isExpired ? "報名已截止 Closed" : "尚未開放 Not Open");
+    var closedLabelZh = isFuture ? "即將開放" : (isExpired ? "報名已截止" : "尚未開放");
+    var closedLabelEn = isFuture ? "Coming Soon" : (isExpired ? "Closed" : "Not Open");
+    var closedLabel = (prefLang === "en") ? closedLabelEn : (prefLang === "zh" ? closedLabelZh : (isFuture ? "即將開放 Coming Soon" : (isExpired ? "報名已截止 Closed" : "尚未開放 Not Open")));
     buttonBox = {
       "type": "button",
       "style": "secondary",
@@ -1578,7 +1716,7 @@ function sendEventDetail(replyToken, eventId) {
       "contents": [
         {
           "type": "text",
-          "text": "【名稱】",
+          "text": titleTag,
           "weight": "bold",
           "size": "sm",
           "color": "#1DB446"
@@ -1593,7 +1731,7 @@ function sendEventDetail(replyToken, eventId) {
         },
         {
           "type": "text",
-          "text": "【簡介】",
+          "text": summaryTag,
           "weight": "bold",
           "size": "sm",
           "color": "#1DB446",
@@ -1601,7 +1739,7 @@ function sendEventDetail(replyToken, eventId) {
         },
         {
           "type": "text",
-          "text": ev.summary || "尚無簡介",
+          "text": summaryContent,
           "size": "sm",
           "color": "#555555",
           "wrap": true,
@@ -1609,7 +1747,7 @@ function sendEventDetail(replyToken, eventId) {
         },
         {
           "type": "text",
-          "text": "【詳細行程】",
+          "text": itineraryTag,
           "weight": "bold",
           "size": "sm",
           "color": "#1DB446",
@@ -1617,7 +1755,7 @@ function sendEventDetail(replyToken, eventId) {
         },
         {
           "type": "text",
-          "text": ev.itinerary || "尚無詳細行程",
+          "text": fullDescContent,
           "size": "sm",
           "color": "#555555",
           "wrap": true,
@@ -1631,21 +1769,21 @@ function sendEventDetail(replyToken, eventId) {
           "contents": [
             {
               "type": "text",
-              "text": "費用 Cost: " + costStr,
+              "text": costLabel + costStr,
               "size": "sm",
               "color": "#666666",
               "weight": "bold"
             },
             {
               "type": "text",
-              "text": "活動時間 Event Date: " + dateDisplay,
+              "text": dateLabel + dateDisplay,
               "size": "sm",
               "color": "#1DB446",
               "weight": "bold"
             },
             {
               "type": "text",
-              "text": "報名截止 Deadline: " + deadlineFormatted,
+              "text": deadlineLabel + deadlineFormatted,
               "size": "sm",
               "color": "#E53935",
               "weight": "bold"
@@ -1672,7 +1810,8 @@ function sendEventDetail(replyToken, eventId) {
     };
   }
 
-  _replyFlexMessage(replyToken, "活動詳情: " + eventName, bubble);
+  var flexReplyTitle = (prefLang === "en") ? ("Event: " + eventName) : ("活動詳情: " + eventName);
+  _replyFlexMessage(replyToken, flexReplyTitle, bubble);
 }
 
 /**
@@ -1937,6 +2076,7 @@ function _checkProfileComplete(userId, ss, type) {
 function handleSignup(replyToken, userId, eventId, ss) {
   if (!ss) ss = _getSpreadsheet();
 
+  var prefLang = _getUserPreferredLanguage(userId);
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1949,11 +2089,13 @@ function handleSignup(replyToken, userId, eventId, ss) {
       if (ev.title) evName = ev.title;
       var isEvExpired = _isEventExpired(ev.deadline);
       if (isEvExpired || ev.status === "關閉" || ev.status === "已截止") {
-        _replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (ev.deadline || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration is closed.");
+        var closedReply = "⚠️ 報名失敗：【" + evName + "】已於 " + (ev.deadline || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration is closed.";
+        _replyMessage(replyToken, _splitBilingualMessage(closedReply, prefLang));
         return;
       }
     } else {
-      _replyMessage(replyToken, "⚠️ 報名失敗：查無活動代號【" + eventId + "】，請確認活動代號是否正確！\n─────────────\n⚠️ Event not found for code: " + eventId);
+      var notFoundReply = "⚠️ 報名失敗：查無活動代號【" + eventId + "】，請確認活動代號是否正確！\n─────────────\n⚠️ Event not found for code: " + eventId;
+      _replyMessage(replyToken, _splitBilingualMessage(notFoundReply, prefLang));
       return;
     }
 
@@ -1961,7 +2103,8 @@ function handleSignup(replyToken, userId, eventId, ss) {
     var profileCheck = _checkProfileComplete(userId, ss, "signup");
 
     if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-      _replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先點選單中的「填寫資料」完成註冊後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first.");
+      var noProfileReply = "⚠️ 報名失敗：系統找不到您的社員資料！\n請先點選單中的「填寫資料」完成註冊後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first.";
+      _replyMessage(replyToken, _splitBilingualMessage(noProfileReply, prefLang));
       return;
     }
 
@@ -1994,8 +2137,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
         return "👉 " + (fieldEnMap[f] || f);
       }).join("\n");
 
-      _replyMessage(replyToken, 
-        "⚠️ 報名失敗：您的個人資料尚不完整！\n\n" +
+      var missingProfileMsg = "⚠️ 報名失敗：您的個人資料尚不完整！\n\n" +
         "為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n" +
         missingFormattedZh + "\n\n" +
         "完成資料更新後，再回來點擊一鍵報名喔！🏕️\n" +
@@ -2003,8 +2145,9 @@ function handleSignup(replyToken, userId, eventId, ss) {
         "⚠️ Registration Failed: Incomplete member profile!\n\n" +
         "For insurance coverage and outdoor activity safety, please click 'Register' in the menu to complete the following required fields:\n\n" +
         missingFormattedEn + "\n\n" +
-        "Once your profile is updated, return here to sign up with one click! 🏕️"
-      );
+        "Once your profile is updated, return here to sign up with one click! 🏕️";
+
+      _replyMessage(replyToken, _splitBilingualMessage(missingProfileMsg, prefLang));
       return;
     }
 
@@ -2019,7 +2162,8 @@ function handleSignup(replyToken, userId, eventId, ss) {
         return st.indexOf("取消") === -1 && st.toLowerCase().indexOf("cancelled") === -1;
       });
       if (hasActiveSignup) {
-        _replyMessage(replyToken, "⚠️ 您已經報名過【" + evName + "】囉！\n請耐心等候幹部審核，或是至個人主頁查詢進度。\n─────────────\n⚠️ You have already registered for [" + evName + "]!\nPlease wait for officer review.");
+        var dupMsg = "⚠️ 您已經報名過【" + evName + "】囉！\n請耐心等候幹部審核，或是至個人主頁查詢進度。\n─────────────\n⚠️ You have already registered for [" + evName + "]!\nPlease wait for officer review.";
+        _replyMessage(replyToken, _splitBilingualMessage(dupMsg, prefLang));
         return;
       }
     }
@@ -2048,23 +2192,29 @@ function handleSignup(replyToken, userId, eventId, ss) {
       console.warn("同步至活動專屬試算表例外:", evSSErr);
     }
 
+    // 6. 回傳確認收據 (依偏好語言精準拆分)
+    var successReceiptZh = "✅ 報名登記已送出！\n\n" +
+      "活動：" + evName + "\n" +
+      "活動代號：" + eventId + "\n" +
+      "報名專屬碼：" + signupCode + "\n\n" +
+      p.name + "，我們已收到您的報名資料。\n\n" +
+      "⚠️ 【重要提醒】\n" +
+      "此階段為「報名登記與資格審核」，幹部將進行體能評估與篩選，最終錄取名單（正取/備取）將透過本帳號推播通知您！";
 
-
-    // 6. 回傳確認收據 (中英完整雙語)
-    _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n" +
-      "活動 (Event)：\n" + evName + "\n" +
-      "活動代號 (Event ID)：" + eventId + "\n" +
-      "報名專屬碼 (Signup Code)：" + signupCode + "\n\n" +
-      p.name + "，我們已收到您的報名資料。\n" +
+    var successReceiptEn = "✅ Registration Submitted!\n\n" +
+      "Event: " + evName + "\n" +
+      "Event ID: " + eventId + "\n" +
+      "Signup Code: " + signupCode + "\n\n" +
       "Dear " + p.name + ", we have received your application.\n\n" +
-      "⚠️ 【重要提醒 / Important Reminder】\n" +
-      "此階段為「報名登記與資格審核」，幹部將進行體能評估與篩選，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n" +
-      "─────────────\n" +
-      "This stage is registration & review. Officers will evaluate qualifications, and admission status (Confirmed/Waitlisted) will be notified to you via this LINE account!");
+      "⚠️ 【Important Reminder】\n" +
+      "This stage is registration & review. Officers will evaluate qualifications, and admission status (Confirmed/Waitlisted) will be notified to you via this LINE account!";
+
+    _replyMessage(replyToken, _formatBilingualMessage(successReceiptZh, successReceiptEn, prefLang));
 
   } catch (err) {
     console.error("活動報名失敗:", err);
-    _replyMessage(replyToken, "⚠️ 系統目前忙碌中，請稍後再試！\n─────────────\n⚠️ System is currently busy, please try again later!");
+    var busyMsg = "⚠️ 系統目前忙碌中，請稍後再試！\n─────────────\n⚠️ System is currently busy, please try again later!";
+    _replyMessage(replyToken, _splitBilingualMessage(busyMsg, prefLang));
   } finally {
     _safeReleaseLock(lock);
   }
@@ -2074,12 +2224,14 @@ function handleSignup(replyToken, userId, eventId, ss) {
  * 處理備取意願確認 (Postback) - 100% 直連 Supabase (SSOT)，杜絕試算表錯誤
  */
 function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
+  var prefLang = _getUserPreferredLanguage(userId);
   var eventId = paramsMap["eventId"] || "";
   var targetUid = paramsMap["userId"] || userId;
   var targetCode = paramsMap["signupCode"] || paramsMap["targetId"] || "";
 
   if (!targetUid) {
-    _replyMessage(replyToken, "系統錯誤：缺少使用者識別碼。\n─────────────\nSystem Error: Missing user identifier.");
+    var missingUidMsg = "系統錯誤：缺少使用者識別碼。\n─────────────\nSystem Error: Missing user identifier.";
+    _replyMessage(replyToken, _splitBilingualMessage(missingUidMsg, prefLang));
     return;
   }
 
@@ -2097,7 +2249,8 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
 
     var signups = _supabaseGet("event_signups", queryParams);
     if (!signups || signups.length === 0) {
-      _replyMessage(replyToken, "找不到該筆報名資料，請洽詢社團幹部！\n─────────────\nRegistration record not found, please contact club officers!");
+      var notFoundRecordMsg = "找不到該筆報名資料，請洽詢社團幹部！\n─────────────\nRegistration record not found, please contact club officers!";
+      _replyMessage(replyToken, _splitBilingualMessage(notFoundRecordMsg, prefLang));
       return;
     }
 
@@ -2105,7 +2258,8 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
     var currentStatus = String(signup.status || "");
 
     if (currentStatus.indexOf("備取（有意願）") > -1 || currentStatus.indexOf("有意願") > -1) {
-      _replyMessage(replyToken, "您先前已確認過備取意願！若有名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist preference! Officers will contact you if a spot opens up!");
+      var alreadyConfirmedMsg = "您先前已確認過備取意願！若有名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist preference! Officers will contact you if a spot opens up!";
+      _replyMessage(replyToken, _splitBilingualMessage(alreadyConfirmedMsg, prefLang));
       return;
     }
 
@@ -2116,13 +2270,16 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
     });
 
     if (patchSuccess) {
-      _replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nSuccessfully confirmed waitlist preference! Status updated to: [Waitlisted (Interested)]. We will contact you if a spot opens up!");
+      var confirmedSuccessMsg = "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nSuccessfully confirmed waitlist preference! Status updated to: [Waitlisted (Interested)]. We will contact you if a spot opens up!";
+      _replyMessage(replyToken, _splitBilingualMessage(confirmedSuccessMsg, prefLang));
     } else {
-      _replyMessage(replyToken, "⚠️ 更新備取意願失敗，請稍後再試或洽詢幹部！\n─────────────\n⚠️ Failed to update waitlist preference, please try again later or contact officers!");
+      var updateFailMsg = "⚠️ 更新備取意願失敗，請稍後再試或洽詢幹部！\n─────────────\n⚠️ Failed to update waitlist preference, please try again later or contact officers!";
+      _replyMessage(replyToken, _splitBilingualMessage(updateFailMsg, prefLang));
     }
   } catch (err) {
     console.error("[handleConfirmWaitlist] 例外:", err);
-    _replyMessage(replyToken, "系統發生錯誤：" + (err.message || err) + "\n─────────────\nSystem error: " + (err.message || err));
+    var exMsg = "系統發生錯誤：" + (err.message || err) + "\n─────────────\nSystem error: " + (err.message || err);
+    _replyMessage(replyToken, _splitBilingualMessage(exMsg, prefLang));
   }
 }
 
@@ -4126,8 +4283,8 @@ function _handleNotifyOfficersLoan(json) {
 
     // ⭐️ 2. 同步保底推播給使用者個人 LINE 聊天室 (預約成功憑證)
     if (userId && userId !== "TEST_USER_ID") {
-      var userLoanMsg = "【🎒 我的裝備租借預訂單】\n" +
-        "\n" +
+      var prefLang = _getUserPreferredLanguage(userId);
+      var userLoanMsgZh = "【🎒 我的裝備租借預訂單】\n\n" +
         "• 訂單編號：" + loanId + "\n" +
         "• 借用人：" + borrowerName + " (" + identityDesc + ")\n" +
         "• 預計領取：" + (details.pickupDate || "") + "\n" +
@@ -4135,15 +4292,13 @@ function _handleNotifyOfficersLoan(json) {
         "• 租借用途：" + purpose + "\n\n" +
         "📦 預約裝備清單：\n" +
         (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") + "\n\n" +
-        "💰 預估總租金：$" + totalRent + " 元\n" +
-        "\n" +
+        "💰 預估總租金：$" + totalRent + " 元\n\n" +
         "📌 提醒事項：\n" +
         "1. 幹部已收到您的預約申請，將為您備齊裝備。\n" +
         "2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n" +
-        "3. 將有幹部主動聯繫你，確認領取時間以及地點。\n" +
-        "─────────────\n" +
-        "【🎒 Equipment Loan Reservation Confirmed】\n" +
-        "\n" +
+        "3. 將有幹部主動聯繫你，確認領取時間以及地點。";
+
+      var userLoanMsgEn = "【🎒 Equipment Loan Reservation Confirmed】\n\n" +
         "• Order ID: " + loanId + "\n" +
         "• Borrower: " + borrowerName + " (" + identityDesc + ")\n" +
         "• Pickup Date: " + (details.pickupDate || "") + "\n" +
@@ -4151,14 +4306,13 @@ function _handleNotifyOfficersLoan(json) {
         "• Purpose: " + purpose + "\n\n" +
         "📦 Items:\n" +
         (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• None") + "\n\n" +
-        "💰 Estimated Total: $" + totalRent + " TWD\n" +
-        "\n" +
+        "💰 Estimated Total: $" + totalRent + " TWD\n\n" +
         "📌 Notes:\n" +
         "1. Officers have received your request and will prepare the gear.\n" +
         "2. If fees apply, please complete payment in 'Payment Center' before pickup.\n" +
         "3. An officer will contact you to confirm pickup time and location. Thank you!";
 
-      _pushMessage(userId, userLoanMsg);
+      _pushMessage(userId, _formatBilingualMessage(userLoanMsgZh, userLoanMsgEn, prefLang));
     }
 
     return _successResponse({ message: "幹部推播與個人推播已成功送出" });
@@ -4208,19 +4362,20 @@ function _handleNotifyLoanCancelled(json) {
 
     // 2. 使用者個人 LINE 推播 (取消成功憑證)
     if (userId && userId !== "TEST_USER_ID") {
-      var userMsg = "【🎒 裝備租借取消成功憑證】\n\n" +
+      var prefLang = _getUserPreferredLanguage(userId);
+      var userMsgZh = "【🎒 裝備租借取消成功憑證】\n\n" +
         "• 訂單編號：" + loanId + "\n" +
         "• 借用人：" + borrowerName + "\n" +
         "• 取消裝備明細：\n" + itemsText + "\n\n" +
-        (isPaid ? "⚠️ 您已完成此訂單之繳費，社團幹部將主動與您聯繫辦理退款事宜！\n\n" : "您的裝備租借預約已成功取消，庫存已歸還系統。\n\n") +
-        "─────────────\n" +
-        "【🎒 Equipment Loan Cancellation Confirmed】\n\n" +
+        (isPaid ? "⚠️ 您已完成此訂單之繳費，社團幹部將主動與您聯繫辦理退款事宜！" : "您的裝備租借預約已成功取消，庫存已歸還系統。");
+
+      var userMsgEn = "【🎒 Equipment Loan Cancellation Confirmed】\n\n" +
         "• Order ID: " + loanId + "\n" +
         "• Borrower: " + borrowerName + "\n" +
         "• Items:\n" + itemsText + "\n\n" +
-        (isPaid ? "⚠️ You have paid for this reservation. Officers will contact you regarding the refund process.\n" : "Your equipment loan reservation has been successfully cancelled.");
+        (isPaid ? "⚠️ You have paid for this reservation. Officers will contact you regarding the refund process." : "Your equipment loan reservation has been successfully cancelled.");
 
-      _pushMessage(userId, userMsg);
+      _pushMessage(userId, _formatBilingualMessage(userMsgZh, userMsgEn, prefLang));
     }
 
     return _successResponse({ message: "裝備取消幹部與個人推播已成功送出" });
@@ -4369,16 +4524,17 @@ function _handleNotifyOfficersPayment(json) {
 
     // 2. ⭐️ 同步保底推播給使用者個人 LINE 聊天室 (個人繳費收據)
     if (userId && userId !== "TEST_USER_ID") {
-      var userMsg = "【💳 繳費申報已成功送出】\n\n" +
+      var prefLang = _getUserPreferredLanguage(userId);
+      var userMsgZh = "【💳 繳費申報已成功送出】\n\n" +
         "您好" + (userName ? " " + userName : "") + "！系統已成功收到您的繳費申報資訊：\n\n" +
         (paymentId ? "• 繳費單號：" + paymentId + "\n" : "") +
         "• 申報金額：$" + totalAmount + " 元\n" +
         "• 帳號末五碼：" + last5Digits + "\n" +
         "• 申報項目：\n" + itemsZh +
         noteZh + "\n\n" +
-        "幹部會於核對款項後自動更新您的繳費狀態。謝謝！\n" +
-        "─────────────\n" +
-        "【💳 Payment Report Submitted】\n\n" +
+        "幹部會於核對款項後自動更新您的繳費狀態。謝謝！";
+
+      var userMsgEn = "【💳 Payment Report Submitted】\n\n" +
         "Hello" + (userName ? " " + userName : "") + "! Your payment report has been submitted:\n\n" +
         (paymentId ? "• Payment ID: " + paymentId + "\n" : "") +
         "• Amount: $" + totalAmount + " TWD\n" +
@@ -4387,7 +4543,7 @@ function _handleNotifyOfficersPayment(json) {
         noteEn + "\n\n" +
         "Officers will verify your payment and update your status soon. Thank you!";
 
-      _pushMessage(userId, userMsg);
+      _pushMessage(userId, _formatBilingualMessage(userMsgZh, userMsgEn, prefLang));
     }
 
     return _successResponse({ message: "繳費申報幹部與個人推播已成功送出" });
@@ -4411,21 +4567,24 @@ function _handleNotifyPaymentConfirmed(json) {
 
     // 1. 推播給社員個人 LINE
     if (lineUserId && lineUserId.indexOf("U") === 0) {
-      var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
+      var prefLang = _getUserPreferredLanguage(lineUserId);
+      var successMsgZh = "🎉 繳費成功通知\n\n" +
         "親愛的 " + userName + " 您好：\n" +
-        "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
+        "幹部已確認收到您的款項囉！\n\n" +
         "• 繳費單號：" + paymentId + "\n" +
         "• 核銷金額：$" + amount + " 元\n" +
         "• 核銷項目：" + items + "\n\n" +
-        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
-        "─────────────\n" +
+        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨";
+
+      var successMsgEn = "🎉 Payment Confirmed\n\n" +
         "Dear " + userName + ",\n" +
         "Your payment has been successfully confirmed by the officers!\n\n" +
         "• Payment ID: " + paymentId + "\n" +
         "• Amount: $" + amount + " TWD\n" +
         "• Items: " + items + "\n\n" +
         "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
-      _pushMessage(lineUserId, successMsg);
+
+      _pushMessage(lineUserId, _formatBilingualMessage(successMsgZh, successMsgEn, prefLang));
     }
 
     // 2. 推播給幹部管理群組
@@ -4464,7 +4623,8 @@ function _handleNotifyLoanStatusUpdated(json) {
       : String(itemsSummary || "無品項細項");
 
     if (userId && userId.indexOf("U") === 0) {
-      var userMsg = "【裝備租借狀態更新通知】\n\n" +
+      var prefLang = _getUserPreferredLanguage(userId);
+      var userMsgZh = "【裝備租借狀態更新通知】\n\n" +
         "親愛的 " + borrowerName + " 您好：\n" +
         "您的裝備租借申請單狀態已更新！\n\n" +
         "• 訂單編號：" + loanId + "\n" +
@@ -4472,7 +4632,17 @@ function _handleNotifyLoanStatusUpdated(json) {
         "• 租借期間：" + pickupDate + " ~ " + returnDate + "\n" +
         (itemsText ? ("• 租借裝備品項：\n• " + itemsText + "\n\n") : "\n") +
         "如有任何疑問或需確認領取/歸還時間，請隨時與社團裝備幹部聯絡，謝謝！";
-      _pushMessage(userId, userMsg);
+
+      var userMsgEn = "【Equipment Loan Status Update】\n\n" +
+        "Dear " + borrowerName + ",\n" +
+        "Your equipment loan application status has been updated!\n\n" +
+        "• Order ID: " + loanId + "\n" +
+        "• Status: [" + newStatus + "]\n" +
+        "• Period: " + pickupDate + " ~ " + returnDate + "\n" +
+        (itemsText ? ("• Items:\n• " + itemsText + "\n\n") : "\n") +
+        "If you have any questions or need to confirm pickup/return times, please contact equipment officers. Thank you!";
+
+      _pushMessage(userId, _formatBilingualMessage(userMsgZh, userMsgEn, prefLang));
     }
 
     return _successResponse({ message: "裝備狀態推播通知已成功送出" });
@@ -4845,19 +5015,21 @@ function _handleNotifyEventCancelled(json) {
 
     // 2. 使用者個人 LINE 推播 (取消報名確認)
     if (userId && userId !== "TEST_USER_ID") {
-      var userMsg = "【🏕️ 活動報名取消確認】\n\n" +
+      var prefLang = _getUserPreferredLanguage(userId);
+      var userMsgZh = "【🏕️ 活動報名取消確認】\n\n" +
         "親愛的 " + userName + " 您好：\n" +
         "您所報名的活動【" + eventName + "】已成功取消！\n\n" +
         "• 原審核狀態：" + (reviewStatus || "已報名") + "\n" +
         (cancelReason ? "• 取消原因：" + cancelReason + "\n" : "") +
-        (isPaid ? "\n⚠️ 若您已繳交活動費用，社團幹部將依退費規範主動聯絡您安排退費！\n" : "\n期待未來在其他山林活動中與您同行！🏔️\n") +
-        "─────────────\n" +
-        "【🏕️ Event Registration Cancellation Confirmed】\n\n" +
+        (isPaid ? "\n⚠️ 若您已繳交活動費用，社團幹部將依退費規範主動聯絡您安排退費！\n" : "\n期待未來在其他山林活動中與您同行！🏔️");
+
+      var userMsgEn = "【🏕️ Event Registration Cancellation Confirmed】\n\n" +
         "Dear " + userName + ",\n" +
         "Your registration for [" + eventName + "] has been successfully cancelled." +
+        (cancelReason ? "\n• Reason: " + cancelReason : "") +
         (isPaid ? "\n⚠️ If you have already paid the activity fee, officers will contact you for refund arrangements." : "\nHope to see you on the trails in future events! 🏔️");
 
-      _pushMessage(userId, userMsg);
+      _pushMessage(userId, _formatBilingualMessage(userMsgZh, userMsgEn, prefLang));
     }
 
     // 3. ⚡ 同步標記該活動專屬獨立試算表 (報名名冊) 為已取消
@@ -6062,21 +6234,40 @@ function _handleSendEventNotifications(json) {
 
               var isAcceptedOrWaitlisted = (statusStr.indexOf("正取") > -1 || statusStr.indexOf("備取") > -1);
               if (isAcceptedOrWaitlisted && notifyStr !== "已通知" && statusStr.indexOf("取消") === -1 && targetUid.startsWith("U")) {
+                var prefLang = _getUserPreferredLanguage(targetUid);
                 if (statusStr.indexOf("正取") > -1) {
+                  var resTag = (prefLang === "en") ? "Review Result Released" : ((prefLang === "zh") ? "審核結果出爐" : "審核結果出爐 Result");
+                  var resTitle = (prefLang === "en") ? "Admission Confirmed" : "活動正取通知";
+                  var greetText = (prefLang === "en")
+                    ? ("Hello " + applicantName + "! For the event:")
+                    : ((prefLang === "zh")
+                        ? ("哈囉 " + applicantName + "！您報名的活動：")
+                        : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
+                  var resPrompt = (prefLang === "en") ? "Review Result:" : ((prefLang === "zh") ? "審核結果為：" : "審核結果為 Result：");
+                  var displayBadge = (prefLang === "en") ? "【 Confirmed 】" : ((prefLang === "zh") ? "【 正取 】" : "【 " + statusStr + " 】");
+                  var noticeText = (prefLang === "en")
+                    ? "Congratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!"
+                    : ((prefLang === "zh")
+                        ? "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！"
+                        : "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!");
+                  var joinBtn = (prefLang === "en") ? "Join Group" : ((prefLang === "zh") ? "加入活動群組" : "加入活動群組 Join Group");
+                  var payBtn = (prefLang === "en") ? "Pay Now" : ((prefLang === "zh") ? "前往繳費系統" : "前往繳費系統 Pay");
+                  var altPushText = (prefLang === "en") ? "【Activity Admission Notice】" : ((prefLang === "zh") ? "【活動正取通知】" : "【活動正取通知 Confirmed】");
+
                   var acceptedFlex = {
                     type: "bubble",
                     body: {
                       type: "box",
                       layout: "vertical",
                       contents: [
-                        { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#1DB446", size: "sm" },
-                        { type: "text", text: "活動正取通知", weight: "bold", size: "xl", margin: "md" },
-                        { type: "text", text: "哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:", margin: "md", size: "sm", wrap: true },
+                        { type: "text", text: resTag, weight: "bold", color: "#1DB446", size: "sm" },
+                        { type: "text", text: resTitle, weight: "bold", size: "xl", margin: "md" },
+                        { type: "text", text: greetText, margin: "md", size: "sm", wrap: true },
                         { type: "text", text: targetEventTitle, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
-                        { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
-                        { type: "text", text: "【 " + statusStr + " 】", weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
+                        { type: "text", text: resPrompt, margin: "md", size: "sm" },
+                        { type: "text", text: displayBadge, weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
                         { type: "separator", margin: "md" },
-                        { type: "text", text: "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                        { type: "text", text: noticeText, wrap: true, margin: "md", size: "xs", color: "#666666" }
                       ]
                     },
                     footer: {
@@ -6090,7 +6281,7 @@ function _handleSendEventNotifications(json) {
                           color: "#1DB446",
                           action: {
                             type: "uri",
-                            label: "加入活動群組 Join Group",
+                            label: joinBtn,
                             uri: targetGroupUrl
                           }
                         },
@@ -6100,29 +6291,46 @@ function _handleSendEventNotifications(json) {
                           color: "#475569",
                           action: {
                             type: "uri",
-                            label: "前往繳費系統 Pay",
+                            label: payBtn,
                             uri: "https://liff.line.me/" + (LIFF_CHANNEL_ID || "2009217429") + "-u7OCkmQO"
                           }
                         }
                       ]
                     }
                   };
-                  pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
+                  pushFlexMessage(targetUid, altPushText, acceptedFlex);
                 } else {
+                  var resTagW = (prefLang === "en") ? "Review Result Released" : ((prefLang === "zh") ? "審核結果出爐" : "審核結果出爐 Result");
+                  var resTitleW = (prefLang === "en") ? "Activity Waitlist Notice" : "活動備取通知";
+                  var greetTextW = (prefLang === "en")
+                    ? ("Hello " + applicantName + "! For the event:")
+                    : ((prefLang === "zh")
+                        ? ("哈囉 " + applicantName + "！您報名的活動：")
+                        : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
+                  var resPromptW = (prefLang === "en") ? "Review Result:" : ((prefLang === "zh") ? "審核結果為：" : "審核結果為 Result：");
+                  var displayBadgeW = (prefLang === "en") ? "【 Waitlisted 】" : ((prefLang === "zh") ? "【 備取 】" : "【 " + statusStr + " 】");
+                  var noticeTextW = (prefLang === "en")
+                    ? "You are currently on the waitlist. We will contact you if a spot opens up!"
+                    : ((prefLang === "zh")
+                        ? "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！"
+                        : "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!");
+                  var confirmBtn = (prefLang === "en") ? "Confirm Waitlist" : ((prefLang === "zh") ? "確認備取意願" : "確認備取意願 Confirm Waitlist");
+                  var altPushTextW = (prefLang === "en") ? "【Activity Waitlist Notice】" : ((prefLang === "zh") ? "【活動備取通知】" : "【活動備取通知 Waitlist】");
+
                   var waitlistFlex = {
                     type: "bubble",
                     body: {
                       type: "box",
                       layout: "vertical",
                       contents: [
-                        { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#FF9800", size: "sm" },
-                        { type: "text", text: "活動備取通知", weight: "bold", size: "xl", margin: "md" },
-                        { type: "text", text: "哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:", margin: "md", size: "sm", wrap: true },
+                        { type: "text", text: resTagW, weight: "bold", color: "#FF9800", size: "sm" },
+                        { type: "text", text: resTitleW, weight: "bold", size: "xl", margin: "md" },
+                        { type: "text", text: greetTextW, margin: "md", size: "sm", wrap: true },
                         { type: "text", text: targetEventTitle, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
-                        { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
-                        { type: "text", text: "【 " + statusStr + " 】", weight: "bold", color: "#FF9800", size: "lg", align: "center", margin: "md" },
+                        { type: "text", text: resPromptW, margin: "md", size: "sm" },
+                        { type: "text", text: displayBadgeW, weight: "bold", color: "#FF9800", size: "lg", align: "center", margin: "md" },
                         { type: "separator", margin: "md" },
-                        { type: "text", text: "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                        { type: "text", text: noticeTextW, wrap: true, margin: "md", size: "xs", color: "#666666" }
                       ]
                     },
                     footer: {
@@ -6134,13 +6342,13 @@ function _handleSendEventNotifications(json) {
                         color: "#FF9800",
                         action: {
                           type: "postback",
-                          label: "確認備取意願 Confirm Waitlist",
+                          label: confirmBtn,
                           data: "action=confirm_waitlist&eventId=" + encodeURIComponent(targetEventId) + "&userId=" + encodeURIComponent(targetUid)
                         }
                       }]
                     }
                   };
-                  pushFlexMessage(targetUid, "【活動備取通知 Waitlist】", waitlistFlex);
+                  pushFlexMessage(targetUid, altPushTextW, waitlistFlex);
                 }
 
                 // 立即以 PATCH 更新 Supabase event_signups 表的 notification_status 為已通知

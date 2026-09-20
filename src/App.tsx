@@ -54,6 +54,7 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
     const nextLang = i18n.language === 'zh' ? 'en' : 'zh';
     i18n.changeLanguage(nextLang);
     localStorage.setItem('app_lang', nextLang);
+    localStorage.setItem('app_lang_manual', 'true');
   };
 
   // 根據當前路由，動態決定左側的 Logo、標題與副標題（子路由如 /dashboard/achievements, /payment/history 需優先判斷）

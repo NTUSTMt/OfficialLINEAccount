@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.165-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.168-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.165)](#7-最新版本異動紀錄-changelog-v01165)
+- [7. 最新版本異動紀錄 (Changelog v0.1.168)](#7-最新版本異動紀錄-changelog-v01168)
 
 ---
 
@@ -373,7 +373,50 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.165)
+## 7. 最新版本異動紀錄 (Changelog v0.1.168)
+
+### v0.1.168 (2026-09-20)
+- 個人主頁 (Dashboard) 活動報名狀態支援偏好語言與中英雙語切換：
+  - **資料庫 RPC 擴充 (`get_my_dashboard`)**：
+    - 更新 Supabase 雲端與本地 `supabase/get_my_dashboard.sql`，於 `v_activities` 查詢中同時回傳 `eventNameZh`（中文名稱）、`eventNameEn`（英文名稱），且 `eventName` 預設依社員的 `preferred_language` 自動選用。
+    - 於 `v_profile` 回傳社員本人之 `preferredLanguage`（`zh` 或 `en`）。
+  - **前端 LIFF 雙向語言連動 (`Dashboard.tsx`, `App.tsx`, `Register.tsx`)**：
+    - 活動報名卡片名稱改為依當前語系動態選取：英文時顯示 `act.eventNameEn || act.eventName`，中文時顯示 `act.eventNameZh || act.eventName`。
+    - 社員填寫個人資料偏好語言後，前端儲存即時更新 `app_lang`，並於個人主頁載入時自動同步 `i18n` 介面語系（使用者若曾手動於頂部按鈕切換語言則予以保留）。
+  - **單元測試與建置防護**：
+    - 於 `test/73_preferred_language_messaging.test.mjs` 中擴充測試，檢驗 `get_my_dashboard.sql` 與 `Dashboard.tsx` 語系相容性。
+    - 全專案 54 個測試套件、254 個單元測試 100% 通過，`pnpm build` 建置零錯誤。
+
+### v0.1.167 (2026-09-20)
+- 修復最新活動 (Activities) 輪播卡片與活動詳情 Supabase 查詢欄位對齊：
+  - **根本原因排查**：在 `sendEventList` 與 `sendEventDetail` 中，向 Supabase `events` 表發起查詢時誤傳了不存在的欄位名稱（`name_en`、`short_desc_en`），導致 Supabase PostgREST 拋出 HTTP 400 Bad Request 錯誤，系統判斷查詢失敗而回傳「目前這學期還沒有排定的活動喔！ / There are no scheduled activities for this semester yet!」。
+  - **欄位全面校正與容錯回退**：
+    - 將 `sendEventList` 查詢欄位修正為 Supabase 實際存在的欄位名稱：`"id,title,title_en,fee,start_date,end_date,deadline,status,summary,summary_en,cover_image_url"`。
+    - 取得英文名稱與說明時，優先採用資料庫標準欄位 `title_en`、`summary_en` 與 `itinerary_en`，並保留歷史兼容性回退。
+  - **自動化測試防護**：
+    - 於 `test/73_preferred_language_messaging.test.mjs` 中擴充測試案例，嚴格驗證查詢欄位與實際資料表結構 100% 吻合，杜絕 PostgREST 400 錯誤。
+    - 全專案 54 個測試套件、253 個單元測試 100% 通過，`pnpm build` 建置零錯誤。
+
+### v0.1.166 (2026-09-20)
+- 依社員偏好語言個人化發送訊息（現有雙語精準拆分機制）：
+  - **核心設計原則（嚴格拆分現有文案，絕不重新寫作）**：
+    - 系統中傳送給社員之業務互動與推播訊息，全面介接資料庫中的偏好語言（`members.preferred_language`）。
+    - 偏好為英文 (`en`) 時，精確取用現有雙語文案的「英文區塊」。
+    - 偏好為中文 (`zh`) 時，精確取用現有雙語文案的「中文區塊」。
+    - 未設定偏好或訪客時，自動回退為原有的「完整中英並陳（含分隔線）」，確保新朋友與未註冊者無障礙閱讀。
+  - **LINE 聊天室公眾文字指令維持原樣**：
+    - 聊天室固定問答關鍵字（如「關於社團 / About Us」、「社辦資訊 / Office」等）維持中英雙語對照，確保使用者不會因關鍵字不符合而無法觸發回覆。
+  - **7 大個人化訊息情境落地覆蓋**：
+    1. **最新活動輪播卡片 (`sendEventList`)**：依使用者切換中文/英文活動名稱、簡介、欄位標籤（費用/時間/截止）與按鈕。
+    2. **單一活動詳情卡片 (`sendEventDetail`)**：依使用者切換中文/英文行程、簡介與操作按鈕。
+    3. **活動一鍵報名與備取互動回覆 (`handleSignup`, `handleConfirmWaitlist`)**：已截止提示、查無活動、個資未完整提醒、重複報名提示、報名成功收據與備取意願更新回覆。
+    4. **活動審核結果 Flex 推播 (`_handleSendEventNotifications`)**：正取與備取通知卡片依每位錄取社員的偏好語言分別產出純英文、中文或雙語之 Flex Message。
+    5. **活動取消確認推播 (`_handleCancelEventSignup`)**：依偏好語言發送個人取消憑證。
+    6. **裝備租借申請與狀態更新推播 (`_handleBorrowApplication`, `_handleNotifyLoanStatusUpdated`, `_handleNotifyLoanCancelled`)**：租借申請個人收據、狀態變更通知與取消收據。
+    7. **繳費申報個人收據與核銷完成通知 (`_handleNotifyOfficersPayment`, `_handleNotifyPaymentConfirmed`, `_processPaymentVerification`)**：繳費申報收據與繳費成功核銷推播。
+- 單元測試與建置驗證：
+  - 新增 `test/73_preferred_language_messaging.test.mjs`，驗證偏好語言查詢快取、雙語拆分與回退正確性、輪播與詳情個人化、Flex 推播語系分流。
+  - 全專案 54 個測試套件、252 個單元測試 100% 通過，`tsc -b && vite build` 建置零錯誤。
 
 ### v0.1.165 (2026-09-20)
 - 統一全系統活動編號 (Unified Event ID Format)：

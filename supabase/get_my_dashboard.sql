@@ -32,6 +32,7 @@ BEGIN
             'isOfficial', COALESCE(v_member.is_official_member, FALSE) AND (v_member.membership_expires_at IS NULL OR v_member.membership_expires_at >= CURRENT_DATE),
             'isOfficer', COALESCE(v_member.is_officer, FALSE),
             'officerRole', COALESCE(v_member.officer_role, ''),
+            'preferredLanguage', COALESCE(v_member.preferred_language, 'zh'),
             'expireDate', CASE 
                 WHEN v_member.membership_expires_at IS NOT NULL THEN to_char(v_member.membership_expires_at, 'YYYY/MM/DD')
                 ELSE '尚未核發/尚未繳費 (Not issued/Unpaid)'
@@ -45,6 +46,7 @@ BEGIN
             'isOfficial', FALSE,
             'isOfficer', FALSE,
             'officerRole', '',
+            'preferredLanguage', 'zh',
             'expireDate', '尚未核發/尚未繳費 (Not issued/Unpaid)'
         );
     END IF;
@@ -55,7 +57,12 @@ BEGIN
     FROM (
         SELECT jsonb_build_object(
             'eventId', e.id,
-            'eventName', e.title,
+            'eventName', CASE 
+                WHEN COALESCE(v_member.preferred_language, 'zh') = 'en' AND e.title_en IS NOT NULL AND trim(e.title_en) != '' THEN e.title_en
+                ELSE e.title
+            END,
+            'eventNameZh', e.title,
+            'eventNameEn', e.title_en,
             'date', to_char(e.start_date, 'YYYY/MM/DD') || CASE WHEN e.end_date != e.start_date THEN ' ~ ' || to_char(e.end_date, 'YYYY/MM/DD') ELSE '' END,
             'reviewStatus', s.status,
             'payStatus', CASE 
