@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.159-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.160-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.159)](#7-最新版本異動紀錄-changelog-v01159)
+- [7. 最新版本異動紀錄 (Changelog v0.1.160)](#7-最新版本異動紀錄-changelog-v01160)
 
 ---
 
@@ -373,7 +373,15 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.159)
+## 7. 最新版本異動紀錄 (Changelog v0.1.160)
+
+### v0.1.160 (2026-09-20)
+- 修復個人資料彈窗 (MemberProfileModal) 誤判為「非社員」缺陷 (src/components/admin/MemberProfileModal.tsx, src/components/admin/ApplicantModals.tsx):
+  - 根本原因排查：Supabase PostgreSQL `members` 資料表中的正式社員欄位名稱為 `is_official_member`（布林值 `BOOLEAN`）。總覽清單頁面 (`AdminMembers.tsx`) 與詳細資料編輯頁面 (`MemberDetailEdit.tsx`) 皆直接讀取 `is_official_member`，因此列表能正確呈現「正式社員」徽章且編輯表單有確實勾選；但個人資料預覽彈窗 (`MemberProfileModal.tsx`) 內部判定邏輯原先僅比對 `merged.is_official === true || merged.is_official === '是' || merged.isOfficial === '是'`，遺漏了資料庫真實欄位 `is_official_member`，導致運算結果永遠為 false，錯誤渲染為灰色「非社員」標籤。
+  - 全欄位防禦相容判定：於 `MemberProfileModal.tsx` 擴充身分判定邏輯，全面相容 `is_official_member`、`is_official`、`isOfficial` 與 `isOfficialMember` 之布林值與中英文字串型態，確保彈窗身分標籤與總覽名冊及資料庫 100% 嚴格一致。
+  - 報名名冊個資彈窗防禦補強：於 `ApplicantModals.tsx` 同步補強身分判定，全面相容布林值與字串型態之社員資格判定。
+- 單元測試與打包建置:
+  - 新增 `test/68_member_profile_modal_official_status.test.mjs` 專屬單元測試，驗證 `MemberProfileModal` 與 `ApplicantModals` 在各種欄位格式下均能正確識別正式社員狀態。全專案 222 項單元測試 100% 通過，前端 `tsc -b && vite build` 成功打包零錯誤。
 
 ### v0.1.159 (2026-09-18)
 - 幹部管理系統「重新整理優先直連 Supabase (<50ms)」與極速同步修復 (src/pages/AdminEvents.tsx, src/pages/AdminFinance.tsx, src/pages/AdminMembers.tsx, src/pages/AdminLoans.tsx, src/pages/AdminInventory.tsx, src/pages/MemberRecords.tsx):

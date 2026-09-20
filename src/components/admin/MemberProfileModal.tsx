@@ -96,7 +96,20 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
   const merged: any = { ...initialMember, ...detail };
   const name = merged.name || '未命名社員';
   const gender = merged.gender || '未填';
-  const isOfficial = merged.is_official === true || merged.is_official === '是' || merged.isOfficial === '是';
+  const isOfficial = Boolean(
+    merged.is_official_member === true ||
+    merged.is_official_member === 'true' ||
+    merged.is_official_member === '是' ||
+    merged.is_official === true ||
+    merged.is_official === 'true' ||
+    merged.is_official === '是' ||
+    merged.isOfficial === '是' ||
+    merged.isOfficial === true ||
+    merged.isOfficial === 'true' ||
+    merged.isOfficialMember === true ||
+    merged.isOfficialMember === 'true' ||
+    merged.isOfficialMember === '是'
+  );
   const birthday = merged.birthday || '';
   const studentId = merged.student_id || merged.studentId || '';
   const department = merged.department || '';

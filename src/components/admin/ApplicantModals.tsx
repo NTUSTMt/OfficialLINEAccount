@@ -236,7 +236,7 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
                 <div><span style={{ color: '#64748b' }}>姓名：</span><span style={{ fontWeight: '600', color: '#0f172a' }}>{profileModalApplicant.name}</span></div>
                 <div><span style={{ color: '#64748b' }}>性別：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.gender || '未填'}</span></div>
-                <div><span style={{ color: '#64748b' }}>身分：</span><span style={{ fontWeight: 'bold', color: profileModalApplicant.isOfficial === '是' ? '#16a34a' : '#64748b' }}>{profileModalApplicant.isOfficial === '是' ? '正式社員' : '非社員'}</span></div>
+                <div><span style={{ color: '#64748b' }}>身分：</span><span style={{ fontWeight: 'bold', color: ((profileModalApplicant as any).isOfficial === '是' || (profileModalApplicant as any).isOfficial === true || (profileModalApplicant as any).is_official_member === true) ? '#16a34a' : '#64748b' }}>{((profileModalApplicant as any).isOfficial === '是' || (profileModalApplicant as any).isOfficial === true || (profileModalApplicant as any).is_official_member === true) ? '正式社員' : '非社員'}</span></div>
                 <div><span style={{ color: '#64748b' }}>生日：</span><span style={{ color: '#0f172a' }}>{formatDateSlash(profileModalApplicant.birthday)}</span></div>
                 {profileModalApplicant.studentId && (
                   <div><span style={{ color: '#64748b' }}>學號：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.studentId}</span></div>
