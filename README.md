@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.160-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.161-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.160)](#7-最新版本異動紀錄-changelog-v01160)
+- [7. 最新版本異動紀錄 (Changelog v0.1.161)](#7-最新版本異動紀錄-changelog-v01161)
 
 ---
 
@@ -373,7 +373,33 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.160)
+## 7. 最新版本異動紀錄 (Changelog v0.1.161)
+
+### v0.1.161 (2026-09-20)
+- 活動管理頁面重新設計與歷史活動歸檔系統 (AdminEvents & AdminEventsHistory)：
+  - **獨立子路由架構**：新增 `/admin/events/history` 路由，並於頂部導航配置「返回活動管理」按鈕與「歷史活動歸檔」標題。
+  - **歸檔判定與主頁資料隔離 (`isEventArchived`)**：
+    - 建立 `src/utils/eventArchiveUtils.ts`，以活動結束日（`endDate`，若無則回退 `startDate`）加上 14 天（結束滿兩週）為嚴格基準。
+    - 活動管理主頁自動排除已結束滿兩週之活動，僅保留進行中、未來及兩週內結束之活動，維持主頁簡潔清爽。
+    - 主頁頂部配置「歷史活動」按鈕與歷史場次即時計數徽章，點擊平滑跳轉至歷史活動頁面。
+  - **歷史活動卡片手風琴展開與折疊互動 (`AdminHistoryEventCard`)**：
+    - 卡片支援手風琴開展與收合，呈現標題、出隊日期、代號、費用與報名人數徽章。
+    - 活動「簡介」與「詳細時程與裝備需求」預設收起，提供獨立的展開/收合開關。
+    - 若有設定 LINE 交流群組連結，提供一鍵外開按鈕。
+  - **報名人員名冊延遲載入與正備取排序**：
+    - 展開卡片時依需延遲載入（Lazy Loading）該場活動報名名冊，並寫入快取，兼顧首頁秒開與流量節約。
+    - 報名名單嚴格依照「正取 (Confirmed) 優先 > 備取 (Waitlisted) 次之 > 審核中/其他在後」排序，同狀態按報名序號排列。
+    - 提供「全部」、「僅正取」、「僅備取」切換標籤與人數計數。
+  - **報名者個資彈窗唯讀模式與社員編輯跳轉**：
+    - `ApplicantModals` 組件擴充 `isReadOnly` 模式，在歷史活動中隱藏「正取/備取/重設」審核按鈕，防止誤改歷史名冊。
+    - 彈窗底部保留「移至社員詳細資料編輯頁面」導航按鈕，點擊無縫切換至 `/admin/members/:userId`。
+  - **NotionFilterBar 搜尋、多維度篩選與排序**：
+    - 歷史活動頁頂部工具列支援關鍵字搜尋（名稱、代號）。
+    - 支援動態出隊年份篩選（全部年份、各年份動態提取）與活動狀態篩選。
+    - 支援依出隊日、報名截止日升降冪排序與即時重新整理。
+- 單元測試與建置驗證：
+  - 新增 `test/69_admin_events_history.test.mjs`，完整涵蓋日期解析器相容性、歷史歸檔門檻判定、出隊年份提取、正備取優先排序與主頁歷史資料隔離測試。
+  - 全數 227 項單元測試通過，TypeScript 與 Vite 打包建置零錯誤。
 
 ### v0.1.160 (2026-09-20)
 - 修復個人資料彈窗 (MemberProfileModal) 誤判為「非社員」缺陷 (src/components/admin/MemberProfileModal.tsx, src/components/admin/ApplicantModals.tsx):

@@ -26,8 +26,10 @@ import {
   Lock,
   Mountain,
   ArrowLeft,
-  CheckCircle2
+  CheckCircle2,
+  History
 } from 'lucide-react';
+import { isEventArchived } from '../utils/eventArchiveUtils';
 
 interface AdminEventsProps {
   userId: string;
@@ -778,9 +780,18 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     }
   };
 
+  // 篩選進行中與結束未滿 14 天之活動（結束逾 14 天者自動歸檔至歷史活動頁）
+  const activeEvents = useMemo(() => {
+    return events.filter((evt) => !isEventArchived(evt, 14));
+  }, [events]);
+
+  const archivedCount = useMemo(() => {
+    return events.filter((evt) => isEventArchived(evt, 14)).length;
+  }, [events]);
+
   // 篩選與排序後活動列表
   const filteredEvents = useMemo(() => {
-    const list = events.filter((evt) => {
+    const list = activeEvents.filter((evt) => {
       const matchesStatus = statusFilter === 'all' || evt.status === statusFilter;
       const matchesSearch =
         searchQuery.trim() === '' ||
@@ -955,6 +966,59 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
               <span>{toastMessage}</span>
             </div>
           )}
+
+          {/* 活動主頁標題列與歷史活動按鈕 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '12px',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                進行中活動
+              </h2>
+              <span style={{ fontSize: '12px', color: '#64748b' }}>
+                共 {activeEvents.length} 場
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/admin/events/history')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '10px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                color: '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <History size={15} color="#059669" />
+              <span>歷史活動</span>
+              {archivedCount > 0 && (
+                <span style={{
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '10px'
+                }}>
+                  {archivedCount}
+                </span>
+              )}
+            </button>
+          </div>
 
           {/* Notion 搜尋、篩選、排序、重新整理與發布活動列 */}
           <NotionFilterBar

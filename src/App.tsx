@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense, lazy, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle, Calendar, Users, PackageCheck, Layers } from 'lucide-react';
+import { Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle, Calendar, Users, PackageCheck, Layers, History as HistoryIcon } from 'lucide-react';
 import liff from '@line/liff';
 import { appendAuthToken } from './utils/api';
 import { getCache, setCache } from './utils/cacheUtils';
@@ -17,6 +17,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const History = lazy(() => import('./pages/History'));
 const Achievements = lazy(() => import('./pages/Achievements'));
 const AdminEvents = lazy(() => import('./pages/AdminEvents'));
+const AdminEventsHistory = lazy(() => import('./pages/AdminEventsHistory'));
 const ConfirmPayment = lazy(() => import('./pages/ConfirmPayment'));
 const AdminMembers = lazy(() => import('./pages/AdminMembers'));
 const MemberDetailEdit = lazy(() => import('./pages/MemberDetailEdit'));
@@ -72,6 +73,9 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
     }
     if (path.includes('/admin/inventory')) {
       return { title: t('nav.adminInventory.title', '裝備庫存'), subtitle: t('nav.adminInventory.subtitle', 'Inventory'), icon: <Layers size={24} color="#059669" /> };
+    }
+    if (path.includes('/admin/events/history')) {
+      return { title: '歷史活動歸檔', subtitle: 'Past Events Archive', icon: <HistoryIcon size={24} color="#059669" /> };
     }
     if (path.includes('/admin')) {
       return { title: t('nav.adminEvents.title', '活動管理'), subtitle: t('nav.adminEvents.subtitle', 'Events'), icon: <Calendar size={24} color="#059669" /> };
@@ -645,6 +649,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
               <Achievements userId={liffInit.userId} />
             </ProfileCheck>
           } />
+          <Route path="/admin/events/history" element={<AdminEventsHistory userId={liffInit.userId} />} />
           <Route path="/admin/events" element={<AdminEvents userId={liffInit.userId} />} />
           <Route path="/admin/members" element={<AdminMembers userId={liffInit.userId} />} />
           <Route path="/admin/members/:userId/records" element={<MemberRecords officerUserId={liffInit.userId} />} />

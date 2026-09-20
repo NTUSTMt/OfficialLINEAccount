@@ -27,8 +27,9 @@ interface ApplicantModalsProps {
   onCloseProof: () => void;
   profileModalApplicant: SignupApplicant | null;
   onCloseProfile: () => void;
-  onUpdateApplicantResult: (applicant: SignupApplicant, newResult: string) => Promise<void>;
-  updatingSignupCode: string | null;
+  onUpdateApplicantResult?: (applicant: SignupApplicant, newResult: string) => Promise<void>;
+  updatingSignupCode?: string | null;
+  isReadOnly?: boolean;
 }
 
 export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
@@ -37,7 +38,8 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
   profileModalApplicant,
   onCloseProfile,
   onUpdateApplicantResult,
-  updatingSignupCode
+  updatingSignupCode = null,
+  isReadOnly = false
 }) => {
   const navigate = useNavigate();
   const [copiedLineId, setCopiedLineId] = useState<string | null>(null);
@@ -415,98 +417,100 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
                   {profileModalApplicant.reviewResult || '審核中 Checking'}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {updatingSignupCode === String(profileModalApplicant.rowNumber) ? (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    padding: '10px',
-                    width: '100%',
-                    backgroundColor: '#f8fafc',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0'
-                  }}>
-                    <div className="spinner" style={{ width: '18px', height: '18px', margin: 0 }}></div>
-                    <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>審核更新中...</span>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      disabled={updatingSignupCode !== null}
-                      onClick={() => onUpdateApplicantResult(profileModalApplicant, '正取 Confirmed')}
-                      style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        borderRadius: '8px',
-                        fontSize: '13px',
-                        fontWeight: 'bold',
-                        border: 'none',
-                        cursor: updatingSignupCode !== null ? 'not-allowed' : 'pointer',
-                        backgroundColor: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? '#16a34a' : '#f1f5f9',
-                        color: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? 'white' : '#475569',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                        opacity: updatingSignupCode !== null ? 0.6 : 1
-                      }}
-                    >
-                      <CheckCircle2 size={13} />
-                      <span>正取</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={updatingSignupCode !== null}
-                      onClick={() => onUpdateApplicantResult(profileModalApplicant, '備取 Waitlisted')}
-                      style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        borderRadius: '8px',
-                        fontSize: '13px',
-                        fontWeight: 'bold',
-                        border: 'none',
-                        cursor: updatingSignupCode !== null ? 'not-allowed' : 'pointer',
-                        backgroundColor: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? '#ea580c' : '#f1f5f9',
-                        color: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? 'white' : '#475569',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                        opacity: updatingSignupCode !== null ? 0.6 : 1
-                      }}
-                    >
-                      <Clock4 size={13} />
-                      <span>備取</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={updatingSignupCode !== null}
-                      onClick={() => onUpdateApplicantResult(profileModalApplicant, '審核中 Checking')}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        border: '1px solid #cbd5e1',
-                        backgroundColor: 'white',
-                        color: '#64748b',
-                        cursor: updatingSignupCode !== null ? 'not-allowed' : 'pointer',
-                        fontWeight: '500',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                        opacity: updatingSignupCode !== null ? 0.6 : 1
-                      }}
-                    >
-                      <RotateCcw size={12} />
-                      <span>重設</span>
-                    </button>
-                  </>
-                )}
-              </div>
+              {!isReadOnly && onUpdateApplicantResult && (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {updatingSignupCode === String(profileModalApplicant.rowNumber) ? (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '10px',
+                      width: '100%',
+                      backgroundColor: '#f8fafc',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0'
+                    }}>
+                      <div className="spinner" style={{ width: '18px', height: '18px', margin: 0 }}></div>
+                      <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>審核更新中...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        disabled={updatingSignupCode !== null}
+                        onClick={() => onUpdateApplicantResult(profileModalApplicant, '正取 Confirmed')}
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          fontSize: '13px',
+                          fontWeight: 'bold',
+                          border: 'none',
+                          cursor: updatingSignupCode !== null ? 'not-allowed' : 'pointer',
+                          backgroundColor: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? '#16a34a' : '#f1f5f9',
+                          color: profileModalApplicant.reviewResult.indexOf('正取') > -1 ? 'white' : '#475569',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          opacity: updatingSignupCode !== null ? 0.6 : 1
+                        }}
+                      >
+                        <CheckCircle2 size={13} />
+                        <span>正取</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={updatingSignupCode !== null}
+                        onClick={() => onUpdateApplicantResult(profileModalApplicant, '備取 Waitlisted')}
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          fontSize: '13px',
+                          fontWeight: 'bold',
+                          border: 'none',
+                          cursor: updatingSignupCode !== null ? 'not-allowed' : 'pointer',
+                          backgroundColor: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? '#ea580c' : '#f1f5f9',
+                          color: profileModalApplicant.reviewResult.indexOf('備取') > -1 ? 'white' : '#475569',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          opacity: updatingSignupCode !== null ? 0.6 : 1
+                        }}
+                      >
+                        <Clock4 size={13} />
+                        <span>備取</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={updatingSignupCode !== null}
+                        onClick={() => onUpdateApplicantResult(profileModalApplicant, '審核中 Checking')}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: 'white',
+                          color: '#64748b',
+                          cursor: updatingSignupCode !== null ? 'not-allowed' : 'pointer',
+                          fontWeight: '500',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          opacity: updatingSignupCode !== null ? 0.6 : 1
+                        }}
+                      >
+                        <RotateCcw size={12} />
+                        <span>重設</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* 移至社員詳細資料編輯頁面 */}
               <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '4px' }}>
