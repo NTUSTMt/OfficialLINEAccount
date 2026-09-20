@@ -52,7 +52,7 @@ describe('70. 活動管理與歷史歸檔頁面 5 大介面優化與跳轉修復
     assert.doesNotMatch(code, /<h2[^>]*>\s*歷史活動歸檔\s*<\/h2>/);
     // 確保使用 prefixElement 傳入純圖示返回按鈕
     assert.match(code, /prefixElement=\{/);
-    assert.match(code, /title="返回活動管理"/);
+    assert.match(code, /title="返回(?:上一頁|活動管理)"/);
     assert.match(code, /<ArrowLeft size=\{18\} \/>/);
   });
 

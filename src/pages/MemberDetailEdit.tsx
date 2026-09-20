@@ -20,6 +20,7 @@ import {
   updateMemberFullDetailInSupabase
 } from '../utils/supabaseClient';
 import type { MemberFullRecord, MemberActiveStats } from '../types/admin';
+import { safeNavigateBack } from '../utils/navigationUtils';
 
 // 欄位繁體中文顯示名稱對照表
 const FIELD_LABELS: Record<string, string> = {
@@ -253,7 +254,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
         justifyContent: 'space-between'
       }}>
         <button
-          onClick={() => navigate('/admin/members')}
+          onClick={() => safeNavigateBack(navigate, '/admin/members')}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -267,7 +268,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
           }}
         >
           <ArrowLeft size={18} />
-          <span>返回社員列表</span>
+          <span>返回上一頁</span>
         </button>
 
         <button

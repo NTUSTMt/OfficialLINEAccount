@@ -16,6 +16,7 @@ import { NotionFilterBar, type FilterGroup, type SortOption } from '../component
 import { AdminHistoryEventCard } from '../components/admin/AdminHistoryEventCard';
 import { ApplicantModals } from '../components/admin/ApplicantModals';
 import { isEventArchived, getEventYear } from '../utils/eventArchiveUtils';
+import { safeNavigateBack } from '../utils/navigationUtils';
 
 interface AdminEventsHistoryProps {
   userId: string;
@@ -353,11 +354,11 @@ export default function AdminEventsHistory({ userId }: AdminEventsHistoryProps) 
         </p>
         <button
           type="button"
-          onClick={() => navigate('/admin/events')}
+          onClick={() => safeNavigateBack(navigate, '/admin/events')}
           className="btn btn-primary"
           style={{ width: '100%', padding: '12px 24px', borderRadius: '12px', fontWeight: 'bold' }}
         >
-          返回活動管理
+          返回上一頁
         </button>
       </div>
     );
@@ -418,8 +419,8 @@ export default function AdminEventsHistory({ userId }: AdminEventsHistoryProps) 
           prefixElement={
             <button
               type="button"
-              onClick={() => navigate('/admin/events')}
-              title="返回活動管理"
+              onClick={() => safeNavigateBack(navigate, '/admin/events')}
+              title="返回上一頁"
               style={{
                 width: '38px',
                 height: '38px',

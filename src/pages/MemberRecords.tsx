@@ -18,6 +18,7 @@ import {
   type MemberTimelineResult
 } from '../utils/supabaseClient';
 import type { MemberTimelineRecord, MemberTimelineCategory } from '../types/admin';
+import { safeNavigateBack } from '../utils/navigationUtils';
 
 const SORT_OPTIONS: SortOption[] = [
   { key: 'timestamp', label: '依紀錄時間（預設上新下舊）' },
@@ -274,7 +275,7 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
       }}>
         <button
           type="button"
-          onClick={() => navigate(`/admin/members/${userId}`)}
+          onClick={() => safeNavigateBack(navigate, `/admin/members/${userId}`)}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -299,7 +300,7 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
           }}
         >
           <ArrowLeft size={16} />
-          <span>返回社員詳細資料</span>
+          <span>返回上一頁</span>
         </button>
       </div>
 

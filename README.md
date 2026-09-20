@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.162-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.163-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.162)](#7-最新版本異動紀錄-changelog-v01162)
+- [7. 最新版本異動紀錄 (Changelog v0.1.163)](#7-最新版本異動紀錄-changelog-v01163)
 
 ---
 
@@ -373,7 +373,25 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.162)
+## 7. 最新版本異動紀錄 (Changelog v0.1.163)
+
+### v0.1.163 (2026-09-20)
+- 管理頁面返回上一頁智慧歷程導航 (Smart History Back Navigation)：
+  - **核心問題排查與架構解耦**：
+    - 過去幹部管理模組之「返回」按鈕多硬編碼寫死為特定路由（例如：社員詳細資料編輯頁固定返回 `/admin/members`、個人歷史紀錄固定返回 `/admin/members/:userId`、歷史活動歸檔固定返回 `/admin/events`）。
+    - 當幹部從財務對帳（`AdminFinance`）或租借管理（`AdminLoans`）點擊彈窗的「移至社員詳細資料編輯頁面」進行跳轉時，點擊返回卻被強制帶往社員名冊清單頁（`/admin/members`），打斷原本的財務或裝備審核工作流。
+  - **通用的智慧上一頁工具函式 (`src/utils/navigationUtils.ts`)**：
+    - 新增 `safeNavigateBack(navigate, fallbackPath)` 輔助函式。
+    - 透過校驗 `window.history.state?.idx > 0` 判定使用者是否有前一個網頁瀏覽歷史：若存在上一頁則精準執行 `navigate(-1)`，無縫返回來源頁面（如 `AdminFinance`, `AdminLoans`, `AdminEvents`, `MemberDetailEdit` 等）。
+    - 若無歷程（如幹部直接重新整理頁面或透過深層連結直接開啟），則以 `{ replace: true }` 安全平滑回退至各頁面所屬之預設安全路徑，徹底防止跳出 LINE LIFF 容器或卡死在白畫面。
+  - **全域管理頁面返回按鈕改造與文案統一**：
+    - `MemberDetailEdit.tsx`（社員詳細編輯）：返回按鈕由固定 `navigate('/admin/members')` 改為 `safeNavigateBack(navigate, '/admin/members')`，文案統一為「返回上一頁」。
+    - `MemberRecords.tsx`（個人歷史紀錄）：返回按鈕由固定 `navigate('/admin/members/' + userId)` 改為 `safeNavigateBack(navigate, '/admin/members/' + userId)`，文案統一為「返回上一頁」。
+    - `AdminEventsHistory.tsx`（歷史活動歸檔）：`NotionFilterBar` 最左側純圖示返回按鈕（以及權限不足時的返回按鈕）改為 `safeNavigateBack(navigate, '/admin/events')`，標題提示與按鈕文案對齊為「返回上一頁」。
+    - `AdminEvents.tsx`（活動管理）：權限不足 fallback 畫面之返回按鈕改為 `safeNavigateBack(navigate, '/dashboard')`，按鈕文案對齊為「返回上一頁」。
+- 單元測試與建置驗證：
+  - 新增 `test/71_smart_back_navigation.test.mjs` 專屬單元測試，模擬驗證有上一頁歷程時 `navigate(-1)` 之正確調用、無歷程時安全回退 fallback、各管理頁面源碼靜態分析確保皆採用 `safeNavigateBack` 且按鈕文案統一。
+  - 全專案 237 項單元測試 100% 通過，TypeScript 與 Vite 打包建置零錯誤。
 
 ### v0.1.162 (2026-09-20)
 - 活動管理與歷史歸檔頁面 5 大介面優化與跳轉修復：

@@ -292,7 +292,7 @@ test('幹部系統模組測試：個人歷史全紀錄新頁面、動態概況�
   // 3. MemberRecords 頁面架構與靠左對齊
   assert.ok(recordsCode.includes("textAlign: 'left'"), 'MemberRecords 必須設定 textAlign: left');
   assert.ok(recordsCode.includes('NotionFilterBar'), 'MemberRecords 必須嵌入 NotionFilterBar');
-  assert.ok(recordsCode.includes('返回社員詳細資料'), 'MemberRecords 必須具備返回社員按鈕');
+  assert.ok(recordsCode.includes('返回上一頁') || recordsCode.includes('返回社員詳細資料'), 'MemberRecords 必須具備返回按鈕');
   assert.ok(recordsCode.includes('toggleExpand'), 'MemberRecords 必須支援展開詳情');
 
   // 4. Supabase RPC 與客戶端函式檢驗

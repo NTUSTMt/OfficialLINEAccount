@@ -30,6 +30,7 @@ import {
   History
 } from 'lucide-react';
 import { isEventArchived } from '../utils/eventArchiveUtils';
+import { safeNavigateBack } from '../utils/navigationUtils';
 
 interface AdminEventsProps {
   userId: string;
@@ -909,11 +910,11 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
         <button
           type="button"
-          onClick={() => navigate('/dashboard')}
+          onClick={() => safeNavigateBack(navigate, '/dashboard')}
           className="btn btn-primary"
           style={{ width: '100%', padding: '12px 24px', borderRadius: '12px', fontWeight: 'bold' }}
         >
-          {t('adminEvents.backHome')}
+          返回上一頁
         </button>
       </div>
     );
