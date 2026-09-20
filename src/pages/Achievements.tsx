@@ -612,7 +612,7 @@ function Achievements({ userId }: { userId: string }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
+          zIndex: 11000,
           padding: '16px'
         }}>
           <div style={{

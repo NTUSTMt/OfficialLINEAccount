@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.171-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.172-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.171)](#7-最新版本異動紀錄-changelog-v01171)
+- [7. 最新版本異動紀錄 (Changelog v0.1.172)](#7-最新版本異動紀錄-changelog-v01172)
 
 ---
 
@@ -373,7 +373,17 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.171)
+## 7. 最新版本異動紀錄 (Changelog v0.1.172)
+
+### v0.1.172 (2026-09-20)
+- 修復心得牆內點擊「編輯/撰寫我的心得」表單層級 (z-index) 遮蔽問題：
+  - **根本原因排查**：全螢幕拍立得心得牆 (`ReflectionWallModal.tsx`) 之全螢幕容器層級為 `zIndex: 9999`（內部 FAB 按鈕為 `10001`、照片燈箱為 `10002`），而心得填寫/編輯表單 Modal (`Achievements.tsx`) 舊有層級僅為 `zIndex: 1000`，導致點擊 FAB 後編輯表單被全螢幕心得牆完全遮蓋在後方，畫面上無法顯示。
+  - **層級提升修復 (`Achievements.tsx`)**：
+    - 將心得填寫/編輯 Modal 之容器層級由 `1000` 提升至 `11000`，確保表單能清晰浮現在全螢幕心得牆的最上方。
+    - 點擊「儲存修改」成功後即時刷新底層心得牆並關閉表單；點擊「取消編輯」或關閉時，表單平滑關閉並完好保留在心得牆畫面。
+  - **防回退單元測試與打包驗證**：
+    - 於 `test/75_event_reflection_wall.test.mjs` 加入斷言，檢驗心得表單 Modal 之 `zIndex: 11000` 嚴格高於 `ReflectionWallModal`。
+    - 全專案 56 個測試套件、261 個單元測試 100% 通過，`pnpm build` 建置零錯誤。
 
 ### v0.1.171 (2026-09-20)
 - 活動出隊足跡卡片極簡化與心得牆 FAB 智慧切換（撰寫/直接編輯）：

@@ -89,6 +89,12 @@ describe('75. 活動出隊足跡「山系拍立得心得牆 (Reflection Wall)」
       achievementsContent.includes('isPublic') && achievementsContent.includes('setWallRefreshKey'),
       'handleSubmit should pass isPublic and trigger setWallRefreshKey'
     );
+
+    // 檢查心得表單 Modal 的層級 (zIndex: 11000) 高於全螢幕心得牆 (zIndex: 9999)，避免被心得牆遮蓋
+    assert.ok(
+      achievementsContent.includes('zIndex: 11000'),
+      'Form modal should have zIndex: 11000 to overlay ReflectionWallModal (zIndex: 9999)'
+    );
   });
 
   it('3. Supabase Client 與 SQL 腳本應支援公開心得聚合 RPC 與 is_public 欄位', () => {
