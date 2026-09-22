@@ -308,8 +308,8 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const maxWidth = 1200;
-        const maxHeight = 1200;
+        const maxWidth = 2048;
+        const maxHeight = 2048;
 
         if (width > height) {
           if (width > maxWidth) {
@@ -329,7 +329,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         if (!ctx) return;
         ctx.drawImage(img, 0, 0, width, height);
 
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.88);
         setSelectedFile({ base64: compressedBase64, name: file.name });
         setPreviewImage(compressedBase64);
       };
@@ -386,7 +386,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       notifyOfficerGroup: false
     });
     setSelectedFile(null);
-    setPreviewImage(evt.imageUrl ? (getDirectImageUrl(evt.imageUrl, 800) || evt.imageUrl) : '');
+    setPreviewImage(evt.imageUrl ? (getDirectImageUrl(evt.imageUrl, 2048) || evt.imageUrl) : '');
     setActiveTab('create');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

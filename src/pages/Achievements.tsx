@@ -242,8 +242,8 @@ function Achievements({ userId }: { userId: string }) {
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          const maxWidth = 1024;
-          const maxHeight = 1024;
+          const maxWidth = 2048;
+          const maxHeight = 2048;
 
           if (width > height) {
             if (width > maxWidth) {
@@ -268,7 +268,7 @@ function Achievements({ userId }: { userId: string }) {
           }
 
           ctx.drawImage(img, 0, 0, width, height);
-          const base64 = canvas.toDataURL('image/jpeg', 0.7);
+          const base64 = canvas.toDataURL('image/jpeg', 0.88);
 
           const nameParts = file.name.split('.');
           nameParts[nameParts.length - 1] = 'jpg';
@@ -317,22 +317,24 @@ function Achievements({ userId }: { userId: string }) {
     try {
       let finalPhotoUrls = [...existingPhotos];
 
-      // 1. 若有新上傳的心得相片，呼叫輕量 Helper 上傳 Drive 取得連結 (純 Drive API，不接觸試算表)
+      // 1. 若有新上傳的心得相片，呼叫輕量 Helper 上傳 Drive 取得連結 (單張發送防範大 Payload 逾時)
       if (photoFiles.length > 0) {
         try {
-          const uploadRes = await fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(withAuthPayload({
-              action: 'upload_drive_file',
-              userId: userId || 'TEST_USER_ID',
-              folderType: 'reflections',
-              files: photoFiles
-            }))
-          });
-          const uploadResult = await uploadRes.json();
-          if (uploadResult.status === 'success' && uploadResult.urls) {
-            finalPhotoUrls = [...finalPhotoUrls, ...uploadResult.urls];
+          for (const photoFile of photoFiles) {
+            const uploadRes = await fetch(GAS_API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify(withAuthPayload({
+                action: 'upload_drive_file',
+                userId: userId || 'TEST_USER_ID',
+                folderType: 'reflections',
+                files: [photoFile]
+              }))
+            });
+            const uploadResult = await uploadRes.json();
+            if (uploadResult.status === 'success' && Array.isArray(uploadResult.urls)) {
+              finalPhotoUrls = [...finalPhotoUrls, ...uploadResult.urls];
+            }
           }
         } catch (uploadErr) {
           console.warn('[Achievements] 上傳心得相片例外，繼續儲存心得:', uploadErr);
@@ -868,7 +870,7 @@ function Achievements({ userId }: { userId: string }) {
                       {imageUrl.split(/[\n,]/).map((url) => url.trim()).filter(Boolean).map((url, idx) => (
                         <div key={idx} style={{ borderRadius: '8px', overflow: 'hidden', height: '220px', border: '1px solid #e2e8f0' }}>
                           <img
-                            src={getDirectImageUrl(url, 1000) || url}
+                            src={getDirectImageUrl(url, 2048) || url}
                             alt={`Reflection photo ${idx + 1}`}
                             loading="lazy"
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}

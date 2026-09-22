@@ -4268,7 +4268,7 @@ function _handleDriveUploadHelper(json) {
         if (fileUrl && !fileUrl.startsWith("上傳失敗")) {
           var driveMatch = fileUrl.match(/(?:file\/d\/|id=)([^/&?]+)/);
           if (driveMatch && driveMatch[1]) {
-            uploadedUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000");
+            uploadedUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=s0");
           } else {
             uploadedUrls.push(fileUrl);
           }
@@ -5419,7 +5419,7 @@ function _handleUpdateEquipmentImages(payload) {
           if (uploadedUrl && !uploadedUrl.startsWith("上傳失敗")) {
             var driveMatch = uploadedUrl.match(/(?:file\/d\/|id=)([^/&?]+)/);
             if (driveMatch && driveMatch[1]) {
-              finalUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000");
+              finalUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=s0");
             } else {
               finalUrls.push(uploadedUrl);
             }
@@ -6261,7 +6261,7 @@ function _handleSaveEvent(json) {
       if (uploadResult && !uploadResult.startsWith("上傳失敗")) {
         var driveMatch = uploadResult.match(/(?:file\/d\/|id=)([^/&?]+)/);
         if (driveMatch && driveMatch[1]) {
-          imageUrl = "https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000";
+          imageUrl = "https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=s0";
         } else {
           imageUrl = uploadResult;
         }

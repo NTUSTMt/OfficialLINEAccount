@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.180-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.181-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.180)](#7-最新版本異動紀錄-changelog-v01180)
+- [7. 最新版本異動紀錄 (Changelog v0.1.181)](#7-最新版本異動紀錄-changelog-v01181)
 
 ---
 
@@ -373,7 +373,26 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.180)
+## 7. 最新版本異動紀錄 (Changelog v0.1.181)
+
+### v0.1.181 (2026-09-22)
+- Google Drive 圖片上傳品質全面升級至 2K 超清標準 (2048px / Q88 / CDN =s0)：
+  - **根本原因排查與實測分析**：
+    - 經獨立基準壓力測試查明：先前圖片模糊並非僅為前端壓縮過度，主因為 Google Drive CDN 網址寫死 `=w1000`，使 Google 圖片伺服器強制縮圖至 1000px 並二次有損壓縮成 66KB。
+    - 另外查明若完全不壓縮，相機原圖動輒 10MB~15MB（Base64 達 20MB），上傳單張耗時逾 35 秒，多張時極易因超出 GAS 50MB 負載上限或連線逾時導致 `Load failed`。
+  - **前端等比壓縮標準全面升級至 2K 超清 (Visual Lossless Sweet Spot)**：
+    - **活動管理宣傳封面 (`AdminEvents.tsx`)**：長寬上限由 1200px 升級至 **2048px**，品質提升至 **0.88**。
+    - **裝備庫存相片 (`AdminInventory.tsx`)**：長邊上限由 1200px 升級至 **2048px**，品質提升至 **0.88**。
+    - **裝備相片詳細維護 (`EquipmentDetailModal.tsx`)**：長邊上限由 1200px 升級至 **2048px**，品質提升至 **0.88**，預覽與 Lightbox 大圖讀取尺寸對齊 2048px。
+    - **活動報名體能證明 (`Register.tsx`)**：長寬上限由 1024px 升級至 **2048px**，品質提升至 **0.88**。
+    - **登頂心得與照片上傳 (`Achievements.tsx`)**：長寬上限由 1024px 升級至 **2048px**，品質提升至 **0.88**，檢視尺寸升級為 2048px。
+  - **多圖上傳單張隔離防護 (Single-Item Upload Protection)**：
+    - 針對體能證明（最多 5 張）與登頂照片，改採單張獨立發送機制，確保每次 POST 請求 Payload 均在 300KB 以內，徹底杜絕多圖合併累積成巨大 Payload 拖垮網路或觸發 GAS 逾時。
+  - **Google Drive CDN 高清直連網址解鎖 (`=s0` / `=w2048`)**：
+    - `src/gas.js` 與 `gas_modules/06_Helper_Services.js` 回傳之 CDN 網址後綴由 `=w1000` 升級為 **`=s0`**（原生尺寸原樣輸出，完整保留 2K 細節）。
+    - `src/utils/image.ts` 的 `getDirectImageUrl` 預設尺寸升級為 2048，並原生支援傳入 `'s0'`。
+  - **單元測試套件驗證 (`test/79_image_2k_high_quality_and_cdn_s0.test.mjs`)**：
+    - 新增專屬測試驗證全系統各模組之 2048px / 0.88 參數、多圖單張發送迴圈、`getDirectImageUrl` 解析規格與 GAS `=s0` 產出。
 
 ### v0.1.180 (2026-09-22)
 - 社員幹部意願管理、卡片標籤、試算表名冊欄位同步與個資編輯整合：

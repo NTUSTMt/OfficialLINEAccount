@@ -4,25 +4,29 @@ import assert from 'node:assert/strict';
 // ----------------------------------------------------
 // 1. 模擬 src/utils/image.ts 中的 getDirectImageUrl 核心邏輯
 // ----------------------------------------------------
-function getDirectImageUrl(url, size = 1000) {
+function getDirectImageUrl(url, size = 2048) {
   if (!url) return undefined;
   const rawUrl = url.split(/[\n,，;\s]+/).map(u => u.trim()).find(u => u.startsWith('http')) || url.trim();
   const cleanUrl = rawUrl.trim();
   if (!cleanUrl || !cleanUrl.startsWith('http')) return undefined;
   
+  const sizeSuffix = typeof size === 'string' && size.startsWith('s')
+    ? `=${size}`
+    : (size === 0 || size === '0' || size === 's0' ? '=s0' : `=w${size}`);
+
   const driveRegex = /(?:https?:\/\/)?(?:drive|docs)\.google\.com\/(?:file\/d\/|(?:open|uc)\?(?:[^&]*&)?id=)([^/&?]+)/;
   const match = cleanUrl.match(driveRegex);
   
   if (match && match[1]) {
     const fileId = match[1];
-    return `https://lh3.googleusercontent.com/d/${fileId}=w${size}`;
+    return `https://lh3.googleusercontent.com/d/${fileId}${sizeSuffix}`;
   }
 
   const lh3Regex = /(?:https?:\/\/)?lh\d?\.googleusercontent\.com\/d\/([^/=?]+)(?:=.*)?/;
   const lh3Match = cleanUrl.match(lh3Regex);
   if (lh3Match && lh3Match[1]) {
     const fileId = lh3Match[1];
-    return `https://lh3.googleusercontent.com/d/${fileId}=w${size}`;
+    return `https://lh3.googleusercontent.com/d/${fileId}${sizeSuffix}`;
   }
   
   return cleanUrl;
@@ -153,7 +157,7 @@ describe('前端工具函式與純邏輯自動化測試 (Frontend Utils Test Sui
     it('能正確解析 docs.google.com/uc?export=view&id=FILE_ID 格式', () => {
       const input = 'https://docs.google.com/uc?export=view&id=1x2y3z4w';
       const output = getDirectImageUrl(input);
-      assert.equal(output, 'https://lh3.googleusercontent.com/d/1x2y3z4w=w1000');
+      assert.equal(output, 'https://lh3.googleusercontent.com/d/1x2y3z4w=w2048');
     });
 
     it('若已是 lh3.googleusercontent.com/d/FILE_ID=w400，動態更新其尺寸參數', () => {
@@ -162,10 +166,16 @@ describe('前端工具函式與純邏輯自動化測試 (Frontend Utils Test Sui
       assert.equal(output, 'https://lh3.googleusercontent.com/d/1SampleFileId=w1200');
     });
 
+    it('支援傳入 s0 輸出原生原尺寸 CDN 格式', () => {
+      const input = 'https://drive.google.com/file/d/sampleFile/view';
+      const output = getDirectImageUrl(input, 's0');
+      assert.equal(output, 'https://lh3.googleusercontent.com/d/sampleFile=s0');
+    });
+
     it('多個 URL 逗號分隔時，取第一個合法網址進行解析', () => {
       const input = 'https://drive.google.com/file/d/firstId/view, https://drive.google.com/file/d/secondId/view';
       const output = getDirectImageUrl(input);
-      assert.equal(output, 'https://lh3.googleusercontent.com/d/firstId=w1000');
+      assert.equal(output, 'https://lh3.googleusercontent.com/d/firstId=w2048');
     });
 
     it('非 Google 外部圖片（如 Imgur, Cloudinary 等）應原樣保留', () => {

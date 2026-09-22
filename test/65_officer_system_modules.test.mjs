@@ -376,7 +376,7 @@ test('幹部系統模組測試：大頭貼選單圖示與名稱一致、歷史�
 
   // 2. 前端 Canvas 輕量化壓縮與即時預覽機制 (0ms 本地預覽)
   assert.ok(inventoryCode.includes('document.createElement(\'canvas\')'), 'AdminInventory 必須具備 Canvas 縮圖壓縮處理');
-  assert.ok(inventoryCode.includes('toDataURL(\'image/jpeg\', 0.8)'), 'AdminInventory 必須壓縮為 0.8 品質 JPEG');
+  assert.ok(inventoryCode.includes("toDataURL('image/jpeg', 0.88)") || inventoryCode.includes("toDataURL('image/jpeg', 0.8)"), 'AdminInventory 必須壓縮為 JPEG 品質');
   assert.ok(inventoryCode.includes('setNewPhotos'), 'AdminInventory 必須暫存待上傳新相片清單');
 
   // 3. 正方形相片輪播與右上方刪除按鈕

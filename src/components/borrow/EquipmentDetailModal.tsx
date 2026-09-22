@@ -175,7 +175,7 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const maxDim = 1200;
+        const maxDim = 2048;
         if (width > height && width > maxDim) {
           height = Math.round((height * maxDim) / width);
           width = maxDim;
@@ -188,7 +188,7 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
         ctx.drawImage(img, 0, 0, width, height);
-        const base64 = canvas.toDataURL('image/jpeg', 0.75);
+        const base64 = canvas.toDataURL('image/jpeg', 0.88);
         setModalPhotos(prev => {
           const next = [...prev, { url: base64, isNew: true, fileObj: { base64, name: file.name } }];
           setActivePhotoIdx(next.length - 1);
@@ -348,7 +348,7 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
                   {modalPhotos.map((photo, idx) => (
                     <div key={idx} className="photo-carousel-slide">
                       <img
-                        src={getDirectImageUrl(photo.url, 1000) || photo.url}
+                        src={getDirectImageUrl(photo.url, 2048) || photo.url}
                         alt={`${equipment.name} ${idx + 1}`}
                         draggable={false}
                         onClick={() => {
@@ -656,7 +656,7 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
           </button>
           <img
             className="photo-lightbox-img"
-            src={getDirectImageUrl(modalPhotos[activePhotoIdx].url, 1600) || modalPhotos[activePhotoIdx].url}
+            src={getDirectImageUrl(modalPhotos[activePhotoIdx].url, 2048) || modalPhotos[activePhotoIdx].url}
             alt={equipment.name}
             draggable={false}
             onClick={(e) => e.stopPropagation()}

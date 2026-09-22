@@ -208,7 +208,7 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const maxDim = 1200;
+        const maxDim = 2048;
         if (width > height && width > maxDim) {
           height = Math.round((height * maxDim) / width);
           width = maxDim;
@@ -221,7 +221,7 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
         ctx.drawImage(img, 0, 0, width, height);
-        const base64 = canvas.toDataURL('image/jpeg', 0.8);
+        const base64 = canvas.toDataURL('image/jpeg', 0.88);
 
         setFormState(prev => {
           const nextImages = [...prev.images, base64];

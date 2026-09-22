@@ -300,8 +300,8 @@ function Register({ userId }: { userId: string }) {
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          const maxWidth = 1024;
-          const maxHeight = 1024;
+          const maxWidth = 2048;
+          const maxHeight = 2048;
 
           if (width > height) {
             if (width > maxWidth) {
@@ -326,8 +326,8 @@ function Register({ userId }: { userId: string }) {
           }
 
           ctx.drawImage(img, 0, 0, width, height);
-          // 壓縮為 0.7 品質的 JPEG
-          const base64 = canvas.toDataURL('image/jpeg', 0.7);
+          // 壓縮為 0.88 高清品質的 JPEG (2K 視覺無損)
+          const base64 = canvas.toDataURL('image/jpeg', 0.88);
 
           // 將原檔名副檔名統一規格化為 .jpg
           const nameParts = file.name.split('.');
@@ -427,22 +427,28 @@ function Register({ userId }: { userId: string }) {
     try {
       let finalFormData = { ...formData };
 
-      // 1. 若有新上傳的體能證明照片，呼叫輕量 Helper 上傳 Drive 取得連結 (純 Drive API，不接觸試算表)
+      // 1. 若有新上傳的體能證明照片，呼叫輕量 Helper 上傳 Drive 取得連結 (採單張發送防範大 Payload 逾時)
       if (strengthProofFiles.length > 0) {
         try {
-          const uploadRes = await fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(withAuthPayload({
-              action: 'upload_drive_file',
-              userId: userId || 'TEST_USER_ID',
-              folderType: 'proofs',
-              files: strengthProofFiles
-            }))
-          });
-          const uploadResult = await uploadRes.json();
-          if (uploadResult.status === 'success' && uploadResult.urls) {
-            const combinedProofs = [finalFormData.strengthProof, ...uploadResult.urls]
+          const uploadedUrls: string[] = [];
+          for (const proofFile of strengthProofFiles) {
+            const uploadRes = await fetch(GAS_API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify(withAuthPayload({
+                action: 'upload_drive_file',
+                userId: userId || 'TEST_USER_ID',
+                folderType: 'proofs',
+                files: [proofFile]
+              }))
+            });
+            const uploadResult = await uploadRes.json();
+            if (uploadResult.status === 'success' && Array.isArray(uploadResult.urls)) {
+              uploadedUrls.push(...uploadResult.urls);
+            }
+          }
+          if (uploadedUrls.length > 0) {
+            const combinedProofs = [finalFormData.strengthProof, ...uploadedUrls]
               .filter(Boolean)
               .join('\n');
             finalFormData.strengthProof = combinedProofs;
