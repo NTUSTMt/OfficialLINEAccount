@@ -104,4 +104,34 @@ describe('77. 活動專屬試算表明冊同步透明度強化、智慧分頁與
       'AdminEvents.tsx handleCreateEventSheet 必須改用 gasGet 發送 GET 請求避開 WebKit 阻斷'
     );
   });
+
+  it('7. 必須使用動態表頭定位 (Dynamic Header Mapping) 回補是否為社員、審核結果、通知狀態、繳費狀態等所有欄位', () => {
+    const gasPath = path.join(rootDir, 'src', 'gas.js');
+    const gasContent = fs.readFileSync(gasPath, 'utf8');
+
+    assert.ok(
+      gasContent.includes('isMember: _findHeaderCol(headers, "is_official_member"') &&
+      gasContent.includes('status: _findHeaderCol(headers, "status"') &&
+      gasContent.includes('notify: _findHeaderCol(headers, "notification_status"') &&
+      gasContent.includes('payment: _findHeaderCol(headers, "payment_status"'),
+      'gas.js _backfillEventSpreadsheetMemberInfo 必須具備狀態欄位動態定位 colMap'
+    );
+
+    assert.ok(
+      gasContent.includes('setCell(colMap.isMember') &&
+      gasContent.includes('setCell(colMap.status') &&
+      gasContent.includes('setCell(colMap.notify') &&
+      gasContent.includes('setCell(colMap.payment'),
+      '追加新列時必須依據 colMap 動態賦值，絕不能使用硬編碼陣列'
+    );
+
+    const adminEventsPath = path.join(rootDir, 'src', 'pages', 'AdminEvents.tsx');
+    const adminEventsContent = fs.readFileSync(adminEventsPath, 'utf8');
+
+    assert.ok(
+      adminEventsContent.includes('isWebKitLoadFailed') &&
+      adminEventsContent.includes('targetUrl'),
+      'AdminEvents.tsx handleCreateEventSheet 必須對 iOS WebKit Load failed 進行智慧容錯與順暢開表'
+    );
+  });
 });

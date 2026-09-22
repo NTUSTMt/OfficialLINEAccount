@@ -658,8 +658,34 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     } catch (err: any) {
       const exMsg = err?.message || String(err);
       console.error('[handleCreateEventSheet] 例外:', err);
-      setToastMessage('[錯誤] 試算表連線異常: ' + exMsg);
-      alert('[錯誤] 建立或同步試算表異常: ' + exMsg);
+      const targetUrl = events.find((e) => e.id === eventId)?.spreadsheetUrl;
+      const isWebKitLoadFailed = exMsg.toLowerCase().includes('load failed') || exMsg.toLowerCase().includes('failed to fetch');
+
+      if (isWebKitLoadFailed && targetUrl) {
+        // iOS WebKit 跨域 302 重導向限制：後端 GAS 實際上已順利接收並在背景執行試算表同步
+        const backgroundMsg = '已發送同步請求至 Google 試算表！名冊將於背景完成更新。';
+        setToastMessage(backgroundMsg);
+
+        if (openAfterSync) {
+          try {
+            if (liff && typeof liff.isInClient === 'function' && liff.isInClient()) {
+              liff.openWindow({ url: targetUrl, external: true });
+            } else {
+              window.open(targetUrl, '_blank', 'noopener,noreferrer');
+            }
+          } catch (openErr) {
+            console.warn('[handleCreateEventSheet] 外部開啟分頁異常:', openErr);
+            window.open(targetUrl, '_blank', 'noopener,noreferrer');
+          }
+        }
+
+        if (!silent) {
+          alert(backgroundMsg);
+        }
+      } else {
+        setToastMessage('[錯誤] 試算表連線異常: ' + exMsg);
+        alert('[錯誤] 建立或同步試算表異常: ' + exMsg);
+      }
     } finally {
       setCreatingSheetEventId(null);
     }

@@ -7037,14 +7037,31 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     }
 
     var headers = sData[0];
-    var uidCol = _findHeaderCol(headers, "line_user_id", ["系統識別碼", "userId"]);
-    var codeCol = _findHeaderCol(headers, "id", ["專屬碼", "報名編號"]);
-    var idCardCol = _findHeaderCol(headers, "id_card", ["證件號碼", "身分證字號", "身分證"]);
-    var emerRelCol = _findHeaderCol(headers, "emergency_contact_rel", ["緊急聯絡人關係", "關係"]);
-    var expCol = _findHeaderCol(headers, "outdoor_experience", ["爬山經驗", "登山經驗"]);
-    var fitCol = _findHeaderCol(headers, "fitness_desc", ["體能測驗", "體能"]);
-    var proofCol = _findHeaderCol(headers, "proof_urls", ["體能證明"]);
-    var wantSayCol = _findHeaderCol(headers, "want_to_say", ["想說的話", "想說的話 I want to say...", "留言"]);
+    var colMap = {
+      uid: _findHeaderCol(headers, "line_user_id", ["系統識別碼", "userId"]),
+      code: _findHeaderCol(headers, "id", ["專屬碼", "報名編號"]),
+      name: _findHeaderCol(headers, "name", ["姓名"]),
+      gender: _findHeaderCol(headers, "gender", ["性別"]),
+      lineId: _findHeaderCol(headers, "line_id", ["LINE ID", "Line ID"]),
+      email: _findHeaderCol(headers, "email", ["聯絡信箱", "Email", "email"]),
+      phone: _findHeaderCol(headers, "phone", ["聯絡電話", "電話"]),
+      address: _findHeaderCol(headers, "address", ["聯絡地址", "地址"]),
+      birthday: _findHeaderCol(headers, "birthday", ["生日"]),
+      idCard: _findHeaderCol(headers, "id_card", ["證件號碼", "身分證字號", "身分證"]),
+      emerName: _findHeaderCol(headers, "emergency_contact_name", ["緊急聯絡人姓名", "緊急聯絡人"]),
+      emerPhone: _findHeaderCol(headers, "emergency_contact_phone", ["緊急聯絡人電話"]),
+      emerAddr: _findHeaderCol(headers, "emergency_contact_address", ["緊急聯絡人聯絡地址", "緊急聯絡人地址"]),
+      emerRel: _findHeaderCol(headers, "emergency_contact_rel", ["緊急聯絡人關係", "關係"]),
+      exp: _findHeaderCol(headers, "outdoor_experience", ["爬山經驗", "登山經驗"]),
+      fit: _findHeaderCol(headers, "fitness_desc", ["體能測驗", "體能"]),
+      proof: _findHeaderCol(headers, "proof_urls", ["體能證明"]),
+      isMember: _findHeaderCol(headers, "is_official_member", ["是否為社員", "社員", "is_member"]),
+      status: _findHeaderCol(headers, "status", ["審核結果", "審核狀態"]),
+      notify: _findHeaderCol(headers, "notification_status", ["通知狀態", "審核通知狀態"]),
+      payment: _findHeaderCol(headers, "payment_status", ["繳費狀態"]),
+      notes: _findHeaderCol(headers, "notes", ["備註"]),
+      wantSay: _findHeaderCol(headers, "want_to_say", ["想說的話", "想說的話 I want to say...", "留言"])
+    };
 
     var signups = _supabaseGet("event_signups", { event_id: "eq." + eventId, select: "*", order: "created_at.asc" });
     if (!Array.isArray(signups)) {
@@ -7065,54 +7082,101 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
       }
     }
 
+    var signupMapByUid = {};
+    var signupMapByCode = {};
+    for (var i = 0; i < signups.length; i++) {
+      var sg = signups[i];
+      if (sg.line_user_id) signupMapByUid[sg.line_user_id] = sg;
+      if (sg.id) signupMapByCode[sg.id] = sg;
+    }
+
     var existingCodes = {};
     var existingUids = {};
     var updatedCount = 0;
     var lastValidRow = 1;
 
     for (var r = 1; r < sData.length; r++) {
-      var rowUid = uidCol > -1 ? String(sData[r][uidCol] || "").trim() : "";
-      var rowCode = codeCol > -1 ? String(sData[r][codeCol] || "").trim() : "";
+      var rowUid = colMap.uid > -1 ? String(sData[r][colMap.uid] || "").trim() : "";
+      var rowCode = colMap.code > -1 ? String(sData[r][colMap.code] || "").trim() : "";
       if (rowUid) existingUids[rowUid] = true;
       if (rowCode) existingCodes[rowCode] = true;
       if (rowUid || rowCode) {
         lastValidRow = r + 1;
       }
 
+      var s = (rowCode && signupMapByCode[rowCode]) || (rowUid && signupMapByUid[rowUid]);
       var m = memberMap[rowUid];
-      if (!m) continue;
-
-      var proofUrlsStr = "";
-      if (Array.isArray(m.proof_urls)) {
-        proofUrlsStr = m.proof_urls.join(", ");
-      } else if (m.proof_urls) {
-        proofUrlsStr = String(m.proof_urls);
-      }
-
       var changed = false;
-      if (idCardCol > -1 && !String(sData[r][idCardCol] || "").trim()) {
-        var cardVal = m.id_card || m.id_number || "";
-        if (cardVal) { sheet.getRange(r + 1, idCardCol + 1).setValue("'" + cardVal); changed = true; }
+
+      // 1. 回補隊員個資 (來自 members)
+      if (m) {
+        var proofUrlsStr = "";
+        if (Array.isArray(m.proof_urls)) {
+          proofUrlsStr = m.proof_urls.join(", ");
+        } else if (m.proof_urls) {
+          proofUrlsStr = String(m.proof_urls);
+        }
+
+        if (colMap.idCard > -1 && !String(sData[r][colMap.idCard] || "").trim()) {
+          var cardVal = m.id_card || m.id_number || "";
+          if (cardVal) { sheet.getRange(r + 1, colMap.idCard + 1).setValue("'" + cardVal); changed = true; }
+        }
+        if (colMap.emerRel > -1 && !String(sData[r][colMap.emerRel] || "").trim()) {
+          var relVal = m.emergency_contact_rel || m.emergency_contact_relationship || "";
+          if (relVal) { sheet.getRange(r + 1, colMap.emerRel + 1).setValue(relVal); changed = true; }
+        }
+        if (colMap.exp > -1 && !String(sData[r][colMap.exp] || "").trim()) {
+          var expVal = m.outdoor_experience || m.hiking_experience || "";
+          if (expVal) { sheet.getRange(r + 1, colMap.exp + 1).setValue(expVal); changed = true; }
+        }
+        if (colMap.fit > -1 && !String(sData[r][colMap.fit] || "").trim()) {
+          var fitVal = m.fitness_desc || m.fitness_test || "";
+          if (fitVal) { sheet.getRange(r + 1, colMap.fit + 1).setValue(fitVal); changed = true; }
+        }
+        if (colMap.proof > -1 && !String(sData[r][colMap.proof] || "").trim()) {
+          var pVal = proofUrlsStr || m.fitness_proof_url || "";
+          if (pVal) { sheet.getRange(r + 1, colMap.proof + 1).setValue(pVal); changed = true; }
+        }
+        if (colMap.wantSay > -1 && !String(sData[r][colMap.wantSay] || "").trim()) {
+          var sayVal = m.want_to_say || "";
+          if (sayVal) { sheet.getRange(r + 1, colMap.wantSay + 1).setValue(sayVal); changed = true; }
+        }
       }
-      if (emerRelCol > -1 && !String(sData[r][emerRelCol] || "").trim()) {
-        var relVal = m.emergency_contact_rel || m.emergency_contact_relationship || "";
-        if (relVal) { sheet.getRange(r + 1, emerRelCol + 1).setValue(relVal); changed = true; }
-      }
-      if (expCol > -1 && !String(sData[r][expCol] || "").trim()) {
-        var expVal = m.outdoor_experience || m.hiking_experience || "";
-        if (expVal) { sheet.getRange(r + 1, expCol + 1).setValue(expVal); changed = true; }
-      }
-      if (fitCol > -1 && !String(sData[r][fitCol] || "").trim()) {
-        var fitVal = m.fitness_desc || m.fitness_test || "";
-        if (fitVal) { sheet.getRange(r + 1, fitCol + 1).setValue(fitVal); changed = true; }
-      }
-      if (proofCol > -1 && !String(sData[r][proofCol] || "").trim()) {
-        var pVal = proofUrlsStr || m.fitness_proof_url || "";
-        if (pVal) { sheet.getRange(r + 1, proofCol + 1).setValue(pVal); changed = true; }
-      }
-      if (wantSayCol > -1 && !String(sData[r][wantSayCol] || "").trim()) {
-        var sayVal = m.want_to_say || "";
-        if (sayVal) { sheet.getRange(r + 1, wantSayCol + 1).setValue(sayVal); changed = true; }
+
+      // 2. 回補與校正報名狀態 (來自 event_signups)
+      if (s) {
+        if (colMap.isMember > -1) {
+          var curIsMem = String(sData[r][colMap.isMember] || "").trim();
+          var correctIsMem = s.is_official_member_snapshot ? "是" : ((m && m.is_official_member) ? "是" : "否");
+          if (!curIsMem || (curIsMem !== "是" && curIsMem !== "否")) {
+            sheet.getRange(r + 1, colMap.isMember + 1).setValue(correctIsMem);
+            changed = true;
+          }
+        }
+        if (colMap.status > -1) {
+          var curStatus = String(sData[r][colMap.status] || "").trim();
+          var correctStatus = s.status || "審核中 Checking";
+          if (!curStatus || curStatus === "是" || curStatus === "否" || curStatus === "未通知" || curStatus === "未繳費" || curStatus === "未繳費 Unpaid") {
+            sheet.getRange(r + 1, colMap.status + 1).setValue(correctStatus);
+            changed = true;
+          }
+        }
+        if (colMap.notify > -1) {
+          var curNotify = String(sData[r][colMap.notify] || "").trim();
+          var correctNotify = s.notification_status || "未通知";
+          if (!curNotify || curNotify.indexOf("Checking") > -1 || curNotify.indexOf("Accepted") > -1) {
+            sheet.getRange(r + 1, colMap.notify + 1).setValue(correctNotify);
+            changed = true;
+          }
+        }
+        if (colMap.payment > -1) {
+          var curPay = String(sData[r][colMap.payment] || "").trim();
+          var correctPay = s.payment_status || "未繳費 Unpaid";
+          if (!curPay || curPay === "未通知" || curPay === "已通知") {
+            sheet.getRange(r + 1, colMap.payment + 1).setValue(correctPay);
+            changed = true;
+          }
+        }
       }
 
       if (changed) updatedCount++;
@@ -7132,32 +7196,38 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
           pUrls = String(mem.proof_urls);
         }
 
-        var newRow = [
-          s.line_user_id || "",
-          s.id || "",
-          mem.name || s.name || "",
-          mem.gender || "",
-          mem.line_id || s.line_id || "",
-          mem.email || "",
-          mem.phone || "",
-          mem.address || "",
-          mem.birthday ? String(mem.birthday).replace(/-/g, "/").slice(0, 10) : "",
-          mem.id_card || mem.id_number || "",
-          mem.emergency_contact_name || "",
-          mem.emergency_contact_phone || "",
-          mem.emergency_contact_address || "",
-          mem.emergency_contact_rel || mem.emergency_contact_relationship || "",
-          mem.outdoor_experience || mem.hiking_experience || "",
-          mem.fitness_desc || mem.fitness_test || "",
-          pUrls || mem.fitness_proof_url || "",
-          mem.want_to_say || "",
-          s.is_official_member_snapshot ? "是" : (mem.is_official_member ? "是" : "否"),
-          s.status || "審核中 Checking",
-          s.notification_status || "未通知",
-          s.payment_status || "未繳費 Unpaid",
-          s.notes || ""
-        ];
-        rowsToAppend.push(newRow);
+        var row = new Array(headers.length).fill("");
+        var setCell = function(idx, val) {
+          if (idx > -1 && idx < headers.length && val !== undefined && val !== null) {
+            row[idx] = val;
+          }
+        };
+
+        setCell(colMap.uid, s.line_user_id || "");
+        setCell(colMap.code, s.id || "");
+        setCell(colMap.name, mem.name || s.name || "");
+        setCell(colMap.gender, mem.gender || "");
+        setCell(colMap.lineId, mem.line_id || s.line_id || "");
+        setCell(colMap.email, mem.email || "");
+        setCell(colMap.phone, mem.phone ? "'" + String(mem.phone) : "");
+        setCell(colMap.address, mem.address || "");
+        setCell(colMap.birthday, mem.birthday ? String(mem.birthday).replace(/-/g, "/").slice(0, 10) : "");
+        setCell(colMap.idCard, mem.id_card ? "'" + String(mem.id_card) : (mem.id_number ? "'" + String(mem.id_number) : ""));
+        setCell(colMap.emerName, mem.emergency_contact_name || "");
+        setCell(colMap.emerPhone, mem.emergency_contact_phone ? "'" + String(mem.emergency_contact_phone) : "");
+        setCell(colMap.emerAddr, mem.emergency_contact_address || "");
+        setCell(colMap.emerRel, mem.emergency_contact_rel || mem.emergency_contact_relationship || "");
+        setCell(colMap.exp, mem.outdoor_experience || mem.hiking_experience || "");
+        setCell(colMap.fit, mem.fitness_desc || mem.fitness_test || "");
+        setCell(colMap.proof, pUrls || mem.fitness_proof_url || "");
+        setCell(colMap.isMember, s.is_official_member_snapshot ? "是" : (mem.is_official_member ? "是" : "否"));
+        setCell(colMap.status, s.status || "審核中 Checking");
+        setCell(colMap.notify, s.notification_status || "未通知");
+        setCell(colMap.payment, s.payment_status || "未繳費 Unpaid");
+        setCell(colMap.notes, s.notes || "");
+        setCell(colMap.wantSay, mem.want_to_say || "");
+
+        rowsToAppend.push(row);
         if (s.id) existingCodes[s.id] = true;
         if (s.line_user_id) existingUids[s.line_user_id] = true;
       }

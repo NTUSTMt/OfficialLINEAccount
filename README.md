@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.178-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.179-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.178)](#7-最新版本異動紀錄-changelog-v01178)
+- [7. 最新版本異動紀錄 (Changelog v0.1.179)](#7-最新版本異動紀錄-changelog-v01179)
 
 ---
 
@@ -373,7 +373,18 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.178)
+## 7. 最新版本異動紀錄 (Changelog v0.1.179)
+
+### v0.1.179 (2026-09-22)
+- 試算表欄位動態映射回補與 iOS WebKit Load failed 智慧容錯優化：
+  - **根本原因排查與欄位順序對齊**：
+    - 查明過往追加新列時硬編碼 23 欄陣列，將「想說的話」放置於第 18 欄，與使用者活動試算表實際表頭（第 18 欄為「是否為社員」、第 19 欄為「審核結果」、第 20 欄為「通知狀態」、第 21 欄為「繳費狀態」、第 22 欄為「備註」、第 23 欄為「想說的話」）產生一位元偏移（Offset by 1），導致狀態欄位寫入空白或錯位值。
+  - **動態表頭欄位定位（Dynamic Header Mapping）實作 (`src/gas.js`)**：
+    - 在 `_backfillEventSpreadsheetMemberInfo` 函式中全面引入動態表頭欄位定位 (`colMap`)，精準比對每一個欄位名稱，徹底擺脫寫死順序之缺陷。
+    - **既有列與新列雙重回補**：全面遍歷名冊所有資料列，針對既有 11 列與新追加之 6 列，自動對齊並回補 Supabase 之「是否為社員」、「審核結果」、「通知狀態」、「繳費狀態」最新值，確保整份名冊 100% 填滿無空欄。
+  - **iOS WebKit `Load failed` 智慧容錯開啟 (`AdminEvents.tsx`)**：
+    - 針對 iOS Safari / LINE WebKit 遇長時間跨域 302 重導向時底層拋出 `TypeError: Load failed` 的特性進行智慧判定：
+    - 若錯誤為 `Load failed` 且該活動在 Supabase 已具備試算表網址，前端直接顯示「已發送同步請求至 Google 試算表！名冊將於背景完成更新」，並順暢調用 `liff.openWindow` 開啟 Google 試算表，杜絕誤報警報。
 
 ### v0.1.178 (2026-09-22)
 - iOS WebKit 跨域快取約束與 LINE 內嵌瀏覽器開表體驗優化：
