@@ -208,8 +208,8 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
 
       setSuccessMessage('社員資料已成功更新儲存');
       setIsDiffModalOpen(false);
-      // 更新原始基準資料
-      setOriginalData(prev => prev ? ({ ...prev, ...changedPayload }) : null);
+      // 重新由 Supabase 載入最新完整紀錄與狀態，確保資料庫與畫面 100% 同步
+      await loadData();
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(msg);

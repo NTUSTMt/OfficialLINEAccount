@@ -23,7 +23,7 @@ interface AdminEventCardProps {
   onEdit: (evt: AdminEvent) => void;
   onOpenSignups: (evt: AdminEvent) => void;
   onQuickStatusChange: (eventId: string, newStatus: string) => void;
-  onCreateSheet?: (eventId: string, silent?: boolean) => void;
+  onCreateSheet?: (eventId: string, silent?: boolean, openAfterSync?: boolean) => void;
   isCreatingSheet?: boolean;
 }
 
@@ -384,12 +384,15 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
             </a>
           )}
           {evt.spreadsheetUrl ? (
-            <a
-              href={evt.spreadsheetUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              disabled={isCreatingSheet}
               onClick={() => {
-                if (onCreateSheet) onCreateSheet(evt.id, true);
+                if (onCreateSheet) {
+                  onCreateSheet(evt.id, true, true);
+                } else {
+                  window.open(evt.spreadsheetUrl, '_blank', 'noopener,noreferrer');
+                }
               }}
               style={{
                 flex: 1,
@@ -401,11 +404,11 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
                 color: '#0369a1',
                 fontSize: '12px',
                 fontWeight: '600',
-                textDecoration: 'none',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '5px'
+                gap: '5px',
+                cursor: isCreatingSheet ? 'not-allowed' : 'pointer'
               }}
             >
               {isCreatingSheet ? (
@@ -413,8 +416,8 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
               ) : (
                 <FileSpreadsheet size={13} />
               )}
-              <span>{isCreatingSheet ? '同步中...' : '報名試算表'}</span>
-            </a>
+              <span>{isCreatingSheet ? '同步名冊中...' : '報名試算表'}</span>
+            </button>
           ) : (
             onCreateSheet && (
               <button

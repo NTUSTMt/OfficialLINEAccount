@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.173-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.175-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.173)](#7-最新版本異動紀錄-changelog-v01173)
+- [7. 最新版本異動紀錄 (Changelog v0.1.175)](#7-最新版本異動紀錄-changelog-v01175)
 
 ---
 
@@ -373,7 +373,29 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.173)
+## 7. 最新版本異動紀錄 (Changelog v0.1.175)
+
+### v0.1.175 (2026-09-22)
+- 幹部後台個人資料「偏好語言」持久化與 RPC 防呆修復：
+  - **根本原因排查**：幹部後台專屬 RPC 函式 `update_admin_member_rpc` 的 SQL UPDATE 語句中，遺漏了 `preferred_language`（偏好語言）欄位，導致編輯時雖然提示成功，但資料庫未更動、重新整理打回原形。
+  - **SQL RPC 更新**：於 `update_admin_member_rpc` 補齊 `preferred_language = COALESCE(p_data->>'preferred_language', preferred_language)`，並增設 `IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'message', '查無此社員或資料庫更新筆數為 0！'); END IF;` 防呆保護，已同步發布至 Supabase 正式環境。
+  - **前端資料校驗與即時重新載入**：
+    - `src/utils/supabaseClient.ts`（`updateMemberFullDetailInSupabase`）：精確攔截 `rpcRes.success === false` 的錯誤訊息，並於直更模式加入 `.select()` 嚴格校驗更新筆數是否大於 0；清理空字串日期防範 PostgreSQL 22007 報錯。
+    - `src/pages/MemberDetailEdit.tsx`：於儲存成功後主動調用 `await loadData()`，重新自 Supabase 取得最新完整紀錄，確保畫面與資料庫 100% 同步一致。
+- 活動專屬獨立試算表人數短少修復與「先同步後開表」體驗升級：
+  - **消滅 Race Condition 開表時差**：
+    - 舊版 `AdminEventCard` 以 `<a target="_blank">` 在點擊瞬間直接打開 Google Sheets，背景 GAS 同步剛發出產生非同步時差，導致開表人看到同步前的舊試算表。
+    - 改版為非同步 `<button>` 觸發流程：點擊「報名試算表」時按鈕轉為「同步名冊中...」旋轉動畫，預先開啟受保護新分頁，等候 GAS 自 Supabase 拉取最新名冊寫入 Google Sheets 後，自動導航至最新試算表，確保開表時人數 100% 準確齊全。
+  - **後端報名自動同步至獨立試算表**：
+    - 在 `src/gas.js` 補齊實作 `_appendToEventSpreadsheet(eventId, signupData, eventTitle)` 函式。
+    - 當隊員在 LINE 報名或取消時，GAS Sync Worker 在消費 `event_signups` 佇列時，不僅寫入主試算表，更自動透過 `events.spreadsheet_id` 同步寫入活動專屬獨立試算表，**開表人完全免除 Google OAuth 授權**即可享有即時名冊。
+- 單元測試與建置驗證：
+  - 新增 `test/76_profile_preferred_language_and_sheet_sync.test.mjs`，全專案 57 個測試套件、268 個單元測試全數通過，`tsc -b && vite build` 零錯誤打包成功。
+
+### v0.1.174 (2026-09-22)
+- 後端腳本快照備份 (GAS Backend Snapshot Backup)：
+  - 依使用者需求，完整複製建立當前 Google Apps Script 主程式快照檔案：`src/gas.backup_20260922.js`。
+  - 保留 2026/09/14 之歷史備份 `src/gas.backup.js`，並具備今日日期時間標記，提供更精準之版本回溯與對照安全防護。
 
 ### v0.1.173 (2026-09-20)
 - 外籍人士（未填個資）語言智慧自動辨識與活動卡片英文/雙語平滑回退：

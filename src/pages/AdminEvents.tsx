@@ -596,12 +596,19 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     // 3. Supabase 已透過 Triggers 自動排入 sync_queue，由背景 Worker 平滑同步至 Google Sheets，無須前端呼叫 GAS 改試算表
   };
 
-  // 幹部專用：一鍵建立活動專屬獨立試算表與雲端資料夾，或於開啟試算表時靜默同步名冊資料
-  const handleCreateEventSheet = async (eventId: string, silent: boolean = false) => {
+  // 幹部專用：一鍵建立活動專屬獨立試算表與雲端資料夾，或於開啟試算表時先同步最新名冊再跳轉開啟
+  const handleCreateEventSheet = async (eventId: string, silent: boolean = false, openAfterSync: boolean = false) => {
     if (!userId || userId === 'TEST_USER_ID') {
       if (!silent) alert(t('adminEvents.errorNoUser', '無法取得使用者身分或權限不足'));
       return;
     }
+
+    // 若需要開啟試算表，先預先建立窗口以防止瀏覽器彈窗阻擋
+    let newTab: Window | null = null;
+    if (openAfterSync) {
+      newTab = window.open('about:blank', '_blank');
+    }
+
     setCreatingSheetEventId(eventId);
     try {
       const payload = {
@@ -619,13 +626,14 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       const result = await res.json();
 
       if (result.status === 'success') {
+        const targetUrl = result.spreadsheetUrl || events.find(e => e.id === eventId)?.spreadsheetUrl;
         setEvents((prev) => {
           const next = prev.map((e) =>
             e.id === eventId
               ? {
                   ...e,
-                  spreadsheetUrl: result.spreadsheetUrl,
-                  spreadsheetId: result.spreadsheetId,
+                  spreadsheetUrl: result.spreadsheetUrl || e.spreadsheetUrl,
+                  spreadsheetId: result.spreadsheetId || e.spreadsheetId,
                   driveFolderUrl: result.driveFolderUrl || e.driveFolderUrl
                 }
               : e
@@ -633,10 +641,22 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           setCache(CACHE_KEY_ADMIN_EVENTS, next, 180);
           return next;
         });
+
+        if (openAfterSync && targetUrl) {
+          if (newTab && !newTab.closed) {
+            newTab.location.href = targetUrl;
+          } else {
+            window.open(targetUrl, '_blank', 'noopener,noreferrer');
+          }
+        } else if (newTab && !newTab.closed) {
+          newTab.close();
+        }
+
         if (!silent) {
           alert(result.message || '獨立試算表建立成功');
         }
       } else {
+        if (newTab && !newTab.closed) newTab.close();
         if (!silent) {
           alert(result.message || '建立獨立試算表失敗');
         } else {
@@ -644,6 +664,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         }
       }
     } catch (err: any) {
+      if (newTab && !newTab.closed) newTab.close();
       console.error('[handleCreateEventSheet] 例外:', err);
       if (!silent) {
         alert('建立試算表異常: ' + (err?.message || String(err)));

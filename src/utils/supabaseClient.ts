@@ -1424,6 +1424,10 @@ export const updateMemberFullDetailInSupabase = async (
       if (!rpcErr && rpcRes && rpcRes.success) {
         return { success: true };
       }
+      if (rpcRes && rpcRes.success === false) {
+        console.warn('[Supabase] update_admin_member_rpc 拒絕更新:', rpcRes.message);
+        return { success: false, error: rpcRes.message || '幹部更新社員資料失敗' };
+      }
       if (rpcErr) {
         console.warn('[Supabase] update_admin_member_rpc 失敗，切換直更模式:', rpcErr.message);
       }
@@ -1439,14 +1443,25 @@ export const updateMemberFullDetailInSupabase = async (
     };
     delete updatePayload.line_user_id;
 
-    const { error } = await supabase
+    // 清理空日期字串，避免 PostgreSQL 22007 invalid input syntax for type date
+    if (updatePayload.membership_expires_at === '') {
+      updatePayload.membership_expires_at = null;
+    }
+
+    const { data, error } = await supabase
       .from('members')
       .update(updatePayload)
-      .eq('line_user_id', userId);
+      .eq('line_user_id', userId)
+      .select('line_user_id');
 
     if (error) {
       console.error('[Supabase] 更新社員資料失敗:', error.message);
       return { success: false, error: `[更新社員資料失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})` };
+    }
+
+    if (!data || data.length === 0) {
+      console.warn('[Supabase] 更新社員資料 0 筆異動:', userId);
+      return { success: false, error: `資料庫中查無 line_user_id 為 ${userId} 的社員，更新筆數為 0` };
     }
 
     return { success: true };

@@ -457,8 +457,13 @@ BEGIN
             ELSE is_officer 
         END,
         officer_role = COALESCE(p_data->>'officer_role', officer_role),
+        preferred_language = COALESCE(p_data->>'preferred_language', preferred_language),
         updated_at = NOW()
     WHERE line_user_id = trim(p_target_user_id);
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'message', '查無此社員或資料庫更新筆數為 0！');
+    END IF;
 
     RETURN jsonb_build_object('success', true);
 END;

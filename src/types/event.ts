@@ -14,6 +14,7 @@ export interface AdminEvent {
   imageUrl: string;
   driveFolderUrl?: string;
   spreadsheetUrl?: string;
+  spreadsheetId?: string;
   lineGroupUrl?: string;
   stats: {
     total: number;
