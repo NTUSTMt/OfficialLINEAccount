@@ -360,8 +360,12 @@ function _getEventName(ss, eventId) {
 // 輕量呼叫 Supabase REST API (GET)
 function _supabaseGet(table, queryParams) {
   var props = PropertiesService.getScriptProperties();
-  var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
-  var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+  var sbUrl = props.getProperty('SUPABASE_URL') || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+  var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') ||
+              props.getProperty('SUPABASE_KEY') ||
+              props.getProperty('SUPABASE_ANON_KEY') ||
+              (typeof SUPABASE_SERVICE_ROLE_KEY !== 'undefined' ? SUPABASE_SERVICE_ROLE_KEY : '') ||
+              (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '');
 
   if (!sbUrl || !sbKey) {
     console.warn("⚠️ [Supabase] 缺少 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY");
@@ -6846,15 +6850,35 @@ function _handleCreateEventSheet(json) {
     }
     var evt = events[0];
 
-    // 若已經有試算表，自動巡檢並回補缺漏之個資（如證件號碼、爬山經驗、體能等）
+    // 若已經有試算表，自動巡檢並回補缺漏之個資（如證件號碼、爬山經驗、體能等），並追加新報名者
     if (evt.spreadsheet_id && evt.spreadsheet_url) {
       var ssId = evt.spreadsheet_id;
-      var updatedCount = _backfillEventSpreadsheetMemberInfo(ssId, eventId);
+      var backfillResult = _backfillEventSpreadsheetMemberInfo(ssId, eventId);
+      if (!backfillResult || backfillResult.success === false) {
+        var errDetail = (backfillResult && backfillResult.error) ? backfillResult.error : "未知同步錯誤";
+        return _errorResponse("同步 Google 試算表失敗: " + errDetail, {
+          spreadsheetUrl: evt.spreadsheet_url,
+          spreadsheetId: evt.spreadsheet_id,
+          driveFolderUrl: evt.drive_folder_url || ""
+        });
+      }
+
+      var syncMsg = "";
+      if (backfillResult.appendedCount > 0) {
+        syncMsg = "✅ 試算表同步成功！已為您追加 " + backfillResult.appendedCount + " 筆新報名者，名冊目前共 " + backfillResult.sheetTotal + " 人。";
+      } else if (backfillResult.backfilledCount > 0) {
+        syncMsg = "✅ 試算表同步成功！已補齊 " + backfillResult.backfilledCount + " 筆隊員缺漏個資，名冊目前共 " + backfillResult.sheetTotal + " 人。";
+      } else {
+        syncMsg = "ℹ️ 試算表名冊已是最新狀態，目前共有 " + backfillResult.totalSignups + " 筆報名。";
+      }
+
       return _jsonResponse({
         status: "success",
-        message: updatedCount > 0
-          ? "已成功補齊試算表中 " + updatedCount + " 筆隊員個資！"
-          : "獨立試算表已是最新狀態，名冊資料完整無缺漏",
+        message: syncMsg,
+        appendedCount: backfillResult.appendedCount,
+        backfilledCount: backfillResult.backfilledCount,
+        totalSignups: backfillResult.totalSignups,
+        sheetTotal: backfillResult.sheetTotal,
         spreadsheetUrl: evt.spreadsheet_url,
         spreadsheetId: evt.spreadsheet_id,
         driveFolderUrl: evt.drive_folder_url || ""
@@ -6962,18 +6986,49 @@ function _handleCreateEventSheet(json) {
 }
 
 /**
+ * ⚡ 智慧定位活動專屬試算表中的報名名冊工作表 (排除 _CONFIG，相容多種常見命名別名)
+ */
+function _findEventSignupSheet(eventSS) {
+  if (!eventSS) return null;
+  var candidateNames = ["報名名冊", "名冊", "Signups", "活動名冊", "報名名單", "名單", "報名表", "活動報名名冊"];
+  for (var i = 0; i < candidateNames.length; i++) {
+    var s = eventSS.getSheetByName(candidateNames[i]);
+    if (s) return s;
+  }
+  var allSheets = eventSS.getSheets();
+  for (var j = 0; j < allSheets.length; j++) {
+    var name = allSheets[j].getName();
+    if (name !== "_CONFIG" && !name.startsWith("_")) {
+      return allSheets[j];
+    }
+  }
+  return allSheets.length > 0 ? allSheets[0] : null;
+}
+
+/**
  * ⚡ 巡檢並補齊活動獨立試算表中缺漏的名冊個資 (如證件號碼、緊急聯絡人關係、爬山經驗、體能測驗、體能證明等)
  * 同時自動追加尚未寫入試算表的新報名者，達成每次點擊皆 100% 完整雙向對齊
+ * 回傳結構化同步狀態物件 { success, appendedCount, backfilledCount, totalSignups, sheetTotal, error }
  */
 function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
-  if (!ssId || !eventId) return 0;
+  if (!ssId || !eventId) {
+    return { success: false, appendedCount: 0, backfilledCount: 0, totalSignups: 0, sheetTotal: 0, error: "缺少 ssId 或 eventId" };
+  }
   try {
     var eventSS = SpreadsheetApp.openById(ssId);
-    var sheet = eventSS.getSheetByName("報名名冊") || eventSS.getSheets()[0];
-    if (!sheet) return 0;
+    if (!eventSS) {
+      return { success: false, appendedCount: 0, backfilledCount: 0, totalSignups: 0, sheetTotal: 0, error: "無法透過 ID 開啟 Google 試算表: " + ssId };
+    }
+
+    var sheet = _findEventSignupSheet(eventSS);
+    if (!sheet) {
+      return { success: false, appendedCount: 0, backfilledCount: 0, totalSignups: 0, sheetTotal: 0, error: "無法於試算表中找到報名名冊工作表" };
+    }
 
     var sData = sheet.getDataRange().getValues();
-    if (sData.length === 0) return 0;
+    if (sData.length === 0) {
+      return { success: false, appendedCount: 0, backfilledCount: 0, totalSignups: 0, sheetTotal: 0, error: "試算表名冊內容為空白，無表頭資訊" };
+    }
 
     var headers = sData[0];
     var uidCol = _findHeaderCol(headers, "line_user_id", ["系統識別碼", "userId"]);
@@ -6986,7 +7041,9 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     var wantSayCol = _findHeaderCol(headers, "want_to_say", ["想說的話", "想說的話 I want to say...", "留言"]);
 
     var signups = _supabaseGet("event_signups", { event_id: "eq." + eventId, select: "*", order: "created_at.asc" });
-    if (!Array.isArray(signups) || signups.length === 0) return 0;
+    if (!Array.isArray(signups)) {
+      return { success: false, appendedCount: 0, backfilledCount: 0, totalSignups: 0, sheetTotal: 0, error: "從 Supabase 讀取報名紀錄失敗 (請確認 SUPABASE_URL 與 Service Role Key 配置)" };
+    }
 
     var userIds = signups.map(function(s) { return s.line_user_id; }).filter(Boolean);
     var memberMap = {};
@@ -7005,12 +7062,16 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     var existingCodes = {};
     var existingUids = {};
     var updatedCount = 0;
+    var lastValidRow = 1;
 
     for (var r = 1; r < sData.length; r++) {
       var rowUid = uidCol > -1 ? String(sData[r][uidCol] || "").trim() : "";
       var rowCode = codeCol > -1 ? String(sData[r][codeCol] || "").trim() : "";
       if (rowUid) existingUids[rowUid] = true;
       if (rowCode) existingCodes[rowCode] = true;
+      if (rowUid || rowCode) {
+        lastValidRow = r + 1;
+      }
 
       var m = memberMap[rowUid];
       if (!m) continue;
@@ -7096,19 +7157,47 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
       }
     }
 
+    var appendedCount = 0;
     if (rowsToAppend.length > 0) {
-      var startRow = sheet.getLastRow() + 1;
-      sheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
-      updatedCount += rowsToAppend.length;
-      console.log("[backfillEventSpreadsheetMemberInfo] 成功追加 " + rowsToAppend.length + " 筆新隊員至試算表: " + ssId);
+      var reqCols = rowsToAppend[0].length;
+      var curCols = sheet.getMaxColumns();
+      if (curCols < reqCols) {
+        sheet.insertColumnsAfter(curCols, reqCols - curCols);
+      }
+
+      var startRow = lastValidRow + 1;
+      var totalNeededRows = startRow + rowsToAppend.length - 1;
+      if (totalNeededRows > sheet.getMaxRows()) {
+        sheet.insertRowsAfter(sheet.getMaxRows(), totalNeededRows - sheet.getMaxRows());
+      }
+
+      sheet.getRange(startRow, 1, rowsToAppend.length, reqCols).setValues(rowsToAppend);
+      appendedCount = rowsToAppend.length;
+      lastValidRow += appendedCount;
+      console.log("[backfillEventSpreadsheetMemberInfo] 成功追加 " + appendedCount + " 筆新隊員至試算表: " + ssId);
     }
 
-    return updatedCount;
+    return {
+      success: true,
+      appendedCount: appendedCount,
+      backfilledCount: updatedCount,
+      totalSignups: signups.length,
+      sheetTotal: Math.max(0, lastValidRow - 1),
+      error: null
+    };
   } catch (err) {
     console.error("[backfillEventSpreadsheetMemberInfo] 異常:", err);
-    return 0;
+    return {
+      success: false,
+      appendedCount: 0,
+      backfilledCount: 0,
+      totalSignups: 0,
+      sheetTotal: 0,
+      error: (err && (err.message || err.toString())) || "執行回補發生未知例外"
+    };
   }
 }
+
 
 
 

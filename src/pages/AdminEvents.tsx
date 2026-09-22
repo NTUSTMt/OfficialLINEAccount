@@ -642,6 +642,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           return next;
         });
 
+        const syncMsg = result.message || '試算表同步成功！';
+        setToastMessage(syncMsg);
+
         if (openAfterSync && targetUrl) {
           if (newTab && !newTab.closed) {
             newTab.location.href = targetUrl;
@@ -653,22 +656,20 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         }
 
         if (!silent) {
-          alert(result.message || '獨立試算表建立成功');
+          alert(syncMsg);
         }
       } else {
         if (newTab && !newTab.closed) newTab.close();
-        if (!silent) {
-          alert(result.message || '建立獨立試算表失敗');
-        } else {
-          console.warn('[handleCreateEventSheet] 靜默同步失敗:', result.message);
-        }
+        const errMsg = result.message || '建立或同步活動試算表失敗';
+        setToastMessage('[錯誤] ' + errMsg);
+        alert('[錯誤] 同步試算表失敗: ' + errMsg);
       }
     } catch (err: any) {
       if (newTab && !newTab.closed) newTab.close();
+      const exMsg = err?.message || String(err);
       console.error('[handleCreateEventSheet] 例外:', err);
-      if (!silent) {
-        alert('建立試算表異常: ' + (err?.message || String(err)));
-      }
+      setToastMessage('[錯誤] 試算表連線異常: ' + exMsg);
+      alert('[錯誤] 建立或同步試算表異常: ' + exMsg);
     } finally {
       setCreatingSheetEventId(null);
     }

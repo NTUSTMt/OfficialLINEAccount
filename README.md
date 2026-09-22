@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.175-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.176-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.175)](#7-最新版本異動紀錄-changelog-v01175)
+- [7. 最新版本異動紀錄 (Changelog v0.1.176)](#7-最新版本異動紀錄-changelog-v01176)
 
 ---
 
@@ -373,7 +373,24 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.175)
+## 7. 最新版本異動紀錄 (Changelog v0.1.176)
+
+### v0.1.176 (2026-09-22)
+- 活動專屬 Google 試算表明冊同步透明度強化與防呆修復：
+  - **根本原因排查與錯誤解除吞噬**：
+    - 排查確認 `_backfillEventSpreadsheetMemberInfo` 過往在發生工作表定位錯誤或試算表欄數不足 23 欄時，於 `catch (err) { return 0; }` 直接吞噬錯誤，導致外層 `_handleCreateEventSheet` 誤以為成功並回傳虛假的 success，掩蔽真實錯誤。
+    - 改寫為結構化回傳物件 `{ success, appendedCount, backfilledCount, totalSignups, sheetTotal, error }`；若發生例外直接透過 `_errorResponse` 印出完整錯誤細節，遵循規範第一條「錯誤訊息一律直接印出」。
+  - **智慧工作表分頁定位 (`_findEventSignupSheet`)**：
+    - 依序搜尋常規名冊名稱（「報名名冊」、「名冊」、「Signups」、「活動名冊」等），並嚴格排除 `_CONFIG` 等隱藏工作表，杜絕資料錯寫入設定分頁。
+  - **邊界自動擴展與真實資料列定位**：
+    - 寫入前檢查試算表總欄數，若小於名冊所需欄數（23 欄）則自動呼叫 `insertColumnsAfter` 補齊，防止 `Range coordinates are out of bounds`。
+    - 精確計算最後有效資料列，避免範本預留格式空行造成新隊員被追加至底部遠處。
+  - **前端同步狀態 Toast 通知與順暢導航**：
+    - 在 `AdminEvents.tsx` 中整合 `setToastMessage`：同步完成時立即回報具體統計數據（如「已為您追加 6 筆新報名者，名冊目前共 17 人」或「試算表名冊已是最新狀態」）。
+    - 若發生錯誤則透過 Toast 與 Alert 直接呈現真實錯誤原因，絕不掩蔽。
+    - 嚴格維持零表情符號規範，全數測試通過。
+  - **單元測試與建置驗證**：
+    - 新增 `test/77_event_sheet_sync_transparency.test.mjs`，全專案 58 個測試套件、273 個單元測試 100% 通過，`tsc -b && vite build` 打包零錯誤。
 
 ### v0.1.175 (2026-09-22)
 - 幹部後台個人資料「偏好語言」持久化與 RPC 防呆修復：
