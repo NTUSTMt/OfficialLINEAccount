@@ -12,6 +12,7 @@ export interface AdminMemberListItem {
   created_at?: string | null;
   phone?: string | null;
   email?: string | null;
+  officer_intent?: string | null;
 }
 
 export interface MemberFullRecord {

@@ -817,6 +817,20 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                   />
                 </div>
 
+                {/* 擔任幹部意願 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #f1f5f9' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>擔任幹部意願</div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>有意願協助社團營運、出隊嚮導或幹部實習</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.officer_intent && (formData.officer_intent.includes('意願') || formData.officer_intent === '我有意願成為社團幹部'))}
+                    onChange={e => handleFieldChange('officer_intent', e.target.checked ? '我有意願成為社團幹部' : '')}
+                    style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#2563eb' }}
+                  />
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>社籍到期日</label>

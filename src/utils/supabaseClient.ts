@@ -1178,7 +1178,7 @@ export const fetchAdminMembersFromSupabase = async (officerUserId?: string): Pro
   try {
     const { data, error } = await supabase
       .from('members')
-      .select('line_user_id, name, identity_status, department, student_id, line_id, is_official_member, is_officer, officer_role, payment_status, created_at, phone, email')
+      .select('line_user_id, name, identity_status, department, student_id, line_id, is_official_member, is_officer, officer_role, payment_status, created_at, phone, email, officer_intent')
       .order('created_at', { ascending: false });
 
     if (error) {

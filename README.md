@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.179-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.180-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.179)](#7-最新版本異動紀錄-changelog-v01179)
+- [7. 最新版本異動紀錄 (Changelog v0.1.180)](#7-最新版本異動紀錄-changelog-v01180)
 
 ---
 
@@ -373,7 +373,26 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.179)
+## 7. 最新版本異動紀錄 (Changelog v0.1.180)
+
+### v0.1.180 (2026-09-22)
+- 社員幹部意願管理、卡片標籤、試算表名冊欄位同步與個資編輯整合：
+  - **社員名冊「幹部意願」篩選器與卡片標籤 (`AdminMembers.tsx`)**：
+    - 於社員管理頁面 Notion 風格篩選抽屜新增「幹部意願」群組（全部 / 有意願 / 無意願），支援快速檢視與招募潛在幹部成員。
+    - 社員卡片第一行（身分狀態旁）新增「幹部意願」專屬標籤，樣式嚴格對齊校外人士灰階風格（背景 `#f1f5f9`、文字 `#475569`、字重 `500`），直觀辨識。
+  - **編輯個人資料「擔任幹部意願」維護 (`MemberDetailEdit.tsx`)**：
+    - 於「正式社員身分」勾選框正下方配置「擔任幹部意願」勾選核取方塊，可一鍵切換「我有意願成為社團幹部」與空值。
+    - 支援確認防呆 Diff Modal 預覽異動，並直連寫入 Supabase `members.officer_intent` 欄位。
+  - **個人檔案彈窗幹部意願呈現 (`MemberProfileModal.tsx`)**：
+    - 於共用之個人檔案預覽彈窗中解析並展示「意願：擔任幹部」徽章，點擊底部綠色按鈕即可平滑導航至詳細編輯頁。
+  - **活動獨立試算表自動擴充「擔任幹部意願」同步 (`src/gas.js`)**：
+    - 新增活動試算表 (`_handleCreateEventSheet`) 之表頭陣列末端納入「擔任幹部意願」。
+    - 名冊動態回補 (`_backfillEventSpreadsheetMemberInfo`) 具備動態欄位擴充能力：若現有試算表缺少「擔任幹部意願」表頭，將自動於右側追加該欄，並為所有既有與新追加列回補填入社員最新之幹部意願資料。
+  - **Supabase 安全 RPC 與查詢層更新 (`get_admin_members_rpc`, `supabaseClient.ts`)**：
+    - 更新 `get_admin_members_rpc` 函式定義，在 `SELECT` 欄位加入 `m.officer_intent`。
+    - `fetchAdminMembersFromSupabase` 直讀備援查詢同步納入 `officer_intent`，確保前後台型別與資料對齊。
+  - **單元測試套件驗證 (`test/78_member_officer_intent_filter_and_sheet_sync.test.mjs`)**：
+    - 新增專屬測試檔案驗證型別定義、備援欄位、過濾邏輯、卡片標籤、編輯頁面位置、Modal 標籤與 GAS 試算表欄位擴充與填值邏輯，測試 100% 通過。
 
 ### v0.1.179 (2026-09-22)
 - 試算表欄位動態映射回補與 iOS WebKit Load failed 智慧容錯優化：

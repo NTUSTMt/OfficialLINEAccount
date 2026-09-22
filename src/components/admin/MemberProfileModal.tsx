@@ -132,6 +132,8 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
   const fitnessTest = merged.fitness_desc || merged.fitnessTest || merged.strength || '';
   const medicalHistory = merged.medical_history || merged.medicalHistory || '';
   const wantToSay = merged.want_to_say || merged.wantToSay || '';
+  const officerIntent = merged.officer_intent || merged.officerIntent || '';
+  const hasOfficerIntent = Boolean(officerIntent && (officerIntent.includes('意願') || officerIntent === '我有意願成為社團幹部'));
 
   // 體能照片清單
   const rawProof = merged.proof_urls || merged.strengthProof;
@@ -252,6 +254,18 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
                     color: '#64748b'
                   }}>
                     非社員
+                  </span>
+                )}
+                {hasOfficerIntent && (
+                  <span style={{
+                    fontSize: '11px',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    backgroundColor: '#eff6ff',
+                    color: '#1d4ed8',
+                    fontWeight: 'bold'
+                  }}>
+                    幹部意願
                   </span>
                 )}
               </div>

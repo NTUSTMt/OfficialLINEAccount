@@ -5691,7 +5691,7 @@ function _createEventDriveFolderAndSheet(payload, eventId) {
       var headers = [
         "系統識別碼", "專屬碼", "姓名", "性別", "LINE ID", "聯絡信箱", "聯絡電話", "聯絡地址",
         "生日", "證件號碼", "緊急聯絡人姓名", "緊急聯絡人電話", "緊急聯絡人聯絡地址", "緊急聯絡人關係",
-        "爬山經驗", "體能測驗", "體能證明", "想說的話", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註"
+        "爬山經驗", "體能測驗", "體能證明", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註", "想說的話", "擔任幹部意願"
       ];
       signupSheet.appendRow(headers);
 
@@ -7037,6 +7037,17 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     }
 
     var headers = sData[0];
+    var officerIntentCol = _findHeaderCol(headers, "officer_intent", ["幹部意願", "擔任幹部意願", "有意願擔任幹部"]);
+    if (officerIntentCol === -1) {
+      var maxC = sheet.getMaxColumns();
+      if (headers.length >= maxC) {
+        sheet.insertColumnsAfter(maxC, 1);
+      }
+      sheet.getRange(1, headers.length + 1).setValue("擔任幹部意願");
+      headers.push("擔任幹部意願");
+      officerIntentCol = headers.length - 1;
+    }
+
     var colMap = {
       uid: _findHeaderCol(headers, "line_user_id", ["系統識別碼", "userId"]),
       code: _findHeaderCol(headers, "id", ["專屬碼", "報名編號"]),
@@ -7060,7 +7071,8 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
       notify: _findHeaderCol(headers, "notification_status", ["通知狀態", "審核通知狀態"]),
       payment: _findHeaderCol(headers, "payment_status", ["繳費狀態"]),
       notes: _findHeaderCol(headers, "notes", ["備註"]),
-      wantSay: _findHeaderCol(headers, "want_to_say", ["想說的話", "想說的話 I want to say...", "留言"])
+      wantSay: _findHeaderCol(headers, "want_to_say", ["想說的話", "想說的話 I want to say...", "留言"]),
+      officerIntent: officerIntentCol
     };
 
     var signups = _supabaseGet("event_signups", { event_id: "eq." + eventId, select: "*", order: "created_at.asc" });
@@ -7140,6 +7152,15 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
         if (colMap.wantSay > -1 && !String(sData[r][colMap.wantSay] || "").trim()) {
           var sayVal = m.want_to_say || "";
           if (sayVal) { sheet.getRange(r + 1, colMap.wantSay + 1).setValue(sayVal); changed = true; }
+        }
+        if (colMap.officerIntent > -1) {
+          var curIntent = String(sData[r][colMap.officerIntent] || "").trim();
+          var mIntent = (m.officer_intent || "").trim();
+          var intentVal = mIntent ? (mIntent.indexOf("意願") > -1 || mIntent === "我有意願成為社團幹部" ? "我有意願成為社團幹部" : mIntent) : "無";
+          if (!curIntent) {
+            sheet.getRange(r + 1, colMap.officerIntent + 1).setValue(intentVal);
+            changed = true;
+          }
         }
       }
 
@@ -7226,6 +7247,9 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
         setCell(colMap.payment, s.payment_status || "未繳費 Unpaid");
         setCell(colMap.notes, s.notes || "");
         setCell(colMap.wantSay, mem.want_to_say || "");
+        var memIntent = (mem.officer_intent || "").trim();
+        var newIntentVal = memIntent ? (memIntent.indexOf("意願") > -1 || memIntent === "我有意願成為社團幹部" ? "我有意願成為社團幹部" : memIntent) : "無";
+        setCell(colMap.officerIntent, newIntentVal);
 
         rowsToAppend.push(row);
         if (s.id) existingCodes[s.id] = true;

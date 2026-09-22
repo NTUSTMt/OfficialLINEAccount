@@ -24,6 +24,7 @@ export default function AdminMembers({ userId }: { userId?: string }) {
   const [identityFilter, setIdentityFilter] = useState('all');
   const [payFilter, setPayFilter] = useState('all');
   const [officialFilter, setOfficialFilter] = useState('all');
+  const [officerIntentFilter, setOfficerIntentFilter] = useState('all');
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -90,8 +91,19 @@ export default function AdminMembers({ userId }: { userId?: string }) {
         { value: 'true', label: '正式社員' },
         { value: 'false', label: '非正式社員' }
       ]
+    },
+    {
+      key: 'officerIntent',
+      label: '幹部意願',
+      selected: officerIntentFilter,
+      onChange: setOfficerIntentFilter,
+      options: [
+        { value: 'all', label: '全部意願' },
+        { value: 'yes', label: '有意願' },
+        { value: 'no', label: '無意願' }
+      ]
     }
-  ], [identityFilter, payFilter, officialFilter]);
+  ], [identityFilter, payFilter, officialFilter, officerIntentFilter]);
 
   // 過濾與排序
   const filteredMembers = useMemo(() => {
@@ -136,6 +148,16 @@ export default function AdminMembers({ userId }: { userId?: string }) {
     if (officialFilter !== 'all') {
       const isOfficial = officialFilter === 'true';
       list = list.filter(m => Boolean(m.is_official_member) === isOfficial);
+    }
+
+    // 幹部意願篩選
+    if (officerIntentFilter !== 'all') {
+      const wantYes = officerIntentFilter === 'yes';
+      list = list.filter(m => {
+        const intent = (m.officer_intent || '').trim();
+        const hasIntent = Boolean(intent && (intent.includes('意願') || intent === '我有意願成為社團幹部'));
+        return hasIntent === wantYes;
+      });
     }
 
     // 排序
@@ -322,6 +344,18 @@ export default function AdminMembers({ userId }: { userId?: string }) {
                           fontWeight: 600
                         }}>
                           {m.officer_role || '幹部'}
+                        </span>
+                      )}
+                      {Boolean(m.officer_intent && (m.officer_intent.includes('意願') || m.officer_intent === '我有意願成為社團幹部')) && (
+                        <span style={{
+                          fontSize: '11px',
+                          padding: '2px 7px',
+                          borderRadius: '6px',
+                          backgroundColor: '#f1f5f9',
+                          color: '#475569',
+                          fontWeight: 500
+                        }}>
+                          幹部意願
                         </span>
                       )}
                     </div>
