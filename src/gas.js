@@ -6871,11 +6871,11 @@ function _handleCreateEventSheet(json) {
 
       var syncMsg = "";
       if (backfillResult.appendedCount > 0) {
-        syncMsg = "✅ 試算表同步成功！已為您追加 " + backfillResult.appendedCount + " 筆新報名者，名冊目前共 " + backfillResult.sheetTotal + " 人。";
+        syncMsg = "試算表同步成功！已為您追加 " + backfillResult.appendedCount + " 筆新報名者，名冊目前共 " + backfillResult.sheetTotal + " 人。";
       } else if (backfillResult.backfilledCount > 0) {
-        syncMsg = "✅ 試算表同步成功！已補齊 " + backfillResult.backfilledCount + " 筆隊員缺漏個資，名冊目前共 " + backfillResult.sheetTotal + " 人。";
+        syncMsg = "試算表同步成功！已補齊 " + backfillResult.backfilledCount + " 筆隊員缺漏個資，名冊目前共 " + backfillResult.sheetTotal + " 人。";
       } else {
-        syncMsg = "ℹ️ 試算表名冊已是最新狀態，目前共有 " + backfillResult.totalSignups + " 筆報名。";
+        syncMsg = "試算表名冊已是最新狀態，目前共有 " + backfillResult.totalSignups + " 筆報名。";
       }
 
       return _jsonResponse({

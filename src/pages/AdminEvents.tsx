@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import liff from '@line/liff';
 import { appendAuthToken, withAuthPayload, gasGet } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
@@ -603,16 +604,6 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       return;
     }
 
-    // 若需要開啟試算表，先預先建立窗口以防止瀏覽器彈窗阻擋
-    let newTab: Window | null = null;
-    if (openAfterSync) {
-      try {
-        newTab = window.open('about:blank', '_blank');
-      } catch (e) {
-        console.warn('[handleCreateEventSheet] 無法預先開啟分頁:', e);
-      }
-    }
-
     setCreatingSheetEventId(eventId);
     try {
       const query = new URLSearchParams({
@@ -644,26 +635,27 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         setToastMessage(syncMsg);
 
         if (openAfterSync && targetUrl) {
-          if (newTab && !newTab.closed) {
-            newTab.location.href = targetUrl;
-          } else {
+          try {
+            if (liff && typeof liff.isInClient === 'function' && liff.isInClient()) {
+              liff.openWindow({ url: targetUrl, external: true });
+            } else {
+              window.open(targetUrl, '_blank', 'noopener,noreferrer');
+            }
+          } catch (openErr) {
+            console.warn('[handleCreateEventSheet] 開啟試算表異常:', openErr);
             window.open(targetUrl, '_blank', 'noopener,noreferrer');
           }
-        } else if (newTab && !newTab.closed) {
-          newTab.close();
         }
 
         if (!silent) {
           alert(syncMsg);
         }
       } else {
-        if (newTab && !newTab.closed) newTab.close();
         const errMsg = result.message || '建立或同步活動試算表失敗';
         setToastMessage('[錯誤] ' + errMsg);
         alert('[錯誤] 同步試算表失敗: ' + errMsg);
       }
     } catch (err: any) {
-      if (newTab && !newTab.closed) newTab.close();
       const exMsg = err?.message || String(err);
       console.error('[handleCreateEventSheet] 例外:', err);
       setToastMessage('[錯誤] 試算表連線異常: ' + exMsg);

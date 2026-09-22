@@ -57,7 +57,7 @@ export interface GasApiResponse<T = unknown> {
  */
 export const gasGet = async <T = GasApiResponse>(url: string): Promise<T> => {
   try {
-    const res = await fetch(url, { cache: 'no-store' });
+    const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`伺服器回應異常 (HTTP ${res.status})`);
     }

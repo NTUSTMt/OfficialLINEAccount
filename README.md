@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.177-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.178-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.177)](#7-最新版本異動紀錄-changelog-v01177)
+- [7. 最新版本異動紀錄 (Changelog v0.1.178)](#7-最新版本異動紀錄-changelog-v01178)
 
 ---
 
@@ -373,7 +373,18 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.177)
+## 7. 最新版本異動紀錄 (Changelog v0.1.178)
+
+### v0.1.178 (2026-09-22)
+- iOS WebKit 跨域快取約束與 LINE 內嵌瀏覽器開表體驗優化：
+  - **移除 `cache: 'no-store'` 徹底消除 iOS WebKit 302 跨域異常**：
+    - 在 `src/utils/api.ts` 的 `gasGet` 函式中移除 `{ cache: 'no-store' }` 設定。
+    - 由於 URL 已經附帶防快取時間戳記 (`_t=${Date.now()}`)，移除 `no-store` 可杜絕 iOS Safari / WebKit 在處理 Cross-Origin 302 跳轉時觸發的 `TypeError: Load failed`。
+  - **LINE 內嵌環境開表優化 (`AdminEvents.tsx`)**：
+    - 移除不相容於行動端之 `window.open('about:blank', '_blank')` 預先開窗機制，避免在 iOS LINE App 中干擾當前網路請求。
+    - 試算表同步完成後，透過 `liff.isInClient()` 判斷：若在 LINE 客戶端內則優先呼叫 `liff.openWindow({ url: targetUrl, external: true })` 透過外部原生 Safari 開啟，若在一般瀏覽器則調用 `window.open`。
+  - **全面遵循 Zero Emoji 規範 (`src/gas.js`)**：
+    - 清理 `_handleCreateEventSheet` 後端同步提示訊息中之表情符號，嚴格保持純文字與數據反饋。
 
 ### v0.1.177 (2026-09-22)
 - 根治 iOS WebKit (Safari / LINE App) 302 POST 重導向引發之 `Load failed` 異常：
