@@ -606,24 +606,22 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     // 若需要開啟試算表，先預先建立窗口以防止瀏覽器彈窗阻擋
     let newTab: Window | null = null;
     if (openAfterSync) {
-      newTab = window.open('about:blank', '_blank');
+      try {
+        newTab = window.open('about:blank', '_blank');
+      } catch (e) {
+        console.warn('[handleCreateEventSheet] 無法預先開啟分頁:', e);
+      }
     }
 
     setCreatingSheetEventId(eventId);
     try {
-      const payload = {
+      const query = new URLSearchParams({
         action: 'create_event_sheet',
         userId: userId,
         eventId: eventId
-      };
-
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload)),
-        redirect: 'follow'
       });
-      const result = await res.json();
+
+      const result = await gasGet<any>(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
 
       if (result.status === 'success') {
         const targetUrl = result.spreadsheetUrl || events.find(e => e.id === eventId)?.spreadsheetUrl;

@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.176-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.177-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.176)](#7-最新版本異動紀錄-changelog-v01176)
+- [7. 最新版本異動紀錄 (Changelog v0.1.177)](#7-最新版本異動紀錄-changelog-v01177)
 
 ---
 
@@ -373,7 +373,22 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.176)
+## 7. 最新版本異動紀錄 (Changelog v0.1.177)
+
+### v0.1.177 (2026-09-22)
+- 根治 iOS WebKit (Safari / LINE App) 302 POST 重導向引發之 `Load failed` 異常：
+  - **根本原因排查**：
+    - 使用者於 iPhone 手機（iOS Safari / LINE in-app WebKit）操作活動管理點擊「報名試算表」時，前端原以 `fetch(GAS_API_URL, { method: 'POST' })` 呼叫。
+    - Google Apps Script 對於 POST 請求會強制回傳 `302 Moved Temporarily` 跳轉至 `script.googleusercontent.com`。
+    - iOS WebKit 跨域安全策略嚴格阻斷 cross-origin POST 302 重導向，底層直接拋出 `TypeError: Load failed`，導致請求無法抵達 GAS 後端進行同步。
+  - **後端 GET 端點相容支援 (`src/gas.js`)**：
+    - 於 `doGet(e)` 函式新增 `action === "create_event_sheet"` 處理分支，使試算表建立與名冊同步支援 GET 請求。
+    - 由於 iOS WebKit 對跨域 GET 請求之 302 重導向完全相容並能順暢跟隨，徹底消除 `Load failed` 阻斷。
+  - **前端切換為 `gasGet` 請求 (`src/pages/AdminEvents.tsx`)**：
+    - 將 `handleCreateEventSheet` 升級為使用 `gasGet(appendAuthToken(...))`，在 URL 參數附帶 JWT 與時間戳記。
+    - 開表視窗預先開啟流程加入 `try...catch` 容錯，防止被行動瀏覽器攔截。
+  - **單元測試與建置驗證**：
+    - 擴充 `test/77_event_sheet_sync_transparency.test.mjs` 加入第 6 項 iOS WebKit GET 模式相容測試，全專案 58 個測試套件、274 個單元測試 100% 通過，`tsc -b && vite build` 打包零錯誤。
 
 ### v0.1.176 (2026-09-22)
 - 活動專屬 Google 試算表明冊同步透明度強化與防呆修復：

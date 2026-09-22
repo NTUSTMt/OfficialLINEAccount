@@ -85,4 +85,23 @@ describe('77. 活動專屬試算表明冊同步透明度強化、智慧分頁與
       'AdminEventCard.tsx 點擊報名試算表時必須呼叫 onCreateSheet(evt.id, true, true)'
     );
   });
+
+  it('6. 必須支援 GET 模式同步試算表以根絕 iOS WebKit 302 POST 重導向之 Load failed 異常', () => {
+    const gasPath = path.join(rootDir, 'src', 'gas.js');
+    const gasContent = fs.readFileSync(gasPath, 'utf8');
+
+    assert.ok(
+      gasContent.includes('if (action === "create_event_sheet")') &&
+      gasContent.includes('doGet(e)'),
+      'gas.js doGet 必須支援 action === "create_event_sheet"'
+    );
+
+    const adminEventsPath = path.join(rootDir, 'src', 'pages', 'AdminEvents.tsx');
+    const adminEventsContent = fs.readFileSync(adminEventsPath, 'utf8');
+
+    assert.ok(
+      adminEventsContent.includes('await gasGet<any>(appendAuthToken('),
+      'AdminEvents.tsx handleCreateEventSheet 必須改用 gasGet 發送 GET 請求避開 WebKit 阻斷'
+    );
+  });
 });

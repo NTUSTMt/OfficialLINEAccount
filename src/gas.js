@@ -5254,7 +5254,13 @@ function doGet(e) {
     return _handleWebConfirmPayment(webPayId);
   }
 
-  // 1. 幹部身分初檢 (GET 備援)
+  // 1. 建立或同步活動專屬試算表 (GET 支援以避開 iOS WebKit 對 302 POST 重導向之 Load failed 阻斷)
+  if (action === "create_event_sheet") {
+    var sheetEventId = (e && e.parameter && e.parameter.eventId) ? e.parameter.eventId : "";
+    return _handleCreateEventSheet({ userId: userId, eventId: sheetEventId });
+  }
+
+  // 2. 幹部身分初檢 (GET 備援)
   if (action === "check_officer_status") {
     return _handleCheckOfficerStatus({ userId: userId });
   }
@@ -7197,7 +7203,3 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     };
   }
 }
-
-
-
-
