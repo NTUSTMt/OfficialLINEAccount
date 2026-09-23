@@ -76,16 +76,16 @@ describe('80. 活動報名 6 個月資料更新檢查與爬山經歷體能更新
     assert.ok(enContent.register.alert.updateSuccess.includes('outing admission chances'), 'en.json 更新成功提醒');
   });
 
-  it('6. _syncSignupToSupabase 必須保留原有的 updatedAt，防止報名動作刷新時鐘', () => {
+  it('6. _syncSignupToSupabase 必須保留原有的 updatedAt 與 createdAt，防止報名動作刷新時鐘', () => {
     assert.ok(
-      gasContent.includes('updated_at: p.updatedAt || p.updated_at || new Date().toISOString()'),
-      'gas.js 中的 _syncSignupToSupabase 必須保留 p.updatedAt'
+      gasContent.includes('updated_at: p.updatedAt || p.updated_at || p.createdAt || p.created_at || new Date().toISOString()'),
+      'gas.js 中的 _syncSignupToSupabase 必須保留 p.updatedAt 與 p.createdAt'
     );
     const workerPath = path.join(rootDir, 'gas_modules', '05_Sync_Worker.js');
     const workerContent = fs.readFileSync(workerPath, 'utf8');
     assert.ok(
-      workerContent.includes('updated_at: p.updatedAt || p.updated_at || new Date().toISOString()'),
-      '05_Sync_Worker 中的 _syncSignupToSupabase 必須保留 p.updatedAt'
+      workerContent.includes('updated_at: p.updatedAt || p.updated_at || p.createdAt || p.created_at || new Date().toISOString()'),
+      '05_Sync_Worker 中的 _syncSignupToSupabase 必須保留 p.updatedAt 與 p.createdAt'
     );
   });
 

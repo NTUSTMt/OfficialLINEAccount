@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.186-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.187-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.186)](#7-最新版本異動紀錄-changelog-v01186)
+- [7. 最新版本異動紀錄 (Changelog v0.1.187)](#7-最新版本異動紀錄-changelog-v01187)
 
 ---
 
@@ -373,7 +373,18 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.186)
+## 7. 最新版本異動紀錄 (Changelog v0.1.187)
+
+### v0.1.187 (2026-09-23)
+- 補強新社員註冊無更新時間戳時之時效時鐘保護 (createdAt Fallback)：
+  - 核心問題排查與解決：
+    - 經 CodeRabbit 深度審查指出極端邊界情況：若新社員剛完成註冊，其資料庫記錄僅具備 createdAt 而無 updatedAt。若該社員在 180 天內首次報名活動，handleSignup 依據 createdAt 判定放行；但若 _syncSignupToSupabase 僅以 updatedAt 判定，則會觸發當前時間 fallback（new Date().toISOString()），導致該新社員的 updated_at 被誤填為報名時間，進而在後續持續展延時鐘。
+  - 邊界防護實作 (_syncSignupToSupabase)：
+    - 於 src/gas.js 與 gas_modules/05_Sync_Worker.js 將 memberPayload 之 updated_at 賦值順序調整為：
+      updated_at: p.updatedAt || p.updated_at || p.createdAt || p.created_at || new Date().toISOString()
+    - 確保新註冊社員報名活動時，嚴格保留其最初之 createdAt 註冊時間戳記，絕不提早或延後其個資時效時鐘，達到 100% 邏輯嚴密閉環。
+  - 單元測試套件驗證 (test/80_member_profile_recency_and_signup_fitness_hint.test.mjs)：
+    - 擴充第 6 項測試斷言，驗證 src/gas.js 與 gas_modules/05_Sync_Worker.js 均具備 createdAt 之 fallback 保護機制，全數 PASS。
 
 ### v0.1.186 (2026-09-23)
 - 報名時效時鐘保護與無效時間戳記精準提示優化 (CodeRabbit 審查改進)：

@@ -1110,7 +1110,7 @@ function _syncSignupToSupabase(userId, eventId, signupCode, p, signupStatus, eve
       emergency_contact_address: p.emerAddr || null,
       medical_history: p.medicalHistory || null,
       is_official_member: isOfficial,
-      updated_at: p.updatedAt || p.updated_at || new Date().toISOString()
+      updated_at: p.updatedAt || p.updated_at || p.createdAt || p.created_at || new Date().toISOString()
     };
 
     var memberUrl = sbUrl + "/rest/v1/members?on_conflict=line_user_id";
