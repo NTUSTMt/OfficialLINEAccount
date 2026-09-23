@@ -795,6 +795,13 @@ function _syncSignupToEventSpecificSheet(p) {
             signupData.strength = m.fitness_desc;
             signupData.strengthProof = m.proof_urls;
             signupData.isMember = m.is_official_member;
+            signupData.wantToSay = m.want_to_say;
+            signupData.officerIntent = m.officer_intent;
+            signupData.department = m.department;
+            signupData.studentId = m.student_id;
+            signupData.medicalHistory = m.medical_history;
+            signupData.identityStatus = m.identity_status;
+            signupData.joinMembershipIntent = m.join_membership_intent;
           }
         }
         _appendToEventSpreadsheet(eventId, signupData, (evts && evts[0] && evts[0].title) || "");

@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.182-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.183-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.182)](#7-最新版本異動紀錄-changelog-v01182)
+- [7. 最新版本異動紀錄 (Changelog v0.1.183)](#7-最新版本異動紀錄-changelog-v01183)
 
 ---
 
@@ -373,7 +373,27 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.182)
+## 7. 最新版本異動紀錄 (Changelog v0.1.183)
+
+### v0.1.183 (2026-09-23)
+- 活動獨立試算表 29 欄位規格升級與智慧雙重同步比對機制實作 (LAST_SYNCED_AT vs updated_at)：
+  - **核心問題排查與解決**：
+    - 查明過往活動試算表同步採「空白才填補 (If Empty Then Fill)」策略，當社員後續在個人資料勾選「我有意願成為社團幹部」或繳交社費後，試算表因該格已有非空文字而跳過，導致無法動態更新。
+    - 查明 `_supabaseGet` 在 PostgREST 批次查詢 `in.(...)` 語法中，將逗號 delimiter 編碼為 `%2C`，使資料庫將多位使用者 ID 誤認為單一字串而回傳空陣列，致使名冊同步時抓不到隊員資料。
+    - 查明建立全新試算表 (`_handleCreateEventSheet`) 與單筆追加 (`_appendToEventSpreadsheet`) 時表頭與陣列元素順序錯位（第 18 欄填入「想說的話」），且長度只有 23 欄漏填意願欄位。
+  - **擴充 5 大新欄位至總計 29 個欄位規格**：
+    - 活動獨立試算表正式納入 29 欄位標準：`系統識別碼 | 專屬碼 | 姓名 | 性別 | LINE ID | 聯絡信箱 | 聯絡電話 | 聯絡地址 | 生日 | 證件號碼 | 緊急聯絡人姓名 | 緊急聯絡人電話 | 緊急聯絡人聯絡地址 | 緊急聯絡人關係 | 爬山經驗 | 體能測驗 | 體能證明 | 是否為社員 | 審核結果 | 通知狀態 | 繳費狀態 | 備註 | 想說的話 | 擔任幹部意願 | 系所 | 學號 | 個人特殊病史 | 身分 | 加入社員意願`。
+    - 既有活動試算表於同步時自動檢查表頭，若缺少上述新欄位，將自動於右側追加欄位（`insertColumnsAfter`）並自動補齊隊員資料。
+  - **智慧雙重同步判斷與列級批次回寫 (Field-by-Field Diff & Batch Write)**：
+    - 於活動試算表隱藏工作表 `_CONFIG` 記錄 `LAST_SYNCED_AT` ISO 時間戳記，並同步更新 Supabase `events.updated_at`。
+    - 同步時先篩選 `member.updated_at > LAST_SYNCED_AT`（若首次同步無時間戳記則全量比對），僅針對有異動的成員在 JavaScript 記憶體中逐欄比對，文字有差異才更新對應陣列儲存格。
+    - 比對完成後，以列為單位執行 `sheet.getRange(...).setValues([row])` 批次回寫，執行耗時僅約 0.3 秒，且**100% 完整保留儲存格原有之底色畫記 (Highlight)、字體樣式與框線**。
+  - **欄位權限分流與顯示規格統一**：
+    - **隊員欄位 (23 欄)**：隊員個資、經驗證明、身分意願隨 member 更新動態同步。
+    - **行政審核 (4 欄)**：「審核結果」、「通知狀態」、「繳費狀態」、「備註」受嚴格保護，絕不受隊員個資變更所影響。
+    - **意願規格簡化**：「擔任幹部意願」與「加入社員意願」統一格式化為「是」/「否」；「是否為社員」在繳費後動態更新為「是」。
+  - **單元測試套件全數通過 (`test/79_event_spreadsheet_smart_sync_29_columns.test.mjs`)**：
+    - 新增專屬測試檔案驗證 29 欄位定義、`_supabaseGet` 逗號編碼防護、`_CONFIG` 時間戳記讀寫、逐欄比對邏輯與「是/否」格式化，全專案 295 項單元測試 100% PASS。
 
 ### v0.1.182 (2026-09-23)
 - 修復社員資料頁面「幹部意願」篩選未響應異常 (`AdminMembers.tsx`)：

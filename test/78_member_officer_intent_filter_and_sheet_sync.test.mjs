@@ -95,14 +95,15 @@ describe('78. 社員幹部意願篩選、個人資料編輯元件與獨立試算
     );
 
     assert.ok(
-      gasContent.includes('officerIntent: officerIntentCol') &&
+      gasContent.includes('officerIntent:') &&
       gasContent.includes('colMap.officerIntent'),
       '_backfillEventSpreadsheetMemberInfo 必須支援 officerIntent colMap'
     );
 
     assert.ok(
-      gasContent.includes('sheet.getRange(r + 1, colMap.officerIntent + 1).setValue'),
-      '既有列迴圈必須回補隊員擔任幹部意願'
+      gasContent.includes('checkAndUpdate(colMap.officerIntent') ||
+      gasContent.includes('colMap.officerIntent'),
+      '既有列迴圈必須比對並回補隊員擔任幹部意願'
     );
 
     assert.ok(

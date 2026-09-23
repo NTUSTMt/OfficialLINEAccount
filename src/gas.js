@@ -196,10 +196,10 @@ function _getGlobalColumnAliases(englishName) {
     "emergency_contact_rel": ["與緊急聯絡人關係", "緊急聯絡人關係", "關係"],
     "emergency_contact_phone": ["緊急聯絡人電話", "緊急聯絡電話"],
     "emergency_contact_address": ["緊急聯絡人地址", "緊急聯絡地址"],
-    "medical_history": ["病史", "過敏史", "特殊病史"],
-    "identity_status": ["身分", "學生身分", "校內外身分"],
-    "join_membership_intent": ["入社意願", "是否入社"],
-    "officer_intent": ["幹部意願", "擔任幹部意願"],
+    "medical_history": ["個人特殊病史", "個人特殊病史或過敏", "病史", "過敏史", "特殊病史"],
+    "identity_status": ["身分", "身分狀態", "學生身分", "校內外身分"],
+    "join_membership_intent": ["加入社員意願", "入社意願", "是否入社"],
+    "officer_intent": ["擔任幹部意願", "幹部意願", "有意願擔任幹部"],
     "want_to_say": ["想說的話", "想說的話 I want to say...", "給幹部的話", "留言"],
     "is_official_member": ["是否為正式社員", "正式社員", "社員身分"],
     "is_officer": ["是否為幹部", "幹部身分"],
@@ -377,7 +377,26 @@ function _supabaseGet(table, queryParams) {
     var parts = [];
     for (var k in queryParams) {
       if (Object.prototype.hasOwnProperty.call(queryParams, k)) {
-        parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(queryParams[k]));
+        var v = queryParams[k];
+        var valStr = String(v);
+        var encVal;
+        if (valStr.indexOf("in.(") === 0 && valStr.slice(-1) === ")") {
+          var inner = valStr.slice(4, -1);
+          var items = inner.split(",");
+          encVal = "in.(" + items.map(function(it) {
+            return encodeURIComponent(decodeURIComponent(it.trim()));
+          }).join(",") + ")";
+        } else {
+          var dotIdx = valStr.indexOf(".");
+          var op = dotIdx > -1 ? valStr.substring(0, dotIdx) : "";
+          if (["eq", "neq", "gt", "gte", "lt", "lte", "like", "ilike", "is", "cs", "cd"].indexOf(op) > -1) {
+            var rest = valStr.substring(dotIdx + 1);
+            encVal = op + "." + encodeURIComponent(decodeURIComponent(rest));
+          } else {
+            encVal = encodeURIComponent(valStr);
+          }
+        }
+        parts.push(encodeURIComponent(k) + "=" + encVal);
       }
     }
     if (parts.length > 0) {
@@ -3441,6 +3460,13 @@ function _syncSignupToEventSpecificSheet(p) {
             signupData.strength = m.fitness_desc;
             signupData.strengthProof = m.proof_urls;
             signupData.isMember = m.is_official_member;
+            signupData.wantToSay = m.want_to_say;
+            signupData.officerIntent = m.officer_intent;
+            signupData.department = m.department;
+            signupData.studentId = m.student_id;
+            signupData.medicalHistory = m.medical_history;
+            signupData.identityStatus = m.identity_status;
+            signupData.joinMembershipIntent = m.join_membership_intent;
           }
         }
         _appendToEventSpreadsheet(eventId, signupData, (evts && evts[0] && evts[0].title) || "");
@@ -5691,7 +5717,8 @@ function _createEventDriveFolderAndSheet(payload, eventId) {
       var headers = [
         "系統識別碼", "專屬碼", "姓名", "性別", "LINE ID", "聯絡信箱", "聯絡電話", "聯絡地址",
         "生日", "證件號碼", "緊急聯絡人姓名", "緊急聯絡人電話", "緊急聯絡人聯絡地址", "緊急聯絡人關係",
-        "爬山經驗", "體能測驗", "體能證明", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註", "想說的話", "擔任幹部意願"
+        "爬山經驗", "體能測驗", "體能證明", "是否為社員", "審核結果", "通知狀態", "繳費狀態", "備註", "想說的話", "擔任幹部意願",
+        "系所", "學號", "個人特殊病史", "身分", "加入社員意願"
       ];
       signupSheet.appendRow(headers);
 
@@ -5885,6 +5912,17 @@ function _asyncAppendToEventSpreadsheet(eventId, signupData, eventName) {
     setCol(["通知狀態", "notify_status"], signupData.notifyStatus || "未通知");
     setCol(["繳費狀態", "payment_status"], signupData.paymentStatus || "未繳費");
     if (signupData.notes) setCol(["備註", "notes"], signupData.notes);
+    if (signupData.wantToSay || signupData.want_to_say) setCol(["想說的話", "want_to_say", "wantToSay"], signupData.wantToSay || signupData.want_to_say);
+    var ofIntent = signupData.officerIntent || signupData.officer_intent;
+    var isOfIntent = ofIntent && (String(ofIntent).indexOf("意願") > -1 || ofIntent === "我有意願成為社團幹部" || ofIntent === "是" || ofIntent === true);
+    setCol(["擔任幹部意願", "officer_intent"], isOfIntent ? "是" : "否");
+    if (signupData.department) setCol(["系所", "department"], signupData.department);
+    if (signupData.studentId || signupData.student_id) setCol(["學號", "student_id"], "'" + String(signupData.studentId || signupData.student_id));
+    if (signupData.medicalHistory || signupData.medical_history) setCol(["個人特殊病史", "medical_history"], signupData.medicalHistory || signupData.medical_history);
+    if (signupData.identityStatus || signupData.identity_status) setCol(["身分", "identity_status"], signupData.identityStatus || signupData.identity_status);
+    var jmIntent = signupData.joinMembershipIntent || signupData.join_membership_intent;
+    var isJmIntent = jmIntent && (String(jmIntent).indexOf("意願") > -1 || jmIntent === "我有意願成為社員" || jmIntent === "是" || jmIntent === true);
+    setCol(["加入社員意願", "join_membership_intent"], isJmIntent ? "是" : "否");
 
     if (targetRow > -1) {
       sheet.getRange(targetRow, 1, 1, row.length).setValues([row]);
@@ -6028,31 +6066,45 @@ function _appendToEventSpreadsheet(eventId, signupData, eventTitle) {
       proofUrlsStr = String(signupData.strengthProof);
     }
 
-    var newRow = [
-      signupData.userId || "",
-      signupData.signupCode || "",
-      signupData.name || "",
-      signupData.gender || "",
-      signupData.realLineId || signupData.lineId || "",
-      signupData.email || "",
-      signupData.phone || "",
-      signupData.studentAddr || signupData.address || "",
-      signupData.birthday ? String(signupData.birthday).replace(/-/g, "/").slice(0, 10) : "",
-      signupData.idNumber || signupData.id_card || "",
-      signupData.emerName || signupData.emergency_contact_name || "",
-      signupData.emerPhone || signupData.emergency_contact_phone || "",
-      signupData.emerAddr || signupData.emergency_contact_address || "",
-      signupData.emerRel || signupData.emergency_contact_rel || "",
-      signupData.exp || signupData.outdoor_experience || "",
-      signupData.strength || signupData.fitness_desc || "",
-      proofUrlsStr || "",
-      signupData.wantToSay || signupData.want_to_say || "",
-      signupData.isMember ? "是" : "否",
-      signupData.reviewStatus || "審核中 Checking",
-      signupData.notificationStatus || "未通知",
-      signupData.paymentStatus || "未繳費 Unpaid",
-      signupData.notes || ""
-    ];
+    var newRow = new Array(sHeaders.length).fill("");
+    function setColVal(keywords, val) {
+      var idx = _findHeaderCol(sHeaders, keywords[0], keywords);
+      if (idx > -1 && val !== undefined && val !== null) newRow[idx] = val;
+    }
+
+    setColVal(["系統識別碼", "line_user_id", "userId"], signupData.userId || "");
+    setColVal(["專屬碼", "signup_code", "id"], signupData.signupCode || "");
+    setColVal(["姓名", "name"], signupData.name || "");
+    setColVal(["性別", "gender"], signupData.gender || "");
+    setColVal(["LINE ID", "line_id", "realLineId"], signupData.realLineId || signupData.lineId || "");
+    setColVal(["聯絡信箱", "email", "Email"], signupData.email || "");
+    setColVal(["聯絡電話", "phone"], signupData.phone ? "'" + String(signupData.phone) : "");
+    setColVal(["聯絡地址", "address"], signupData.studentAddr || signupData.address || "");
+    setColVal(["生日", "birthday"], signupData.birthday ? String(signupData.birthday).replace(/-/g, "/").slice(0, 10) : "");
+    setColVal(["證件號碼", "id_card", "idNumber"], signupData.idNumber ? "'" + String(signupData.idNumber) : (signupData.id_card ? "'" + String(signupData.id_card) : ""));
+    setColVal(["緊急聯絡人姓名", "emer_contact_name"], signupData.emerName || signupData.emergency_contact_name || "");
+    setColVal(["緊急聯絡人電話", "emer_contact_phone"], (signupData.emerPhone || signupData.emergency_contact_phone) ? "'" + String(signupData.emerPhone || signupData.emergency_contact_phone) : "");
+    setColVal(["緊急聯絡人聯絡地址", "emer_contact_address"], signupData.emerAddr || signupData.emergency_contact_address || "");
+    setColVal(["緊急聯絡人關係", "emer_contact_relationship"], signupData.emerRel || signupData.emergency_contact_rel || "");
+    setColVal(["爬山經驗", "experience"], signupData.exp || signupData.outdoor_experience || "");
+    setColVal(["體能測驗", "fitness_test"], signupData.strength || signupData.fitness_desc || "");
+    setColVal(["體能證明", "fitness_proof"], proofUrlsStr || "");
+    setColVal(["是否為社員", "is_member"], signupData.isMember ? "是" : "否");
+    setColVal(["審核結果", "review_status"], signupData.reviewStatus || "審核中 Checking");
+    setColVal(["通知狀態", "notify_status"], signupData.notificationStatus || "未通知");
+    setColVal(["繳費狀態", "payment_status"], signupData.paymentStatus || "未繳費 Unpaid");
+    setColVal(["備註", "notes"], signupData.notes || "");
+    setColVal(["想說的話", "want_to_say"], signupData.wantToSay || signupData.want_to_say || "");
+    var aOfIntent = signupData.officerIntent || signupData.officer_intent;
+    var aIsOfIntent = aOfIntent && (String(aOfIntent).indexOf("意願") > -1 || aOfIntent === "我有意願成為社團幹部" || aOfIntent === "是" || aOfIntent === true);
+    setColVal(["擔任幹部意願", "officer_intent"], aIsOfIntent ? "是" : "否");
+    setColVal(["系所", "department"], signupData.department || "");
+    setColVal(["學號", "student_id"], (signupData.studentId || signupData.student_id) ? "'" + String(signupData.studentId || signupData.student_id) : "");
+    setColVal(["個人特殊病史", "medical_history"], signupData.medicalHistory || signupData.medical_history || "");
+    setColVal(["身分", "identity_status"], signupData.identityStatus || signupData.identity_status || "");
+    var aJmIntent = signupData.joinMembershipIntent || signupData.join_membership_intent;
+    var aIsJmIntent = aJmIntent && (String(aJmIntent).indexOf("意願") > -1 || aJmIntent === "我有意願成為社員" || aJmIntent === "是" || aJmIntent === true);
+    setColVal(["加入社員意願", "join_membership_intent"], aIsJmIntent ? "是" : "否");
 
     sheet.appendRow(newRow);
     console.log("⚡ [EventSheet] 成功追加新報名紀錄至獨立試算表 " + ssId + ": " + (signupData.signupCode || signupData.userId));
@@ -6946,23 +6998,29 @@ function _handleCreateEventSheet(json) {
             m.gender || "",
             m.line_id || s.line_id || "",
             m.email || "",
-            m.phone || "",
+            m.phone ? "'" + String(m.phone) : "",
             m.address || "",
             m.birthday ? String(m.birthday).replace(/-/g, "/").slice(0, 10) : "",
-            m.id_card || m.id_number || "",
+            m.id_card ? "'" + String(m.id_card) : (m.id_number ? "'" + String(m.id_number) : ""),
             m.emergency_contact_name || "",
-            m.emergency_contact_phone || "",
+            m.emergency_contact_phone ? "'" + String(m.emergency_contact_phone) : "",
             m.emergency_contact_address || "",
             m.emergency_contact_rel || m.emergency_contact_relationship || "",
             m.outdoor_experience || m.hiking_experience || "",
             m.fitness_desc || m.fitness_test || "",
             proofUrlsStr || m.fitness_proof_url || "",
-            m.want_to_say || "",
-            s.is_official_member_snapshot ? "是" : (m.is_official_member ? "是" : "否"),
+            m.is_official_member ? "是" : (s.is_official_member_snapshot ? "是" : "否"),
             s.status || "審核中 Checking",
             s.notification_status || "未通知",
             s.payment_status || "未繳費 Unpaid",
-            s.notes || ""
+            s.notes || "",
+            m.want_to_say || "",
+            (m.officer_intent && (String(m.officer_intent).indexOf("意願") > -1 || m.officer_intent === "我有意願成為社團幹部" || m.officer_intent === "是" || m.officer_intent === true)) ? "是" : "否",
+            m.department || "",
+            m.student_id ? "'" + String(m.student_id) : "",
+            m.medical_history || "",
+            m.identity_status || "",
+            (m.join_membership_intent && (String(m.join_membership_intent).indexOf("意願") > -1 || m.join_membership_intent === "我有意願成為社員" || m.join_membership_intent === "是" || m.join_membership_intent === true)) ? "是" : "否"
           ];
           rowsToAppend.push(row);
         }
@@ -6975,8 +7033,11 @@ function _handleCreateEventSheet(json) {
       }
     }
 
-    // 5. 將試算表與資料夾連結回寫至 Supabase events 資料表
+    // 5. 將試算表與資料夾連結回寫至 Supabase events 資料表，並記錄同步時間
     _syncEventDriveUrlsToSupabase(eventId, folderUrl, ssUrl, ssId);
+    if (configSheet) {
+      _setOrUpdateConfigRow(configSheet, "LAST_SYNCED_AT", new Date().toISOString());
+    }
 
     return _jsonResponse({
       status: "success",
@@ -7037,15 +7098,35 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     }
 
     var headers = sData[0];
-    var officerIntentCol = _findHeaderCol(headers, "officer_intent", ["幹部意願", "擔任幹部意願", "有意願擔任幹部"]);
-    if (officerIntentCol === -1) {
-      var maxC = sheet.getMaxColumns();
-      if (headers.length >= maxC) {
-        sheet.insertColumnsAfter(maxC, 1);
+
+    // 動態補齊可能缺漏的新欄位（幹部意願、系所、學號、個人特殊病史、身分、加入社員意願）
+    var requiredCols = [
+      { key: "officerIntent", name: "擔任幹部意願", english: "officer_intent", aliases: ["幹部意願", "擔任幹部意願", "有意願擔任幹部"] },
+      { key: "department", name: "系所", english: "department", aliases: ["系所", "科系", "系級"] },
+      { key: "studentId", name: "學號", english: "student_id", aliases: ["學號"] },
+      { key: "medicalHistory", name: "個人特殊病史", english: "medical_history", aliases: ["個人特殊病史", "個人特殊病史或過敏", "特殊病史", "病史"] },
+      { key: "identityStatus", name: "身分", english: "identity_status", aliases: ["身分", "身分狀態", "校內身分"] },
+      { key: "joinMembershipIntent", name: "加入社員意願", english: "join_membership_intent", aliases: ["加入社員意願", "入社意願", "是否入社"] }
+    ];
+
+    var headersModified = false;
+    for (var cIdx = 0; cIdx < requiredCols.length; cIdx++) {
+      var req = requiredCols[cIdx];
+      var fCol = _findHeaderCol(headers, req.english, req.aliases);
+      if (fCol === -1) {
+        var maxC = sheet.getMaxColumns();
+        if (headers.length >= maxC) {
+          sheet.insertColumnsAfter(maxC, 1);
+        }
+        sheet.getRange(1, headers.length + 1).setValue(req.name);
+        headers.push(req.name);
+        headersModified = true;
       }
-      sheet.getRange(1, headers.length + 1).setValue("擔任幹部意願");
-      headers.push("擔任幹部意願");
-      officerIntentCol = headers.length - 1;
+    }
+
+    if (headersModified) {
+      sData = sheet.getDataRange().getValues();
+      headers = sData[0];
     }
 
     var colMap = {
@@ -7072,8 +7153,20 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
       payment: _findHeaderCol(headers, "payment_status", ["繳費狀態"]),
       notes: _findHeaderCol(headers, "notes", ["備註"]),
       wantSay: _findHeaderCol(headers, "want_to_say", ["想說的話", "想說的話 I want to say...", "留言"]),
-      officerIntent: officerIntentCol
+      officerIntent: _findHeaderCol(headers, "officer_intent", ["擔任幹部意願", "幹部意願", "有意願擔任幹部"]),
+      department: _findHeaderCol(headers, "department", ["系所", "科系", "系級"]),
+      studentId: _findHeaderCol(headers, "student_id", ["學號"]),
+      medicalHistory: _findHeaderCol(headers, "medical_history", ["個人特殊病史", "個人特殊病史或過敏", "特殊病史", "病史"]),
+      identityStatus: _findHeaderCol(headers, "identity_status", ["身分", "身分狀態", "校內身分"]),
+      joinMembershipIntent: _findHeaderCol(headers, "join_membership_intent", ["加入社員意願", "入社意願", "是否入社"])
     };
+
+    var configSheet = eventSS.getSheetByName("_CONFIG");
+    var lastSyncedAtStr = "";
+    if (configSheet) {
+      lastSyncedAtStr = _getConfigRow(configSheet, "LAST_SYNCED_AT") || "";
+    }
+    var lastSyncedTime = lastSyncedAtStr ? new Date(lastSyncedAtStr).getTime() : 0;
 
     var signups = _supabaseGet("event_signups", { event_id: "eq." + eventId, select: "*", order: "created_at.asc" });
     if (!Array.isArray(signups)) {
@@ -7084,7 +7177,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     var memberMap = {};
     if (userIds.length > 0) {
       var members = _supabaseGet("members", {
-        line_user_id: "in.(" + userIds.map(encodeURIComponent).join(",") + ")",
+        line_user_id: "in.(" + userIds.join(",") + ")",
         select: "*"
       });
       if (Array.isArray(members)) {
@@ -7117,11 +7210,40 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
       }
 
       var s = (rowCode && signupMapByCode[rowCode]) || (rowUid && signupMapByUid[rowUid]);
-      var m = memberMap[rowUid];
-      var changed = false;
+      var m = (rowUid && memberMap[rowUid]) || (s && s.line_user_id && memberMap[s.line_user_id]);
+      var rowChanged = false;
 
-      // 1. 回補隊員個資 (來自 members)
-      if (m) {
+      var checkAndUpdate = function(colIdx, newVal) {
+        if (colIdx > -1 && colIdx < headers.length && newVal !== undefined && newVal !== null) {
+          var curVal = sData[r][colIdx] !== undefined && sData[r][colIdx] !== null ? String(sData[r][colIdx]).trim() : "";
+          var targetVal = String(newVal).trim();
+          if (curVal !== targetVal) {
+            sData[r][colIdx] = targetVal;
+            rowChanged = true;
+          }
+        }
+      };
+
+      // 補齊可能空白的系統識別碼或專屬碼
+      if (!rowUid && m && m.line_user_id && colMap.uid > -1) {
+        checkAndUpdate(colMap.uid, m.line_user_id);
+      }
+      if (!rowCode && s && s.id && colMap.code > -1) {
+        checkAndUpdate(colMap.code, s.id);
+      }
+
+      // 隊員個人資料與意願比對（依時間戳記先篩，無時間戳記或首次同步則全面對齊）
+      var memberNeedsUpdate = !lastSyncedTime;
+      if (m && m.updated_at) {
+        var mTime = new Date(m.updated_at).getTime();
+        if (mTime > lastSyncedTime) {
+          memberNeedsUpdate = true;
+        }
+      } else if (m) {
+        memberNeedsUpdate = true;
+      }
+
+      if (memberNeedsUpdate && m) {
         var proofUrlsStr = "";
         if (Array.isArray(m.proof_urls)) {
           proofUrlsStr = m.proof_urls.join(", ");
@@ -7129,78 +7251,67 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
           proofUrlsStr = String(m.proof_urls);
         }
 
-        if (colMap.idCard > -1 && !String(sData[r][colMap.idCard] || "").trim()) {
-          var cardVal = m.id_card || m.id_number || "";
-          if (cardVal) { sheet.getRange(r + 1, colMap.idCard + 1).setValue("'" + cardVal); changed = true; }
-        }
-        if (colMap.emerRel > -1 && !String(sData[r][colMap.emerRel] || "").trim()) {
-          var relVal = m.emergency_contact_rel || m.emergency_contact_relationship || "";
-          if (relVal) { sheet.getRange(r + 1, colMap.emerRel + 1).setValue(relVal); changed = true; }
-        }
-        if (colMap.exp > -1 && !String(sData[r][colMap.exp] || "").trim()) {
-          var expVal = m.outdoor_experience || m.hiking_experience || "";
-          if (expVal) { sheet.getRange(r + 1, colMap.exp + 1).setValue(expVal); changed = true; }
-        }
-        if (colMap.fit > -1 && !String(sData[r][colMap.fit] || "").trim()) {
-          var fitVal = m.fitness_desc || m.fitness_test || "";
-          if (fitVal) { sheet.getRange(r + 1, colMap.fit + 1).setValue(fitVal); changed = true; }
-        }
-        if (colMap.proof > -1 && !String(sData[r][colMap.proof] || "").trim()) {
-          var pVal = proofUrlsStr || m.fitness_proof_url || "";
-          if (pVal) { sheet.getRange(r + 1, colMap.proof + 1).setValue(pVal); changed = true; }
-        }
-        if (colMap.wantSay > -1 && !String(sData[r][colMap.wantSay] || "").trim()) {
-          var sayVal = m.want_to_say || "";
-          if (sayVal) { sheet.getRange(r + 1, colMap.wantSay + 1).setValue(sayVal); changed = true; }
-        }
-        if (colMap.officerIntent > -1) {
-          var curIntent = String(sData[r][colMap.officerIntent] || "").trim();
-          var mIntent = (m.officer_intent || "").trim();
-          var intentVal = mIntent ? (mIntent.indexOf("意願") > -1 || mIntent === "我有意願成為社團幹部" ? "我有意願成為社團幹部" : mIntent) : "無";
-          if (!curIntent) {
-            sheet.getRange(r + 1, colMap.officerIntent + 1).setValue(intentVal);
-            changed = true;
-          }
-        }
+        checkAndUpdate(colMap.name, m.name);
+        checkAndUpdate(colMap.gender, m.gender);
+        checkAndUpdate(colMap.lineId, m.line_id);
+        checkAndUpdate(colMap.email, m.email);
+        if (m.phone) checkAndUpdate(colMap.phone, "'" + String(m.phone));
+        checkAndUpdate(colMap.address, m.address);
+        if (m.birthday) checkAndUpdate(colMap.birthday, String(m.birthday).replace(/-/g, "/").slice(0, 10));
+        var cardVal = m.id_card || m.id_number || "";
+        if (cardVal) checkAndUpdate(colMap.idCard, "'" + cardVal);
+        checkAndUpdate(colMap.emerName, m.emergency_contact_name);
+        if (m.emergency_contact_phone) checkAndUpdate(colMap.emerPhone, "'" + String(m.emergency_contact_phone));
+        checkAndUpdate(colMap.emerAddr, m.emergency_contact_address);
+        checkAndUpdate(colMap.emerRel, m.emergency_contact_rel || m.emergency_contact_relationship);
+        checkAndUpdate(colMap.exp, m.outdoor_experience || m.hiking_experience);
+        checkAndUpdate(colMap.fit, m.fitness_desc || m.fitness_test);
+        checkAndUpdate(colMap.proof, proofUrlsStr || m.fitness_proof_url);
+        checkAndUpdate(colMap.wantSay, m.want_to_say);
+        checkAndUpdate(colMap.department, m.department);
+        if (m.student_id) checkAndUpdate(colMap.studentId, "'" + String(m.student_id));
+        checkAndUpdate(colMap.medicalHistory, m.medical_history);
+        checkAndUpdate(colMap.identityStatus, m.identity_status);
+
+        // 正式社員身分連動更新：只要最新為正式社員即更新為「是」
+        var latestIsMember = m.is_official_member ? "是" : ((s && s.is_official_member_snapshot) ? "是" : "否");
+        checkAndUpdate(colMap.isMember, latestIsMember);
+
+        // 擔任幹部意願精簡為「是」/「否」
+        var mIntent = (m.officer_intent || "").trim();
+        var intentVal = (mIntent && (String(mIntent).indexOf("意願") > -1 || mIntent === "我有意願成為社團幹部" || mIntent === "是" || mIntent === true)) ? "是" : "否";
+        checkAndUpdate(colMap.officerIntent, intentVal);
+
+        // 加入社員意願精簡為「是」/「否」
+        var jmIntent = (m.join_membership_intent || "").trim();
+        var jmVal = (jmIntent && (String(jmIntent).indexOf("意願") > -1 || jmIntent === "我有意願成為社員" || jmIntent === "是" || jmIntent === true)) ? "是" : "否";
+        checkAndUpdate(colMap.joinMembershipIntent, jmVal);
       }
 
-      // 2. 回補與校正報名狀態 (來自 event_signups)
+      // 行政審核欄位保護比對 (僅當 signup 本身有異動時才校正)
       if (s) {
-        if (colMap.isMember > -1) {
-          var curIsMem = String(sData[r][colMap.isMember] || "").trim();
-          var correctIsMem = s.is_official_member_snapshot ? "是" : ((m && m.is_official_member) ? "是" : "否");
-          if (!curIsMem || (curIsMem !== "是" && curIsMem !== "否")) {
-            sheet.getRange(r + 1, colMap.isMember + 1).setValue(correctIsMem);
-            changed = true;
-          }
+        var signupNeedsUpdate = !lastSyncedTime;
+        if (s.updated_at && new Date(s.updated_at).getTime() > lastSyncedTime) {
+          signupNeedsUpdate = true;
         }
-        if (colMap.status > -1) {
-          var curStatus = String(sData[r][colMap.status] || "").trim();
-          var correctStatus = s.status || "審核中 Checking";
-          if (!curStatus || curStatus === "是" || curStatus === "否" || curStatus === "未通知" || curStatus === "未繳費" || curStatus === "未繳費 Unpaid") {
-            sheet.getRange(r + 1, colMap.status + 1).setValue(correctStatus);
-            changed = true;
+        if (signupNeedsUpdate) {
+          if (colMap.status > -1 && s.status) {
+            checkAndUpdate(colMap.status, s.status);
           }
-        }
-        if (colMap.notify > -1) {
-          var curNotify = String(sData[r][colMap.notify] || "").trim();
-          var correctNotify = s.notification_status || "未通知";
-          if (!curNotify || curNotify.indexOf("Checking") > -1 || curNotify.indexOf("Accepted") > -1) {
-            sheet.getRange(r + 1, colMap.notify + 1).setValue(correctNotify);
-            changed = true;
+          if (colMap.notify > -1 && s.notification_status) {
+            checkAndUpdate(colMap.notify, s.notification_status);
           }
-        }
-        if (colMap.payment > -1) {
-          var curPay = String(sData[r][colMap.payment] || "").trim();
-          var correctPay = s.payment_status || "未繳費 Unpaid";
-          if (!curPay || curPay === "未通知" || curPay === "已通知") {
-            sheet.getRange(r + 1, colMap.payment + 1).setValue(correctPay);
-            changed = true;
+          if (colMap.payment > -1 && s.payment_status) {
+            checkAndUpdate(colMap.payment, s.payment_status);
           }
         }
       }
 
-      if (changed) updatedCount++;
+      if (rowChanged) {
+        // 整列一次批次回寫，保留所有背景底色 (Highlight) 與儲存格樣式
+        sheet.getRange(r + 1, 1, 1, headers.length).setValues([sData[r]]);
+        updatedCount++;
+      }
     }
 
     // 檢查是否有 Supabase 存在但試算表尚未有的新報名者，自動追加新列
@@ -7241,15 +7352,22 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
         setCell(colMap.exp, mem.outdoor_experience || mem.hiking_experience || "");
         setCell(colMap.fit, mem.fitness_desc || mem.fitness_test || "");
         setCell(colMap.proof, pUrls || mem.fitness_proof_url || "");
-        setCell(colMap.isMember, s.is_official_member_snapshot ? "是" : (mem.is_official_member ? "是" : "否"));
+        setCell(colMap.isMember, mem.is_official_member ? "是" : (s.is_official_member_snapshot ? "是" : "否"));
         setCell(colMap.status, s.status || "審核中 Checking");
         setCell(colMap.notify, s.notification_status || "未通知");
         setCell(colMap.payment, s.payment_status || "未繳費 Unpaid");
         setCell(colMap.notes, s.notes || "");
         setCell(colMap.wantSay, mem.want_to_say || "");
         var memIntent = (mem.officer_intent || "").trim();
-        var newIntentVal = memIntent ? (memIntent.indexOf("意願") > -1 || memIntent === "我有意願成為社團幹部" ? "我有意願成為社團幹部" : memIntent) : "無";
+        var newIntentVal = (memIntent && (String(memIntent).indexOf("意願") > -1 || memIntent === "我有意願成為社團幹部" || memIntent === "是" || memIntent === true)) ? "是" : "否";
         setCell(colMap.officerIntent, newIntentVal);
+        setCell(colMap.department, mem.department || "");
+        setCell(colMap.studentId, mem.student_id ? "'" + String(mem.student_id) : "");
+        setCell(colMap.medicalHistory, mem.medical_history || "");
+        setCell(colMap.identityStatus, mem.identity_status || "");
+        var memJmIntent = (mem.join_membership_intent || "").trim();
+        var newJmVal = (memJmIntent && (String(memJmIntent).indexOf("意願") > -1 || memJmIntent === "我有意願成為社員" || memJmIntent === "是" || memJmIntent === true)) ? "是" : "否";
+        setCell(colMap.joinMembershipIntent, newJmVal);
 
         rowsToAppend.push(row);
         if (s.id) existingCodes[s.id] = true;
@@ -7275,6 +7393,17 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
       appendedCount = rowsToAppend.length;
       lastValidRow += appendedCount;
       console.log("[backfillEventSpreadsheetMemberInfo] 成功追加 " + appendedCount + " 筆新隊員至試算表: " + ssId);
+    }
+
+    // 記錄本次同步時間戳記至 _CONFIG 與 Supabase events
+    var nowIso = new Date().toISOString();
+    if (configSheet) {
+      _setOrUpdateConfigRow(configSheet, "LAST_SYNCED_AT", nowIso);
+    }
+    try {
+      _supabasePatch("events", { id: "eq." + eventId }, { updated_at: nowIso });
+    } catch (e) {
+      console.warn("更新 events.updated_at 提示:", e);
     }
 
     return {

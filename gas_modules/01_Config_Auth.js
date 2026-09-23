@@ -194,10 +194,10 @@ function _getGlobalColumnAliases(englishName) {
     "emergency_contact_rel": ["與緊急聯絡人關係", "緊急聯絡人關係", "關係"],
     "emergency_contact_phone": ["緊急聯絡人電話", "緊急聯絡電話"],
     "emergency_contact_address": ["緊急聯絡人地址", "緊急聯絡地址"],
-    "medical_history": ["病史", "過敏史", "特殊病史"],
-    "identity_status": ["身分", "學生身分", "校內外身分"],
-    "join_membership_intent": ["入社意願", "是否入社"],
-    "officer_intent": ["幹部意願", "擔任幹部意願"],
+    "medical_history": ["個人特殊病史", "個人特殊病史或過敏", "病史", "過敏史", "特殊病史"],
+    "identity_status": ["身分", "身分狀態", "學生身分", "校內外身分"],
+    "join_membership_intent": ["加入社員意願", "入社意願", "是否入社"],
+    "officer_intent": ["擔任幹部意願", "幹部意願", "有意願擔任幹部"],
     "want_to_say": ["想說的話", "想說的話 I want to say...", "給幹部的話", "留言"],
     "is_official_member": ["是否為正式社員", "正式社員", "社員身分"],
     "is_officer": ["是否為幹部", "幹部身分"],
@@ -371,7 +371,26 @@ function _supabaseGet(table, queryParams) {
     var parts = [];
     for (var k in queryParams) {
       if (Object.prototype.hasOwnProperty.call(queryParams, k)) {
-        parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(queryParams[k]));
+        var v = queryParams[k];
+        var valStr = String(v);
+        var encVal;
+        if (valStr.indexOf("in.(") === 0 && valStr.slice(-1) === ")") {
+          var inner = valStr.slice(4, -1);
+          var items = inner.split(",");
+          encVal = "in.(" + items.map(function(it) {
+            return encodeURIComponent(decodeURIComponent(it.trim()));
+          }).join(",") + ")";
+        } else {
+          var dotIdx = valStr.indexOf(".");
+          var op = dotIdx > -1 ? valStr.substring(0, dotIdx) : "";
+          if (["eq", "neq", "gt", "gte", "lt", "lte", "like", "ilike", "is", "cs", "cd"].indexOf(op) > -1) {
+            var rest = valStr.substring(dotIdx + 1);
+            encVal = op + "." + encodeURIComponent(decodeURIComponent(rest));
+          } else {
+            encVal = encodeURIComponent(valStr);
+          }
+        }
+        parts.push(encodeURIComponent(k) + "=" + encVal);
       }
     }
     if (parts.length > 0) {
