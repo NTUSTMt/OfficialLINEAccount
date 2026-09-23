@@ -110,4 +110,11 @@ describe('79. 活動專屬試算表 29 欄位對齊與智慧雙重同步比對�
     assert.ok(modHelper.includes('"加入社員意願"'), '06_Helper_Services 必須包含加入社員意願表頭');
     assert.ok(modHelper.includes('LAST_SYNCED_AT'), '06_Helper_Services 必須包含 LAST_SYNCED_AT 比對邏輯');
   });
+
+  it('8. _getConfigRow 輔助函式必須存在於 src/gas.js 與 gas_modules/06_Helper_Services.js', () => {
+    assert.ok(gasContent.includes('function _getConfigRow(configSheet, key)'), 'gas.js 必須實作 _getConfigRow');
+    const modHelperPath = path.join(rootDir, 'gas_modules', '06_Helper_Services.js');
+    const modHelper = fs.readFileSync(modHelperPath, 'utf8');
+    assert.ok(modHelper.includes('function _getConfigRow(configSheet, key)'), '06_Helper_Services.js 必須實作 _getConfigRow');
+  });
 });

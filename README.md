@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.183-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.184-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.183)](#7-最新版本異動紀錄-changelog-v01183)
+- [7. 最新版本異動紀錄 (Changelog v0.1.184)](#7-最新版本異動紀錄-changelog-v01184)
 
 ---
 
@@ -373,7 +373,17 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.183)
+## 7. 最新版本異動紀錄 (Changelog v0.1.184)
+
+### v0.1.184 (2026-09-23)
+- 修復活動專屬試算表智慧同步缺少 _getConfigRow 輔助函式異常：
+  - 問題根因排查：
+    - 在 v0.1.183 實作「智慧雙重同步比對」機制時，活動試算表資料回補函式 (_backfillEventSpreadsheetMemberInfo) 調用了 _getConfigRow(configSheet, "LAST_SYNCED_AT") 以取得上次同步之時間戳記。
+    - 然而代碼中原先僅定義了 _setOrUpdateConfigRow(configSheet, key, value) 寫入輔助函式，未實作讀取用的 _getConfigRow，導致幹部點擊「同步試算表」時在 GAS 端擲出 "_getConfigRow is not defined" 例外中斷。
+  - 核心修復與健全防護：
+    - 於 src/gas.js 與 gas_modules/06_Helper_Services.js 補齊 _getConfigRow(configSheet, key) 實作，安全遍歷 _CONFIG 工作表並以大小寫不敏感 (Case-Insensitive) 方式精準比對 key，取回對應儲存格字串值；若工作表或鍵值不存在則安全回傳空字串，杜絕例外發生。
+  - 單元測試套件補強 (test/79_event_spreadsheet_smart_sync_29_columns.test.mjs)：
+    - 擴充單元測試斷言，嚴格檢驗 src/gas.js 與 gas_modules/06_Helper_Services.js 均具備完整的 _getConfigRow 函式實作，防止未來模組維護時再次缺漏。
 
 ### v0.1.183 (2026-09-23)
 - 活動獨立試算表 29 欄位規格升級與智慧雙重同步比對機制實作 (LAST_SYNCED_AT vs updated_at)：

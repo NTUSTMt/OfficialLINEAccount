@@ -5661,6 +5661,25 @@ function _setOrUpdateConfigRow(configSheet, key, value) {
 }
 
 /**
+ * 安全取得 _CONFIG 工作表中的指定鍵值
+ */
+function _getConfigRow(configSheet, key) {
+  if (!configSheet || !key) return "";
+  try {
+    var cData = configSheet.getDataRange().getValues();
+    var targetKey = String(key).trim().toUpperCase();
+    for (var i = 0; i < cData.length; i++) {
+      if (String(cData[i][0]).trim().toUpperCase() === targetKey) {
+        return cData[i][1] !== undefined && cData[i][1] !== null ? String(cData[i][1]).trim() : "";
+      }
+    }
+  } catch (err) {
+    console.warn("讀取 _CONFIG 例外:", err);
+  }
+  return "";
+}
+
+/**
  * 建立活動專屬雲端硬碟資料夾 (YYYY/MM/DD_活動名稱) 與報名名冊試算表
  */
 function _createEventDriveFolderAndSheet(payload, eventId) {
