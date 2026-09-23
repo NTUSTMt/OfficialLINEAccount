@@ -905,6 +905,11 @@ function Register({ userId }: { userId: string }) {
           <div className="form-step-content animate-fade-in">
             <h2 className="step-title">{t('register.step4.title')}</h2>
 
+            <div className="privacy-banner" style={{ backgroundColor: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af', marginBottom: '16px' }}>
+              <Info size={18} className="privacy-banner-icon" style={{ color: '#2563eb', flexShrink: 0 }} />
+              <span>{t('register.step4.fitnessNotice')}</span>
+            </div>
+
             <div className="form-group">
               <label>{t('register.step4.expLabel')}</label>
               <textarea

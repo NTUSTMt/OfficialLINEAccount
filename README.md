@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.184-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.185-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.184)](#7-最新版本異動紀錄-changelog-v01184)
+- [7. 最新版本異動紀錄 (Changelog v0.1.185)](#7-最新版本異動紀錄-changelog-v01185)
 
 ---
 
@@ -373,7 +373,22 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.184)
+## 7. 最新版本異動紀錄 (Changelog v0.1.185)
+
+### v0.1.185 (2026-09-23)
+- 活動報名個人資料 6 個月更新檢查與爬山經歷體能重要性說明：
+  - 核心需求與背景：
+    - 社團戶外登山活動（特別是百岳、中級山與長程縱走）需嚴謹評估隊員之爬山經歷與體能狀況。若隊員個人資料已長年未更新，可能導致幹部依據舊有紀錄審核，影響出隊安全或錯失錄取機會。
+  - LINE 活動報名 6 個月更新檢查機制 (handleSignup)：
+    - 當隊員在 LINE 官方帳號點擊最新活動之「立即報名」時，系統直查 Supabase members 資料表（SSOT），取得 updated_at 或 created_at 判定距今是否已逾 180 天（6 個月）。
+    - 若超過 180 天（或查無有效更新時間戳記），系統將阻擋本次報名，回傳雙語提示訊息，明確說明社團出團將以爬山經歷與體能狀況作為審核與篩選依據，並附帶個人主頁更新之 LIFF 快速連結，引導隊員更新後再回聊天室報名。
+  - 報名成功收據加註體能經歷說明：
+    - 當未逾期成功送出報名時，回傳之 LINE 確認收據在重要提醒後方追加「體能與經歷更新說明」，溫馨提醒隊員若有更佳的最新登山紀錄或體能證明，可隨時至個人主頁更新以增加出隊錄取機會。
+  - 前端 LIFF 報名頁面與多語言同步 (Register.tsx, zh.json, en.json)：
+    - 於步驟 4（登山經驗與體能證明）頂部配置顯著之資訊橫幅 (Info Banner)，以雙語提示「社團出團活動將依據爬山經驗與體能狀況進行審查評估。若近期有更好的經歷或紀錄，記得隨時至此更新，增加錄取機會！」。
+    - 個人資料更新成功後之彈窗提示亦同步融入「隨時保持更新以增加出隊錄取機會」之友善引導。
+  - 單元測試防護 (test/80_member_profile_recency_and_signup_fitness_hint.test.mjs)：
+    - 完整涵蓋 updatedAt 讀取、180 天計算模擬、阻擋訊息與 LIFF 連結驗證、收據更新說明驗證、Register.tsx 與多語言詞條對齊測試，全數通過。
 
 ### v0.1.184 (2026-09-23)
 - 修復活動專屬試算表智慧同步缺少 _getConfigRow 輔助函式異常：

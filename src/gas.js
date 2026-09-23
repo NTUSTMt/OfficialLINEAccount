@@ -2167,6 +2167,8 @@ function _checkProfileComplete(userId, ss, type) {
     p.strengthProof = Array.isArray(m.proof_urls) ? m.proof_urls.join("\n") : (m.proof_urls || "");
     p.medicalHistory = m.medical_history || "";
     p.isOfficial = m.is_official_member ? "是" : "否";
+    p.updatedAt = m.updated_at || "";
+    p.createdAt = m.created_at || "";
   } else {
     return { missingFields: ["NOT_FOUND"], p: null };
   }
@@ -2279,6 +2281,39 @@ function handleSignup(replyToken, userId, eventId, ss) {
 
     var p = profileCheck.p;
 
+    // 2.5 檢查個人資料與體能經歷更新時效性 (超過 6 個月/180 天需提醒更新)
+    var lastUpdateStr = p.updatedAt || p.createdAt || "";
+    var isProfileExpired = false;
+    if (lastUpdateStr) {
+      var lastUpdateDate = new Date(lastUpdateStr);
+      if (!isNaN(lastUpdateDate.getTime())) {
+        var diffDays = (new Date().getTime() - lastUpdateDate.getTime()) / (24 * 60 * 60 * 1000);
+        if (diffDays > 180) {
+          isProfileExpired = true;
+        }
+      } else {
+        isProfileExpired = true;
+      }
+    } else {
+      isProfileExpired = true;
+    }
+
+    if (isProfileExpired) {
+      var expireNoticeZh = "⚠️ 報名提醒：您的個人資料與體能紀錄已超過 6 個月未更新！\n\n" +
+        "社團出團活動將依據您的「爬山經歷」與「體能狀況」進行審查與篩選。為了維護出隊安全並增加您的錄取機會，若近期有更豐富的登山紀錄或更佳的體能表現，請先前往更新個人資料後，再回到此處報名活動喔！\n\n" +
+        "👉 立即前往更新個人資料：\n" +
+        "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard\n" +
+        "(或於選單點擊「填寫資料 / 個人主頁」)";
+
+      var expireNoticeEn = "⚠️ Registration Notice: Your profile and fitness records have not been updated for over 6 months!\n\n" +
+        "Club outings evaluate applications based on your hiking experience and fitness status. To ensure safety and boost your admission chances, please update your profile with your latest records before signing up!\n\n" +
+        "👉 Update Your Profile Now:\n" +
+        "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard";
+
+      _replyMessage(replyToken, _formatBilingualMessage(expireNoticeZh, expireNoticeEn, prefLang));
+      return;
+    }
+
     // 3. 檢查重複報名 (⭐️ 100% 查 Supabase event_signups 表，絕不查主試算表！)
     var sbSignups = _supabaseGet("event_signups", { line_user_id: "eq." + userId, event_id: "eq." + eventId, select: "id,status" });
     if (sbSignups && sbSignups.length > 0) {
@@ -2325,7 +2360,9 @@ function handleSignup(replyToken, userId, eventId, ss) {
       "報名專屬碼：" + signupCode + "\n\n" +
       p.name + "，我們已收到您的報名資料。\n\n" +
       "⚠️ 【重要提醒】\n" +
-      "此階段為「報名登記與資格審核」，幹部將進行體能評估與篩選，最終錄取名單（正取/備取）將透過本帳號推播通知您！";
+      "此階段為「報名登記與資格審核」，幹部將進行體能評估與篩選，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n\n" +
+      "💡 【體能與經歷更新說明】\n" +
+      "社團出團會依據爬山經驗與體能進行評估，若有最新的登山紀錄或更佳體能證明，記得隨時至個人主頁更新資料，增加自己的錄取機會喔！";
 
     var successReceiptEn = "✅ Registration Submitted!\n\n" +
       "Event: " + evName + "\n" +
@@ -2333,7 +2370,9 @@ function handleSignup(replyToken, userId, eventId, ss) {
       "Signup Code: " + signupCode + "\n\n" +
       "Dear " + p.name + ", we have received your application.\n\n" +
       "⚠️ 【Important Reminder】\n" +
-      "This stage is registration & review. Officers will evaluate qualifications, and admission status (Confirmed/Waitlisted) will be notified to you via this LINE account!";
+      "This stage is registration & review. Officers will evaluate qualifications, and admission status (Confirmed/Waitlisted) will be notified to you via this LINE account!\n\n" +
+      "💡 【Fitness & Experience Reminder】\n" +
+      "Admission is evaluated based on hiking experience and fitness. If you have newer hiking records or fitness proofs, remember to update them anytime on your Dashboard to boost your admission chances!";
 
     _replyMessage(replyToken, _formatBilingualMessage(successReceiptZh, successReceiptEn, prefLang));
 

@@ -74,7 +74,7 @@
       "imageLoadError": "Failed to load image {{name}}, please try another file!",
       "fileReadError": "Failed to read file {{name}}!",
       "registerSuccess": "Registration successful! Data saved to club database.",
-      "updateSuccess": "Profile updated successfully!",
+      "updateSuccess": "Profile updated successfully! Remember to keep your hiking records and fitness proofs updated anytime to boost your outing admission chances!",
       "saveFailed": "Save failed: {{message}}",
       "contactAdmin": "Please contact the club administrator",
       "networkError": "Network connection failed, please check your network status!"
@@ -131,6 +131,7 @@
     },
     "step4": {
       "title": "Experience & Upload (Optional)",
+      "fitnessNotice": "Club outings evaluate applications based on hiking experience and fitness. If you have newer records, remember to update them anytime to boost your admission chances!",
       "expLabel": "Mountaineering Experience",
       "expPlaceholder": "e.g., Hehuanshan, Yushan Main Peak, Jiaming Lake...",
       "strengthLabel": "Physical Fitness Proof",

@@ -41,7 +41,7 @@
       "imageLoadError": "載入圖片 {{name}} 失敗，請嘗試更換圖片檔案！",
       "fileReadError": "讀取檔案 {{name}} 失敗！",
       "registerSuccess": "註冊成功！資料已寫入社團資料庫。",
-      "updateSuccess": "資料已成功更新！",
+      "updateSuccess": "資料已成功更新！若有新的登山經歷或體能證明，記得隨時保持更新以增加出隊錄取機會喔！",
       "saveFailed": "儲存失敗: {{message}}",
       "contactAdmin": "請聯絡社團管理員",
       "networkError": "網路連線失敗，請檢查您的網路狀態！"
@@ -98,6 +98,7 @@
     },
     "step4": {
       "title": "登山經驗與體能 (Experience & Upload)",
+      "fitnessNotice": "社團出團活動將依據「爬山經驗」與「體能狀況」進行審查評估。若近期有更好的經歷或紀錄，記得隨時至此更新，增加錄取機會！",
       "expLabel": "過往登山經驗簡述",
       "expPlaceholder": "例如：登頂合歡群峰、玉山主峰、嘉明湖，或百岳累積 5 座...等等",
       "strengthLabel": "體能證明",
