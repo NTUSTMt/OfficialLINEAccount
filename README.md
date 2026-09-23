@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.181-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.182-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.181)](#7-最新版本異動紀錄-changelog-v01181)
+- [7. 最新版本異動紀錄 (Changelog v0.1.182)](#7-最新版本異動紀錄-changelog-v01182)
 
 ---
 
@@ -373,7 +373,17 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.181)
+## 7. 最新版本異動紀錄 (Changelog v0.1.182)
+
+### v0.1.182 (2026-09-23)
+- 修復社員資料頁面「幹部意願」篩選未響應異常 (`AdminMembers.tsx`)：
+  - **根本原因排查**：
+    - 在 `AdminMembers.tsx` 計算過濾清單之 `filteredMembers = useMemo(...)` 依賴項陣列中，遺漏了 `officerIntentFilter` 狀態變數。
+    - 導致使用者於 Notion 風格篩選抽屜選取「有意願」或「無意願」時，React 的 `useMemo` 判定依賴無變更而回傳舊快取，未重新觸發名冊過濾運算。
+  - **響應式依賴陣列補齊**：
+    - 將 `useMemo` 依賴項完整補齊為 `[members, searchQuery, identityFilter, payFilter, officialFilter, officerIntentFilter, sortBy, sortOrder]`，點擊「有意願」或「無意願」時立即即時重新計算與呈現過濾結果。
+  - **單元測試防護升級 (`test/78_member_officer_intent_filter_and_sheet_sync.test.mjs`)**：
+    - 新增靜態斷言檢驗 `useMemo` 依賴項陣列完整性，杜絕後續重構遺漏依賴變數。
 
 ### v0.1.181 (2026-09-22)
 - Google Drive 圖片上傳品質全面升級至 2K 超清標準 (2048px / Q88 / CDN =s0)：

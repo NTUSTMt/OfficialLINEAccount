@@ -49,6 +49,11 @@ describe('78. 社員幹部意願篩選、個人資料編輯元件與獨立試算
       adminMembersContent.includes('幹部意願'),
       '卡片標籤必須在第一行呈現幹部意願'
     );
+
+    assert.ok(
+      adminMembersContent.includes('[members, searchQuery, identityFilter, payFilter, officialFilter, officerIntentFilter, sortBy, sortOrder]'),
+      'useMemo 依賴項陣列必須包含 officerIntentFilter，確保點擊篩選選項時即時觸發過濾運算'
+    );
   });
 
   it('3. MemberDetailEdit.tsx 必須在正式社員身分正下方包含擔任幹部意願編輯勾選框', () => {

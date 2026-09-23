@@ -174,7 +174,7 @@ export default function AdminMembers({ userId }: { userId?: string }) {
     });
 
     return list;
-  }, [members, searchQuery, identityFilter, payFilter, officialFilter, sortBy, sortOrder]);
+  }, [members, searchQuery, identityFilter, payFilter, officialFilter, officerIntentFilter, sortBy, sortOrder]);
 
   return (
     <div style={{
