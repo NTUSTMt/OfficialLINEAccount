@@ -2217,8 +2217,7 @@ export const fetchMemberTimelineRecordsFromSupabase = async (
           start_date,
           end_date,
           fee,
-          status,
-          location
+          status
         )
       `)
       .eq('line_user_id', targetUserId);
@@ -2246,7 +2245,6 @@ export const fetchMemberTimelineRecordsFromSupabase = async (
           details: {
             eventId: ev?.id,
             eventStatus: ev?.status,
-            location: ev?.location,
             signupStatus: s.status,
             paymentStatus: s.payment_status,
             signupDate: s.created_at

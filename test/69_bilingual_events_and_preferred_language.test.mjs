@@ -204,6 +204,25 @@ describe('Bilingual Events and Preferred Language Tests', () => {
         gasContent.includes('prefLang === "en"') && gasContent.includes('prefLang === "zh"'),
         'gas.js should respect user preferred language for push notifications'
       );
+
+      // GAS 幹部活動管理清單備援包含雙語欄位
+      assert.ok(gasContent.includes('nameEn: e.title_en || ""'), 'gas.js _handleGetAdminEvents should map nameEn');
+      assert.ok(gasContent.includes('shortDescEn: e.summary_en || ""'), 'gas.js _handleGetAdminEvents should map shortDescEn');
+      assert.ok(gasContent.includes('fullDescEn: e.itinerary_en || ""'), 'gas.js _handleGetAdminEvents should map fullDescEn');
+    });
+
+    it('should verify get_admin_events_rpc in SQL migration includes bilingual fields', () => {
+      const sqlContent = fs.readFileSync(
+        path.join(rootDir, 'supabase/fix_admin_events_rpc_bilingual.sql'),
+        'utf8'
+      );
+
+      assert.ok(sqlContent.includes("'nameEn', COALESCE(e.title_en, '')"), 'get_admin_events_rpc should return nameEn');
+      assert.ok(sqlContent.includes("'shortDescEn', COALESCE(e.summary_en, '')"), 'get_admin_events_rpc should return shortDescEn');
+      assert.ok(sqlContent.includes("'fullDescEn', COALESCE(e.itinerary_en, '')"), 'get_admin_events_rpc should return fullDescEn');
+      assert.ok(sqlContent.includes('e.title_en'), 'GROUP BY should include e.title_en');
+      assert.ok(sqlContent.includes('e.summary_en'), 'GROUP BY should include e.summary_en');
+      assert.ok(sqlContent.includes('e.itinerary_en'), 'GROUP BY should include e.itinerary_en');
     });
   });
 });

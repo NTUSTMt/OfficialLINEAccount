@@ -136,7 +136,6 @@ AS $$
 DECLARE
     v_is_officer BOOLEAN;
     v_officer_record officers%ROWTYPE;
-    v_events JSONB;
 BEGIN
     v_is_officer := is_officer(p_officer_line_user_id);
 
@@ -152,20 +151,23 @@ BEGIN
     -- 查詢幹部個人稱謂
     SELECT * INTO v_officer_record FROM officers WHERE line_user_id = trim(p_officer_line_user_id) LIMIT 1;
 
-    -- 聚合活動與報名人數統計 (包含 line_group_url)
+    -- 聚合活動與報名人數統計 (包含 line_group_url 與雙語英文欄位)
     SELECT COALESCE(jsonb_agg(evt), '[]'::jsonb)
     INTO v_events
     FROM (
         SELECT jsonb_build_object(
             'id', e.id,
             'name', e.title,
+            'nameEn', COALESCE(e.title_en, ''),
             'startDate', to_char(e.start_date, 'YYYY/MM/DD'),
             'endDate', to_char(e.end_date, 'YYYY/MM/DD'),
             'deadline', to_char(e.deadline AT TIME ZONE 'Asia/Taipei', 'YYYY/MM/DD'),
             'cost', CASE WHEN e.fee > 0 THEN '$' || e.fee ELSE '免費' END,
             'status', COALESCE(e.status, '關閉'),
             'shortDesc', COALESCE(e.summary, ''),
+            'shortDescEn', COALESCE(e.summary_en, ''),
             'fullDesc', COALESCE(e.itinerary, ''),
+            'fullDescEn', COALESCE(e.itinerary_en, ''),
             'imageUrl', COALESCE(e.cover_image_url, ''),
             'driveFolderUrl', COALESCE(e.drive_folder_url, ''),
             'spreadsheetUrl', COALESCE(e.spreadsheet_url, ''),
@@ -181,7 +183,7 @@ BEGIN
         ) AS evt
         FROM events e
         LEFT JOIN event_signups s ON e.id = s.event_id
-        GROUP BY e.id, e.title, e.start_date, e.end_date, e.deadline, e.fee, e.status, e.summary, e.itinerary, e.cover_image_url, e.drive_folder_url, e.spreadsheet_url, e.spreadsheet_id, e.line_group_url
+        GROUP BY e.id, e.title, e.title_en, e.start_date, e.end_date, e.deadline, e.fee, e.status, e.summary, e.summary_en, e.itinerary, e.itinerary_en, e.cover_image_url, e.drive_folder_url, e.spreadsheet_url, e.spreadsheet_id, e.line_group_url
         ORDER BY e.start_date DESC
     ) sub;
 
@@ -196,7 +198,6 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_admin_events_rpc(TEXT) TO anon, authenticated, service_role;
-
 
 -- 4. 更新建立或更新活動資料 RPC (確保 line_group_url 寫入與更新)
 CREATE OR REPLACE FUNCTION save_admin_event_rpc(
@@ -249,30 +250,31 @@ BEGIN
     END;
 
     -- 解析日期
-    v_start_date := (replace(p_event_data->>'startDate', '/', '-'))::DATE;
-    IF p_event_data->>'endDate' IS NOT NULL AND trim(p_event_data->>'endDate') != '' THEN
-        v_end_date := (replace(p_event_data->>'endDate', '/', '-'))::DATE;
-    ELSE
-        v_end_date := v_start_date;
-    END IF;
+    v_start_date := COALESCE((replace(p_event_data->>'startDate', '/', '-'))::DATE, CURRENT_DATE);
+    v_end_date := COALESCE((replace(p_event_data->>'endDate', '/', '-'))::DATE, v_start_date);
 
     IF (p_event_data->>'deadline') ~ 'T|\+|:\d{2}' THEN
         v_deadline := (p_event_data->>'deadline')::TIMESTAMPTZ;
-    ELSE
+    ELSIF p_event_data->>'deadline' IS NOT NULL AND trim(p_event_data->>'deadline') != '' THEN
         v_deadline := (replace(p_event_data->>'deadline', '/', '-') || ' 23:59:59+08')::TIMESTAMPTZ;
+    ELSE
+        v_deadline := (v_start_date || ' 23:59:59+08')::TIMESTAMPTZ;
     END IF;
 
     -- UPSERT 進入 events 表
     INSERT INTO events (
         id,
         title,
+        title_en,
         fee,
         start_date,
         end_date,
         deadline,
         status,
         summary,
+        summary_en,
         itinerary,
+        itinerary_en,
         cover_image_url,
         drive_folder_url,
         spreadsheet_url,
@@ -283,13 +285,16 @@ BEGIN
     VALUES (
         v_event_id,
         COALESCE(p_event_data->>'name', '未命名活動'),
+        NULLIF(trim(COALESCE(p_event_data->>'nameEn', '')), ''),
         v_cost_num,
         v_start_date,
         v_end_date,
         v_deadline,
         COALESCE(p_event_data->>'status', '未來開放'),
         COALESCE(p_event_data->>'shortDesc', ''),
+        NULLIF(trim(COALESCE(p_event_data->>'shortDescEn', '')), ''),
         COALESCE(p_event_data->>'fullDesc', ''),
+        NULLIF(trim(COALESCE(p_event_data->>'fullDescEn', '')), ''),
         COALESCE(p_event_data->>'imageUrl', ''),
         NULLIF(trim(COALESCE(p_event_data->>'driveFolderUrl', '')), ''),
         NULLIF(trim(COALESCE(p_event_data->>'spreadsheetUrl', '')), ''),
@@ -299,13 +304,16 @@ BEGIN
     )
     ON CONFLICT (id) DO UPDATE
     SET title = EXCLUDED.title,
+        title_en = COALESCE(EXCLUDED.title_en, events.title_en),
         fee = EXCLUDED.fee,
         start_date = EXCLUDED.start_date,
         end_date = EXCLUDED.end_date,
         deadline = EXCLUDED.deadline,
         status = EXCLUDED.status,
         summary = EXCLUDED.summary,
+        summary_en = COALESCE(EXCLUDED.summary_en, events.summary_en),
         itinerary = EXCLUDED.itinerary,
+        itinerary_en = COALESCE(EXCLUDED.itinerary_en, events.itinerary_en),
         cover_image_url = CASE WHEN EXCLUDED.cover_image_url != '' THEN EXCLUDED.cover_image_url ELSE events.cover_image_url END,
         drive_folder_url = COALESCE(EXCLUDED.drive_folder_url, events.drive_folder_url),
         spreadsheet_url = COALESCE(EXCLUDED.spreadsheet_url, events.spreadsheet_url),

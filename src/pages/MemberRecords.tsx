@@ -244,7 +244,7 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
     if (status.includes('已核銷') || status.includes('已歸還') || status.includes('已繳費')) {
       return { bg: '#ecfdf5', border: '#a7f3d0', text: '#065f46' };
     }
-    if (status.includes('待確認') || status.includes('待領取') || status.includes('候補')) {
+    if (status.includes('待確認') || status.includes('待領取') || status.includes('候補') || status.includes('備取') || status.includes('審核中')) {
       return { bg: '#fffbeb', border: '#fde68a', text: '#b45309' };
     }
     if (status.includes('正取') || status.includes('租借中')) {

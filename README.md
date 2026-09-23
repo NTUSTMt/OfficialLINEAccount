@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.187-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.189-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.187)](#7-最新版本異動紀錄-changelog-v01187)
+- [7. 最新版本異動紀錄 (Changelog v0.1.189)](#7-最新版本異動紀錄-changelog-v01189)
 
 ---
 
@@ -373,7 +373,41 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.187)
+## 7. 最新版本異動紀錄 (Changelog v0.1.189)
+
+### v0.1.189 (2026-09-23)
+- 修復社員歷史全紀錄未顯示活動紀錄問題 (MemberRecords 活動紀錄載入異常修復)：
+  - 核心問題排查與根因：
+    - 幹部進入「社員歷史全紀錄」頁面 (MemberRecords.tsx) 時，系統調用 Supabase RPC 函式 get_admin_member_records_rpc 彙整該社員之裝備租借、活動報名與繳費歷史。
+    - 經資料庫排查，Supabase events 資料表之實際欄位結構包含 id、title、start_date、end_date、deadline、fee、status、summary、itinerary、cover_image_url 等，並無 location 欄位。
+    - 該 RPC 函式在 activities 聯合子查詢中錯誤引用了不存在的 e.location 欄位，導致 PostgreSQL 拋出致命錯誤：ERROR: 42703: column e.location does not exist，活動紀錄完全中斷。
+    - 當 RPC 拋出異常時，客戶端回退至直查資料表備援 (supabaseClient.ts fetchMemberTimelineRecordsFromSupabase)，其 PostgREST 語法同樣指定了 events:event_id (..., location)，遭到 Supabase API 回傳 HTTP 400 Bad Request，導致活動紀錄為空。
+  - 資料庫 RPC 與遷移修復 (Supabase PostgreSQL)：
+    - 建立遷移腳本 supabase/fix_member_records_location_rpc.sql，並同步更新 supabase/admin_portal_rpc.sql。
+    - 移除 get_admin_member_records_rpc 中不存在的 e.location 欄位，確保活動紀錄能正常聯合查詢。
+    - 已在 Supabase 正式執行遷移並驗證，調用 RPC 能成功載入完整活動歷史紀錄。
+  - 前端客戶端備援健全化與狀態樣式優化 (src/utils/supabaseClient.ts, src/pages/MemberRecords.tsx)：
+    - 於 supabaseClient.ts 的 fetchMemberTimelineRecordsFromSupabase 移除 signupsData 查詢中之 location 欄位，杜絕 PostgREST 400 報錯。
+    - 於 MemberRecords.tsx 的 getStatusBadgeStyle 補齊「備取」與「審核中」之琥珀黃徽章樣式，完整呈現正取（藍）、備取/審核中（黃）、已取消（紅）、已繳費/已核銷（綠）之多樣化活動狀態。
+  - 單元測試套件驗證 (test/81_member_records_activity_location_fix.test.mjs)：
+    - 新增單元測試驗證 get_admin_member_records_rpc 與 supabaseClient.ts 均已剔除 location 欄位，全數 308 項單元測試 100% 通過。
+
+### v0.1.188 (2026-09-23)
+- 修復活動管理英文編輯介面未讀取 Supabase 資料問題：
+  - 核心問題排查與根因：
+    - 經排查 Supabase 資料庫，events 資料表中已完整儲存活動之雙語資訊（如 title_en、summary_en、itinerary_en）。
+    - 幹部後台活動管理頁面 (AdminEvents.tsx) 載入活動時呼叫 fetchAdminEventsFromSupabase，調用 Supabase RPC get_admin_events_rpc。
+    - 該 RPC 在輸出 JSON 物件時，僅選取中文欄位（title、summary、itinerary），未選取 title_en、summary_en、itinerary_en，且其 GROUP BY 子句中缺少此三欄位，導致前端取得的 nameEn、shortDescEn、fullDescEn 均為 undefined。
+    - 點擊「編輯活動」時，表單初始化將未定義的英文欄位賦值為空字串，切換至「English」分頁時呈現完全空白。
+    - 同步檢查發現 GAS 備援函式 _handleGetAdminEvents 亦遺漏了雙語欄位與 line_group_url。
+  - 資料庫 RPC 與遷移修復 (Supabase PostgreSQL)：
+    - 建立遷移腳本 supabase/fix_admin_events_rpc_bilingual.sql，並同步更新 supabase/add_line_group_url_to_events.sql 與 supabase/admin_events_rpc.sql。
+    - 於 get_admin_events_rpc 之 jsonb_build_object 中新增 'nameEn', COALESCE(e.title_en, '')、'shortDescEn', COALESCE(e.summary_en, '')、'fullDescEn', COALESCE(e.itinerary_en, '')，並將 e.title_en, e.summary_en, e.itinerary_en 納入 GROUP BY。
+    - 已在 Supabase 正式執行更新並驗證返回物件已正確包含各活動之英文名稱與詳細說明。
+  - 後端 GAS 備援健全化 (src/gas.js)：
+    - 於 _handleGetAdminEvents 的 REST API 查詢字串補入 title_en,summary_en,itinerary_en,cover_image_url,line_group_url，並在回傳物件中對齊 nameEn、shortDescEn、fullDescEn 與 lineGroupUrl。
+  - 單元測試套件驗證 (test/69_bilingual_events_and_preferred_language.test.mjs)：
+    - 擴充測試檢驗 get_admin_events_rpc 遷移腳本與 gas.js _handleGetAdminEvents 之雙語欄位映射完整性，304 項單元測試全數通過。
 
 ### v0.1.187 (2026-09-23)
 - 補強新社員註冊無更新時間戳時之時效時鐘保護 (createdAt Fallback)：

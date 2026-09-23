@@ -137,13 +137,16 @@ BEGIN
         SELECT jsonb_build_object(
             'id', e.id,
             'name', e.title,
+            'nameEn', COALESCE(e.title_en, ''),
             'startDate', to_char(e.start_date, 'YYYY/MM/DD'),
             'endDate', to_char(e.end_date, 'YYYY/MM/DD'),
             'deadline', to_char(e.deadline AT TIME ZONE 'Asia/Taipei', 'YYYY/MM/DD'),
             'cost', CASE WHEN e.fee > 0 THEN '$' || e.fee ELSE '免費' END,
             'status', COALESCE(e.status, '關閉'),
             'shortDesc', COALESCE(e.summary, ''),
+            'shortDescEn', COALESCE(e.summary_en, ''),
             'fullDesc', COALESCE(e.itinerary, ''),
+            'fullDescEn', COALESCE(e.itinerary_en, ''),
             'imageUrl', COALESCE(e.cover_image_url, ''),
             'driveFolderUrl', COALESCE(e.drive_folder_url, ''),
             'spreadsheetUrl', COALESCE(e.spreadsheet_url, ''),
@@ -159,7 +162,7 @@ BEGIN
         ) AS evt
         FROM events e
         LEFT JOIN event_signups s ON e.id = s.event_id
-        GROUP BY e.id, e.title, e.start_date, e.end_date, e.deadline, e.fee, e.status, e.summary, e.itinerary, e.cover_image_url, e.drive_folder_url, e.spreadsheet_url, e.spreadsheet_id, e.line_group_url
+        GROUP BY e.id, e.title, e.title_en, e.start_date, e.end_date, e.deadline, e.fee, e.status, e.summary, e.summary_en, e.itinerary, e.itinerary_en, e.cover_image_url, e.drive_folder_url, e.spreadsheet_url, e.spreadsheet_id, e.line_group_url
         ORDER BY e.start_date DESC
     ) sub;
 

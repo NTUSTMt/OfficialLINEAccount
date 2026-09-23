@@ -284,7 +284,6 @@ BEGIN
             jsonb_build_object(
                 'eventId', e.id,
                 'eventStatus', e.status,
-                'location', e.location,
                 'signupStatus', s.status,
                 'paymentStatus', s.payment_status,
                 'signupDate', to_char(s.created_at::timestamp, 'YYYY/MM/DD HH24:MI')

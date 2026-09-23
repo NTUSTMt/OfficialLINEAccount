@@ -6770,7 +6770,7 @@ function _handleGetAdminEvents(userId) {
     }
 
     if (SUPABASE_URL && SUPABASE_KEY) {
-      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,start_date,end_date,deadline,fee,status,summary,itinerary,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id&order=start_date.desc";
+      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,title_en,start_date,end_date,deadline,fee,status,summary,summary_en,itinerary,itinerary_en,cover_image_url,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id,line_group_url&order=start_date.desc";
       var res = UrlFetchApp.fetch(url, {
         method: "get",
         headers: _getSupabaseHeaders(),
@@ -6783,17 +6783,21 @@ function _handleGetAdminEvents(userId) {
           return {
             id: e.id || "",
             name: e.title || "",
+            nameEn: e.title_en || "",
             startDate: e.start_date || "",
             endDate: e.end_date || "",
             deadline: e.deadline || "",
             cost: e.fee !== undefined ? String(e.fee) : "0",
             status: e.status || "開放",
             shortDesc: e.summary || "",
+            shortDescEn: e.summary_en || "",
             fullDesc: e.itinerary || "",
-            imageUrl: e.image_url || "",
+            fullDescEn: e.itinerary_en || "",
+            imageUrl: e.cover_image_url || e.image_url || "",
             driveFolderUrl: e.drive_folder_url || "",
             spreadsheetUrl: e.spreadsheet_url || "",
-            spreadsheetId: e.spreadsheet_id || ""
+            spreadsheetId: e.spreadsheet_id || "",
+            lineGroupUrl: e.line_group_url || ""
           };
         });
         return _jsonResponse({ status: "success", events: events });
