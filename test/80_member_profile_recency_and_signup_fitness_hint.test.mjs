@@ -75,4 +75,25 @@ describe('80. 活動報名 6 個月資料更新檢查與爬山經歷體能更新
     assert.ok(enContent.register.step4.fitnessNotice.includes('hiking experience and fitness'), 'en.json 必須包含 fitnessNotice');
     assert.ok(enContent.register.alert.updateSuccess.includes('outing admission chances'), 'en.json 更新成功提醒');
   });
+
+  it('6. _syncSignupToSupabase 必須保留原有的 updatedAt，防止報名動作刷新時鐘', () => {
+    assert.ok(
+      gasContent.includes('updated_at: p.updatedAt || p.updated_at || new Date().toISOString()'),
+      'gas.js 中的 _syncSignupToSupabase 必須保留 p.updatedAt'
+    );
+    const workerPath = path.join(rootDir, 'gas_modules', '05_Sync_Worker.js');
+    const workerContent = fs.readFileSync(workerPath, 'utf8');
+    assert.ok(
+      workerContent.includes('updated_at: p.updatedAt || p.updated_at || new Date().toISOString()'),
+      '05_Sync_Worker 中的 _syncSignupToSupabase 必須保留 p.updatedAt'
+    );
+  });
+
+  it('7. handleSignup 必須精確分流「已逾 6 個月」與「時效未校驗/查無更新紀錄」之說明', () => {
+    assert.ok(gasContent.includes('尚未完成時效校驗（或查無最近更新紀錄）'), 'gas.js 必須包含未校驗中文提示');
+    assert.ok(gasContent.includes('unverified update time or no recent records found'), 'gas.js 必須包含未校驗英文提示');
+
+    assert.ok(flexContent.includes('尚未完成時效校驗（或查無最近更新紀錄）'), '03_Flex_Templates 必須包含未校驗中文提示');
+    assert.ok(flexContent.includes('unverified update time or no recent records found'), '03_Flex_Templates 必須包含未校驗英文提示');
+  });
 });

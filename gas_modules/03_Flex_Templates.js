@@ -738,9 +738,10 @@ function handleSignup(replyToken, userId, eventId, ss) {
 
     var p = profileCheck.p;
 
-    // 2.5 檢查個人資料與體能經歷更新時效性 (超過 6 個月/180 天需提醒更新)
+    // 2.5 檢查個人資料與體能經歷更新時效性 (超過 6 個月/180 天或尚未校驗需提醒更新)
     var lastUpdateStr = p.updatedAt || p.createdAt || "";
     var isProfileExpired = false;
+    var isUnverifiedTime = false;
     if (lastUpdateStr) {
       var lastUpdateDate = new Date(lastUpdateStr);
       if (!isNaN(lastUpdateDate.getTime())) {
@@ -750,19 +751,29 @@ function handleSignup(replyToken, userId, eventId, ss) {
         }
       } else {
         isProfileExpired = true;
+        isUnverifiedTime = true;
       }
     } else {
       isProfileExpired = true;
+      isUnverifiedTime = true;
     }
 
     if (isProfileExpired) {
-      var expireNoticeMsg = "⚠️ 報名提醒：您的個人資料與體能紀錄已超過 6 個月未更新！\n\n" +
+      var reasonZh = isUnverifiedTime
+        ? "您的個人資料與體能紀錄尚未完成時效校驗（或查無最近更新紀錄）"
+        : "您的個人資料與體能紀錄已超過 6 個月未更新";
+
+      var reasonEn = isUnverifiedTime
+        ? "Your profile and fitness records have an unverified update time or no recent records found"
+        : "Your profile and fitness records have not been updated for over 6 months";
+
+      var expireNoticeMsg = "⚠️ 報名提醒：" + reasonZh + "！\n\n" +
         "社團出團活動將依據您的「爬山經歷」與「體能狀況」進行審查與篩選。為了維護出隊安全並增加您的錄取機會，若近期有更豐富的登山紀錄或更佳的體能表現，請先前往更新個人資料後，再回到此處報名活動喔！\n\n" +
         "👉 立即前往更新個人資料：\n" +
         "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard\n" +
         "(或於選單點擊「填寫資料 / 個人主頁」)\n" +
         "─────────────\n" +
-        "⚠️ Registration Notice: Your profile and fitness records have not been updated for over 6 months!\n\n" +
+        "⚠️ Registration Notice: " + reasonEn + "!\n\n" +
         "Club outings evaluate applications based on your hiking experience and fitness status. To ensure safety and boost your admission chances, please update your profile with your latest records before signing up!\n\n" +
         "👉 Update Your Profile Now:\n" +
         "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard";

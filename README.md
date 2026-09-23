@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.185-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.186-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.185)](#7-最新版本異動紀錄-changelog-v01185)
+- [7. 最新版本異動紀錄 (Changelog v0.1.186)](#7-最新版本異動紀錄-changelog-v01186)
 
 ---
 
@@ -373,7 +373,22 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.185)
+## 7. 最新版本異動紀錄 (Changelog v0.1.186)
+
+### v0.1.186 (2026-09-23)
+- 報名時效時鐘保護與無效時間戳記精準提示優化 (CodeRabbit 審查改進)：
+  - 核心問題排查與解決：
+    - 經審查發現：當隊員於 180 天內成功報名活動時，系統調用 _syncSignupToSupabase 同步隊員資料至 Supabase，原程式碼寫死 updated_at: new Date().toISOString()，導致報名動作直接覆蓋隊員的個人資料最後更新時間。
+    - 嚴重影響：只要隊員每隔數月報名一次活動，其「個資時效時鐘」就會被自動重設，即使數年未更新爬山經歷與體能紀錄，亦可永遠繞過 6 個月檢查機制。
+    - 另一文案問題：當隊員無有效時間戳記或時間格式異常時，一律提示「已超過 6 個月未更新」，向新建立或未校驗的使用者提供了不精準的阻擋理由。
+  - 實作防護與時鐘鎖定 (_syncSignupToSupabase)：
+    - 於 src/gas.js 與 gas_modules/05_Sync_Worker.js 調整 memberPayload，嚴格沿用隊員原始之 updatedAt（updated_at: p.updatedAt || p.updated_at || new Date().toISOString()），僅在全新無紀錄時賦予當前時間，徹底防止報名動作刷新個資時效。
+  - 精確分流阻擋理由 (handleSignup)：
+    - 於 src/gas.js 與 gas_modules/03_Flex_Templates.js 精準判定 isUnverifiedTime：
+      - 超過 180 天：明確提示「您的個人資料與體能紀錄已超過 6 個月未更新」/「Your profile and fitness records have not been updated for over 6 months」。
+      - 無時間戳記或無法校驗：精準提示「您的個人資料與體能紀錄尚未完成時效校驗（或查無最近更新紀錄）」/「Your profile and fitness records have an unverified update time or no recent records found」。
+  - 單元測試套件全面通過 (test/80_member_profile_recency_and_signup_fitness_hint.test.mjs)：
+    - 擴充測試檢驗 _syncSignupToSupabase 保留 updatedAt 邏輯，以及 handleSignup 精確分流雙語提示，全數 100% 通過。
 
 ### v0.1.185 (2026-09-23)
 - 活動報名個人資料 6 個月更新檢查與爬山經歷體能重要性說明：
