@@ -26,6 +26,15 @@ const AdminFinance = lazy(() => import('./pages/AdminFinance'));
 const AdminLoans = lazy(() => import('./pages/AdminLoans'));
 const AdminInventory = lazy(() => import('./pages/AdminInventory'));
 
+// 電腦版幹部工作站 (Web Admin Workstation)
+const WebAdminLayout = lazy(() => import('./pages/web-admin/WebAdminLayout').then(m => ({ default: m.WebAdminLayout })));
+const WebAdminLogin = lazy(() => import('./pages/web-admin/WebAdminLogin').then(m => ({ default: m.WebAdminLogin })));
+const WebAdminCallback = lazy(() => import('./pages/web-admin/WebAdminCallback').then(m => ({ default: m.WebAdminCallback })));
+const WebAdminEvents = lazy(() => import('./pages/web-admin/WebAdminEvents').then(m => ({ default: m.WebAdminEvents })));
+const WebAdminMembers = lazy(() => import('./pages/web-admin/WebAdminMembers').then(m => ({ default: m.WebAdminMembers })));
+const WebAdminFinance = lazy(() => import('./pages/web-admin/WebAdminFinance').then(m => ({ default: m.WebAdminFinance })));
+const WebAdminInventory = lazy(() => import('./pages/web-admin/WebAdminInventory').then(m => ({ default: m.WebAdminInventory })));
+
 // 解析 LIFF 傳入的初始路徑 (解決 liff.state 傳參導致重定向遺失的問題)
 const getInitialRedirectPath = () => {
   const searchParams = new URLSearchParams(window.location.search);
@@ -37,7 +46,7 @@ const getInitialRedirectPath = () => {
   }
 
   // 確保路徑為合法子路徑且不重複導向
-  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history') || statePath.startsWith('/achievements') || statePath.startsWith('/admin') || statePath.startsWith('/confirm-payment'))) {
+  if (statePath && (statePath.startsWith('/borrow') || statePath.startsWith('/payment') || statePath.startsWith('/register') || statePath.startsWith('/dashboard') || statePath.startsWith('/history') || statePath.startsWith('/achievements') || statePath.startsWith('/admin-web') || statePath.startsWith('/admin') || statePath.startsWith('/confirm-payment'))) {
     return statePath;
   }
 
@@ -609,8 +618,8 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
 
   return (
     <div className="router-wrapper" style={{ position: 'relative' }}>
-      {/* 載入完成後渲染全域導航頭貼選單 (核銷頁面豁免) */}
-      {!location.pathname.startsWith('/confirm-payment') && liffInit.userId && (
+      {/* 載入完成後渲染全域導航頭貼選單 (核銷頁面與電腦版工作站豁免) */}
+      {!location.pathname.startsWith('/confirm-payment') && !location.pathname.startsWith('/admin-web') && liffInit.userId && (
         <GlobalHeader pictureUrl={liffInit.pictureUrl} displayName={liffInit.displayName} isOfficer={isOfficer} />
       )}
 
@@ -667,6 +676,16 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
           <Route path="/admin" element={<Navigate to="/admin/events" replace />} />
           {/* 免 Google/LINE 登入之單鍵安全核銷頁面 */}
           <Route path="/confirm-payment" element={<ConfirmPayment />} />
+          {/* 電腦版幹部工作站 (Web Admin Workstation) */}
+          <Route path="/admin-web" element={<WebAdminLogin />} />
+          <Route path="/admin-web/callback" element={<WebAdminCallback />} />
+          <Route path="/admin-web" element={<WebAdminLayout />}>
+            <Route index element={<Navigate to="/admin-web/events" replace />} />
+            <Route path="events" element={<WebAdminEvents />} />
+            <Route path="members" element={<WebAdminMembers />} />
+            <Route path="finance" element={<WebAdminFinance />} />
+            <Route path="inventory" element={<WebAdminInventory />} />
+          </Route>
           {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
           <Route path="*" element={<Navigate to="/borrow" replace />} />
         </Routes>
@@ -703,8 +722,8 @@ function App() {
           statePath = hashParams.get('liff.state') || '';
         }
 
-        // ⭐️ 核銷專用直通通道：完全免連線 LINE LIFF，秒開渲染 (電腦、手機外部瀏覽器暢通無阻)
-        if (path.includes('/confirm-payment') || statePath.includes('/confirm-payment')) {
+        // ⭐️ 核銷與電腦版幹部工作站專用直通通道：完全免連線 LINE LIFF，秒開渲染 (電腦、手機外部瀏覽器暢通無阻)
+        if (path.includes('/confirm-payment') || statePath.includes('/confirm-payment') || path.startsWith('/admin-web') || statePath.startsWith('/admin-web')) {
           setLiffInit({ loading: false, error: null, userId: '', displayName: '', pictureUrl: '' });
           return;
         }

@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.191-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.192-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.191)](#7-最新版本異動紀錄-changelog-v01191)
+- [7. 最新版本異動紀錄 (Changelog v0.1.192)](#7-最新版本異動紀錄-changelog-v01192)
 
 ---
 
@@ -373,7 +373,37 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.191)
+## 7. 最新版本異動紀錄 (Changelog v0.1.192)
+
+### v0.1.192 (2026-09-24)
+- 電腦版幹部管理工作站全新上線 (Desktop Web Admin Workstation):
+  - 核心痛點解決：徹底擺脫手機 LINE 內部瀏覽器 (LIFF) 逐筆點開卡片的審核瓶頸，為幹部打造支援寬螢幕、高密度操作之桌面工作站。
+  - 獨立路由架構與導航設計：
+    - 規劃全新專屬路由群組 `/admin-web/*`，完全豁免 LIFF 初始化流程，保證電腦 Chrome / Safari / Edge 秒開。
+    - 依 Grill-me 決策結果，採用頂部水平導航列 (Top Nav) 代替側邊欄，將 100% 螢幕橫向寬度全數保留給大型資料網格。
+  - 四大工作站模組實作：
+    - 活動名冊審核工作站 (WebAdminEvents)：試算表樣式 (Excel/Sheets Grid) 高密度呈現，單元格直接下拉變更正備取狀態、多選核取方塊批次審核、全個資明文顯示（身分證字號、電話、緊急聯絡人）、一鍵複製整份名冊為 TSV 格式供保險申報表與入山入園系統直接貼上。
+    - 全社社員名冊工作站 (WebAdminMembers)：支援多維度即時過濾、幹部身分一鍵切換與名冊匯出 CSV。
+    - 財務對帳核銷工作站 (WebAdminFinance)：條列待核銷款項與末五碼，支援單筆與批次一鍵核銷。
+    - 裝備庫存管控工作站 (WebAdminInventory)：提供裝備庫存即時調整與上下架借用狀態切換。
+- 徹底修復 anon key 偽造身分之資安漏洞 (LINE Login OAuth2 + Supabase Custom JWT + RLS):
+  - 漏洞根治：過往前端僅依賴 anon key 直接調用 RPC，存在透過偽造 `p_line_user_id` 越權存取他人敏感個資之風險。
+  - 伺服端認證後端 (Supabase Edge Function `supabase/functions/line-auth/index.ts`)：
+    - 接收前端 LINE authorization code，以社團專屬 Channel Secret 向 LINE 官方 Token API 交換存取權杖，並向 Profile API 取得可信任之真實 userId。
+    - 雙軌查驗 members 與 officers 資料表之幹部身分，簽發 8 小時有效之 Supabase Custom JWT（含 sub=userId, role=authenticated, is_officer=boolean, aud=authenticated）。
+  - 資料庫安全遷移 (supabase/desktop_admin_security.sql)：
+    - 建立操作與登入稽核日誌表 (audit_logs)。
+    - 強化 members, event_signups, loans, loan_items, payments 之 RLS 存取政策：匿名訪問嚴格回傳 0 筆敏感資料；一般社員僅能讀取自身資料；僅持有效幹部 JWT 者方可存取全社個資與審核。
+    - 提供一鍵回滾腳本 (supabase/rollback_desktop_admin_security.sql)。
+  - 異常登入檢測機制：同一帳號於 30 分鐘內出現來自 3 個不同 IP 登入時，自動觸發 SECURITY_ALERT 並寄送警報郵件至社團公用帳號 `ntustmountain@gmail.com`。
+- 嚴格向後相容與 0 破壞回歸防線 (Strict Test Plan Execution):
+  - 保障手機端 LIFF 現有首屏載入秒開：`equipments` 與 `events` 公開讀取政策完整維持不變。
+  - 專案規範落實：所有錯誤訊息直接輸出具體 error.message 與代碼；資料更新直通 Supabase 杜絕 iOS WebKit Load failed 重導向阻斷。
+  - 單元測試套件全數通過：
+    - 新增 `test/84_web_admin_auth_and_jwt.test.mjs` (OAuth2 與 JWT 簽發驗證)。
+    - 新增 `test/85_rls_security_boundaries.test.mjs` (RLS 權限邊界測試)。
+    - 新增 `test/86_audit_and_anomalous_login.test.mjs` (稽核日誌與異常登入警報測試)。
+    - 既有 319 項測試 + 新增 14 項測試，共 333 項單元測試 100% 維持 Pass，`tsc -b && vite build` 建置零錯誤。
 
 ### v0.1.191 (2026-09-24)
 - 幹部後台財務對帳清單重複項目根治與外鍵關聯回填 (Finance Items Deduplication & Target Linking)：

@@ -1,0 +1,382 @@
+/* ==========================================================================
+   國立臺灣科技大學登山社 - 電腦版幹部後台工作站 (Web Admin Workstation)
+   高密度試算表網格與頂部全寬佈局樣式
+   ========================================================================== */
+
+:root {
+  --wa-bg: #0f172a;
+  --wa-surface: #1e293b;
+  --wa-surface-alt: #334155;
+  --wa-border: #334155;
+  --wa-border-light: #475569;
+  --wa-text: #f8fafc;
+  --wa-text-muted: #94a3b8;
+  --wa-primary: #10b981;
+  --wa-primary-hover: #059669;
+  --wa-danger: #ef4444;
+  --wa-warning: #f59e0b;
+  --wa-info: #3b82f6;
+  --wa-cell-pad: 8px 12px;
+}
+
+.web-admin-wrapper {
+  min-height: 100vh;
+  width: 100vw;
+  background-color: var(--wa-bg);
+  color: var(--wa-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 頂部全寬導航列 */
+.web-admin-header {
+  height: 60px;
+  background-color: var(--wa-surface);
+  border-bottom: 1px solid var(--wa-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.web-admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--wa-text);
+  text-decoration: none;
+}
+
+.web-admin-brand-badge {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--wa-primary);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.web-admin-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+}
+
+.web-admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  color: var(--wa-text-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+}
+
+.web-admin-nav-item:hover {
+  color: var(--wa-text);
+  background-color: var(--wa-surface-alt);
+}
+
+.web-admin-nav-item.active {
+  color: var(--wa-primary);
+  background-color: rgba(16, 185, 129, 0.12);
+  border-bottom: 2px solid var(--wa-primary);
+  border-radius: 6px 6px 0 0;
+}
+
+.web-admin-user-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.web-admin-user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.web-admin-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--wa-border-light);
+  object-fit: cover;
+  background-color: var(--wa-surface-alt);
+}
+
+.web-admin-user-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.web-admin-user-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.web-admin-user-role {
+  font-size: 0.72rem;
+  color: var(--wa-primary);
+}
+
+.web-admin-logout-btn {
+  background: transparent;
+  border: 1px solid var(--wa-border);
+  color: var(--wa-text-muted);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.web-admin-logout-btn:hover {
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--wa-danger);
+}
+
+/* 核心工作區 */
+.web-admin-main {
+  flex: 1;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* 工具列 (Toolbar) */
+.web-admin-toolbar {
+  background-color: var(--wa-surface);
+  border: 1px solid var(--wa-border);
+  border-radius: 8px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.web-admin-toolbar-left,
+.web-admin-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.web-admin-input,
+.web-admin-select {
+  background-color: var(--wa-bg);
+  border: 1px solid var(--wa-border-light);
+  color: var(--wa-text);
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.web-admin-input:focus,
+.web-admin-select:focus {
+  border-color: var(--wa-primary);
+}
+
+.web-admin-btn {
+  background-color: var(--wa-primary);
+  color: #ffffff;
+  border: none;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.15s;
+}
+
+.web-admin-btn:hover {
+  background-color: var(--wa-primary-hover);
+}
+
+.web-admin-btn-secondary {
+  background-color: var(--wa-surface-alt);
+  color: var(--wa-text);
+  border: 1px solid var(--wa-border-light);
+}
+
+.web-admin-btn-secondary:hover {
+  background-color: #475569;
+}
+
+.web-admin-btn-danger {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--wa-danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.web-admin-btn-danger:hover {
+  background-color: rgba(239, 68, 68, 0.25);
+}
+
+/* 高密度試算表網格 (Sheets Grid) */
+.web-admin-grid-container {
+  background-color: var(--wa-surface);
+  border: 1px solid var(--wa-border);
+  border-radius: 8px;
+  overflow: auto;
+  max-height: calc(100vh - 180px);
+  position: relative;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.web-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.web-admin-table th {
+  background-color: #172554;
+  color: #93c5fd;
+  font-weight: 600;
+  padding: var(--wa-cell-pad);
+  border-bottom: 2px solid var(--wa-border-light);
+  border-right: 1px solid var(--wa-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  user-select: none;
+}
+
+.web-admin-table td {
+  padding: var(--wa-cell-pad);
+  border-bottom: 1px solid var(--wa-border);
+  border-right: 1px solid var(--wa-border);
+  color: var(--wa-text);
+  vertical-align: middle;
+}
+
+.web-admin-table tr:hover td {
+  background-color: rgba(51, 65, 85, 0.5);
+}
+
+.web-admin-table tr.selected td {
+  background-color: rgba(16, 185, 129, 0.12);
+}
+
+/* 狀態徽章 */
+.web-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.web-admin-badge-success {
+  background-color: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.web-admin-badge-warning {
+  background-color: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.web-admin-badge-danger {
+  background-color: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.web-admin-badge-info {
+  background-color: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.web-admin-badge-neutral {
+  background-color: rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+/* 具體錯誤橫幅 (透明化錯誤呈現) */
+.web-admin-error-banner {
+  background-color: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* 登入頁樣式 */
+.web-admin-login-box {
+  max-width: 480px;
+  margin: 100px auto;
+  background-color: var(--wa-surface);
+  border: 1px solid var(--wa-border);
+  border-radius: 12px;
+  padding: 36px 32px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.web-admin-line-login-btn {
+  background-color: #06c755;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 14px 28px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 24px;
+  transition: background-color 0.15s;
+}
+
+.web-admin-line-login-btn:hover {
+  background-color: #05b04c;
+}
