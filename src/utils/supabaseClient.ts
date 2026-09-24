@@ -1575,8 +1575,11 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
 
     if (unpaidLoans && Array.isArray(unpaidLoans)) {
       unpaidLoans.forEach((l: any) => {
-        // 若該筆 loan 已經有 payment 關聯，則不重複新增
-        const alreadyInPayments = items.some(it => it.target_id === l.id || it.id === l.id);
+        // 若該筆 loan 已經有 payment 關聯，則不重複新增 (支援 target_id 與 type 字串匹配)
+        const alreadyInPayments = items.some(it =>
+          (it.target_id === l.id || it.id === l.id) ||
+          (it.line_user_id === l.line_user_id && it.type && it.type.includes(l.id))
+        );
         if (!alreadyInPayments) {
           items.push({
             id: l.id,
@@ -1613,7 +1616,14 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
       unpaidSignups.forEach((s: any) => {
         const fee = Number(s.events?.fee) || 0;
         if (fee > 0) {
-          const alreadyInPayments = items.some(it => it.target_id === s.event_id && it.line_user_id === s.line_user_id);
+          const alreadyInPayments = items.some(it =>
+            it.line_user_id === s.line_user_id && (
+              it.target_id === s.event_id ||
+              it.target_id === s.id ||
+              (it.type && s.events?.title && it.type.includes(s.events.title)) ||
+              (it.type && s.event_id && it.type.includes(s.event_id))
+            )
+          );
           if (!alreadyInPayments) {
             items.push({
               id: s.id,

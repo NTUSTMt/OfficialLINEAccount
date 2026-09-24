@@ -178,7 +178,30 @@ export default function AdminFinance({ userId }: { userId?: string }) {
 
   // 過濾與排序
   const filteredItems = useMemo(() => {
-    let list = [...items];
+    // 防禦性去重：若同一使用者針對相同活動/裝備既有 payment 申報紀錄，又有 event_signup/loan 待繳虛擬紀錄，排除後者
+    const paymentTargets = new Set<string>();
+    items.forEach(it => {
+      if (it.sourceType === 'payment' && it.line_user_id) {
+        if (it.target_id) paymentTargets.add(`${it.line_user_id}_${it.target_id}`);
+        const cleanType = (it.type || '').replace(/^[^\w\u4e00-\u9fa5(（]+\s*/, '');
+        paymentTargets.add(`${it.line_user_id}_${cleanType}`);
+        const actMatch = cleanType.match(/活動[：:]\s*(.+)/);
+        if (actMatch && actMatch[1]) {
+          paymentTargets.add(`${it.line_user_id}_${actMatch[1].trim()}`);
+        }
+      }
+    });
+
+    let list = items.filter(it => {
+      if (it.sourceType === 'event_signup' && it.line_user_id) {
+        if (it.target_id && paymentTargets.has(`${it.line_user_id}_${it.target_id}`)) return false;
+        const actMatch = (it.type || '').match(/活動費用\s*\((.+)\)/);
+        if (actMatch && actMatch[1] && paymentTargets.has(`${it.line_user_id}_${actMatch[1].trim()}`)) return false;
+      } else if (it.sourceType === 'loan' && it.line_user_id && it.target_id) {
+        if (paymentTargets.has(`${it.line_user_id}_${it.target_id}`)) return false;
+      }
+      return true;
+    });
 
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();

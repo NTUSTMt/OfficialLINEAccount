@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.190-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.191-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.190)](#7-最新版本異動紀錄-changelog-v01190)
+- [7. 最新版本異動紀錄 (Changelog v0.1.191)](#7-最新版本異動紀錄-changelog-v01191)
 
 ---
 
@@ -373,7 +373,24 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.190)
+## 7. 最新版本異動紀錄 (Changelog v0.1.191)
+
+### v0.1.191 (2026-09-24)
+- 幹部後台財務對帳清單重複項目根治與外鍵關聯回填 (Finance Items Deduplication & Target Linking)：
+  - 核心問題排查與根因：
+    - 幹部進入「財務對帳」頁面 (AdminFinance.tsx) 時，系統調用 Supabase RPC get_admin_finance_rpc 彙整 payments（已填報繳費單）與 event_signups / loans（未填報繳費之正取待繳單據）。
+    - 經排查發現：社員透過線上填報活動繳費時，寫入 payments 的 target_type 與 target_id 欄位均為 NULL（活動名稱僅存放於 type 字串中）。
+    - 原 RPC 之 NOT EXISTS 排除條件僅比對 target_type = 'event' AND target_id = e.id，導致條件比對失效，系統誤判該社員尚未申報繳費，將 payments 回報單與 event_signups 報名原始待繳單同時列出，造成視覺重複。
+  - 資料庫層級修復與資料回填 (Supabase PostgreSQL)：
+    - 建立遷移腳本 supabase/fix_admin_finance_duplicate_rpc.sql 並同步更新 supabase/admin_portal_rpc.sql。
+    - 執行資料庫回填：將既有 payments 紀錄依據 type 字串回填正確之 target_type 與 target_id（例如活動 E2609-04、租借單號與社費）。
+    - 強化 get_admin_finance_rpc 排除邏輯：NOT EXISTS 條件擴充支援 (p.type ILIKE '%' || e.title || '%') 與 (p.type ILIKE '%' || e.id || '%')，徹底阻絕重複產生。
+    - 已在遠端 Supabase 正式執行遷移，驗證重複單據已完全消除，各款項均維持唯一呈現。
+  - 前端與備援查詢防禦性去重 (src/utils/supabaseClient.ts, src/pages/AdminFinance.tsx)：
+    - 於 supabaseClient.ts 的 fetchFinanceItemsFromSupabase 備援查詢擴充比對 events.title 與 loan id，防止直讀備援出現重複。
+    - 於 AdminFinance.tsx 的 filteredItems 新增防禦性去重過濾，自動偵測並剔除已存在相同款項之待繳虛擬紀錄。
+  - 單元測試套件驗證 (test/83_admin_finance_deduplication.test.mjs)：
+    - 新增 5 項單元測試，檢驗 RPC 排除邏輯、資料庫回填腳本、備援查詢健全化與前端去重演算，全數 319 項測試 100% 通過。
 
 ### v0.1.190 (2026-09-24)
 - LINE 官方帳號最新活動卡片新增「已報名人數」膠囊徽章 (Registered Count Badge on Event Cards)：

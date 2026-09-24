@@ -548,7 +548,10 @@ BEGIN
           AND l.payment_status != '已繳費 Paid'
           AND NOT EXISTS (
               SELECT 1 FROM payments p 
-              WHERE p.target_type = 'loan' AND p.target_id = l.id
+              WHERE (
+                  (p.target_type = 'loan' AND p.target_id = l.id)
+                  OR (p.line_user_id = l.line_user_id AND p.type ILIKE '%' || l.id || '%')
+              )
           )
 
         UNION ALL
@@ -580,7 +583,12 @@ BEGIN
           AND s.payment_status != '已繳費 Paid'
           AND NOT EXISTS (
               SELECT 1 FROM payments p 
-              WHERE p.target_type = 'event' AND p.target_id = e.id AND p.line_user_id = s.line_user_id
+              WHERE p.line_user_id = s.line_user_id
+                AND (
+                    (p.target_type = 'event' AND p.target_id = e.id)
+                    OR (p.type ILIKE '%' || e.title || '%')
+                    OR (p.type ILIKE '%' || e.id || '%')
+                )
           )
     ) f_row;
 
