@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.189-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.190-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.189)](#7-最新版本異動紀錄-changelog-v01189)
+- [7. 最新版本異動紀錄 (Changelog v0.1.190)](#7-最新版本異動紀錄-changelog-v01190)
 
 ---
 
@@ -373,7 +373,24 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.189)
+## 7. 最新版本異動紀錄 (Changelog v0.1.190)
+
+### v0.1.190 (2026-09-24)
+- LINE 官方帳號最新活動卡片新增「已報名人數」膠囊徽章 (Registered Count Badge on Event Cards)：
+  - 核心功能與需求依據：
+    - 依據訪談決策，於 LINE 聊天室活動卡片頂部狀態列右側新增淺天藍膠囊徽章，讓社員與幹部在報名前即時掌握活動熱絡程度與名額概況。
+    - 支援「最新活動」輪播卡片 (sendEventList) 與「單一活動詳情」卡片 (sendEventDetail)。
+  - 視覺設計與排版 (LINE Flex Message)：
+    - 採用淺天藍底色 (#f0f9ff) 搭配深藍色字體 (#0284c7，字級 xs、粗體 bold)，佐以圓角 (cornerRadius: md) 與精緻內邊距 (paddingStart/End: sm, paddingTop/Bottom: xs)。
+    - 狀態列改採水平佈局 (layout: horizontal, justifyContent: space-between, alignItems: center)，左側為活動狀態標籤 (flex: 1)，右側為已報名人數膠囊徽章 (flex: 0)，視覺層次清晰俐落。
+  - 極速批次查詢與統計邏輯 (src/gas.js, gas_modules/03_Flex_Templates.js)：
+    - 100% 直連 Supabase event_signups 資料表作為單一信任源。
+    - sendEventList 採 in.(...) 批次查詢所有活動報名名單，於記憶體構建 O(1) 計數字典，徹底杜絕迴圈內多次 HTTP 請求之效能損耗。
+    - 嚴格排除取消狀態 (status 不包含「取消」且不包含「cancel」)，即使 0 人報名亦清楚顯示 0 人。
+  - 多語言字串支援：
+    - 依據使用者偏好語言 (prefLang)，分別呈現繁體中文「已報名：X 人」、英文「Registered: X」或雙語安全回退「已報名：X 人 / Registered: X」。
+  - 單元測試套件驗證 (test/82_event_card_signup_count.test.mjs)：
+    - 新增 6 項測試驗證批次查詢語法、取消狀態排除、膠囊樣式顏色、多語系字串與統計計算器，全數 314 項測試 100% 通過。
 
 ### v0.1.189 (2026-09-23)
 - 修復社員歷史全紀錄未顯示活動紀錄問題 (MemberRecords 活動紀錄載入異常修復)：

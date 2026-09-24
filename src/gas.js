@@ -1549,6 +1549,32 @@ function sendEventList(replyToken, userId) {
     return;
   }
 
+  // 批次查詢 event_signups 表統計各活動已報名人數 (排除已取消者)
+  var eventIds = [];
+  for (var k = 0; k < sbEvents.length; k++) {
+    if (sbEvents[k] && sbEvents[k].id) {
+      eventIds.push(sbEvents[k].id);
+    }
+  }
+
+  var signupCounts = {};
+  if (eventIds.length > 0) {
+    var signups = _supabaseGet("event_signups", {
+      select: "event_id,status",
+      event_id: "in.(" + eventIds.join(",") + ")"
+    });
+    if (signups && Array.isArray(signups)) {
+      for (var s = 0; s < signups.length; s++) {
+        var su = signups[s];
+        var sStatus = String(su.status || "").trim().toLowerCase();
+        if (sStatus.indexOf("取消") === -1 && sStatus.indexOf("cancel") === -1) {
+          var eid = su.event_id;
+          signupCounts[eid] = (signupCounts[eid] || 0) + 1;
+        }
+      }
+    }
+  }
+
   var bubbles = [];
   var now = new Date();
 
@@ -1586,6 +1612,15 @@ function sendEventList(replyToken, userId) {
     var displayStatusEn = isFuture ? "Coming Soon" : (isOpen ? "Open" : "Registration Closed");
     var displayStatus = (prefLang === "en") ? displayStatusEn : (prefLang === "zh" ? displayStatusZh : (displayStatusZh + " " + displayStatusEn));
 
+    var regCount = signupCounts[eventId] || 0;
+    var regCountStrZh = "已報名：" + regCount + " 人";
+    var regCountStrEn = "Registered: " + regCount;
+    var regCountDisplay = (prefLang === "en")
+      ? regCountStrEn
+      : (prefLang === "zh"
+          ? regCountStrZh
+          : (regCountStrZh + " / " + regCountStrEn));
+
     var costStrZh = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費";
     var costStrEn = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "Free";
     var costStr = (prefLang === "en") ? costStrEn : (prefLang === "zh" ? costStrZh : ((ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free"));
@@ -1621,11 +1656,35 @@ function sendEventList(replyToken, userId) {
         "type": "box",
         "layout": "vertical",
         "contents": [{
-          "type": "text",
-          "text": displayStatus,
-          "weight": "bold",
-          "color": tagColor,
-          "size": "sm"
+          "type": "box",
+          "layout": "horizontal",
+          "justifyContent": "space-between",
+          "alignItems": "center",
+          "contents": [{
+            "type": "text",
+            "text": displayStatus,
+            "weight": "bold",
+            "color": tagColor,
+            "size": "sm",
+            "flex": 1
+          }, {
+            "type": "box",
+            "layout": "horizontal",
+            "backgroundColor": "#f0f9ff",
+            "cornerRadius": "md",
+            "paddingStart": "sm",
+            "paddingEnd": "sm",
+            "paddingTop": "xs",
+            "paddingBottom": "xs",
+            "flex": 0,
+            "contents": [{
+              "type": "text",
+              "text": regCountDisplay,
+              "size": "xs",
+              "color": "#0284c7",
+              "weight": "bold"
+            }]
+          }]
         }, {
           "type": "text",
           "text": eventName,
@@ -1782,6 +1841,29 @@ function sendEventDetail(replyToken, eventId, userId) {
   var summaryTag = (prefLang === "en") ? "【Summary】" : (prefLang === "zh" ? "【簡介】" : (hasEnglish ? "【簡介 Summary】" : "【簡介】"));
   var itineraryTag = (prefLang === "en") ? "【Detailed Itinerary】" : (prefLang === "zh" ? "【詳細行程】" : (hasEnglish ? "【詳細行程 Detailed Itinerary】" : "【詳細行程】"));
 
+  // 查詢該活動有效報名人數 (排除已取消者)
+  var regCount = 0;
+  var detailSignups = _supabaseGet("event_signups", {
+    select: "id,status",
+    event_id: "eq." + String(eventId).trim()
+  });
+  if (detailSignups && Array.isArray(detailSignups)) {
+    for (var ds = 0; ds < detailSignups.length; ds++) {
+      var dStatus = String(detailSignups[ds].status || "").trim().toLowerCase();
+      if (dStatus.indexOf("取消") === -1 && dStatus.indexOf("cancel") === -1) {
+        regCount++;
+      }
+    }
+  }
+
+  var regCountStrZh = "已報名：" + regCount + " 人";
+  var regCountStrEn = "Registered: " + regCount;
+  var regCountDisplay = (prefLang === "en")
+    ? regCountStrEn
+    : (prefLang === "zh"
+        ? regCountStrZh
+        : (regCountStrZh + " / " + regCountStrEn));
+
   var summaryZh = ev.summary || "尚無簡介";
   var summaryEn = ev.summary_en || ev.short_desc_en || ev.summary || "No summary";
   var summaryContent = (prefLang === "en")
@@ -1841,11 +1923,40 @@ function sendEventDetail(replyToken, eventId, userId) {
       "layout": "vertical",
       "contents": [
         {
-          "type": "text",
-          "text": titleTag,
-          "weight": "bold",
-          "size": "sm",
-          "color": "#1DB446"
+          "type": "box",
+          "layout": "horizontal",
+          "justifyContent": "space-between",
+          "alignItems": "center",
+          "contents": [
+            {
+              "type": "text",
+              "text": titleTag,
+              "weight": "bold",
+              "size": "sm",
+              "color": "#1DB446",
+              "flex": 1
+            },
+            {
+              "type": "box",
+              "layout": "horizontal",
+              "backgroundColor": "#f0f9ff",
+              "cornerRadius": "md",
+              "paddingStart": "sm",
+              "paddingEnd": "sm",
+              "paddingTop": "xs",
+              "paddingBottom": "xs",
+              "flex": 0,
+              "contents": [
+                {
+                  "type": "text",
+                  "text": regCountDisplay,
+                  "size": "xs",
+                  "color": "#0284c7",
+                  "weight": "bold"
+                }
+              ]
+            }
+          ]
         },
         {
           "type": "text",

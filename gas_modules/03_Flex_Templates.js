@@ -95,6 +95,32 @@ function sendEventList(replyToken) {
     return;
   }
 
+  // 批次查詢 event_signups 表統計各活動已報名人數 (排除已取消者)
+  var eventIds = [];
+  for (var k = 0; k < sbEvents.length; k++) {
+    if (sbEvents[k] && sbEvents[k].id) {
+      eventIds.push(sbEvents[k].id);
+    }
+  }
+
+  var signupCounts = {};
+  if (eventIds.length > 0) {
+    var signups = _supabaseGet("event_signups", {
+      select: "event_id,status",
+      event_id: "in.(" + eventIds.join(",") + ")"
+    });
+    if (signups && Array.isArray(signups)) {
+      for (var s = 0; s < signups.length; s++) {
+        var su = signups[s];
+        var sStatus = String(su.status || "").trim().toLowerCase();
+        if (sStatus.indexOf("取消") === -1 && sStatus.indexOf("cancel") === -1) {
+          var eid = su.event_id;
+          signupCounts[eid] = (signupCounts[eid] || 0) + 1;
+        }
+      }
+    }
+  }
+
   var bubbles = [];
 
   for (var i = 0; i < sbEvents.length; i++) {
@@ -121,6 +147,9 @@ function sendEventList(replyToken) {
       var endFormatted = _formatEventDate(ev.end_date);
       var deadlineFormatted = _formatEventDate(ev.deadline);
 
+      var regCount = signupCounts[eventId] || 0;
+      var regCountDisplay = "已報名：" + regCount + " 人 / Registered: " + regCount;
+
       var dateDisplay = startFormatted;
       if (endFormatted && endFormatted !== startFormatted) {
         dateDisplay += " ~ " + endFormatted;
@@ -132,11 +161,35 @@ function sendEventList(replyToken) {
           "type": "box",
           "layout": "vertical",
           "contents": [{
-            "type": "text",
-            "text": displayStatus,
-            "weight": "bold",
-            "color": tagColor,
-            "size": "sm"
+            "type": "box",
+            "layout": "horizontal",
+            "justifyContent": "space-between",
+            "alignItems": "center",
+            "contents": [{
+              "type": "text",
+              "text": displayStatus,
+              "weight": "bold",
+              "color": tagColor,
+              "size": "sm",
+              "flex": 1
+            }, {
+              "type": "box",
+              "layout": "horizontal",
+              "backgroundColor": "#f0f9ff",
+              "cornerRadius": "md",
+              "paddingStart": "sm",
+              "paddingEnd": "sm",
+              "paddingTop": "xs",
+              "paddingBottom": "xs",
+              "flex": 0,
+              "contents": [{
+                "type": "text",
+                "text": regCountDisplay,
+                "size": "xs",
+                "color": "#0284c7",
+                "weight": "bold"
+              }]
+            }]
           }, {
             "type": "text",
             "text": eventName,
@@ -259,6 +312,23 @@ function sendEventDetail(replyToken, eventId) {
     status = "關閉";
   }
 
+  // 查詢該活動有效報名人數 (排除已取消者)
+  var regCount = 0;
+  var detailSignups = _supabaseGet("event_signups", {
+    select: "id,status",
+    event_id: "eq." + String(eventId).trim()
+  });
+  if (detailSignups && Array.isArray(detailSignups)) {
+    for (var ds = 0; ds < detailSignups.length; ds++) {
+      var dStatus = String(detailSignups[ds].status || "").trim().toLowerCase();
+      if (dStatus.indexOf("取消") === -1 && dStatus.indexOf("cancel") === -1) {
+        regCount++;
+      }
+    }
+  }
+
+  var regCountDisplay = "已報名：" + regCount + " 人 / Registered: " + regCount;
+
   var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
   var startFormatted = _formatEventDate(ev.start_date);
   var endFormatted = _formatEventDate(ev.end_date);
@@ -303,11 +373,40 @@ function sendEventDetail(replyToken, eventId) {
       "layout": "vertical",
       "contents": [
         {
-          "type": "text",
-          "text": "【名稱】",
-          "weight": "bold",
-          "size": "sm",
-          "color": "#1DB446"
+          "type": "box",
+          "layout": "horizontal",
+          "justifyContent": "space-between",
+          "alignItems": "center",
+          "contents": [
+            {
+              "type": "text",
+              "text": "【名稱】",
+              "weight": "bold",
+              "size": "sm",
+              "color": "#1DB446",
+              "flex": 1
+            },
+            {
+              "type": "box",
+              "layout": "horizontal",
+              "backgroundColor": "#f0f9ff",
+              "cornerRadius": "md",
+              "paddingStart": "sm",
+              "paddingEnd": "sm",
+              "paddingTop": "xs",
+              "paddingBottom": "xs",
+              "flex": 0,
+              "contents": [
+                {
+                  "type": "text",
+                  "text": regCountDisplay,
+                  "size": "xs",
+                  "color": "#0284c7",
+                  "weight": "bold"
+                }
+              ]
+            }
+          ]
         },
         {
           "type": "text",
