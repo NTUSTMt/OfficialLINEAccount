@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.192-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.201-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.192)](#7-最新版本異動紀錄-changelog-v01192)
+- [7. 最新版本異動紀錄 (Changelog v0.1.201)](#7-最新版本異動紀錄-changelog-v01201)
 
 ---
 
@@ -373,7 +373,141 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.192)
+## 7. 最新版本異動紀錄 (Changelog v0.1.201)
+
+### v0.1.201 (2026-09-24)
+- 活動詳細資訊欄位（活動日期、截止日期、預計費用）全面貼齊卡片底部 (WebAdminEvents, webAdmin.css):
+  - 依據視覺對齊要求，將「活動日期：」、「截止日期：」與「預計費用：」資訊區塊（`.wa-event-card-meta`）移入卡片置底容器（`.wa-event-card-footer`）中，位於分隔線與操作按鈕正上方。
+  - 當上方簡介文字行數較少（例如 1 行或無簡介）時，中間剩餘空間由彈性伸縮區塊吸收，確保所有活動卡片的活動日期、截止日期、預計費用、分隔線與操作按鈕在整份網格中均完全處於同一水平線上對齊，呈現整齊劃一的卡片視覺感。
+- 單元測試套件與建置驗證:
+  - 全專案 344 項單元測試 100% 通過，`tsc -b && vite build` 建置零錯誤，嚴格符合零 Emoji 規範。
+
+### v0.1.200 (2026-09-24)
+- 排序與篩選下拉選單箭頭內縮與自訂樣式 (webAdmin.css):
+  - 徹底解決瀏覽器原生 `<select>` 下拉箭頭緊貼右外框問題（如圖一）。
+  - 導入標準 `appearance: none;` 與俐落向量 SVG 展開箭頭（`#64748b`），精準設定 `background-position: right 14px center` 與 `padding-right: 36px`，賦予下拉選單左右對稱之舒適視覺呼吸感。
+- 活動卡片底部操作列與分隔線固定置底 (WebAdminEvents, webAdmin.css):
+  - 新增 `.wa-event-card-footer` 結構並配置 `margin-top: auto`，將「預計費用」下方之分隔線（`____________`）與「編輯活動」「報名名冊」操作按鈕牢固錨定於卡片最底部，杜絕因簡介行數長短不一而造成卡片底部按鈕浮動高低不齊。
+  - 操作按鈕採用 `flex: 1` 與水平垂直完全置中（`justify-content: center`），消除按鈕右側多餘空白，讓兩顆按鈕飽滿均分整張卡片寬度。
+- 活動卡片封面右上角狀態加入已報名人數 (WebAdminEvents):
+  - 同步批次查詢 `event_signups` 資料表有效報名紀錄（排除已取消），動態統計各活動實際報名人數。
+  - 狀態膠囊徽章文字統一對齊為純數字與狀態名稱，格式如：`8・開放`、`0・未來開放`、`12・已截止`、`0・關閉`。
+- 編輯活動彈窗欄位靠左、必填校驗與字數限制 (WebAdminEvents):
+  - 彈窗全體欄位標籤嚴格靠左對齊（`text-align: left`），並將「出隊結束日期 *」納入前端與儲存驗證之必填欄位。
+  - 移除中英文雙欄頂部之說明文字（「社團預設語言」、「外籍生友善對照」、「最多三行 / 上限1000字」、「上限700字」等）。
+  - 對齊 LINE Flex Message 限制（單一卡片傳送上限 1500 - 100 = 1400 字），為中英文各自實作總字數（簡介+行程）即時統計提示與超出上限（> 1400）攔截機制。
+  - 大幅增加「活動簡介」（4 行，最小高度 110px）與「詳細行程與裝備要求」（12 行，最小高度 260px）之預設輸入框高度，提升幹部排版與輸入舒適度。
+- 單元測試套件與建置驗證 (test/87_web_admin_loans_and_redesign.test.mjs):
+  - 擴充單元測試驗證活動卡片底部固定容器、報名人數膠囊、出隊結束日期必填、1400 字數限制與零 Emoji 規範。
+  - 全專案 344 項測試 100% 通過，`tsc -b && vite build` 編譯建置零錯誤。
+
+### v0.1.199 (2026-09-24)
+- 活動管理編輯彈窗多行輸入框視覺風格統一 (WebAdminEvents, webAdmin.css):
+  - 修正中英文「活動簡介」與「詳細行程與裝備要求」文字輸入框 (textarea) 之背景底色與邊框外觀。
+  - 於 `webAdmin.css` 統一將 `.web-admin-textarea` 納入 `.web-admin-input, .web-admin-select` 標準規則中，提供純白底色 (`#ffffff` / `var(--wa-surface)`)、細緻淺灰邊框 (`1px solid var(--wa-border-light)`)、內距 (padding) 與圓角 (6px)，並加入垂直尺寸自由調整 (`resize: vertical`) 與行高改善。
+  - 在 `WebAdminEvents.tsx` 中為 4 處簡介與詳細行程 textarea (中文與英文) 設定純白底色，消除預設瀏覽器原生外觀與灰色雜色，使彈窗內所有輸入元件（單行文字、日期、數字、下拉選單、多行文字）達到一致之質感。
+
+### v0.1.198 (2026-09-24)
+- 活動管理頁面更名、精確狀態篩選與多維度排序 (WebAdminEvents, WebAdminLayout):
+  - 頂級導覽標籤全面由「活動發布管理」更名為「活動管理」，契合全功能維護之定位。
+  - 徹底修復狀態篩選無效問題：以資料庫真實 `status`（開放、未來開放、關閉）與截止日期 `deadline` 動態計算衍生狀態（若開放且逾截止日即判定為「已截止」），篩選選項精準對齊為「全部狀態 (ALL)」、「開放中 (開放)」、「未來開放」、「已截止」與「已關閉 (關閉)」，且各選項標註即時符合筆數。
+  - 實作多維度排序功能：預設依「出隊開始日期（由新到舊）」排序，並支援一鍵切換「出隊日期 (由舊到新)」、「截止日期 (即將截止優先)」、「截止日期 (較晚截止優先)」、「活動代號 (由新到舊/由舊到新)」與「活動狀態 (開放中優先)」。
+- LINE 風格頂部封面大圖卡片升級 (wa-event-card, webAdmin.css):
+  - 卡片頂部採用比例接近 LINE Flex 卡片之滿版封面大圖容器（高度 185px），無圖片時自動呈現質感翡翠綠山巒漸層與山形圖示。
+  - 圖片左上角：半透明深色玻璃擬態徽章顯示活動代號（如 `E2609-01`，等寬字體）。
+  - 圖片右上角：彩色膠囊徽章顯示報名狀態（開放綠色、未來開放橙色、已截止紅色、已關閉灰色），依指示不顯示多餘人數。
+  - 圖片下方靠左文字結構：
+    - 活動名稱：中文與英文以空格隔開，大字體加粗。
+    - 活動簡介：嚴格限制最多三行（CSS `line-clamp: 3`），排版整齊不忽高忽低。
+    - 活動詳細資訊：活動日期（YYYY/MM/DD - YYYY/MM/DD）、截止日期、預計費用（翡翠綠高對比強調）。
+    - 分隔線與底部操作：水平對稱配置「編輯活動」與「報名名冊」直通按鈕。
+- 置中雙欄中英文編輯彈窗實作 (Centered Bilingual Modal, wa-modal-container):
+  - 捨棄右側滑出抽屜，改為桌面端友善之寬版置中彈窗（`max-width: 960px`，支援點擊遮罩或點擊叉號關閉）。
+  - 上方共用設定區：活動代號、活動狀態、出隊起訖日期、報名截止日、預計費用、LINE 群組邀請保密連結。
+  - 封面照片雙軌設定：可點擊選取電腦本機圖檔（即時 Base64 預覽並自動壓縮），亦可直接輸入圖片網址（URL）。
+  - 下方中英文雙欄對照區：左右對稱並列「中文內容 (Traditional Chinese)」與「英文內容 (English Translation)」，直觀對照兩側活動名稱、三行簡介與詳細行程裝備。
+  - 儲存處理：若有新圖檔則經由 GAS 壓縮上傳 Google Drive 取得永久 CDN 縮圖網址，並直連寫入 Supabase `events` 資料表且記錄稽核日誌。
+- 單元測試套件與建置驗證 (test/87_web_admin_loans_and_redesign.test.mjs):
+  - 擴充單元測試驗證活動管理更名、狀態計算與篩選選單、排序機制、LINE 大圖卡片結構、置中雙欄彈窗與全體零表情符號規範。
+  - 全專案 344 項測試 100% 通過（69 個測試套件維持 0 失敗），`tsc -b && vite build` 編譯建置零錯誤。
+
+### v0.1.197 (2026-09-24)
+- 電腦版幹部工作站介面風格全面翻新 (Light Clean Notion / Linear UI Theme, webAdmin.css):
+  - 設計語言全面重塑：揚棄傳統暗色模式，改採 Notion / Linear 現代輕量設計語彙。以 `#f8fafc` 淺灰為底色、純白 `#ffffff` 面板與資料表格、Slate-900 俐落文字，並融合台科登山社代表色翡翠綠（`#059669`）作為品牌主色調。
+  - 統一滑出抽屜與卡片網格體系：在 `webAdmin.css` 封裝 `.wa-drawer-backdrop`、`.wa-drawer-panel`、`.wa-card-grid`、`.wa-card` 與 `.wa-diff-modal` 樣式變數，確保所有管理模組擁有一致之流暢體驗。
+- 活動發布與名冊審核模組獨立解耦 (WebAdminEvents & WebAdminRoster Separation):
+  - 頂級功能獨立：依據幹部決策將名冊審核自活動子標籤中獨立為頂級獨立頁面 `/admin-web/roster`。
+  - 活動管理專注出隊與編輯 (`/admin-web/events`)：採用卡片網格佈局，支援關鍵字與狀態切換、報名即時人數統計；右側滑出抽屜提供完整新增與編輯表單，卡片上配置快速捷徑按鈕直接開啟 `/admin-web/roster?eventId=...`。
+  - 名冊審核高密度工作站 (`/admin-web/roster`)：專為保險審核與入山入園打造之高密度試算表介面，支援依活動下拉切換、正備取單筆切換、多筆批次審核，並提供一鍵將整份名冊複製為 TSV（Tab-Separated Values）功能，方便直接於 Google 試算表或保險表單貼上。
+- 裝備借用管理模組全面實作 (WebAdminLoans):
+  - 新增 `/admin-web/loans` 路由，採用參考手機介面之卡片網格佈局，支援搜尋借用人、學號、電話與裝備品名。
+  - 點擊卡片彈出右側滑出抽屜，完整展示借用人聯絡資訊、出隊起訖、租金與押金、租借品項明細。
+  - 抽屜提供快捷「點交出借」與「歸還入庫」操作，歸還入庫時自動回補 `equipments.available_qty` 庫存數量，並記錄幹部稽核紀錄。
+- 全社社員名冊卡片網格與 Diff 比對確認彈窗 (WebAdminMembers):
+  - 清單全面改採清新卡片網格佈局，點擊卡片開啟右側抽屜，包含完整個人基本資料編輯與歷史活動/借用時間軸。
+  - 實作防呆 Diff 確認彈窗：按下儲存時自動比對新舊值，以表格清晰呈現異動項目（包含紅綠對照標記），確認後直連更新 Supabase `members`。
+- 財務核銷與庫存管理色彩對比度強化 (WebAdminFinance & WebAdminInventory):
+  - 優化金額、末五碼與庫存數量於純白底色之色彩對比度，提升視覺舒適感與可讀性。
+- 嚴格零表情符號規範與單元測試套件 (test/87_web_admin_loans_and_redesign.test.mjs):
+  - 新增專屬單元測試，驗證 6 大路由、抽屜面板、卡片佈局、Diff 比對防呆、庫存回補與全模組零表情符號規範。
+  - 修正歷史測試 `test/86_audit_and_anomalous_login.test.mjs` 之名冊稽核斷言。
+  - 全專案 342 項測試 100% 通過（69 個測試套件全數通過），`tsc -b && vite build` 建置編譯零錯誤。
+
+### v0.1.196 (2026-09-24)
+- line-auth Edge Function 變數修復、線上部署與本機環境配置 (.env, supabase/functions/line-auth/index.ts):
+  - 核心問題診斷：幹部登入回呼時，畫面顯示 `[系統配置錯誤]: 未設定 VITE_SUPABASE_URL 環境變數`；且經稽核發現 `supabase/functions/line-auth/index.ts` 遺漏了 `supabaseUrl` 與 `supabaseServiceKey` 宣告，且該 Function 尚未部署至線上 Supabase。
+  - 根因分析：
+    - 前端缺少本機實體 `.env` 檔案，導致 Vite 無法自 `import.meta.env` 讀取 Supabase 連線參數。
+    - 後端 Edge Function 遺漏 `SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY` 變數宣告，收到請求時將觸發 ReferenceError。
+    - 線上 Supabase 尚未部署 `line-auth`，造成換票端點回傳 404。
+  - 解決方案實作：
+    - 本機環境檔案：依據 `.env.example` 建立實體 `.env` 檔案並於 `.gitignore` 納入防護，使 Vite 自動載入 `VITE_SUPABASE_URL`。
+    - Edge Function 變數補全：在 `supabase/functions/line-auth/index.ts` 補齊 `supabaseUrl` 與 `supabaseServiceKey` 變數宣告。
+    - 線上部署：將 `line-auth` 正式部署至 Supabase Edge Runtime，配置 `verify_jwt: false` 確保公開登入換票端點正常運作。
+  - 單元測試套件與建置驗證：
+    - 執行 `pnpm test`，全數 334 項單元測試 100% 通過（0 失敗）。
+    - 執行 `tsc -b && vite build`，建置編譯零錯誤。
+
+### v0.1.195 (2026-09-24)
+- LINE Login 回呼 CSRF 防偽驗證與 React StrictMode 雙重掛載競爭修復 (OAuth Callback StrictMode Resilience):
+  - 核心問題診斷：幹部於本機環境 (`pnpm dev`) 點擊「使用 LINE 帳號登入」並成功通過 LINE 官方授權跳回時，畫面報錯 `[安全校驗失敗]: CSRF state mismatch (防偽驗證權杖不符或過期，請重新登入)`。
+  - 根因分析：
+    - React 19 開發模式 (`StrictMode`) 會對組件執行「掛載 -> 卸載 -> 再次掛載」的雙重生命週期。
+    - 第一次掛載時 `handleLineCallback` 比對成功並立即銷毀 `sessionStorage` 中的 `state`。
+    - 數毫秒後第二次掛載執行時，暫存 `state` 已成空值，導致防偽校驗失敗；且重複發送相同 `code` 亦會觸發 OAuth2 一次性票券失效錯誤。
+  - 解決方案實作 (src/utils/webAuth.ts, src/pages/web-admin/WebAdminCallback.tsx)：
+    - 換票 Promise 單例防重 (In-flight Promise Deduplication)：加入模組級 `inFlightExchange` 與 `lastHandledCode`。若相同 `code` 正在換票中，第二次呼叫直接回傳共享的非同步 Promise，絕不發送重複請求或二度檢核。
+    - 雙重儲存相容 (Storage Resilience)：發起登入時同時寫入 `sessionStorage` 與 `localStorage`，確保重導向與不同瀏覽器分頁情境下狀態絕不遺失。
+    - 延後清除 State：嚴格限定在憑證與 JWT 交換成功後才銷毀 state，若換票異常則保留狀態並允許安全重試。
+  - 單元測試套件與建置驗證：
+    - 在 `test/84_web_admin_auth_and_jwt.test.mjs` 擴充 `inFlightExchange` 防重機制與儲存相容性檢測，全數 334 項測試通過（0 失敗）。
+    - 執行 `tsc -b && vite build`，建置編譯零錯誤。
+
+### v0.1.194 (2026-09-24)
+- 電腦版幹部工作站無限重定向迴圈修復與路由架構解耦 (Web Admin Routing Decoupling & Loop Fix):
+  - 核心問題診斷：先前在訪問 `http://localhost:5173/admin-web` 或 `/admin-web/events` 時，頁面無限卡在「正在驗證幹部身分憑證...」動畫，無法順利顯示登入介面。
+  - 根因分析：
+    - `src/App.tsx` 中同時宣告了 `<Route path="/admin-web" element={<WebAdminLogin />} />` 與 `<Route path="/admin-web" element={<WebAdminLayout />}>`，導致路由比對衝突。
+    - `WebAdminLayout` 內部在未登入時呼叫 `navigate('/admin-web')`，但因未重設 `loading: false` 且路由導回自身，再度觸發子路由 `/admin-web/events`，形成無限彈跳迴圈。
+  - 解決方案實作：
+    - 路由解耦：將登入頁面路徑獨立宣告為 `<Route path="/admin-web/login" element={<WebAdminLogin />} />`。
+    - 狀態安全歸零：`WebAdminLayout` 於未登入或無幹部權限時，先執行 `setLoading(false)` 再導向 `/admin-web/login` 或 `/admin-web/login?unauthorized=true`。
+    - 登出與回呼同步：更新 `webLogout` 與 `WebAdminCallback` 失敗時之導航目標為 `/admin-web/login`。
+    - 資安一致性：依使用者明確要求，不加入任何略過 OAuth2 驗證之本機開發一鍵登入按鈕，嚴格維持標準 LINE Login 認證防線。
+  - 單元測試套件與建置驗證：
+    - 執行 `pnpm test`，全數 333 項測試 100% 通過（68 個測試套件維持 0 失敗）。
+    - 執行 `tsc -b && vite build`，建置打包作業零錯誤。
+
+### v0.1.193 (2026-09-24)
+- Supabase Edge Function 環境變數命名相容強化 (JWT_SECRET Compatibility):
+  - 核心問題診斷：Supabase 平台為避免與官方系統保留變數產生命名衝突，嚴格禁止使用者自訂以 `SUPABASE_` 為前綴之 Secrets 變數名稱（例如嘗試設定 `SUPABASE_JWT_SECRET` 時會被系統阻擋報錯：Name must not start with the SUPABASE_ prefix）。
+  - Edge Function 讀取相容性升級 (supabase/functions/line-auth/index.ts)：
+    - 將簽發 Custom JWT 時讀取之密鑰名稱優先調整為合規之標準名稱 `JWT_SECRET`。
+    - 實作多層名稱回退相容：依序讀取 `Deno.env.get('JWT_SECRET')`、`Deno.env.get('CUSTOM_JWT_SECRET')` 與 `Deno.env.get('SUPABASE_JWT_SECRET')`。
+    - 當缺少環境變數時，錯誤提示訊息精準引導管理者設定 `JWT_SECRET`，大幅提升後台部署維運體驗。
+  - 單元測試套件與建置驗證：
+    - 執行 `pnpm test`，全數 333 項測試 100% 通過（68 個測試套件維持 0 失敗）。
+    - 執行 `tsc -b && vite build`，建置打包作業零錯誤。
 
 ### v0.1.192 (2026-09-24)
 - 電腦版幹部管理工作站全新上線 (Desktop Web Admin Workstation):

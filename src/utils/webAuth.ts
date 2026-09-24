@@ -24,6 +24,9 @@ export const generateSecureState = (): string => {
   return 'state_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
 };
 
+let inFlightExchange: Promise<WebAuthSession> | null = null;
+let lastHandledCode: string | null = null;
+
 /**
  * 發起 LINE Login OAuth2 流程並重導向至 LINE 登入頁
  */
@@ -31,6 +34,11 @@ export const initiateLineLogin = (channelIdOverride?: string) => {
   const channelId = channelIdOverride || import.meta.env.VITE_LINE_CHANNEL_ID || '2009217429';
   const state = generateSecureState();
   sessionStorage.setItem(STATE_STORAGE_KEY, state);
+  try {
+    localStorage.setItem(STATE_STORAGE_KEY, state);
+  } catch {
+    // 忽略無痕模式之 storage 例外
+  }
 
   const redirectUri = `${window.location.origin}/admin-web/callback`;
   const params = new URLSearchParams({
@@ -52,58 +60,87 @@ export const handleLineCallback = async (
   state: string,
   supabaseUrlOverride?: string
 ): Promise<WebAuthSession> => {
-  const savedState = sessionStorage.getItem(STATE_STORAGE_KEY);
-  sessionStorage.removeItem(STATE_STORAGE_KEY);
+  // 防範 React StrictMode 雙重掛載 (Double Mount) 或重複換票
+  if (code === lastHandledCode && inFlightExchange) {
+    return inFlightExchange;
+  }
+
+  const savedState =
+    sessionStorage.getItem(STATE_STORAGE_KEY) ||
+    localStorage.getItem(STATE_STORAGE_KEY);
 
   if (!state || !savedState || state !== savedState) {
     throw new Error('[安全校驗失敗]: CSRF state mismatch (防偽驗證權杖不符或過期，請重新登入)');
   }
 
-  const supabaseUrl = (supabaseUrlOverride || import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-  if (!supabaseUrl) {
-    throw new Error('[系統配置錯誤]: 未設定 VITE_SUPABASE_URL 環境變數');
-  }
+  lastHandledCode = code;
 
-  const edgeFnUrl = `${supabaseUrl}/functions/v1/line-auth`;
-  const redirectUri = `${window.location.origin}/admin-web/callback`;
-
-  const res = await fetch(edgeFnUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
-    },
-    body: JSON.stringify({
-      code,
-      redirectUri,
-    }),
-  });
-
-  if (!res.ok) {
-    const errorBody = await res.text();
-    let parsedMessage = errorBody;
+  inFlightExchange = (async () => {
     try {
-      const json = JSON.parse(errorBody);
-      if (json.error) parsedMessage = json.error;
-    } catch {
-      // 保持原始字串輸出
+      const supabaseUrl = (supabaseUrlOverride || import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+      if (!supabaseUrl) {
+        throw new Error('[系統配置錯誤]: 未設定 VITE_SUPABASE_URL 環境變數');
+      }
+
+      const edgeFnUrl = `${supabaseUrl}/functions/v1/line-auth`;
+      const redirectUri = `${window.location.origin}/admin-web/callback`;
+
+      const res = await fetch(edgeFnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+        },
+        body: JSON.stringify({
+          code,
+          redirectUri,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorBody = await res.text();
+        let parsedMessage = errorBody;
+        try {
+          const json = JSON.parse(errorBody);
+          if (json.error) parsedMessage = json.error;
+        } catch {
+          // 保持原始字串輸出
+        }
+        throw new Error(`[LINE 登入換票失敗]: HTTP ${res.status} - ${parsedMessage}`);
+      }
+
+      const data = await res.json();
+      const session: WebAuthSession = {
+        jwt: data.jwt,
+        userId: data.userId,
+        displayName: data.displayName || '',
+        pictureUrl: data.pictureUrl || '',
+        isOfficer: Boolean(data.isOfficer),
+        officerRole: data.officerRole || null,
+        expiresAt: Date.now() + 8 * 60 * 60 * 1000, // 8 小時有效
+      };
+
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+      // 換票成功後銷毀暫存 state，防止重複使用
+      sessionStorage.removeItem(STATE_STORAGE_KEY);
+      try {
+        localStorage.removeItem(STATE_STORAGE_KEY);
+      } catch {
+        // 忽略無痕模式之 storage 例外
+      }
+
+      return session;
+    } catch (err) {
+      lastHandledCode = null;
+      throw err;
+    } finally {
+      setTimeout(() => {
+        inFlightExchange = null;
+      }, 3000);
     }
-    throw new Error(`[LINE 登入換票失敗]: HTTP ${res.status} - ${parsedMessage}`);
-  }
+  })();
 
-  const data = await res.json();
-  const session: WebAuthSession = {
-    jwt: data.jwt,
-    userId: data.userId,
-    displayName: data.displayName || '',
-    pictureUrl: data.pictureUrl || '',
-    isOfficer: Boolean(data.isOfficer),
-    officerRole: data.officerRole || null,
-    expiresAt: Date.now() + 8 * 60 * 60 * 1000, // 8 小時有效
-  };
-
-  sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-  return session;
+  return inFlightExchange;
 };
 
 /**
@@ -140,7 +177,12 @@ export const getWebSession = (): WebAuthSession | null => {
 export const webLogout = () => {
   sessionStorage.removeItem(SESSION_STORAGE_KEY);
   sessionStorage.removeItem(STATE_STORAGE_KEY);
-  window.location.href = '/admin-web';
+  try {
+    localStorage.removeItem(STATE_STORAGE_KEY);
+  } catch {
+    // 忽略無痕模式之 storage 例外
+  }
+  window.location.href = '/admin-web/login';
 };
 
 /**

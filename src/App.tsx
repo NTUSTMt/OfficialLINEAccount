@@ -31,6 +31,8 @@ const WebAdminLayout = lazy(() => import('./pages/web-admin/WebAdminLayout').the
 const WebAdminLogin = lazy(() => import('./pages/web-admin/WebAdminLogin').then(m => ({ default: m.WebAdminLogin })));
 const WebAdminCallback = lazy(() => import('./pages/web-admin/WebAdminCallback').then(m => ({ default: m.WebAdminCallback })));
 const WebAdminEvents = lazy(() => import('./pages/web-admin/WebAdminEvents').then(m => ({ default: m.WebAdminEvents })));
+const WebAdminRoster = lazy(() => import('./pages/web-admin/WebAdminRoster').then(m => ({ default: m.WebAdminRoster })));
+const WebAdminLoans = lazy(() => import('./pages/web-admin/WebAdminLoans').then(m => ({ default: m.WebAdminLoans })));
 const WebAdminMembers = lazy(() => import('./pages/web-admin/WebAdminMembers').then(m => ({ default: m.WebAdminMembers })));
 const WebAdminFinance = lazy(() => import('./pages/web-admin/WebAdminFinance').then(m => ({ default: m.WebAdminFinance })));
 const WebAdminInventory = lazy(() => import('./pages/web-admin/WebAdminInventory').then(m => ({ default: m.WebAdminInventory })));
@@ -677,11 +679,13 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
           {/* 免 Google/LINE 登入之單鍵安全核銷頁面 */}
           <Route path="/confirm-payment" element={<ConfirmPayment />} />
           {/* 電腦版幹部工作站 (Web Admin Workstation) */}
-          <Route path="/admin-web" element={<WebAdminLogin />} />
+          <Route path="/admin-web/login" element={<WebAdminLogin />} />
           <Route path="/admin-web/callback" element={<WebAdminCallback />} />
           <Route path="/admin-web" element={<WebAdminLayout />}>
             <Route index element={<Navigate to="/admin-web/events" replace />} />
             <Route path="events" element={<WebAdminEvents />} />
+            <Route path="roster" element={<WebAdminRoster />} />
+            <Route path="loans" element={<WebAdminLoans />} />
             <Route path="members" element={<WebAdminMembers />} />
             <Route path="finance" element={<WebAdminFinance />} />
             <Route path="inventory" element={<WebAdminInventory />} />

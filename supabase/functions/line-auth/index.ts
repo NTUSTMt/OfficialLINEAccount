@@ -34,12 +34,15 @@ Deno.serve(async (req: Request) => {
     const channelSecret = Deno.env.get('LINE_CHANNEL_SECRET');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const supabaseJwtSecret = Deno.env.get('SUPABASE_JWT_SECRET');
+    const supabaseJwtSecret =
+      Deno.env.get('JWT_SECRET') ||
+      Deno.env.get('CUSTOM_JWT_SECRET') ||
+      Deno.env.get('SUPABASE_JWT_SECRET');
 
     if (!channelId || !channelSecret || !supabaseUrl || !supabaseServiceKey || !supabaseJwtSecret) {
       return new Response(
         JSON.stringify({
-          error: 'Server configuration error: missing required environment variables (LINE_CHANNEL_ID, LINE_CHANNEL_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET)',
+          error: 'Server configuration error: missing required environment variables (LINE_CHANNEL_ID, LINE_CHANNEL_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, JWT_SECRET)',
         }),
         {
           status: 500,

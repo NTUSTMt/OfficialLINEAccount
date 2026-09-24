@@ -86,5 +86,20 @@ describe('84. 電腦版幹部工作站認證與 JWT 簽發驗證 (Web Admin Auth
       appContent.includes("!location.pathname.startsWith('/admin-web')"),
       'App.tsx 必須在 /admin-web 隱藏手機版全域導航選單'
     );
+    assert.ok(
+      appContent.includes('path="/admin-web/login"'),
+      'App.tsx 必須獨立註冊 /admin-web/login 登入路由杜絕重導向死鎖循環'
+    );
+  });
+
+  it('應驗證 webAuth.ts 具備 React StrictMode 換票防重 (inFlightExchange) 與雙重儲存相容', () => {
+    assert.ok(
+      webAuthContent.includes('inFlightExchange'),
+      'webAuth.ts 必須具備 inFlightExchange 快取防止 StrictMode 雙重掛載造成 CSRF mismatch'
+    );
+    assert.ok(
+      webAuthContent.includes('localStorage.getItem'),
+      'webAuth.ts 必須同時相容 localStorage 與 sessionStorage 防範狀態遺失'
+    );
   });
 });

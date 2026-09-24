@@ -26,7 +26,7 @@ export const WebAdminCallback: React.FC = () => {
         if (session.isOfficer) {
           navigate('/admin-web/events', { replace: true });
         } else {
-          navigate('/admin-web?unauthorized=true', { replace: true });
+          navigate('/admin-web/login?unauthorized=true', { replace: true });
         }
       })
       .catch((err: any) => {
@@ -58,7 +58,7 @@ export const WebAdminCallback: React.FC = () => {
               type="button"
               className="web-admin-btn web-admin-btn-secondary"
               style={{ width: '100%', justifyContent: 'center' }}
-              onClick={() => navigate('/admin-web')}
+              onClick={() => navigate('/admin-web/login')}
             >
               <ArrowLeft size={16} />
               <span>返回重新登入</span>

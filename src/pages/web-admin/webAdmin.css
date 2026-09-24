@@ -1,21 +1,28 @@
 /* ==========================================================================
    國立臺灣科技大學登山社 - 電腦版幹部後台工作站 (Web Admin Workstation)
-   高密度試算表網格與頂部全寬佈局樣式
+   高密度淺色極簡風 (Light Clean Notion / Linear Style)
    ========================================================================== */
 
 :root {
-  --wa-bg: #0f172a;
-  --wa-surface: #1e293b;
-  --wa-surface-alt: #334155;
-  --wa-border: #334155;
-  --wa-border-light: #475569;
-  --wa-text: #f8fafc;
-  --wa-text-muted: #94a3b8;
-  --wa-primary: #10b981;
-  --wa-primary-hover: #059669;
-  --wa-danger: #ef4444;
-  --wa-warning: #f59e0b;
-  --wa-info: #3b82f6;
+  --wa-bg: #f8fafc;
+  --wa-surface: #ffffff;
+  --wa-surface-alt: #f1f5f9;
+  --wa-surface-hover: #f8fafc;
+  --wa-border: #e2e8f0;
+  --wa-border-light: #cbd5e1;
+  --wa-text: #0f172a;
+  --wa-text-muted: #64748b;
+  --wa-text-subtle: #94a3b8;
+  --wa-primary: #059669;
+  --wa-primary-hover: #047857;
+  --wa-primary-light: rgba(5, 150, 105, 0.08);
+  --wa-danger: #dc2626;
+  --wa-danger-hover: #b91c1c;
+  --wa-danger-light: rgba(220, 38, 38, 0.08);
+  --wa-warning: #d97706;
+  --wa-warning-light: rgba(217, 119, 6, 0.08);
+  --wa-info: #2563eb;
+  --wa-info-light: rgba(37, 99, 235, 0.08);
   --wa-cell-pad: 8px 12px;
 }
 
@@ -29,9 +36,9 @@
   flex-direction: column;
 }
 
-/* 頂部全寬導航列 */
+/* 頂部全寬導航列 (Top Nav) */
 .web-admin-header {
-  height: 60px;
+  height: 62px;
   background-color: var(--wa-surface);
   border-bottom: 1px solid var(--wa-border);
   display: flex;
@@ -41,7 +48,7 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
 }
 
 .web-admin-brand {
@@ -55,9 +62,9 @@
 }
 
 .web-admin-brand-badge {
-  background: rgba(16, 185, 129, 0.15);
+  background: var(--wa-primary-light);
   color: var(--wa-primary);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid rgba(5, 150, 105, 0.25);
   font-size: 0.75rem;
   padding: 2px 8px;
   border-radius: 9999px;
@@ -67,19 +74,19 @@
 .web-admin-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   height: 100%;
 }
 
 .web-admin-nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 7px;
+  padding: 8px 14px;
   border-radius: 6px;
   color: var(--wa-text-muted);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 500;
   transition: all 0.15s ease-in-out;
   cursor: pointer;
@@ -92,9 +99,8 @@
 
 .web-admin-nav-item.active {
   color: var(--wa-primary);
-  background-color: rgba(16, 185, 129, 0.12);
-  border-bottom: 2px solid var(--wa-primary);
-  border-radius: 6px 6px 0 0;
+  background-color: var(--wa-primary-light);
+  font-weight: 600;
 }
 
 .web-admin-user-section {
@@ -113,7 +119,7 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 1px solid var(--wa-border-light);
+  border: 1px solid var(--wa-border);
   object-fit: cover;
   background-color: var(--wa-surface-alt);
 }
@@ -127,11 +133,13 @@
 .web-admin-user-name {
   font-size: 0.88rem;
   font-weight: 600;
+  color: var(--wa-text);
 }
 
 .web-admin-user-role {
   font-size: 0.72rem;
   color: var(--wa-primary);
+  font-weight: 600;
 }
 
 .web-admin-logout-btn {
@@ -149,15 +157,15 @@
 }
 
 .web-admin-logout-btn:hover {
-  background-color: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.3);
+  background-color: var(--wa-danger-light);
+  border-color: rgba(220, 38, 38, 0.3);
   color: var(--wa-danger);
 }
 
 /* 核心工作區 */
 .web-admin-main {
   flex: 1;
-  padding: 20px 24px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -176,6 +184,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .web-admin-toolbar-left,
@@ -187,20 +196,41 @@
 }
 
 .web-admin-input,
-.web-admin-select {
-  background-color: var(--wa-bg);
+.web-admin-select,
+.web-admin-textarea {
+  background-color: var(--wa-surface);
   border: 1px solid var(--wa-border-light);
   color: var(--wa-text);
   padding: 7px 12px;
   border-radius: 6px;
   font-size: 0.88rem;
+  font-family: inherit;
   outline: none;
-  transition: border-color 0.15s;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .web-admin-input:focus,
-.web-admin-select:focus {
+.web-admin-select:focus,
+.web-admin-textarea:focus {
   border-color: var(--wa-primary);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
+}
+
+.web-admin-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 14px;
+  padding-right: 36px !important;
+  cursor: pointer;
+}
+
+.web-admin-textarea {
+  resize: vertical;
+  line-height: 1.5;
 }
 
 .web-admin-btn {
@@ -223,23 +253,23 @@
 }
 
 .web-admin-btn-secondary {
-  background-color: var(--wa-surface-alt);
+  background-color: var(--wa-surface);
   color: var(--wa-text);
   border: 1px solid var(--wa-border-light);
 }
 
 .web-admin-btn-secondary:hover {
-  background-color: #475569;
+  background-color: var(--wa-surface-alt);
 }
 
 .web-admin-btn-danger {
-  background-color: rgba(239, 68, 68, 0.15);
+  background-color: var(--wa-danger-light);
   color: var(--wa-danger);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(220, 38, 38, 0.3);
 }
 
 .web-admin-btn-danger:hover {
-  background-color: rgba(239, 68, 68, 0.25);
+  background-color: rgba(220, 38, 38, 0.15);
 }
 
 /* 高密度試算表網格 (Sheets Grid) */
@@ -250,7 +280,7 @@
   overflow: auto;
   max-height: calc(100vh - 180px);
   position: relative;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .web-admin-table {
@@ -262,8 +292,8 @@
 }
 
 .web-admin-table th {
-  background-color: #172554;
-  color: #93c5fd;
+  background-color: #f8fafc;
+  color: #475569;
   font-weight: 600;
   padding: var(--wa-cell-pad);
   border-bottom: 2px solid var(--wa-border-light);
@@ -283,59 +313,329 @@
 }
 
 .web-admin-table tr:hover td {
-  background-color: rgba(51, 65, 85, 0.5);
+  background-color: #f8fafc;
 }
 
 .web-admin-table tr.selected td {
-  background-color: rgba(16, 185, 129, 0.12);
+  background-color: rgba(5, 150, 105, 0.06);
 }
 
-/* 狀態徽章 */
+/* 卡片網格流 (Card Grid Style) */
+.wa-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.wa-card {
+  background-color: var(--wa-surface);
+  border: 1px solid var(--wa-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  transition: all 0.18s ease-in-out;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+}
+
+.wa-card:hover {
+  border-color: var(--wa-primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.wa-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wa-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--wa-text);
+  margin: 0;
+}
+
+.wa-card-meta {
+  font-size: 0.82rem;
+  color: var(--wa-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wa-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--wa-border);
+  font-size: 0.82rem;
+  color: var(--wa-text-muted);
+}
+
+/* 狀態徽章 (Badges) */
 .web-admin-badge {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   padding: 3px 8px;
   border-radius: 4px;
   font-size: 0.76rem;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.2;
 }
 
 .web-admin-badge-success {
-  background-color: rgba(16, 185, 129, 0.18);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background-color: rgba(5, 150, 105, 0.1);
+  color: #047857;
+  border: 1px solid rgba(5, 150, 105, 0.25);
 }
 
 .web-admin-badge-warning {
-  background-color: rgba(245, 158, 11, 0.18);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background-color: rgba(217, 119, 6, 0.1);
+  color: #b45309;
+  border: 1px solid rgba(217, 119, 6, 0.25);
 }
 
 .web-admin-badge-danger {
-  background-color: rgba(239, 68, 68, 0.18);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background-color: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.25);
 }
 
 .web-admin-badge-info {
-  background-color: rgba(59, 130, 246, 0.18);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background-color: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.25);
 }
 
 .web-admin-badge-neutral {
-  background-color: rgba(148, 163, 184, 0.18);
-  color: #cbd5e1;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid var(--wa-border);
 }
 
-/* 具體錯誤橫幅 (透明化錯誤呈現) */
+/* 右側滑出抽屜 (Slide-Over Drawer) */
+.wa-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.wa-drawer-panel {
+  width: 100%;
+  max-width: 620px;
+  height: 100%;
+  background-color: var(--wa-surface);
+  box-shadow: -4px 0 25px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.wa-drawer-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--wa-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #ffffff;
+}
+
+.wa-drawer-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--wa-text);
+  margin: 0;
+}
+
+.wa-drawer-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--wa-text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.wa-drawer-close-btn:hover {
+  background-color: var(--wa-surface-alt);
+  color: var(--wa-text);
+}
+
+.wa-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.wa-drawer-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--wa-border);
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* 抽屜內表單樣式 */
+.wa-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: #f8fafc;
+  border: 1px solid var(--wa-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.wa-form-section-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--wa-text);
+  margin-bottom: 4px;
+}
+
+.wa-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wa-form-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--wa-text);
+  text-align: left;
+  display: block;
+}
+
+.wa-form-input,
+.wa-form-select,
+.wa-form-textarea {
+  background-color: #ffffff;
+  border: 1px solid var(--wa-border-light);
+  color: var(--wa-text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.wa-form-input:focus,
+.wa-form-select:focus,
+.wa-form-textarea:focus {
+  border-color: var(--wa-primary);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
+}
+
+/* Diff 確認對照彈窗 */
+.wa-diff-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.wa-diff-modal {
+  width: 100%;
+  max-width: 640px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.wa-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  text-align: left;
+}
+
+.wa-diff-table th {
+  background-color: #f8fafc;
+  color: var(--wa-text-muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--wa-border);
+  font-weight: 600;
+}
+
+.wa-diff-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--wa-border);
+  vertical-align: middle;
+}
+
+.wa-diff-old {
+  background-color: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+  padding: 3px 6px;
+  border-radius: 4px;
+  text-decoration: line-through;
+}
+
+.wa-diff-new {
+  background-color: rgba(5, 150, 105, 0.08);
+  color: #047857;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+/* 具體錯誤橫幅 */
 .web-admin-error-banner {
-  background-color: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
+  background-color: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  color: #b91c1c;
   padding: 12px 16px;
   border-radius: 6px;
   font-family: monospace;
@@ -355,7 +655,7 @@
   border: 1px solid var(--wa-border);
   border-radius: 12px;
   padding: 36px 32px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
   text-align: center;
 }
 
@@ -380,3 +680,546 @@
 .web-admin-line-login-btn:hover {
   background-color: #05b04c;
 }
+
+/* LINE 風格活動卡片樣式 */
+.wa-event-card {
+  background-color: #ffffff;
+  border: 1px solid var(--wa-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--wa-shadow);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.wa-event-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -3px rgba(0, 0, 0, 0.08);
+}
+
+.wa-event-card-cover {
+  width: 100%;
+  height: 185px;
+  position: relative;
+  overflow: hidden;
+  background-color: #e2e8f0;
+}
+
+.wa-event-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wa-event-card-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #065f46 0%, #047857 50%, #059669 100%);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.wa-event-badge-id {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background-color: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.wa-event-badge-status {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wa-event-badge-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.wa-event-card-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  flex: 1;
+}
+
+.wa-event-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.4;
+  text-align: left;
+  margin: 0;
+}
+
+.wa-event-card-summary {
+  font-size: 0.84rem;
+  color: #64748b;
+  line-height: 1.5;
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 3.8em;
+  margin: 2px 0;
+}
+
+.wa-event-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.82rem;
+  color: #334155;
+  margin-top: 0;
+}
+
+.wa-event-card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wa-event-card-meta-label {
+  color: var(--wa-text-muted);
+  font-size: 0.8rem;
+  min-width: 64px;
+}
+
+.wa-event-card-meta-val {
+  font-weight: 600;
+  color: var(--wa-text);
+}
+
+.wa-event-card-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.wa-event-card-divider {
+  border: none;
+  border-top: 1px solid #f1f5f9;
+  margin: 0;
+  width: 100%;
+}
+
+.wa-event-card-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.wa-event-card-actions .web-admin-btn {
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* 置中活動編輯彈窗 (Centered Modal) */
+.wa-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(3px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.wa-modal-container {
+  background-color: var(--wa-surface);
+  width: 100%;
+  max-width: 960px;
+  max-height: 90vh;
+  border-radius: 16px;
+  border: 1px solid var(--wa-border);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  animation: zoomIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.wa-modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--wa-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #ffffff;
+  flex-shrink: 0;
+}
+
+.wa-modal-title {
+  font-size: 1.18rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wa-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+}
+
+.wa-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--wa-border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  background-color: #ffffff;
+  flex-shrink: 0;
+}
+
+.wa-bilingual-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .wa-bilingual-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wa-bilingual-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: #f8fafc;
+  border: 1px solid var(--wa-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.wa-bilingual-header {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #334155;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 報名名冊工作站高互動試算表專屬樣式 */
+.web-admin-table input[type="checkbox"],
+.web-admin-grid-container input[type="checkbox"] {
+  background-color: #ffffff !important;
+  accent-color: var(--wa-primary);
+  border: 1px solid var(--wa-border);
+  border-radius: 4px;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.wa-th-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 28px;
+  width: 100%;
+}
+
+.wa-th-label {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  color: #475569;
+}
+
+.wa-th-actions-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: none;
+  align-items: center;
+  gap: 3px;
+  background-color: #f1f5f9;
+  padding: 0 6px;
+  border-radius: 4px;
+  z-index: 5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.web-admin-table th:hover .wa-th-actions-overlay {
+  display: flex;
+}
+
+.wa-th-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.wa-th-btn:hover {
+  background: #e2e8f0;
+  color: var(--wa-primary);
+}
+
+.wa-th-btn.active {
+  color: var(--wa-primary);
+  background: rgba(5, 150, 105, 0.12);
+}
+
+.wa-col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  bottom: 0;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+  z-index: 8;
+}
+
+.wa-col-resizer:hover,
+.wa-col-resizer.is-resizing {
+  background-color: var(--wa-primary);
+}
+
+/* 序號欄位與四角懸浮工具列 */
+.wa-row-index-cell {
+  position: relative;
+  width: 46px;
+  min-width: 46px;
+  max-width: 46px;
+  text-align: center;
+  padding: 0 !important;
+  vertical-align: middle;
+}
+
+.wa-row-index-text {
+  display: inline-block;
+  color: var(--wa-text-muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 38px;
+}
+
+.wa-row-actions-quad {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background-color: #ffffff;
+  z-index: 4;
+}
+
+.web-admin-table tr:hover .wa-row-actions-quad {
+  display: block;
+}
+
+.wa-row-quad-btn {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.wa-row-quad-btn:hover {
+  background-color: #f1f5f9;
+  color: var(--wa-primary);
+}
+
+.wa-row-quad-btn.active {
+  color: var(--wa-primary);
+}
+
+.wa-row-quad-tl { top: 2px; left: 2px; }
+.wa-row-quad-tr { top: 2px; right: 2px; }
+.wa-row-quad-bl { bottom: 2px; left: 2px; }
+.wa-row-quad-br { bottom: 2px; right: 2px; }
+
+/* 儲存格點擊展開全文與 Popover */
+.wa-clickable-cell {
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.wa-clickable-cell:hover {
+  background-color: rgba(5, 150, 105, 0.05);
+}
+
+.wa-cell-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-popover-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.wa-popover-card {
+  background: #ffffff;
+  border: 1px solid var(--wa-border);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 520px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  animation: zoomIn 0.15s ease-out;
+}
+
+.wa-popover-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--wa-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8fafc;
+}
+
+.wa-popover-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.wa-popover-body {
+  padding: 18px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.wa-popover-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--wa-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: #f8fafc;
+}
+
+/* 釘選欄位與陰影 */
+.wa-col-pinned {
+  position: sticky;
+  z-index: 3;
+  background-color: #ffffff;
+}
+
+.web-admin-table th.wa-col-pinned {
+  z-index: 15;
+  background-color: #f8fafc;
+}
+
+.wa-col-pinned-divider {
+  box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.12);
+}
+
+.wa-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: #ffffff;
+  border: 1px solid var(--wa-border);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  z-index: 100;
+  width: 280px;
+  max-height: 380px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+

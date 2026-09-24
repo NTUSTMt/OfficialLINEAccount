@@ -101,11 +101,11 @@ export interface AdminLoanItem {
   start_date: string;
   end_date: string;
   days: number;
-  purpose: string;
+  purpose?: string;
   purpose_other?: string | null;
   status: '待領取 To Be Collected' | '租借中 Borrowed' | '已歸還 Returned' | '已取消 Cancelled';
   payment_status: '未繳費 Unpaid' | '待確認 Checking' | '已繳費 Paid';
-  total_fee: number;
+  total_fee?: number;
   total_rent?: number;
   total_deposit?: number;
   is_official_member_snapshot?: boolean;
@@ -115,9 +115,15 @@ export interface AdminLoanItem {
     name?: string;
     quantity: number;
     subtotal?: number;
+    rent?: number;
+    deposit?: number;
   }> | null;
   notes?: string | null;
   created_at: string;
+  phone?: string | null;
+  student_id?: string | null;
+  department?: string | null;
+  line_id?: string | null;
 }
 
 export interface AdminInventoryItem {

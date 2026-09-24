@@ -291,7 +291,7 @@ export const WebAdminInventory: React.FC = () => {
                         </button>
                       </div>
                     </td>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: item.available_qty > 0 ? '#34d399' : '#f87171' }}>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: item.available_qty > 0 ? 'var(--wa-success-text)' : 'var(--wa-danger-text)' }}>
                       {item.available_qty}
                     </td>
                     <td>

@@ -327,10 +327,10 @@ export const WebAdminFinance: React.FC = () => {
                     </td>
                     <td style={{ color: 'var(--wa-text-muted)', fontSize: '0.78rem' }}>{idx + 1}</td>
                     <td style={{ fontWeight: 600 }}>{p.name || '未填寫'}</td>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#34d399' }}>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--wa-success-text)' }}>
                       NT$ {Number(p.amount || 0).toLocaleString()}
                     </td>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#fbbf24' }}>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--wa-warning-text)' }}>
                       {p.last_five_digits || '-'}
                     </td>
                     <td>

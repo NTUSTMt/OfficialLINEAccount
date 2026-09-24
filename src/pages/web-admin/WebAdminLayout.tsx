@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, Outlet } from 'react-router-dom';
-import { Mountain, LogOut, Calendar, Users, CreditCard, Package, RefreshCw } from 'lucide-react';
+import { Mountain, LogOut, Calendar, Users, CreditCard, Package, RefreshCw, ClipboardList, Layers } from 'lucide-react';
 import { getWebSession, webLogout, type WebAuthSession } from '../../utils/webAuth';
 import './webAdmin.css';
 
@@ -12,12 +12,14 @@ export const WebAdminLayout: React.FC = () => {
   useEffect(() => {
     const currentSession = getWebSession();
     if (!currentSession) {
-      navigate('/admin-web', { replace: true });
+      setLoading(false);
+      navigate('/admin-web/login', { replace: true });
       return;
     }
 
     if (!currentSession.isOfficer) {
-      navigate('/admin-web?unauthorized=true', { replace: true });
+      setLoading(false);
+      navigate('/admin-web/login?unauthorized=true', { replace: true });
       return;
     }
 
@@ -52,23 +54,23 @@ export const WebAdminLayout: React.FC = () => {
               className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
             >
               <Calendar size={16} />
-              <span>活動名冊審核</span>
+              <span>活動管理</span>
             </NavLink>
 
             <NavLink
-              to="/admin-web/members"
+              to="/admin-web/roster"
               className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
             >
-              <Users size={16} />
-              <span>社員名冊</span>
+              <ClipboardList size={16} />
+              <span>報名名冊</span>
             </NavLink>
 
             <NavLink
-              to="/admin-web/finance"
+              to="/admin-web/loans"
               className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
             >
-              <CreditCard size={16} />
-              <span>財務對帳</span>
+              <Layers size={16} />
+              <span>裝備借用管理</span>
             </NavLink>
 
             <NavLink
@@ -76,7 +78,23 @@ export const WebAdminLayout: React.FC = () => {
               className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
             >
               <Package size={16} />
-              <span>裝備庫存</span>
+              <span>裝備庫存管控</span>
+            </NavLink>
+
+            <NavLink
+              to="/admin-web/members"
+              className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
+            >
+              <Users size={16} />
+              <span>全社社員名冊</span>
+            </NavLink>
+
+            <NavLink
+              to="/admin-web/finance"
+              className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
+            >
+              <CreditCard size={16} />
+              <span>財務對帳核銷</span>
             </NavLink>
           </nav>
         </div>

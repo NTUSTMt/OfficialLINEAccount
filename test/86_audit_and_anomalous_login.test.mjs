@@ -65,13 +65,18 @@ describe('86. 稽核日誌記錄、異常登入演算法與告警驗證 (Audit &
   });
 
   it('應驗證電腦版各管理頁面均實作前端操作稽核埋點', () => {
+    const webRosterPath = path.resolve('src/pages/web-admin/WebAdminRoster.tsx');
+    const webRosterContent = fs.readFileSync(webRosterPath, 'utf8');
+
     assert.ok(
+      webEventsContent.includes("logWebAuditAction(client, session.userId, 'VIEW_EVENTS_LIST'") ||
       webEventsContent.includes("logWebAuditAction(client, session.userId, 'VIEW_ROSTER'"),
-      'WebAdminEvents 必須包含 VIEW_ROSTER 稽核記錄'
+      'WebAdminEvents 必須包含檢視活動稽核記錄'
     );
     assert.ok(
+      webRosterContent.includes("logWebAuditAction(client, session.userId, 'EXPORT_ROSTER_TSV'") ||
       webEventsContent.includes("logWebAuditAction(client, session.userId, 'EXPORT_ROSTER_CLIPBOARD'"),
-      'WebAdminEvents 複製名冊必須記錄 EXPORT_ROSTER_CLIPBOARD'
+      '名冊匯出必須記錄 EXPORT 稽核埋點'
     );
     assert.ok(
       webFinanceContent.includes("logWebAuditAction(client, session.userId, 'VERIFY_PAYMENT'"),
