@@ -28,12 +28,14 @@
 
 .web-admin-wrapper {
   min-height: 100vh;
-  width: 100vw;
+  width: 100%;
   background-color: var(--wa-bg);
   color: var(--wa-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   display: flex;
   flex-direction: column;
+  text-align: left;
+  color-scheme: light; /* 強制所有表單元件與選取器使用淺色模式，杜絕深色模式黑底 */
 }
 
 /* 頂部全寬導航列 (Top Nav) */
@@ -104,15 +106,27 @@
 }
 
 .web-admin-user-section {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
 }
 
 .web-admin-user-info {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  border: 1px solid transparent;
+}
+
+.web-admin-user-info:hover,
+.web-admin-user-info.active {
+  background-color: var(--wa-surface-alt);
+  border-color: var(--wa-border);
 }
 
 .web-admin-avatar {
@@ -142,24 +156,81 @@
   font-weight: 600;
 }
 
-.web-admin-logout-btn {
-  background: transparent;
+/* 幹部使用者懸浮下拉選單 (Dropdown Popover) */
+.web-admin-user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 230px;
+  background-color: var(--wa-surface);
   border: 1px solid var(--wa-border);
-  color: var(--wa-text-muted);
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.82rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
+  padding: 14px;
+  z-index: 1000;
+  animation: fadeInDown 0.18s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.web-admin-dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--wa-border);
+}
+
+.web-admin-dropdown-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.web-admin-dropdown-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--wa-text);
+}
+
+.web-admin-dropdown-role {
+  font-size: 0.78rem;
+  color: var(--wa-primary);
+  font-weight: 600;
+}
+
+.web-admin-dropdown-logout-btn {
+  background: transparent;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  color: var(--wa-danger);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.15s;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  transition: all 0.15s ease;
 }
 
-.web-admin-logout-btn:hover {
+.web-admin-dropdown-logout-btn:hover {
   background-color: var(--wa-danger-light);
-  border-color: rgba(220, 38, 38, 0.3);
-  color: var(--wa-danger);
+  border-color: var(--wa-danger);
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 核心工作區 */
@@ -285,7 +356,8 @@
 
 .web-admin-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.84rem;
   text-align: left;
   white-space: nowrap;
@@ -302,6 +374,7 @@
   top: 0;
   z-index: 10;
   user-select: none;
+  background-clip: padding-box;
 }
 
 .web-admin-table td {
@@ -310,6 +383,7 @@
   border-right: 1px solid var(--wa-border);
   color: var(--wa-text);
   vertical-align: middle;
+  background-clip: padding-box;
 }
 
 .web-admin-table tr:hover td {
@@ -326,6 +400,68 @@
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 16px;
   width: 100%;
+}
+
+/* 裝備借用專用自適應 3 欄卡片網格流 (3-Column Adaptive Loan Card Grid) */
+.wa-card-grid-loans {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); /* minmax(640px, 1fr) 升級為自適應 3 欄 */
+  gap: 16px;
+  width: 100%;
+}
+
+@media (min-width: 1200px) {
+  .wa-card-grid-loans {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .wa-card-grid-loans {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 借用人姓名膠囊徽章按鈕 */
+.wa-name-capsule-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background-color: rgba(5, 150, 105, 0.08);
+  border: 1px solid rgba(5, 150, 105, 0.28);
+  color: var(--wa-primary);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.wa-name-capsule-btn:hover {
+  background-color: rgba(5, 150, 105, 0.16);
+  border-color: var(--wa-primary);
+  transform: translateY(-1px);
+}
+
+/* 借用卡片裝備品項列 */
+.wa-loan-items-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+.wa-loan-item-pill {
+  background-color: #f8fafc;
+  border: 1px solid var(--wa-border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.84rem;
+  color: var(--wa-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .wa-card {
@@ -422,7 +558,217 @@
   border: 1px solid var(--wa-border);
 }
 
-/* 右側滑出抽屜 (Slide-Over Drawer) */
+/* 社員名冊專用卡片排版樣式 */
+.wa-card-member {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.wa-card-member .wa-card-meta {
+  flex: 1;
+}
+
+.wa-card-member .wa-card-footer {
+  margin-top: auto;
+}
+
+.wa-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.wa-card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid var(--wa-border);
+}
+
+.wa-card-avatar-fallback {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(0, 0, 0, 0.05);
+}
+
+.wa-card-name-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.wa-card-badges-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wa-card-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  font-size: 0.83rem;
+  color: var(--wa-text);
+  line-height: 1.6;
+}
+
+.wa-card-meta-label {
+  color: var(--wa-text-muted);
+  width: 68px;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+.wa-card-meta-value {
+  color: var(--wa-text);
+  font-weight: 500;
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+}
+
+.wa-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--wa-text-muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  margin-left: 6px;
+  transition: all 0.15s;
+}
+
+.wa-copy-btn:hover {
+  color: var(--wa-primary);
+  background-color: rgba(5, 150, 105, 0.12);
+}
+
+.wa-copied-tooltip {
+  font-size: 0.72rem;
+  color: #059669;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* 體能測驗證明照片縮圖 */
+.wa-proof-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.wa-proof-item {
+  width: 90px;
+  height: 90px;
+  border-radius: 8px;
+  border: 2px solid var(--wa-border);
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+  background-color: #f1f5f9;
+}
+
+.wa-proof-item:hover {
+  border-color: var(--wa-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.wa-proof-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wa-proof-item-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.wa-proof-item:hover .wa-proof-item-overlay {
+  opacity: 1;
+}
+
+/* 歷史履歷卡片美化 */
+.wa-timeline-card {
+  background: #ffffff;
+  border: 1px solid var(--wa-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  transition: box-shadow 0.15s;
+}
+
+.wa-timeline-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.wa-timeline-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wa-timeline-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.wa-timeline-category-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.wa-timeline-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--wa-text-muted);
+  background: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--wa-border-light);
+}
+
+/* 右側滑出懸浮圓角抽屜 (Floating Slide-Over Sheet / Modal) */
 .wa-drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -431,19 +777,137 @@
   z-index: 1000;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  padding: 16px;
   animation: fadeIn 0.15s ease-out;
 }
 
 .wa-drawer-panel {
   width: 100%;
-  max-width: 620px;
+  max-width: 640px;
   height: 100%;
+  max-height: calc(100vh - 32px);
   background-color: var(--wa-surface);
-  box-shadow: -4px 0 25px rgba(0, 0, 0, 0.15);
+  border-radius: 18px;
+  box-shadow: -8px 0 35px rgba(0, 0, 0, 0.18), 0 20px 25px -5px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   animation: slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
+  overflow: hidden;
+  border: 1px solid var(--wa-border);
+}
+
+/* 側邊大圖檢視面板 (Side Photo Lightbox) */
+.wa-drawer-side-preview {
+  width: 500px;
+  max-width: calc(100vw - 700px);
+  height: 100%;
+  max-height: calc(100vh - 32px);
+  background-color: #0f172a;
+  border-radius: 18px;
+  box-shadow: 0 20px 35px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-right: 16px;
+  animation: fadeIn 0.18s ease-out;
+  z-index: 1010;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wa-drawer-side-preview-header {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: rgba(30, 41, 59, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+.wa-drawer-side-preview-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+  background-color: #090d16;
+}
+
+.wa-drawer-side-preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+@media (max-width: 1500px) {
+  .wa-drawer-side-preview {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90vw;
+    max-width: 600px;
+    height: auto;
+    max-height: 85vh;
+    z-index: 1050;
+    margin-right: 0;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* 側邊個人資料檢視面板 (Side Profile Panel) */
+.wa-drawer-side-profile {
+  width: 480px;
+  max-width: calc(100vw - 700px);
+  height: 100%;
+  max-height: calc(100vh - 32px);
+  background-color: var(--wa-surface);
+  border-radius: 18px;
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12), 0 20px 25px -5px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-right: 16px;
+  animation: fadeIn 0.18s ease-out;
+  z-index: 1010;
+  border: 1px solid var(--wa-border);
+}
+
+.wa-drawer-side-profile-header {
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--wa-surface-alt);
+  border-bottom: 1px solid var(--wa-border);
+  font-weight: 700;
+  color: var(--wa-text);
+}
+
+.wa-drawer-side-profile-body {
+  flex: 1;
+  padding: 18px 20px;
+  overflow-y: auto;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .wa-drawer-side-profile {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+    z-index: 1020;
+    margin-right: 0;
+  }
 }
 
 @keyframes slideInRight {
@@ -875,6 +1339,7 @@
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
+  text-align: left;
   animation: zoomIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
@@ -963,16 +1428,79 @@
   justify-content: space-between;
 }
 
-/* 報名名冊工作站高互動試算表專屬樣式 */
+/* 報名名冊工作站高互動試算表專屬樣式：純白高質感核取方塊 (防禦 OS 深色模式黑底) */
+.web-admin-wrapper input[type="checkbox"],
 .web-admin-table input[type="checkbox"],
-.web-admin-grid-container input[type="checkbox"] {
+.web-admin-grid-container input[type="checkbox"],
+input[type="checkbox"].wa-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  color-scheme: light;
   background-color: #ffffff !important;
-  accent-color: var(--wa-primary);
-  border: 1px solid var(--wa-border);
+  border: 1.5px solid #cbd5e1 !important;
   border-radius: 4px;
   width: 16px;
   height: 16px;
+  min-width: 16px;
+  min-height: 16px;
   cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+  margin: 0;
+  vertical-align: middle;
+  outline: none;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.web-admin-wrapper input[type="checkbox"]:hover,
+.web-admin-table input[type="checkbox"]:hover,
+.web-admin-grid-container input[type="checkbox"]:hover,
+input[type="checkbox"].wa-checkbox:hover {
+  border-color: var(--wa-primary) !important;
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.15);
+}
+
+.web-admin-wrapper input[type="checkbox"]:checked,
+.web-admin-table input[type="checkbox"]:checked,
+.web-admin-grid-container input[type="checkbox"]:checked,
+input[type="checkbox"].wa-checkbox:checked {
+  background-color: var(--wa-primary) !important;
+  border-color: var(--wa-primary) !important;
+}
+
+.web-admin-wrapper input[type="checkbox"]:checked::after,
+.web-admin-table input[type="checkbox"]:checked::after,
+.web-admin-grid-container input[type="checkbox"]:checked::after,
+input[type="checkbox"].wa-checkbox:checked::after {
+  content: "";
+  display: block;
+  width: 4px;
+  height: 8px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 2px;
+}
+
+.web-admin-wrapper input[type="checkbox"]:indeterminate,
+.web-admin-table input[type="checkbox"]:indeterminate,
+.web-admin-grid-container input[type="checkbox"]:indeterminate,
+input[type="checkbox"].wa-checkbox:indeterminate {
+  background-color: var(--wa-primary) !important;
+  border-color: var(--wa-primary) !important;
+}
+
+.web-admin-wrapper input[type="checkbox"]:indeterminate::after,
+.web-admin-table input[type="checkbox"]:indeterminate::after,
+.web-admin-grid-container input[type="checkbox"]:indeterminate::after,
+input[type="checkbox"].wa-checkbox:indeterminate::after {
+  content: "";
+  display: block;
+  width: 8px;
+  height: 2px;
+  background-color: #ffffff;
 }
 
 .wa-th-cell {
@@ -980,7 +1508,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  min-height: 28px;
+  min-height: 24px;
   width: 100%;
 }
 
@@ -993,19 +1521,23 @@
   color: #475569;
 }
 
+.web-admin-table th:hover .wa-th-label {
+  display: none;
+}
+
 .wa-th-actions-overlay {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
   display: none;
   align-items: center;
+  flex-wrap: wrap;
   gap: 3px;
-  background-color: #f1f5f9;
-  padding: 0 6px;
-  border-radius: 4px;
-  z-index: 5;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  background-color: transparent;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  width: 100%;
+  max-width: 100%;
+  z-index: 20;
 }
 
 .web-admin-table th:hover .wa-th-actions-overlay {
@@ -1017,9 +1549,9 @@
   border: none;
   color: #64748b;
   cursor: pointer;
-  padding: 3px;
+  padding: 2px 4px;
   border-radius: 4px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
@@ -1032,23 +1564,40 @@
 
 .wa-th-btn.active {
   color: var(--wa-primary);
-  background: rgba(5, 150, 105, 0.12);
+  background: rgba(5, 150, 105, 0.15);
 }
 
 .wa-col-resizer {
   position: absolute;
   top: 0;
-  right: 0;
-  width: 6px;
   bottom: 0;
+  right: -3px;
+  width: 6px;
   cursor: col-resize;
   user-select: none;
   touch-action: none;
-  z-index: 8;
+  z-index: 25;
 }
 
 .wa-col-resizer:hover,
 .wa-col-resizer.is-resizing {
+  background-color: var(--wa-primary);
+}
+
+.wa-row-resizer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 6px;
+  cursor: row-resize;
+  user-select: none;
+  touch-action: none;
+  z-index: 15;
+}
+
+.wa-row-resizer:hover,
+.wa-row-resizer.is-resizing {
   background-color: var(--wa-primary);
 }
 
@@ -1071,11 +1620,17 @@
   line-height: 38px;
 }
 
+.web-admin-table tr:hover .wa-row-index-text {
+  display: none;
+}
+
 .wa-row-actions-quad {
   position: absolute;
   inset: 0;
   display: none;
-  background-color: #ffffff;
+  background-color: inherit;
+  box-shadow: none;
+  border-radius: 0;
   z-index: 4;
 }
 
@@ -1113,7 +1668,7 @@
 .wa-row-quad-bl { bottom: 2px; left: 2px; }
 .wa-row-quad-br { bottom: 2px; right: 2px; }
 
-/* 儲存格點擊展開全文與 Popover */
+/* 儲存格點擊原地展開全文與調整欄高 */
 .wa-clickable-cell {
   cursor: pointer;
   transition: background-color 0.15s;
@@ -1130,79 +1685,118 @@
   white-space: nowrap;
 }
 
-.wa-popover-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(2px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.wa-cell-expanded {
+  display: block;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  line-height: 1.5;
+  padding: 4px 0;
   animation: fadeIn 0.15s ease-out;
 }
 
-.wa-popover-card {
-  background: #ffffff;
-  border: 1px solid var(--wa-border);
-  border-radius: 12px;
-  width: 90%;
-  max-width: 520px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
-  animation: zoomIn 0.15s ease-out;
-}
-
-.wa-popover-header {
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--wa-border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #f8fafc;
-}
-
-.wa-popover-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-}
-
-.wa-popover-body {
-  padding: 18px;
-  font-size: 0.88rem;
-  line-height: 1.6;
-  color: #334155;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.wa-popover-footer {
-  padding: 12px 18px;
-  border-top: 1px solid var(--wa-border);
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  background: #f8fafc;
-}
-
-/* 釘選欄位與陰影 */
+/* 釘選欄位與陰影 (強制鎖定右邊框與背景截斷，防禦滾動消失) */
 .wa-col-pinned {
   position: sticky;
-  z-index: 3;
+  z-index: 8;
   background-color: #ffffff;
+  border-right: 1px solid var(--wa-border) !important;
+  background-clip: padding-box;
 }
 
 .web-admin-table th.wa-col-pinned {
   z-index: 15;
   background-color: #f8fafc;
+  border-right: 1px solid var(--wa-border) !important;
+  background-clip: padding-box;
 }
 
 .wa-col-pinned-divider {
   box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.12);
+}
+
+/* 序號中央顯式拖曳手柄與列級拖曳標記 */
+.wa-row-drag-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: #94a3b8;
+  z-index: 5;
+  border-radius: 2px;
+}
+
+.wa-row-drag-handle:active {
+  cursor: grabbing;
+}
+
+.wa-row-drag-handle:hover {
+  color: var(--wa-primary);
+  background-color: #e2e8f0;
+}
+
+.wa-row-drag-over td {
+  border-top: 2px solid var(--wa-primary) !important;
+}
+
+/* 表頭欄位左右拖曳手柄與欄位拖曳標記 */
+.wa-col-drag-handle {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: grab;
+  padding: 2px 3px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.wa-col-drag-handle:active {
+  cursor: grabbing;
+}
+
+.wa-col-drag-handle:hover {
+  background: #e2e8f0;
+  color: var(--wa-primary);
+}
+
+.wa-col-drag-over {
+  border-left: 2px solid var(--wa-primary) !important;
+}
+
+/* 幹部備註編輯輸入框 */
+.wa-notes-input {
+  width: 100%;
+  font-size: 0.82rem;
+  padding: 3px 6px;
+  border: 1px solid var(--wa-primary);
+  border-radius: 4px;
+  outline: none;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px var(--wa-primary-light);
+}
+
+/* 通知狀態下拉選單 */
+.wa-status-select {
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--wa-border);
+  background-color: #f8fafc;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s;
+}
+.wa-status-select:focus {
+  border-color: var(--wa-primary);
 }
 
 .wa-dropdown-panel {
@@ -1222,4 +1816,58 @@
   flex-direction: column;
   gap: 8px;
 }
+
+/* 表格內系統分類即時下拉選單 */
+.wa-table-select {
+  font-size: 0.82rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--wa-border);
+  background-color: var(--wa-surface-alt, #f8fafc);
+  color: var(--wa-text);
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+.wa-table-select:focus,
+.wa-table-select:hover {
+  border-color: var(--wa-primary);
+  background-color: #ffffff;
+}
+
+/* 備註欄位自適應高度與展開切換 */
+.wa-table-note-cell {
+  max-width: 220px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.wa-table-note-collapsed {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wa-table-note-expanded {
+  white-space: pre-wrap;
+  word-break: break-all;
+  background-color: rgba(5, 150, 105, 0.04);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+/* 側邊抽屜正方形相片輪播與管理區 */
+.wa-inventory-carousel-box {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  background-color: #f8fafc;
+  flex-shrink: 0;
+  border: 1px solid var(--wa-border);
+}
+.wa-inventory-carousel-box.dashed {
+  border: 2px dashed #cbd5e1;
+}
+
 

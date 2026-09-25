@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.201-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.217-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.201)](#7-最新版本異動紀錄-changelog-v01201)
+- [7. 最新版本異動紀錄 (Changelog v0.1.217)](#7-最新版本異動紀錄-changelog-v01217)
 
 ---
 
@@ -136,6 +136,25 @@ OfficialLINEAccount/
 ### (3) Supabase 新增欄位與試算表自適應
 - **背景佇列同步 (`_ensureColumnsExist`)**：當 Supabase 異動時，若試算表缺少該欄位，系統會自動在第 1 列最右側追加新欄位。
 - **全量覆蓋更新 (`overwriteMainSpreadsheetFromSupabase`)**：幹部可隨時於試算表點選「🏔️ 社團系統」>「🔄 全量從 Supabase 覆蓋更新主試算表」，系統將向 Supabase OpenAPI 自動動態探索所有資料表與新欄位，一鍵完整同步。
+
+### (4) 活動專屬雲端資料夾與獨立試算表建立與命名機制 (Event Dedicated Folder & Sheet Creation)
+- **觸發與權限**：
+  - 幹部於「報名名冊」工作站點擊「建立資料夾與試算表」或「開啟試算表」，呼叫 GAS API `action=create_event_sheet`。
+  - 後端強制執行幹部身分校驗 (`checkOfficerInternal`)，非幹部拒絕存取。
+- **分支判定邏輯**：
+  - **初次建立**（Supabase `events.spreadsheet_id` 為空）：
+    1. 建立專屬 Google Drive 雲端資料夾。
+    2. 建立專屬 Google 試算表（優先複製 `EVENT_SHEET_TEMPLATE_ID` 範本，若無則程式化生成）。
+    3. 生成「報名名冊」工作表（29 欄位）與隱藏的「_CONFIG」系統設定工作表。
+    4. 全量匯入既有報名者與隊員個資，並將 `drive_folder_url`、`spreadsheet_url`、`spreadsheet_id` 回寫至 Supabase `events` 表。
+  - **重複點擊巡檢與同步**（Supabase `events.spreadsheet_id` 已存在）：
+    - 自動執行 `_backfillEventSpreadsheetMemberInfo`，巡檢缺漏表頭欄位並補齊，比對新報名者自動追加 (`appendRow`)，補齊隊員缺漏個資，最後於新分頁開啟試算表。
+- **命名規則 (Naming Conventions)**：
+  - **起始日期代碼 (`datePart`)**：取自 `events.start_date`（格式 `YYYY/MM/DD`，如 `2026/10/15`）；未設定時回退為當日日期。
+  - **活動名稱 (`eventName`)**：取自 `events.title`（未設定時為 `未命名活動`）。
+  - **雲端資料夾名稱 (`folderName`)**：`{datePart}_{eventName}`（例如 `2026/10/15_合歡北西下華岡`），建立於社團雲端硬碟根目錄。
+  - **試算表檔案名稱 (`sheetName`)**：`{datePart}_{eventName}_報名名冊`（例如 `2026/10/15_合歡北西下華岡_報名名冊`），存放於該活動專屬資料夾內。
+  - **工作表（分頁）名稱**：主工作表為 `報名名冊`，系統中繼工作表為 `_CONFIG`（自動隱藏）。
 
 ---
 
@@ -373,7 +392,52 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.201)
+## 7. 最新版本異動紀錄 (Changelog v0.1.206)
+
+### v0.1.206 (2026-09-24)
+- 報名名冊一鍵恢復預設尺寸連動恢復欄高與展開 (WebAdminRoster.tsx):
+  - 擴充控制列左右箭頭按鈕功能：點擊「一鍵恢復預設欄寬與列高」時，同步執行 `setRowHeights({})` 與 `setExpandedCells(new Set())`，重設所有拖曳調整之列高並收合所有展開儲存格，一鍵還原整齊劃一的試算表緊湊版面。
+  - 同步更新 localStorage 儲存設定與按鈕 Tooltip 懸浮提示文字。
+- 單元測試套件與建置檢查:
+  - 擴充 test/88_web_admin_roster_features.test.mjs 單元測試校驗列高重設機制，全專案 352 項測試全數通過，tsc -b && vite build 編譯建置零錯誤，嚴格恪守零 Emoji 規範。
+
+### v0.1.205 (2026-09-24)
+- 勾選框純白底色徹底防禦深色模式與自訂視覺 (webAdmin.css, WebAdminRoster.tsx):
+  - 徹底解決 macOS / Windows 系統深色模式下勾選框 (Checkbox) 渲染為黑色實心方塊之問題。
+  - 在 `.web-admin-wrapper` 與勾選框中強制指定 `color-scheme: light;`，阻斷瀏覽器原生表單元件繼承作業系統深色主題。
+  - 對全站勾選框導入 `appearance: none;` 與 `-webkit-appearance: none;`，以純 CSS 自訂純白底色 (`background-color: #ffffff !important;`)、細緻淺灰外框 (`border: 1.5px solid #cbd5e1 !important;`)、4px 圓角與 hover 光暈效果。
+  - 勾選後呈森林綠底色 (`var(--wa-primary)`) 搭配俐落白色打勾圖示；全選表頭並支援半選 (indeterminate) 狀態橫槓標示。
+- 單元測試套件與建置檢查:
+  - 擴充 test/88_web_admin_roster_features.test.mjs 單元測試，嚴格校驗 Checkbox 自訂外觀、color-scheme: light 與純白底色宣告。全專案 352 項測試全數通過，tsc -b && vite build 編譯建置零錯誤，嚴格符合零 Emoji 規範。
+
+### v0.1.204 (2026-09-24)
+- 欄寬調整手柄邊界對齊與儲存格原地展開/列高調整 (WebAdminRoster, webAdmin.css):
+  - 欄寬調整手柄精準對齊邊界線：將 `.wa-col-resizer` 提升為 `<th>` 直接子元素，並設定 `right: -3px` 與 `width: 6px`，消除表頭內距 (padding) 導致調整柄偏離欄位右分隔線的問題，使調整柄精準置中於欄位右側邊界線上。
+  - 移除彈窗改為儲存格原地展開與列高拖曳：徹底移除點擊儲存格跳出的 Popover 彈窗。點擊長文字儲存格改為原地切換單行截斷與多行完整換行展開 (`wa-cell-expanded`)；並在 `#` 序號儲存格下緣提供列高拖曳調整柄 (`wa-row-resizer`)，支援滑鼠上下拖曳自由設定個別列高度，設定同步保存於 `localStorage`。
+- 單元測試套件與建置檢查:
+  - 更新單元測試驗證移除 Popover、原地展開全文與列高/欄寬調整柄。全專案 352 項測試全數通過，tsc -b && vite build 編譯建置零錯誤，嚴格符合零 Emoji 規範。
+
+### v0.1.203 (2026-09-24)
+- 報名名冊表頭與列級操作工具平整內嵌優化 (webAdmin.css):
+  - 表頭操作工具直接內嵌於儲存格內：徹底移除原本懸浮於表頭上方之白色圓角陰影卡片 (box-shadow/padding/border-radius)。滑鼠懸浮於任一欄位表頭時，表頭文字在儲存格內直接切換為靠左排列的操作按鈕 (< > 釘選 隱藏)，完全平貼儲存格底色，達到與欄位融為一體的純淨試算表排版。
+  - 序號列級四角操作工具平整化：資料列懸浮時，四角操作按鈕直接於 # 儲存格內以平整背景覆蓋顯示，移除任何懸浮突起效果。
+- 單元測試套件與建置檢查:
+  - 全專案 352 項測試全數通過，tsc -b && vite build 編譯建置零錯誤，嚴格符合零 Emoji 規範。
+
+### v0.1.202 (2026-09-24)
+- 報名名冊工作站全面升級與高互動試算表網格 (WebAdminRoster, WebAdminLayout, webAdmin.css):
+  - 名稱全面更名：頂部導覽列由「名冊審核工作站」正式更名為「報名名冊」。
+  - 控制列整合成單一橫條：將活動切換下拉選單與搜尋篩選橫條結合成單一緊湊列，移除舊有「活動名冊審核」文字與日曆圖示，重新整理按鈕保留純圖示以節省水平空間，移除「管理活動基本設定」多餘跳轉連結。
+  - 完整 27 個報名欄位支援：完整涵蓋姓名、性別、LINE ID、聯絡信箱、系所、學號、身分、聯絡電話、聯絡地址、生日、證件號碼、緊急聯絡人姓名、緊急聯絡人電話、緊急聯絡人聯絡地址、緊急聯絡人關係、個人特殊病史、爬山經驗、體能測驗、體能證明、加入社員意願、是否為社員、擔任幹部意願、審核結果、通知狀態、繳費狀態、備註、想說的話。
+  - 表頭左側懸浮動作遮罩與自訂拖曳：表頭懸浮時浮現靠左動作列覆蓋欄位名稱，提供向左移動、向右移動、釘選至最左側（sticky left 搭配陰影隔線）、隱藏欄位功能；表頭右邊界支援滑鼠拖曳 mousedown/mousemove 動態調整欄寬；全體欄位排版設定自動持久化儲存於 localStorage。
+  - 序號欄位 # 與列級四角懸浮工具列：序號表頭更名為 #；資料列懸浮時於序號儲存格四角精確顯示動作按鈕覆蓋數字：左上（上移此列）、右上（置頂釘選）、左下（下移此列）、右下（隱藏此列）。
+  - 控制橫條輔助功能：眼睛圖示可展開自訂欄位與列之可見度清單並支援一鍵全部還原；左右箭頭 (<->) 一鍵重設所有欄位為預設寬度；複製名冊按鈕改為純圖示並具備懸浮 Tooltip 說明，動態以所見即所得方式匯出目前可見欄位為 TSV 格式。
+  - 純白 Checkbox 底色：強制核取方塊底色為純白 (#ffffff !important)，解決瀏覽器預設底色不一問題。
+  - 審核狀態判定 Bug 修復：對齊 Supabase 的 6 大 ENUM 狀態（正取 Confirmed、正取（已繳費）Confirmed (Paid)、備取 Waitlisted、備取（有意願）Waitlisted (Interested)、審核中 Checking、已取消 Cancelled），加入 normalizeStatus 防禦性轉型，徹底根除歷史資料或字串些微不符導致 React 自動跳回正取的問題。
+  - 長文字浮動卡片 Popover：點擊任何長文字或溢出儲存格時，彈出簡潔浮動視窗完整檢視全文，並提供一鍵複製與關閉按鈕，不破壞資料列高度整齊度。
+- 單元測試套件與建置驗證 (test/88_web_admin_roster_features.test.mjs):
+  - 新增單元測試驗證 27 欄位精確定義、單一控制列、normalizeStatus 狀態解析、四角序號按鈕、白底 Checkbox、長文字 Popover 與 TSV 匯出。
+  - 全專案 352 項測試全數通過，tsc -b && vite build 編譯建置零錯誤，嚴格恪守零 Emoji 規範。
 
 ### v0.1.201 (2026-09-24)
 - 活動詳細資訊欄位（活動日期、截止日期、預計費用）全面貼齊卡片底部 (WebAdminEvents, webAdmin.css):
@@ -1300,4 +1364,236 @@ pnpm test
 - 後端推播與單元測試擴充：
   - 在 gas.js 中擴充 notify_loan_status_updated 處理常式，確保租借狀態更新時順暢推播。
   - 新增 test/65_officer_system_modules.test.mjs 單元測試，全數 193 項測試通過，TypeScript 建置零錯誤。
+
+### v0.1.207 (2026-09-24)
+- 報名名冊工作站功能全面升級與交互優化 (WebAdminRoster & webAdmin.css)：
+  - 一鍵發送通知按鈕 (Send Notification Button)：
+    - 位於複製按鈕右側，採用顯目白字綠底按鈕（圖示 + 發送通知）。
+    - 支援勾選名單單獨發送（僅針對已選取的正取與備取人員發送），以及未勾選時一鍵批次發送全活動所有尚未推播之正取與備取人員。
+    - 內建嚴謹防呆校驗：若發送對象包含正取人員但活動尚未設定專屬 LINE Group URL，立即阻擋並彈窗提示幹部先至活動管理填寫群組連結。
+    - GAS 後端 (_handleSendEventNotifications) 支援 signupIds 參數過濾，精準推播指定報名者並寫入 notification_status = "已通知"。
+  - 通知狀態即時修改下拉選單 (Notification Status Dropdown)：
+    - 表格中「通知狀態」欄位直接提供 select 下拉選單（未通知 / 已通知），幹部切換即時以 Supabase 客戶端直通更新資料庫並同步審核日誌。
+  - 備註欄位升級為幹部備註 (Officer Notes Inline Editing)：
+    - 欄位重新命名為「幹部備註」，點擊儲存格直接切換為輸入框供打字編輯。
+    - 支援 Enter 鍵或失去焦點 (blur) 自動儲存直寫 Supabase event_signups.notes，按 Escape 鍵取消編輯，所有登入幹部皆可即時檢視共同備註。
+  - 序號欄位與表頭欄位拖曳換位 (Drag and Drop Reordering)：
+    - 在序號 (#) 欄位中央加入專屬 Grip 拖曳手柄，支援按住上下拖曳直接調整資料列順序 (customRowOrder)。
+    - 在表頭動作工具列最左側加入 Grip 拖曳手柄，支援按住左右拖曳直接調整欄位顯示順序 (columnOrder)。
+  - Google 雲端資料夾與試算表整合按鈕 (Google Sheet Sync & Open)：
+    - 位於發送通知按鈕左側。若尚未建立則顯示「建立資料夾與試算表」；建立過後自動切換為「開啟試算表」。
+    - 點擊按鈕時觸發 GAS create_event_sheet API，顯示「同步中...」旋轉載入狀態，同步完成後自動以新分頁開啟 Google 試算表。
+  - 工具列介面精簡與按鈕位置微調：
+    - 將重新整理按鈕移至顯示/隱藏項目按鈕（眼睛圖示）的左側。
+    - 移除工具列左側冗餘的「篩選：X 人 / 總報名：Y 人」計數文字，大幅節省橫向空間。
+  - 釘選欄位滑動邊界消失 Bug 防禦修復：
+    - 將表格的 border-collapse 由 collapse 改為 separate，並設定 border-spacing: 0 與 background-clip: padding-box。
+    - 為所有釘選欄位 (wa-col-pinned, th.wa-col-pinned, checkbox, #) 強制指定 border-right: 1px solid var(--wa-border) !important，徹底解決橫向滑動時被固定住的欄位之間的分隔線隨內容滑動消失的顯示問題。
+- 單元測試與建置驗證：
+  - 更新 test/88_web_admin_roster_features.test.mjs 擴充 14 項驗證測試，全數通過。
+  - 全專案 358 項單元測試全數 PASS，TypeScript 與 Vite 打包建置零錯誤。
+
+### v0.1.208 (2026-09-24)
+- 系統架構文檔增補 (README.md)：
+  - 於第 4 節完整梳理並補充「活動專屬雲端資料夾與獨立試算表建立與命名機制 (Event Dedicated Folder & Sheet Creation)」。
+  - 詳述 `_handleCreateEventSheet`、`_createEventDriveFolderAndSheet` 與 `_backfillEventSpreadsheetMemberInfo` 的執行流程、分支判定條件、檔案與資料夾命名規則（`{datePart}_{eventName}` 與 `{datePart}_{eventName}_報名名冊`），以及 29 欄位表頭和隱藏 `_CONFIG` 設定工作表的系統配置。
+
+### v0.1.209 (2026-09-25)
+- 活動管理工作站功能與體驗優化 (WebAdminEvents & GAS Backend)：
+  - 全面統一活動術語 (Terminology Update)：
+    - 將工作站頂部工具列、彈窗標題、送出按鈕、空狀態與成功提示中所有「發布新活動」、「發布活動」、「立即發布活動」統一更名為「新增活動」。
+  - 工具列視覺佈局精簡 (Toolbar Layout Refinement)：
+    - 移除工具列左側冗餘的「活動管理」標題文字與日曆圖示，騰出最大化空間給搜尋與篩選。
+    - 重新整理按鈕精簡為純圖示按鈕，並自左側移至右側「新增活動」按鈕的左側，提升操作動線一致性。
+  - 活動代號產生機制防覆蓋修復 (Event ID Generation Fix)：
+    - 重構活動編號序列生成邏輯，由原先的長度計數累加改為動態掃描資料庫中同月份前綴（如 E2609-）的所有活動編號，提取既有最大數值後遞增（`maxSeq + 1`）。
+    - 徹底解決若當月先前活動曾被刪除時，依陣列長度計算會產生與既有活動重複代號的 Bug。
+  - 刪除活動功能與防呆級聯清理 (Delete Event with Cascade Cleanup)：
+    - 在活動編輯彈窗底部與「儲存活動變更」同列靠左新增紅底白字「刪除活動」按鈕（僅在編輯既有活動時顯示）。
+    - 點擊後查詢該活動當前已報名人數，彈出二次確認視窗清楚提示該活動之名稱、代碼與報名人數。
+    - 幹部確認後依序執行級聯刪除：活動心得紀錄（reflections） -> 報名名冊（event_signups） -> 活動本體（events），解除 PostgreSQL 外鍵 RESTRICT 限制，並寫入審核操作日誌與重載清單。
+  - 幹部群組推播勾選框與 GAS 後端整合 (Officer Group Push Notification)：
+    - 在活動編輯彈窗之「活動封面照片」下方新增「推播此活動資訊至幹部群組」核取方塊（預設為未勾選）。
+    - 在 GAS 後端（gas.js）新增 `action=notify_officer_event` 處理常式，呼叫 `pushAdminMessage` 自動格式化出隊通知卡片（含活動名稱、代碼、日期、截止日、預計費用與狀態）並推播至幹部群組。
+- 單元測試與建置驗證：
+  - 新增 test/89_web_admin_events_enhancements.test.mjs 單元測試，涵蓋更名、工具列佈局、序號生成演算法、級聯刪除、推播核取方塊與 GAS 處理常式。
+  - 全專案 364 項單元測試全數 PASS，TypeScript 與 Vite 打包建置零錯誤。
+
+### v0.1.210 (2026-09-25)
+- 活動編輯彈窗排版與說明文字靠左對齊優化 (WebAdminEvents & webAdmin.css)：
+  - 說明文字靠左對齊 (Left Align Helper Notes)：
+    - 將活動編輯彈窗中「活動專屬 LINE 群組邀請連結 (保密)」下方的說明文字「此連結為出隊專屬保密資訊，僅在幹部審核為正取並推播時提供正取社員加入。」明確設定為靠左對齊 (`textAlign: 'left'`)。
+    - 將「同步推播活動資訊至幹部群組 (LINE)」核取方塊下方的說明文字「勾選後儲存時將自動向 LINE 幹部群組發送活動出隊摘要訊息」移除多餘左邊距並設定為靠左對齊 (`textAlign: 'left'`)，與卡片左邊界緊密貼齊。
+  - 後台容器層防禦 (CSS Anti-Centering Safeguard)：
+    - 在 webAdmin.css 中為 `.web-admin-wrapper` 與 `.wa-modal-container` 全域顯式設定 `text-align: left;`，杜絕全域 `#root { text-align: center; }` 對管理後台元件排版所產生的非預期文字置中影響。
+- 單元測試與建置驗證：
+  - 在 test/89_web_admin_events_enhancements.test.mjs 擴充第 7 項驗證測試，檢查說明文字 textAlign 與 CSS 容器靠左設定。
+  - 全專案 365 項單元測試全數 PASS，TypeScript 與 Vite 打包建置零錯誤。
+
+### v0.1.211 (2026-09-25)
+- 社員名冊頁面重構與互動體驗優化 (WebAdminMembers & WebAdminLayout & webAdmin.css)：
+  - 導覽列更名與工具列精簡 (Terminology & Toolbar Layout)：
+    - 側邊導覽列由「全社社員名冊」精簡更名為「社員名冊」。
+    - 頂部工具列移除橫條「全社社員名冊」文字與圖示，重整按鈕精簡為純圖示按鈕並支援無障礙標籤。
+  - 社員卡片純靠左排版與單鍵複製 (Member Card Left-Align & One-Click Copy)：
+    - 卡片整體資訊統一設定為靠左排版 (`text-align: left`)。
+    - 頂部整合雙軌頭貼機制：支援讀取 Supabase members 資料表之 `avatar_url` 欄位展示照片，若尚無頭貼則自動回退為姓名首字圓形徽章。
+    - 姓名下方橫向排列身分標籤（在校/校友/校外）、社員標籤（社員/非社員）與幹部角色標籤。
+    - 卡片中段依序呈現系所、學號、LINE ID、電話、Gmail，並為學號、LINE ID、電話、Gmail 分別配置專屬單鍵複製按鈕 (`wa-copy-btn`)，點擊複製文字至剪貼簿並彈出短暫微提示，同時加入 `e.stopPropagation()` 杜絕誤觸側邊抽屜。
+    - 卡片底部固定錨定註冊日期（靠左）與「編輯個人資料」（靠右）。
+  - 懸浮式圓角滑出彈窗與左側大圖檢視面板 (Floating Slide-Over Sheet & Side Photo Lightbox)：
+    - 側邊抽屜重構為懸浮式圓角彈窗 (`.wa-drawer-panel`)，具備 18px 圓弧邊角與四周留白間距，呈現現代獨立視窗感。
+    - 抽屜內部所有標題與文字統一設定靠左對齊。
+    - 抽屜個資編輯表單新增「想說的話 (`want_to_say`)」文字區域與「體能測驗證明照片 (`proof_urls`)」縮圖清單 (`wa-proof-grid`)。
+    - 點擊體能證明縮圖時，於右側抽屜的左方空間（螢幕左半部）即時浮現專屬大圖檢視面板 (`wa-drawer-side-preview`)，支援全圖瀏覽、另開原圖與快速關閉，方便幹部對照右側表單與左側證明。
+    - 抽屜底部儲存按鈕文字精簡更名為「儲存變更」。
+  - 歷史履歷深度優化與「日期：-」修復 (Timeline Records Enhancement)：
+    - 診斷並修復歷史履歷中因欄位對應錯誤導致日期恆顯示為「-」之問題，改為優先讀取 Supabase RPC 之 `date_display` 欄位（如出隊區間或租用天數）。
+    - 履歷卡片加入活動（Calendar）、裝備（Package）、繳費（CreditCard）專屬分類標籤與圖示。
+    - 依狀態動態套用彩色狀態徽章（正取/已歸還綠色、待領取/待審核橘色、取消紅色）。
+    - 補齊金額、付款狀態、借用品項與備註等詳細資訊。
+  - Diff 比對確認彈窗靠左對齊 (Diff Confirmation Modal Alignment)：
+    - 將 Diff 彈窗的標題、副標題與說明文字統一設定為靠左對齊 (`textAlign: 'left'`)。
+  - 資料庫層擴充 (Database Schema Migration)：
+    - 建立 `supabase/migrations/20260925_add_avatar_url_to_members.sql`，為 `members` 資料表擴充 `avatar_url TEXT` 欄位以支援 LINE Profile 大頭貼同步。
+- 單元測試與建置驗證：
+  - 新增 `test/88_web_admin_members_redesign.test.mjs` 共 7 大驗證測試。
+  - 全專案 372 項單元測試 100% 通過，TypeScript 與 Vite 打包建置零錯誤。
+
+### v0.1.212 (2026-09-25)
+- 裝備借用模組重構與卡片/抽屜體驗優化 (WebAdminLoans & WebAdminLayout & webAdmin.css)：
+  - 系統命名與導覽列精簡 (Terminology & Navigation)：
+    - 將工作站頂部導覽列由「裝備借用管理」精簡更名為「裝備借用」。
+    - 工具列左側移除橫條「裝備借用管理」標題文字與圖示，重整按鈕精簡為純圖示按鈕並支援無障礙標籤。
+  - 卡片雙倍寬度網格與純靠左排版 (Double-Width Card Grid & Left-Align Layout)：
+    - 卡片網格改用 `.wa-card-grid-loans`，設定自適應最小寬度為 640px (`minmax(640px, 1fr)`)，呈現雙倍寬度之資訊卡片。
+    - 卡片文字預設純靠左對齊 (`textAlign: 'left'`)。
+    - 頂部靠左姓名、靠右純中文借還狀態（待領取、租借中、已歸還、已取消）與繳費狀態徽章。
+    - 第二列直接呈現借用單號 ID，不加「單號」前綴。
+    - 第三列以標籤形式一一條列借用裝備品項與數量 (`wa-loan-items-row` & `wa-loan-item-pill`)。
+    - 第四列與第五列呈現借用期間與應付租金，徹底移除所有押金欄位與文案。
+    - 底部固定列左側配置「查看個人資料」按鈕、右側配置「查看詳細與操作」按鈕。
+  - 手機介面風格個人資料彈窗 (Mobile Profile Modal Integration)：
+    - 點擊卡片左下方「查看個人資料」按鈕，立即跳出置中之手機介面風格個人資料彈窗 (`MemberProfileModal`)。
+    - 彈窗完整呈現社員姓名、性別、身分標籤、學號、系所、聯絡電話、LINE ID、Email、緊急聯絡人、體能自述與證明照片等。
+    - 彈窗底部配置「移至社員詳細資料編輯頁面」按鈕，點擊自動導向 `/admin-web/members`。
+  - 懸浮圓角側邊抽屜與左側並排個資面板 (Floating Drawer & Side Profile Panel)：
+    - 側邊抽屜採用懸浮圓角視窗設計 (`.wa-drawer-panel`，18px 圓角與細緻陰影)，抽屜文字預設純靠左對齊。
+    - 抽屜「申請人資訊」中的借用人姓名以膠囊徽章按鈕 (`wa-name-capsule-btn`) 包覆。
+    - 點擊借用人姓名膠囊時，於主抽屜左側並排展開同級之個人資料面板 (`wa-drawer-side-profile`)，方便幹部邊檢視借用單邊對照借用人完整個資與登山經歷；面板右上角提供前往 `/admin-web/members` 編輯按鈕。
+    - 抽屜帳務區塊、裝備品項表格與幹部備註 placeholder 中徹底移除所有「押金」字樣與欄位。
+- 單元測試與建置驗證：
+  - 新增 `test/90_web_admin_loans_redesign.test.mjs` 共 6 大驗證測試。
+  - 全專案 378 項單元測試 100% 通過，TypeScript 與 Vite 打包建置零錯誤。
+
+### v0.1.213 (2026-09-25)
+- 裝備借用人詳細資料與個人資料彈窗全面統一 (Member Profile Modal & Drawer Unification)：
+  - 卡片彈窗與抽屜個資 100% 組件共用 (Unified Profile Component Architecture)：
+    - 抽屜內部原先手刻之側邊借用人個資面板全面替換為 `MemberProfileModal` 內嵌模式 (`mode="inline"`)。
+    - 卡片點擊「查看個人資料」（手機彈窗）與抽屜點擊姓名膠囊展開之「借用人詳細資料」（左側並排面板）達成 100% 視覺、排版、欄位與行為一致，皆包含姓名、頭貼、身分標籤、基本與學校聯絡資訊、緊急聯絡人、體能證明照片縮圖、戶外登山經驗、體能自述與幹部留言。
+  - 裝備借用單詳情欄位修復與 RPC / 直查健全化 (Fix Missing Student ID, Department & LINE ID)：
+    - 診斷並修復借用單詳情中學號、系所與 LINE ID 消失顯示為「-」之問題。
+    - 修復 Supabase 資料庫 RPC `get_admin_loans_rpc`，在 SQL `SELECT` 中補齊 `m.student_id, m.department, m.line_id`，同步建立資料庫遷移檔 `supabase/migrations/20260925_fix_get_admin_loans_rpc_member_fields.sql` 並同步更新 `supabase/admin_portal_rpc.sql`。
+    - 修復 WebAdminLoans 直讀查詢語法，選取安全的 members 關聯欄位與 items jsonb 欄位，雙重確保直讀與 RPC 備援皆能完整保留學號、系所與 LINE ID。
+  - 體能證明照片側邊大圖檢視與小螢幕浮動置中 (Side Photo Lightbox & Responsive Overlay)：
+    - 點擊借用人個資之體能證明縮圖時，即時在左側展開專屬大圖檢視面板 (`wa-drawer-side-preview`)，支援全圖瀏覽與關閉。
+    - 在 webAdmin.css 加入媒體查詢響應式防禦：當螢幕寬度小於 1500px 時，自動將大圖檢視面板轉為全螢幕浮動置中覆蓋 (`position: fixed; inset: 0`)，徹底解決 3 欄並排時產生的版面擠壓問題。
+  - 跨頁面精確定位與抽屜自動展開 (Cross-Page Deep Linking with Auto Drawer Open)：
+    - 個資彈窗與側邊面板底部按鈕點擊「前往編輯」時，攜帶使用者 ID 導向 `/admin-web/members?userId=${encodeURIComponent(userId)}`。
+    - 社員名冊頁面 (`WebAdminMembers.tsx`) 整合 `useSearchParams` 監聽網址參數，載入名單後自動比對並直接開啟該社員的資料編輯抽屜，無需幹部手動再次搜尋。
+- 單元測試與建置驗證：
+  - 更新 `test/90_web_admin_loans_redesign.test.mjs`，新增驗證共用 MemberProfileModal inline 模式、學號/系所/LINE ID 存在性、大圖預覽面板與網址自動開抽屜功能。
+  - 全專案 379 項單元測試 100% 通過，TypeScript 與 Vite 打包建置零錯誤。
+
+### v0.1.214 (2026-09-25)
+- 裝備庫存管控頁面全面重構 (Web Admin Equipment Inventory Modernization):
+  - 導覽列與工具列更名：更名為「裝備庫存」，移除橫條文字與圖示，重整改為純圖示按鈕，右側新增「新增裝備」按鈕。
+  - 表格欄位與互動重構：
+    - 「裝備編號」改名為「編號」。
+    - 「系統分類」改為即時下拉選單，可在表格內直接切換並即時更新至 Supabase。
+    - 「總庫存」與「目前可借」提供「+」與「-」按鈕即時增減微調。
+    - 「社員價」與「非社員價」合併為「基礎價 (2天)」，只使用 price_2day 與 price_extra_day，價格移除貨幣符號以純數字顯示。
+    - 移除規格說明欄位，保留備註欄位；備註支援點擊自適應展開完整多行高度或收合為單行。
+    - 表格最右側新增鉛筆編輯圖示，點擊後於右側滑出懸浮圓角側邊抽屜。
+  - 懸浮圓角側邊抽屜 (Equipment Edit & Create Drawer)：
+    - 側邊抽屜採用懸浮圓角視窗設計，視窗文字預設純靠左對齊。
+    - 整合手機版 1:1 正方形相片輪播與管理功能，支援多張相片上傳、刪除與瀏覽。
+    - 抽屜內支援修改名稱、分類、編號、總庫存、可借數量、基礎價 (2天)、續租每日與備註。
+- Supabase 資料庫欄位清理與預約 RPC 更新 (Database Price Column Deprecation & RPC Update)：
+  - 自 Supabase equipments 資料表正式移除錯誤的 member_price_per_day 與 non_member_price_per_day 欄位。
+  - 更新 submit_equipment_loan_rpc 預約借用預存程序，移除對過期欄位之依賴，改為統一讀取 price_2day 與 price_extra_day 計算總租金。
+  - 建立資料庫遷移檔 supabase/migrations/20260925_cleanup_equipment_prices_and_update_loan_rpc.sql 並同步更新 supabase/fix_equipment_loan_rpc.sql。
+- 財務對帳核銷頁面修復與健全化 (Web Admin Finance Page Fix & Optimization)：
+  - 導覽列與標題更名為「財務對帳」，移除大字橫條，重整改為純圖示按鈕。
+  - 徹底修復資料空轉問題：改由呼叫 fetchFinanceItemsFromSupabase（整合 payments、loans、signups 跨表財務資訊之 get_admin_finance_rpc），並將預設篩選改為 ALL，解決原先寫死待確認導致 0 筆資料的問題。
+  - 欄位映射修正：支援 bank_last5 帳號末五碼讀取與顯示。
+  - 批次核銷功能支援與錯誤透明化：支援 BATCH_VERIFY_PAYMENTS，稽核錯誤遵循透明原則直接印出完整代碼與訊息。
+- 單元測試與建置驗證：
+  - 新增 test/91_web_admin_inventory_and_finance.test.mjs，包含 7 大驗證測試。
+  - 全專案 74 個測試套件、386 項單元測試 100% 通過，TypeScript 與 Vite 打包建置零錯誤。
+
+### v0.1.215 (2026-09-25)
+- 電腦版工作站全站版面優化與左側空白移除 (Layout White Space Removal)：
+  - 診斷全站左側大塊空白根因：修正 `src/index.css` 中 `#root` 保留之 `width: 1126px; margin: 0 auto; border-inline: ...`，改設為全寬 `width: 100%; min-height: 100svh;`。
+  - 修正 `webAdmin.css` 中 `.web-admin-wrapper` 的寬度設定，由 `width: 100vw;` 改為 `width: 100%;`，消除桌面瀏覽器縱向滾動條造成的橫向溢出與位移。
+  - 經由外層全寬自適應設定，電腦版幹部工作站無縫貼合螢幕邊界展開，手機版 LIFF 頁面則維持由 `.app-container { max-width: 600px; margin: 0 auto; }` 安全置中。
+- 頂部狀態列重構 (Top Header Brand, Navigation Reorder & Logout Popover)：
+  - 品牌更名與精簡：保留綠色山岳圖示，品牌文字由「台科登山社 [電腦工作站]」更新為「NTUST Mountaineering」，移除原有膠囊徽章。
+  - 導航分頁重新排序：依指定工作流排列為「活動管理、報名名冊、社員名冊、財務對帳、裝備借用、裝備庫存」。
+  - 登出互動重構為懸浮下拉選單 (Dropdown Popover)：滑鼠懸停於幹部姓名與職位上方時，於下方平滑滑出精緻浮動卡片，顯示頭貼、姓名、幹部職稱與「登出工作站」按鈕；滑鼠移開後自動平滑收合。
+- 財務對帳核銷頁面功能增強 (Web Admin Finance Redesign)：
+  - 申請人姓名膠囊化與個資彈窗 (Applicant Name Capsule & Member Profile Modal)：
+    - 表格中申請人姓名改以綠色圓角膠囊按鈕 (`wa-name-capsule-btn`) 包覆。
+    - 點擊後跳出手機風格之個人資料彈窗 (`MemberProfileModal`)，完整展示基本資料、通訊聯絡、緊急聯絡人、登山經歷與體能紀錄。
+    - 彈窗底部「前往個人資料編輯」整合跨頁導覽，點擊直達 `/admin-web/members?userId=...` 並自動開啟該社員之編輯抽屜。
+  - 核銷按鈕操作權限守衛 (Verification Button Guard)：
+    - 嚴格限制：當款項狀態為「待繳費 Unpaid」時，不顯示「確認核銷」按鈕，避免幹部在未收到款項時誤觸核銷。
+    - 僅在「待確認 Checking」狀態時顯示「確認核銷」按鈕；「已核銷 Confirmed」狀態時呈現綠色已核銷標籤。
+    - 表格全選核取方塊與批次核銷自動過濾排除「待繳費 Unpaid」項目，確保批次核銷僅針對待確認項目生效。
+  - 操作欄筆圖示與右側滑出式編輯視窗 (Pencil Icon & Slide-over Drawer)：
+    - 操作欄位配置筆的圖示 (`Pencil`) 按鈕。
+    - 點擊筆圖示自右側滑出懸浮圓角抽屜 (`wa-drawer-backdrop` + `wa-drawer-panel`)。
+    - 抽屜支援完整款項資訊檢視、匯款單據/證明照片縮圖與放大預覽、核銷狀態即時切換、LINE 通知狀態更新與幹部內部備註編輯。
+    - 儲存時直連 Supabase 更新關聯款項與來源狀態，並在核銷且未通知時非同步觸發 GAS LINE 推播通知與寫入稽核日誌。
+  - 長文字儲存格點擊自適應調整欄高 (Cell Expansion & Dynamic Row Height)：
+    - 款項說明、備註說明與款項單號等長文字欄位支援點擊互動 (`wa-clickable-cell`)。
+    - 點擊切換展開狀態 (`wa-cell-expanded` / `wa-cell-ellipsis`)，自動擴展列高完整顯示內容，再次點擊收合回單行。
+- 單元測試與建置驗證：
+  - 新增 `test/92_web_admin_redesign_and_finance_workflow.test.mjs`，包含 8 大驗證測試。
+  - 全專案 75 個測試套件、394 項單元測試 100% 通過，TypeScript 與 Vite 打包建置零錯誤。
+
+### v0.1.216 (2026-09-25)
+- 緊急白屏異常修復 (Hotfix White Screen / React Hook Order Violation)：
+  - 診斷白屏根因：在 [src/pages/web-admin/WebAdminLayout.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/web-admin/WebAdminLayout.tsx) 中，登出選單狀態 `isUserMenuOpen` 的 `useState(false)` 誤置於 `if (loading || !session) return ...` 提前返回條件式之後，違反 React Rules of Hooks，在初始渲染到憑證驗證完成重渲染時拋出 `Rendered more hooks than during previous render` 致命例外導致全站崩潰。
+  - 修正措施：將 `const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);` 移至組件頂部（與 `session` 及 `loading` 共同於最前端初始化），嚴格確保所有渲染週期 Hook 呼叫順序完全一致，徹底解決白屏問題。
+  - 驗證：全專案 75 個測試套件、394 項單元測試 100% 通過，Vite 與 TypeScript 打包編譯無任何錯誤。
+
+### v0.1.217 (2026-09-25)
+- 電腦工作站全模組高階表格與個人資料編輯重構 (Web Admin Advanced Tables & Member Drawer):
+  - 抽取共用個人資料編輯抽屜 (MemberEditDrawer.tsx):
+    - 將社員名冊逾 600 行之個人資料編輯抽屜獨立抽取為全站共用組件 `src/components/admin/MemberEditDrawer.tsx`。
+    - 支援 Profile 基本資料與 Timeline 歷程紀錄雙分頁，涵蓋通訊、緊急聯絡人、體能登山經歷、體能照片預覽、幹部留言與意願管理。
+    - 內建 Diff 差異比對計算與確認對話框；特別設計當未變更任何欄位 (0 Diff) 按下儲存時自動關閉抽屜，避免多餘阻擋。
+    - 儲存完成後直連 Supabase 更新並寫入幹部審計日誌 (logWebAuditAction)。
+  - 個資檢視彈窗對接直通編輯抽屜 (MemberProfileModal.tsx):
+    - 底部按鈕文案更新為「開啟詳細資料編輯頁面→」。
+    - 支援 `onOpenEditDrawer` 回呼函式，點擊後於當前頁面右側平滑滑出 MemberEditDrawer，免跳轉頁面。
+  - 報名名冊 (WebAdminRoster.tsx) 表頭排版與個資對接:
+    - 表頭動作列 (`.wa-th-actions-overlay`) 支援 `flex-wrap: wrap;` 與百分百寬度保護，窄欄位按鈕完整展示不被擠壓。
+    - 姓名欄位以綠色膠囊包覆 (`.wa-name-capsule-btn`)，點擊開啟個資檢視彈窗並直通編輯抽屜。
+  - 裝備借用 (WebAdminLoans.tsx) 3 欄自適應卡片網格與個資對接:
+    - 借用卡片列表導入 `.wa-card-grid-loans` 樣式，寬螢幕下自適應呈現 3 欄並支援 2 欄與單欄彈性排版。
+    - 借用人個資彈窗直通右側滑出 MemberEditDrawer。
+  - 社員名冊 (WebAdminMembers.tsx) 身分名稱與卡片貼底優化:
+    - 身分標籤與篩選選項精簡為「臺科在校生」。
+    - 社員卡片 footer 底部固定貼齊 (`margin-top: auto;`)，消除卡片高度不一下方參差問題。
+    - 接入共用 MemberEditDrawer 組件。
+  - 裝備庫存 (WebAdminInventory.tsx) 與財務對帳 (WebAdminFinance.tsx) 引進高階表格引擎:
+    - 全面移植 `useAdvancedTable` 狀態管理引擎，支援欄位寬度拖曳調整、欄位順序拖曳與左右移動、欄位釘選至最左側 (sticky left 陰影)。
+    - 序號列加入四角懸浮快捷工具 (置頂、上移、下移、隱藏) 與中央垂直拖曳手柄。
+    - 工具列提供欄位顯隱管理選單 (Visible Columns)、一鍵還原預設寬度按鈕與隱藏列恢復功能。
+    - 財務對帳申請人姓名支援點擊開啟個資彈窗並直通 MemberEditDrawer。
+- 單元測試與建置檢查:
+  - 新增 `test/93_web_admin_advanced_tables_and_member_drawer.test.mjs`，包含 8 大驗證測試。
+  - 全專案 76 個測試套件、402 項單元測試 100% 通過，TypeScript (tsc -b) 與 Vite 打包建置零錯誤，嚴格恪守零 Emoji 規範。
 

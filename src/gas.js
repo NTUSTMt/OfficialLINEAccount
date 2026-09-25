@@ -4427,6 +4427,11 @@ function handleLiffHelperApi(json) {
     return _handleNotifyLoanStatusUpdated(json);
   }
 
+  // 15. 活動新增/更新推播至幹部群組 Helper
+  if (action === "notify_officer_event") {
+    return _handleNotifyOfficerEvent(json);
+  }
+
   return _errorResponse("未支援的 Helper Action: " + action);
 }
 
@@ -4947,6 +4952,50 @@ function _handleNotifyLoanStatusUpdated(json) {
 }
 
 /**
+ * ⚡ 活動新增/更新推播至幹部群組核心 (純發訊息至 ADMIN_GROUP_ID)
+ */
+function _handleNotifyOfficerEvent(json) {
+  try {
+    var userId = json.userId || "";
+    var eventId = json.eventId || "";
+    var name = json.name || "未命名活動";
+    var startDate = json.startDate || "";
+    var endDate = json.endDate || "";
+    var deadline = json.deadline || "";
+    var cost = json.cost || "0";
+    var status = json.status || "開放";
+    var isUpdate = !!json.isUpdate;
+
+    var officer = checkOfficerInternal(null, userId);
+    if (!officer || !officer.isOfficer) {
+      return _errorResponse("權限不足：僅限幹部可發送活動推播");
+    }
+
+    var titleTag = isUpdate ? "【幹部通知：活動資訊更新】" : "【幹部通知：新活動發布】";
+    var dateRange = startDate ? (startDate + (endDate && endDate !== startDate ? " ~ " + endDate : "")) : "未定";
+    var groupMsg = titleTag + "\n\n" +
+      "• 活動名稱：" + name + "\n" +
+      "• 活動代號：" + eventId + "\n" +
+      "• 出隊日期：" + dateRange + "\n" +
+      "• 報名截止：" + (deadline || "無") + "\n" +
+      "• 預計費用：NT$ " + cost + "\n" +
+      "• 目前狀態：【" + status + "】\n\n" +
+      (isUpdate ? "活動資訊已同步更新完成！" : "已上架完成，社員可在「最新活動」瀏覽與報名！");
+
+    pushAdminMessage(groupMsg);
+
+    return _jsonResponse({
+      status: "success",
+      message: "成功推播活動資訊至幹部群組",
+      eventId: eventId
+    });
+  } catch (err) {
+    console.error("推播至幹部群組失敗:", err);
+    return _errorResponse("推播至幹部群組失敗: " + (err.message || err.toString()));
+  }
+}
+
+/**
  * 基本資料填寫/更新 LINE 推播通知核心 (純推播訊息)
  */
 function _handleNotifyProfileSaved(json) {
@@ -5455,7 +5504,24 @@ function doGet(e) {
   // 2. 審核結果推播通知 (GET 端點支援)
   if (action === "send_event_notifications") {
     var eventId = (e && e.parameter && e.parameter.eventId) ? e.parameter.eventId : "";
-    return _handleSendEventNotifications({ userId: userId, eventId: eventId });
+    var signupIds = (e && e.parameter && e.parameter.signupIds) ? e.parameter.signupIds : "";
+    return _handleSendEventNotifications({ userId: userId, eventId: eventId, signupIds: signupIds });
+  }
+
+  // 3. 活動新增/更新推播至幹部群組 (GET 端點支援)
+  if (action === "notify_officer_event") {
+    var p = e && e.parameter ? e.parameter : {};
+    return _handleNotifyOfficerEvent({
+      userId: userId,
+      eventId: p.eventId || "",
+      name: p.name || "",
+      startDate: p.startDate || "",
+      endDate: p.endDate || "",
+      deadline: p.deadline || "",
+      cost: p.cost || "",
+      status: p.status || "",
+      isUpdate: p.isUpdate === "true" || p.isUpdate === true
+    });
   }
 
   // 3. 活動清單唯讀備援
@@ -6635,6 +6701,16 @@ function _handleSendEventNotifications(json) {
         if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
           var sbSignups = JSON.parse(res.getContentText());
           if (Array.isArray(sbSignups) && sbSignups.length > 0) {
+            // 若傳入指定名冊清單 (signupIds)，僅針對指定對象發送
+            if (json.signupIds) {
+              var allowedIdList = String(json.signupIds).split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+              if (allowedIdList.length > 0) {
+                sbSignups = sbSignups.filter(function (it) {
+                  return allowedIdList.indexOf(String(it.id)) > -1;
+                });
+              }
+            }
+
             // 防呆檢驗：若有正取人員待推播通知，但活動未設定群組連結，立即阻擋
             var hasPendingAccepted = sbSignups.some(function (item) {
               var st = String(item.status || "");

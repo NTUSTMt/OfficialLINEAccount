@@ -15,7 +15,8 @@ import {
   Link2,
   ImageIcon,
   Check,
-  Globe
+  Globe,
+  Trash2
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import { getDirectImageUrl } from '../../utils/image';
@@ -122,6 +123,8 @@ export const WebAdminEvents: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [notifyOfficerGroup, setNotifyOfficerGroup] = useState(false);
 
   // 本機圖片選取狀態
   const [selectedFile, setSelectedFile] = useState<{ base64: string; name: string } | null>(null);
@@ -247,12 +250,22 @@ export const WebAdminEvents: React.FC = () => {
     const yy = String(now.getFullYear()).slice(-2);
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const prefix = `E${yy}${mm}-`;
-    const sameMonthCount = events.filter((e) => e.id.startsWith(prefix)).length;
-    const nextSeq = String(sameMonthCount + 1).padStart(2, '0');
+
+    let maxSeq = 0;
+    events.forEach((e) => {
+      if (e.id.startsWith(prefix)) {
+        const seqPart = parseInt(e.id.slice(prefix.length), 10);
+        if (!isNaN(seqPart) && seqPart > maxSeq) {
+          maxSeq = seqPart;
+        }
+      }
+    });
+    const nextSeq = String(maxSeq + 1).padStart(2, '0');
 
     setEditingEventId(null);
     setSelectedFile(null);
     setPreviewImage('');
+    setNotifyOfficerGroup(false);
     setFormData({
       id: `${prefix}${nextSeq}`,
       status: '開放',
@@ -277,6 +290,7 @@ export const WebAdminEvents: React.FC = () => {
   const handleOpenEdit = (event: AdminEventRecord) => {
     setEditingEventId(event.id);
     setSelectedFile(null);
+    setNotifyOfficerGroup(false);
     const existingImg = event.cover_image_url || event.cover_image || '';
     setPreviewImage(existingImg ? (getDirectImageUrl(existingImg, 600) || existingImg) : '');
     setFormData({
@@ -297,6 +311,79 @@ export const WebAdminEvents: React.FC = () => {
     });
     setModalOpen(true);
     setErrorMsg(null);
+  };
+
+  // 5. 刪除活動（連帶清除報名名冊與心得，並跳出二次確認）
+  const handleDeleteEvent = async () => {
+    if (!editingEventId) return;
+
+    try {
+      setDeleting(true);
+      setErrorMsg(null);
+
+      // 查詢該活動目前報名人數
+      const { count, error: countErr } = await client
+        .from('event_signups')
+        .select('*', { count: 'exact', head: true })
+        .eq('event_id', editingEventId);
+
+      if (countErr) {
+        throw new Error(`[查詢報名名冊失敗]: ${countErr.message}`);
+      }
+
+      const signupCount = count || 0;
+      const confirmPrompt = signupCount > 0
+        ? `此活動目前已有 ${signupCount} 位社員報名！\n\n刪除活動將一併清除該活動的所有報名名冊與心得紀錄。\n\n確定要強制刪除活動「[${formData.id}] ${formData.title}」嗎？此動作無法復原！`
+        : `確定要刪除活動「[${formData.id}] ${formData.title}」嗎？此動作無法復原！`;
+
+      if (!window.confirm(confirmPrompt)) {
+        setDeleting(false);
+        return;
+      }
+
+      // 1. 刪除關聯心得 (reflections)
+      const { error: refErr } = await client
+        .from('reflections')
+        .delete()
+        .eq('event_id', editingEventId);
+      if (refErr) {
+        throw new Error(`[清除活動心得失敗]: ${refErr.message}`);
+      }
+
+      // 2. 刪除關聯報名名冊 (event_signups)
+      const { error: signupDelErr } = await client
+        .from('event_signups')
+        .delete()
+        .eq('event_id', editingEventId);
+      if (signupDelErr) {
+        throw new Error(`[清除活動報名名冊失敗]: ${signupDelErr.message}`);
+      }
+
+      // 3. 刪除活動本體 (events)
+      const { error: eventDelErr } = await client
+        .from('events')
+        .delete()
+        .eq('id', editingEventId);
+      if (eventDelErr) {
+        throw new Error(`[刪除活動失敗]: ${eventDelErr.message}`);
+      }
+
+      await logWebAuditAction(client, session.userId, 'DELETE_EVENT', 'events', editingEventId, {
+        id: editingEventId,
+        title: formData.title,
+        deletedSignupsCount: signupCount,
+      });
+
+      setSuccessMsg(`活動「[${formData.id}] ${formData.title}」已成功刪除！`);
+      setModalOpen(false);
+      loadEvents();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      console.error('[WebAdminEvents] handleDeleteEvent error:', err);
+      setErrorMsg(err.message || String(err));
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // 5. 儲存活動 (新增或修改)
@@ -400,11 +487,32 @@ export const WebAdminEvents: React.FC = () => {
           .insert(payload);
 
         if (error) {
-          throw new Error(`[發布活動失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
+          throw new Error(`[新增活動失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
         }
 
         await logWebAuditAction(client, session.userId, 'CREATE_EVENT', 'events', payload.id, payload);
-        setSuccessMsg(`新活動「${formData.title}」已成功發布！`);
+        setSuccessMsg(`新活動「${formData.title}」已成功建立！`);
+      }
+
+      // 若勾選推播至幹部群組
+      if (notifyOfficerGroup) {
+        try {
+          const query = new URLSearchParams({
+            action: 'notify_officer_event',
+            userId: session.userId,
+            eventId: editingEventId || payload.id,
+            name: formData.title.trim(),
+            startDate: formData.start_date || '',
+            endDate: formData.end_date || formData.start_date || '',
+            deadline: formData.deadline || '',
+            cost: String(formData.fee || 0),
+            status: formData.status,
+            isUpdate: String(!!editingEventId),
+          });
+          await fetch(`${GAS_API_URL}?${query.toString()}`);
+        } catch (pushErr) {
+          console.warn('[WebAdminEvents] 推播幹部群組失敗 (不影響活動儲存):', pushErr);
+        }
       }
 
       setModalOpen(false);
@@ -491,11 +599,6 @@ export const WebAdminEvents: React.FC = () => {
       {/* 頂部操作工具列 */}
       <div className="web-admin-toolbar">
         <div className="web-admin-toolbar-left">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: '1.02rem' }}>
-            <Calendar size={18} color="var(--wa-primary)" />
-            <span>活動管理</span>
-          </div>
-
           <div style={{ position: 'relative' }}>
             <Search size={15} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--wa-text-muted)' }} />
             <input
@@ -536,26 +639,28 @@ export const WebAdminEvents: React.FC = () => {
             <option value="idAsc">活動代號 (由舊到新)</option>
             <option value="statusOrder">活動狀態 (開放中優先)</option>
           </select>
+        </div>
 
+        <div className="web-admin-toolbar-right">
+          {/* 純圖示重新整理按鈕 */}
           <button
             type="button"
             className="web-admin-btn web-admin-btn-secondary"
             onClick={loadEvents}
             title="重新整理活動清單"
+            style={{ padding: '7px 10px' }}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>重整</span>
           </button>
-        </div>
 
-        <div className="web-admin-toolbar-right">
+          {/* 新增活動按鈕 */}
           <button
             type="button"
             className="web-admin-btn"
             onClick={handleOpenCreate}
           >
             <Plus size={16} />
-            <span>發布新活動</span>
+            <span>新增活動</span>
           </button>
         </div>
       </div>
@@ -585,7 +690,7 @@ export const WebAdminEvents: React.FC = () => {
         <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--wa-text-muted)', backgroundColor: 'var(--wa-surface)', borderRadius: 12, border: '1px dashed var(--wa-border)' }}>
           <Calendar size={36} style={{ margin: '0 auto 12px', color: 'var(--wa-text-muted)' }} />
           <div style={{ fontSize: '1rem', fontWeight: 600 }}>目前無符合條件之活動</div>
-          <div style={{ fontSize: '0.84rem', marginTop: 4 }}>請嘗試更換篩選條件或點擊「發布新活動」建立。</div>
+          <div style={{ fontSize: '0.84rem', marginTop: 4 }}>請嘗試更換篩選條件或點擊「新增活動」建立。</div>
         </div>
       ) : (
         <div className="wa-card-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))' }}>
@@ -713,15 +818,15 @@ export const WebAdminEvents: React.FC = () => {
         </div>
       )}
 
-      {/* 置中活動發布 / 編輯彈窗 (Centered Modal) */}
+      {/* 置中活動新增 / 編輯彈窗 (Centered Modal) */}
       {modalOpen && (
-        <div className="wa-modal-backdrop" onClick={() => !saving && setModalOpen(false)}>
+        <div className="wa-modal-backdrop" onClick={() => !saving && !deleting && setModalOpen(false)}>
           <div className="wa-modal-container" onClick={(e) => e.stopPropagation()}>
             {/* 彈窗頂部 */}
             <div className="wa-modal-header">
               <h2 className="wa-modal-title">
                 <Calendar size={20} color="var(--wa-primary)" />
-                <span>{editingEventId ? `編輯活動 [${formData.id}]` : '發布新活動'}</span>
+                <span>{editingEventId ? `編輯活動 [${formData.id}]` : '新增活動'}</span>
               </h2>
               <button
                 type="button"
@@ -843,7 +948,7 @@ export const WebAdminEvents: React.FC = () => {
                       style={{ width: '100%' }}
                       placeholder="https://line.me/R/ti/g/... 或 https://line.me/ti/g/..."
                     />
-                    <div style={{ fontSize: '0.78rem', color: 'var(--wa-text-muted)', marginTop: 4 }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--wa-text-muted)', marginTop: 4, textAlign: 'left' }}>
                       此連結為出隊專屬保密資訊，僅在幹部審核為正取並推播時提供正取社員加入。
                     </div>
                   </div>
@@ -915,6 +1020,24 @@ export const WebAdminEvents: React.FC = () => {
                         )}
                       </div>
                     )}
+                  </div>
+
+                  {/* 第六列：推播到幹部群組勾選框 (在封面照片下方) */}
+                  <div style={{ padding: '10px 14px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid var(--wa-border)' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        className="wa-checkbox"
+                        checked={notifyOfficerGroup}
+                        onChange={(e) => setNotifyOfficerGroup(e.target.checked)}
+                      />
+                      <span style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--wa-text)' }}>
+                        同步推播活動資訊至幹部群組 (LINE)
+                      </span>
+                    </label>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--wa-text-muted)', marginTop: 4, textAlign: 'left' }}>
+                      勾選後儲存時將自動向 LINE 幹部群組發送活動出隊摘要訊息
+                    </div>
                   </div>
                 </div>
 
@@ -1025,11 +1148,34 @@ export const WebAdminEvents: React.FC = () => {
 
               {/* 彈窗底部固定按鈕列 */}
               <div className="wa-modal-footer">
+                {editingEventId && (
+                  <button
+                    type="button"
+                    className="web-admin-btn"
+                    style={{
+                      marginRight: 'auto',
+                      backgroundColor: '#dc2626',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '7px 14px',
+                    }}
+                    onClick={handleDeleteEvent}
+                    disabled={saving || deleting}
+                  >
+                    <Trash2 size={15} />
+                    <span>{deleting ? '刪除中...' : '刪除活動'}</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   className="web-admin-btn web-admin-btn-secondary"
-                  onClick={() => !saving && setModalOpen(false)}
-                  disabled={saving}
+                  onClick={() => !saving && !deleting && setModalOpen(false)}
+                  disabled={saving || deleting}
                 >
                   <span>取消</span>
                 </button>
@@ -1037,10 +1183,10 @@ export const WebAdminEvents: React.FC = () => {
                 <button
                   type="submit"
                   className="web-admin-btn"
-                  disabled={saving}
+                  disabled={saving || deleting}
                 >
                   <Save size={15} />
-                  <span>{saving ? '處理中...' : editingEventId ? '儲存活動變更' : '立即發布活動'}</span>
+                  <span>{saving ? '處理中...' : editingEventId ? '儲存活動變更' : '新增活動'}</span>
                 </button>
               </div>
             </form>

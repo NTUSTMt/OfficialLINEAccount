@@ -24,10 +24,10 @@ export const WebAdminLogin: React.FC = () => {
         </div>
 
         <h1 style={{ fontSize: '1.45rem', fontWeight: 700, margin: '0 0 8px 0', color: 'var(--wa-text)' }}>
-          台科登山社 幹部工作站
+          臺科登山社 幹部後台
         </h1>
         <p style={{ color: 'var(--wa-text-muted)', fontSize: '0.88rem', margin: '0 0 20px 0', lineHeight: 1.5 }}>
-          NTUST Hiking Club Officer Administration Workstation
+          NTUST Mountaineering Club Officer Workstation
         </p>
 
         {isUnauthorized && (

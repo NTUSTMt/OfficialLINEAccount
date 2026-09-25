@@ -26,6 +26,9 @@ export interface MemberProfileModalProps {
   officerUserId?: string;
   initialMember?: any;
   onNavigateToDetail?: (userId: string) => void;
+  onOpenEditDrawer?: (userId: string) => void;
+  mode?: 'modal' | 'inline';
+  onPreviewPhoto?: (url: string) => void;
 }
 
 export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
@@ -34,7 +37,10 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
   userId,
   officerUserId,
   initialMember,
-  onNavigateToDetail
+  onNavigateToDetail,
+  onOpenEditDrawer,
+  mode = 'modal',
+  onPreviewPhoto
 }) => {
   const navigate = useNavigate();
   const [detail, setDetail] = useState<MemberFullRecord | null>(null);
@@ -165,7 +171,9 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
 
   const handleGoToDetail = () => {
     onClose();
-    if (onNavigateToDetail) {
+    if (onOpenEditDrawer && targetUserId) {
+      onOpenEditDrawer(targetUserId);
+    } else if (onNavigateToDetail) {
       onNavigateToDetail(targetUserId);
     } else if (targetUserId) {
       navigate(`/admin/members/${encodeURIComponent(targetUserId)}`);
@@ -179,43 +187,11 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
     setTimeout(() => setCopiedLineId(false), 1800);
   };
 
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.65)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10001,
-        padding: '16px'
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          backgroundColor: '#ffffff',
-          borderRadius: '16px',
-          maxWidth: '520px',
-          width: '100%',
-          padding: '20px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '14px',
-          textAlign: 'left'
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* 標題欄 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+  const innerContent = (
+    <>
+      {/* 標題欄 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
               width: '38px',
               height: '38px',
@@ -446,29 +422,39 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px' }}>
               <span style={{ color: '#64748b' }}>體能證明文件：</span>
               {proofUrls.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    proofUrls.forEach((url) => openExternalUrl(url));
-                  }}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    backgroundColor: '#eff6ff',
-                    border: '1px solid #bfdbfe',
-                    color: '#1d4ed8',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <ImageIcon size={12} />
-                  <span>查看證明檔案 ({proofUrls.length})</span>
-                  <ExternalLink size={12} />
-                </button>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {proofUrls.map((url, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        if (onPreviewPhoto) {
+                          onPreviewPhoto(url);
+                        } else {
+                          openExternalUrl(url);
+                        }
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        backgroundColor: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        color: '#1d4ed8',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      title="點擊預覽證明照片"
+                    >
+                      <ImageIcon size={12} />
+                      <span>證明照 #{idx + 1}</span>
+                      <ExternalLink size={12} />
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <span style={{ color: '#94a3b8', fontSize: '12px' }}>無證明照片</span>
               )}
@@ -489,12 +475,14 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
           </div>
         )}
 
-        {/* 底部按鈕：移至社員詳細資料編輯頁面 */}
+        {/* 底部按鈕：開啟詳細資料編輯頁面 */}
         <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '14px', marginTop: '4px' }}>
           <button
             type="button"
             disabled={!targetUserId}
             onClick={handleGoToDetail}
+            title="移至社員詳細資料編輯頁面"
+            aria-label="移至社員詳細資料編輯頁面"
             style={{
               width: '100%',
               padding: '12px 16px',
@@ -512,10 +500,69 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
               transition: 'background-color 0.15s ease'
             }}
           >
-            <span>移至社員詳細資料編輯頁面</span>
+            <span>開啟詳細資料編輯頁面</span>
             <ArrowRight size={16} />
           </button>
         </div>
+    </>
+  );
+
+  if (mode === 'inline') {
+    return (
+      <div className="wa-drawer-side-profile" onClick={(e) => e.stopPropagation()}>
+        <div
+          style={{
+            backgroundColor: '#ffffff',
+            height: '100%',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px',
+            textAlign: 'left',
+            padding: '20px'
+          }}
+        >
+          {innerContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10001,
+        padding: '16px'
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '16px',
+          maxWidth: '520px',
+          width: '100%',
+          padding: '20px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '14px',
+          textAlign: 'left'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {innerContent}
       </div>
     </div>
   );

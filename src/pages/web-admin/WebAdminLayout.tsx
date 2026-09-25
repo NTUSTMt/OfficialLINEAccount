@@ -8,6 +8,7 @@ export const WebAdminLayout: React.FC = () => {
   const navigate = useNavigate();
   const [session, setSession] = useState<WebAuthSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   useEffect(() => {
     const currentSession = getWebSession();
@@ -44,8 +45,7 @@ export const WebAdminLayout: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
           <NavLink to="/admin-web/events" className="web-admin-brand">
             <Mountain size={22} color="var(--wa-primary)" />
-            <span>台科登山社</span>
-            <span className="web-admin-brand-badge">電腦工作站</span>
+            <span>NTUST Mountaineering</span>
           </NavLink>
 
           <nav className="web-admin-nav">
@@ -66,27 +66,11 @@ export const WebAdminLayout: React.FC = () => {
             </NavLink>
 
             <NavLink
-              to="/admin-web/loans"
-              className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
-            >
-              <Layers size={16} />
-              <span>裝備借用管理</span>
-            </NavLink>
-
-            <NavLink
-              to="/admin-web/inventory"
-              className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
-            >
-              <Package size={16} />
-              <span>裝備庫存管控</span>
-            </NavLink>
-
-            <NavLink
               to="/admin-web/members"
               className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
             >
               <Users size={16} />
-              <span>全社社員名冊</span>
+              <span>社員名冊</span>
             </NavLink>
 
             <NavLink
@@ -94,13 +78,36 @@ export const WebAdminLayout: React.FC = () => {
               className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
             >
               <CreditCard size={16} />
-              <span>財務對帳核銷</span>
+              <span>財務對帳</span>
+            </NavLink>
+
+            <NavLink
+              to="/admin-web/loans"
+              className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
+            >
+              <Layers size={16} />
+              <span>裝備借用</span>
+            </NavLink>
+
+            <NavLink
+              to="/admin-web/inventory"
+              className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
+            >
+              <Package size={16} />
+              <span>裝備庫存</span>
             </NavLink>
           </nav>
         </div>
 
-        <div className="web-admin-user-section">
-          <div className="web-admin-user-info">
+        <div
+          className="web-admin-user-section"
+          onMouseEnter={() => setIsUserMenuOpen(true)}
+          onMouseLeave={() => setIsUserMenuOpen(false)}
+        >
+          <div
+            className={`web-admin-user-info ${isUserMenuOpen ? 'active' : ''}`}
+            onClick={() => setIsUserMenuOpen((prev) => !prev)}
+          >
             {session.pictureUrl ? (
               <img src={session.pictureUrl} alt={session.displayName} className="web-admin-avatar" />
             ) : (
@@ -114,15 +121,32 @@ export const WebAdminLayout: React.FC = () => {
             </div>
           </div>
 
-          <button
-            type="button"
-            className="web-admin-logout-btn"
-            onClick={webLogout}
-            title="登出工作站"
-          >
-            <LogOut size={14} />
-            <span>登出</span>
-          </button>
+          {isUserMenuOpen && (
+            <div className="web-admin-user-dropdown">
+              <div className="web-admin-dropdown-header">
+                {session.pictureUrl ? (
+                  <img src={session.pictureUrl} alt={session.displayName} className="web-admin-avatar" />
+                ) : (
+                  <div className="web-admin-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Mountain size={18} />
+                  </div>
+                )}
+                <div className="web-admin-dropdown-meta">
+                  <span className="web-admin-dropdown-name">{session.displayName || '登山社幹部'}</span>
+                  <span className="web-admin-dropdown-role">{session.officerRole || '社團幹部'}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="web-admin-dropdown-logout-btn"
+                onClick={webLogout}
+                title="登出"
+              >
+                <LogOut size={15} />
+                <span>登出</span>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

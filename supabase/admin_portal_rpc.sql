@@ -643,6 +643,9 @@ BEGIN
             to_char(l.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             m.phone,
             m.email,
+            m.student_id,
+            m.department,
+            m.line_id,
             COALESCE((
                 SELECT jsonb_agg(jsonb_build_object(
                     'equipment_id', li.equipment_id,
@@ -654,7 +657,7 @@ BEGIN
                 FROM loan_items li
                 LEFT JOIN equipments eq ON li.equipment_id = eq.id
                 WHERE li.loan_id = l.id
-            ), '[]'::jsonb) AS items
+            ), l.items, '[]'::jsonb) AS items
         FROM loans l
         LEFT JOIN members m ON l.line_user_id = m.line_user_id
     ) l_row;

@@ -1,73 +1,17 @@
 -- ==============================================================================
--- 台科登山社社團系統：修復裝備租借 submit_equipment_loan_rpc 與防呆欄位補齊
--- 目的：徹底解決 column "member_price_per_day" does not exist 錯誤，
---       並對齊「2天基本租金 + 每日加成、社團出隊免租、社員個人5折」真實計費模型
+-- Migration: 20260925_cleanup_equipment_prices_and_update_loan_rpc.sql
+-- 說明：
+-- 1. 更新 submit_equipment_loan_rpc 預存程序，移除對 member_price_per_day 與 non_member_price_per_day 的依賴，
+--    全面轉為以 price_2day 與 price_extra_day 為準。
+-- 2. 徹底刪除 equipments 資料表中錯誤且冗餘之 member_price_per_day 與 non_member_price_per_day 欄位。
 -- ==============================================================================
 
--- 1. 確保 equipments 欄位完整存在
-ALTER TABLE equipments ADD COLUMN IF NOT EXISTS price_2day INTEGER DEFAULT 0;
-ALTER TABLE equipments ADD COLUMN IF NOT EXISTS price_extra_day INTEGER DEFAULT 0;
-
--- 2. 確保 loans 與 loan_items 欄位完整存在 (防呆補齊可能遺漏的欄位，如 days, unit_price_snapshot 等)
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS name TEXT;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS start_date DATE;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS end_date DATE;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS days INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS purpose TEXT DEFAULT '社團出隊';
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS purpose_other TEXT;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS status TEXT DEFAULT '待領取 To Be Collected';
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT '未繳費';
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS total_deposit INTEGER DEFAULT 0;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS total_rent INTEGER DEFAULT 0;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS notes TEXT;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS refund_needed BOOLEAN DEFAULT FALSE;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
-ALTER TABLE loans ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-
-ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS unit_price_snapshot INTEGER DEFAULT 0;
-ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS subtotal INTEGER DEFAULT 0;
-ALTER TABLE loan_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
-
--- 3. 確保裝備價格欄位預設不為空
-UPDATE equipments 
-SET price_2day = COALESCE(price_2day, 0),
-    price_extra_day = COALESCE(price_extra_day, 0);
-
--- 3.5 確保 text 隱式轉換至 payment_status_enum (杜絕 column "payment_status" is of type payment_status_enum but expression is of type text)
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status_enum') THEN
-        CREATE OR REPLACE FUNCTION text_to_payment_status_enum(val text)
-        RETURNS payment_status_enum AS $cast$
-        BEGIN
-            IF val IS NULL THEN
-                RETURN NULL;
-            ELSIF val LIKE '%已繳費%' OR val LIKE '%Paid%' THEN
-                RETURN '已繳費 Paid'::payment_status_enum;
-            ELSIF val LIKE '%待確認%' OR val LIKE '%Checking%' THEN
-                RETURN '待確認 Checking'::payment_status_enum;
-            ELSE
-                RETURN '未繳費 Unpaid'::payment_status_enum;
-            END IF;
-        END;
-        $cast$ LANGUAGE plpgsql IMMUTABLE;
-
-        DROP CAST IF EXISTS (text AS payment_status_enum);
-        CREATE CAST (text AS payment_status_enum)
-        WITH FUNCTION text_to_payment_status_enum(text) AS IMPLICIT;
-    END IF;
-END $$;
-
--- 4. 重建原子性租借提交 RPC (submit_equipment_loan_rpc)
-CREATE OR REPLACE FUNCTION submit_equipment_loan_rpc(
-    p_line_user_id TEXT,
-    p_details JSONB
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
+-- 1. 更新 submit_equipment_loan_rpc
+CREATE OR REPLACE FUNCTION public.submit_equipment_loan_rpc(p_line_user_id text, p_details jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
 DECLARE
     v_member RECORD;
     v_is_official BOOLEAN := FALSE;
@@ -180,12 +124,12 @@ BEGIN
                 updated_at = NOW()
             WHERE id = v_equip_id;
 
-            -- 計算該品項費用 (對齊前端計費公式)
+            -- 計算該品項費用 (對齊前端計費公式：2天基本 + 續租加成，社團出隊免租，社員個人5折)
             v_item_base := COALESCE(v_equip.p2, 0) + (v_extra_days * COALESCE(v_equip.p_extra, 0));
             IF v_purpose = '社團出隊' THEN
                 v_unit_price := 0; -- 社團出隊免租
             ELSIF v_is_official THEN
-                v_unit_price := ROUND(v_item_base * 0.5); -- 社員個人使用 5 折
+                v_unit_price := ROUND(v_item_base * 0.5); -- 社員個人使用 5折
             ELSE
                 v_unit_price := v_item_base; -- 非社員原價
             END IF;
@@ -199,7 +143,7 @@ BEGIN
         RETURN jsonb_build_object('status', 'error', 'message', '購物車內無有效數量之品項');
     END IF;
 
-    -- 決定付款狀態 (對齊 payment_status_enum 值)
+    -- 決定付款狀態 (對齊 payment_status_enum 值：已繳費 Paid / 未繳費 Unpaid)
     IF v_total_rent = 0 THEN
         v_loan_payment_status := '已繳費 Paid';
     ELSE
@@ -284,14 +228,13 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 8. 回傳成功狀態 (對齊前端期望回傳結構)
+    -- 8. 成功回傳租借單號與總租金
     RETURN jsonb_build_object(
         'status', 'success',
         'loanId', v_loan_id,
         'totalRent', v_total_rent,
         'days', v_days,
-        'isOfficial', v_is_official,
-        'message', '裝備租借申請已成功送達 Supabase！'
+        'message', '裝備租借申請已成功送出！'
     );
 
 EXCEPTION WHEN OTHERS THEN
@@ -300,4 +243,8 @@ EXCEPTION WHEN OTHERS THEN
         'message', SQLERRM
     );
 END;
-$$;
+$function$;
+
+-- 2. 刪除 equipments 表中錯誤的舊欄位
+ALTER TABLE equipments DROP COLUMN IF EXISTS member_price_per_day;
+ALTER TABLE equipments DROP COLUMN IF EXISTS non_member_price_per_day;

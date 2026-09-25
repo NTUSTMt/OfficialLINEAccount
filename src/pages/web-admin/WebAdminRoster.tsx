@@ -14,9 +14,16 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowLeftRight,
-  X
+  GripVertical,
+  Send,
+  FolderPlus,
+  FileSpreadsheet,
+  User,
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
+import { GAS_API_URL } from '../../constants/api';
+import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
+import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
 import './webAdmin.css';
 
 interface EventItem {
@@ -25,6 +32,10 @@ interface EventItem {
   start_date: string;
   end_date: string;
   status: string;
+  spreadsheet_url?: string;
+  spreadsheet_id?: string;
+  drive_folder_url?: string;
+  line_group_url?: string;
 }
 
 interface MemberInfo {
@@ -282,8 +293,8 @@ export const ALL_COLUMNS: ColumnDef[] = [
   },
   {
     key: 'notes',
-    label: '備註',
-    defaultWidth: 130,
+    label: '幹部備註',
+    defaultWidth: 150,
     getValue: (r) => r.notes || '',
     formatText: (r) => r.notes || '-',
   },
@@ -317,8 +328,78 @@ export const WebAdminRoster: React.FC = () => {
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  // 彈出視窗與控制選單
-  const [detailModal, setDetailModal] = useState<{ title: string; content: string } | null>(null);
+  // 幹部備註行內編輯狀態
+  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+  const [editingNotesText, setEditingNotesText] = useState<string>('');
+
+  // 拖曳排序狀態 (列與欄)
+  const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
+  const [dragOverRowId, setDragOverRowId] = useState<string | null>(null);
+  const [draggedColKey, setDraggedColKey] = useState<string | null>(null);
+  const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
+
+  // 試算表同步與推播通知狀態
+  const [syncingSheet, setSyncingSheet] = useState(false);
+  const [sendingNotification, setSendingNotification] = useState(false);
+
+  // 個資檢視彈窗與編輯抽屜狀態
+  const [profileModalUserId, setProfileModalUserId] = useState<string | null>(null);
+  const [profileModalMember, setProfileModalMember] = useState<any | null>(null);
+  const [editDrawerUserId, setEditDrawerUserId] = useState<string | null>(null);
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+
+  // 儲存格原地展開與列高自訂狀態
+  const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set());
+  const toggleCellExpand = (cellKey: string) => {
+    setExpandedCells((prev) => {
+      const next = new Set(prev);
+      if (next.has(cellKey)) {
+        next.delete(cellKey);
+      } else {
+        next.add(cellKey);
+      }
+      return next;
+    });
+  };
+
+  const [rowHeights, setRowHeights] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.rowHeights && typeof parsed.rowHeights === 'object') {
+          return parsed.rowHeights;
+        }
+      }
+    } catch {}
+    return {};
+  });
+
+  const rowResizingRef = useRef<{ rowId: string; startY: number; startHeight: number } | null>(null);
+
+  const startRowResizing = (rowId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const currentHeight = rowHeights[rowId] || 38;
+    rowResizingRef.current = { rowId, startY: e.clientY, startHeight: currentHeight };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!rowResizingRef.current) return;
+      const deltaY = moveEvent.clientY - rowResizingRef.current.startY;
+      const newHeight = Math.max(38, rowResizingRef.current.startHeight + deltaY);
+      setRowHeights((prev) => ({ ...prev, [rowResizingRef.current!.rowId]: newHeight }));
+    };
+
+    const handleMouseUp = () => {
+      rowResizingRef.current = null;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
   const [showHiddenMenu, setShowHiddenMenu] = useState(false);
   const hiddenMenuRef = useRef<HTMLDivElement>(null);
 
@@ -403,12 +484,13 @@ export const WebAdminRoster: React.FC = () => {
           pinnedColumns,
           hiddenColumns,
           columnWidths,
+          rowHeights,
         })
       );
     } catch {
       // 忽略儲存錯誤
     }
-  }, [columnOrder, pinnedColumns, hiddenColumns, columnWidths]);
+  }, [columnOrder, pinnedColumns, hiddenColumns, columnWidths, rowHeights]);
 
   // 關閉下拉面板點擊事件
   useEffect(() => {
@@ -436,7 +518,7 @@ export const WebAdminRoster: React.FC = () => {
     try {
       const { data, error } = await client
         .from('events')
-        .select('id, title, start_date, end_date, status')
+        .select('id, title, start_date, end_date, status, spreadsheet_url, spreadsheet_id, drive_folder_url, line_group_url')
         .order('start_date', { ascending: false });
 
       if (error) {
@@ -679,7 +761,10 @@ export const WebAdminRoster: React.FC = () => {
       defWidths[c.key] = c.defaultWidth;
     });
     setColumnWidths(defWidths);
+    setRowHeights({});
+    setExpandedCells(new Set());
   };
+  const resetColumnWidthsAndHeights = resetColumnWidths;
 
   // 列級操作函式
   const moveRow = (rowId: string, direction: 'up' | 'down') => {
@@ -790,6 +875,17 @@ export const WebAdminRoster: React.FC = () => {
     });
   }, [signups, customRowOrder, pinnedRowIds, hiddenRowIds, searchKeyword, statusFilter]);
 
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      const isSomeSelected =
+        selectedSignupIds.size > 0 &&
+        filteredSignups.some((s) => !selectedSignupIds.has(s.id));
+      selectAllRef.current.indeterminate = isSomeSelected;
+    }
+  }, [selectedSignupIds, filteredSignups]);
+
   // 複製整份名冊為 TSV（所見即所得：依可見欄位與當前自訂順序）
   const handleCopyTSV = () => {
     if (filteredSignups.length === 0) return;
@@ -813,6 +909,207 @@ export const WebAdminRoster: React.FC = () => {
         visibleColumnsCount: visibleColumns.length,
       });
     });
+  };
+
+  // 當前選取的活動物件
+  const currentEvent = useMemo(() => {
+    return events.find((e) => e.id === selectedEventId);
+  }, [events, selectedEventId]);
+
+  // 一鍵發送通知（支援勾選單獨發送與全體未通知正備取一鍵發送）
+  const handleSendNotifications = async () => {
+    if (!selectedEventId || !currentEvent) return;
+
+    // 1. 決定發送名單
+    let targetSignups: SignupRow[] = [];
+    if (selectedSignupIds.size > 0) {
+      targetSignups = signups.filter(
+        (s) => selectedSignupIds.has(s.id) && (s.status.includes('正取') || s.status.includes('備取'))
+      );
+      if (targetSignups.length === 0) {
+        alert('選取的名冊中沒有審核結果為「正取」或「備取」的成員，無法發送通知！');
+        return;
+      }
+    } else {
+      targetSignups = signups.filter(
+        (s) => (s.status.includes('正取') || s.status.includes('備取')) && s.notification_status !== '已通知'
+      );
+      if (targetSignups.length === 0) {
+        alert('名冊中目前沒有待發送通知的正取或備取人員！');
+        return;
+      }
+    }
+
+    // 2. 防呆檢驗：若發送對象包含正取，但活動未設定 LINE Group URL，阻擋發送
+    const hasAccepted = targetSignups.some((s) => s.status.includes('正取'));
+    if (hasAccepted && !currentEvent.line_group_url) {
+      alert('此活動尚未設定專屬群組連結 (LINE Group URL)！\n\n系統規範在發送「正取通知」前，必須先於活動編輯頁面設定群組邀請連結，供社員一鍵入群。請先至活動管理填寫群組連結後再發送推播！');
+      return;
+    }
+
+    const confirmMsg = selectedSignupIds.size > 0
+      ? `確定要推播通知已勾選的 ${targetSignups.length} 位正取／備取人員嗎？`
+      : `確定要一鍵推播通知全活動共 ${targetSignups.length} 位待通知的正取／備取人員嗎？`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setSendingNotification(true);
+    try {
+      const query = new URLSearchParams({
+        action: 'send_event_notifications',
+        userId: session.userId,
+        eventId: selectedEventId,
+        ...(selectedSignupIds.size > 0 ? { signupIds: targetSignups.map((s) => s.id).join(',') } : {}),
+      });
+
+      const res = await fetch(`${GAS_API_URL}?${query.toString()}`);
+      const result = await res.json();
+
+      if (result.status === 'success') {
+        const count = result.notifiedCount || targetSignups.length;
+        alert(`發送成功！共發送了 ${count} 則審核推播通知。`);
+        // 更新前端與快取
+        const targetIds = new Set(targetSignups.map((s) => s.id));
+        setSignups((prev) =>
+          prev.map((s) => (targetIds.has(s.id) ? { ...s, notification_status: '已通知' } : s))
+        );
+        logWebAuditAction(client, session.userId, 'SEND_NOTIFICATIONS', 'event_signups', selectedEventId, {
+          count,
+        });
+      } else {
+        alert(`[推播通知失敗]: ${result.message || '未知錯誤'}`);
+      }
+    } catch (err: any) {
+      alert(`[連線失敗]: ${err.message || String(err)}`);
+    } finally {
+      setSendingNotification(false);
+    }
+  };
+
+  // 建立雲端資料夾與 Google 試算表 / 即時同步並開啟試算表
+  const handleSyncOrOpenSheet = async () => {
+    if (!selectedEventId || !currentEvent) return;
+
+    setSyncingSheet(true);
+    try {
+      const query = new URLSearchParams({
+        action: 'create_event_sheet',
+        userId: session.userId,
+        eventId: selectedEventId,
+      });
+
+      const res = await fetch(`${GAS_API_URL}?${query.toString()}`);
+      const result = await res.json();
+
+      if (result.status === 'success') {
+        const targetUrl = result.spreadsheetUrl || currentEvent.spreadsheet_url;
+        setEvents((prev) =>
+          prev.map((e) =>
+            e.id === selectedEventId
+              ? {
+                  ...e,
+                  spreadsheet_url: result.spreadsheetUrl || e.spreadsheet_url,
+                  spreadsheet_id: result.spreadsheetId || e.spreadsheet_id,
+                  drive_folder_url: result.driveFolderUrl || e.drive_folder_url,
+                }
+              : e
+          )
+        );
+
+        if (targetUrl) {
+          window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        }
+      } else {
+        alert(`[試算表操作失敗]: ${result.message || '未知錯誤'}`);
+      }
+    } catch (err: any) {
+      alert(`[連線失敗]: ${err.message || String(err)}`);
+    } finally {
+      setSyncingSheet(false);
+    }
+  };
+
+  // 修改通知狀態
+  const handleNotificationStatusChange = async (signupId: string, newNotifyStatus: string) => {
+    setUpdatingId(signupId);
+    try {
+      const { error } = await client
+        .from('event_signups')
+        .update({ notification_status: newNotifyStatus, updated_at: new Date().toISOString() })
+        .eq('id', signupId);
+
+      if (error) throw error;
+
+      setSignups((prev) =>
+        prev.map((s) => (s.id === signupId ? { ...s, notification_status: newNotifyStatus } : s))
+      );
+      logWebAuditAction(client, session.userId, 'UPDATE_NOTIFY_STATUS', 'event_signups', signupId, {
+        notification_status: newNotifyStatus,
+      });
+    } catch (err: any) {
+      alert(`[更新通知狀態失敗]: ${err.message || String(err)}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  // 儲存幹部備註
+  const handleSaveNotes = async (signupId: string, newNotes: string) => {
+    const trimmed = newNotes.trim();
+    setEditingNotesId(null);
+    setSignups((prev) => prev.map((s) => (s.id === signupId ? { ...s, notes: trimmed } : s)));
+
+    try {
+      const { error } = await client
+        .from('event_signups')
+        .update({ notes: trimmed, updated_at: new Date().toISOString() })
+        .eq('id', signupId);
+
+      if (error) throw error;
+      logWebAuditAction(client, session.userId, 'UPDATE_OFFICER_NOTES', 'event_signups', signupId, {
+        notes: trimmed,
+      });
+    } catch (err: any) {
+      alert(`[儲存幹部備註失敗]: ${err.message || String(err)}`);
+    }
+  };
+
+  // 列級上下拖曳換位
+  const handleRowDrop = (targetRowId: string) => {
+    if (!draggedRowId || draggedRowId === targetRowId) {
+      setDraggedRowId(null);
+      setDragOverRowId(null);
+      return;
+    }
+    const order = customRowOrder.length > 0 ? [...customRowOrder] : signups.map((s) => s.id);
+    const fromIdx = order.indexOf(draggedRowId);
+    const toIdx = order.indexOf(targetRowId);
+    if (fromIdx > -1 && toIdx > -1) {
+      order.splice(fromIdx, 1);
+      order.splice(toIdx, 0, draggedRowId);
+      setCustomRowOrder(order);
+    }
+    setDraggedRowId(null);
+    setDragOverRowId(null);
+  };
+
+  // 欄位左右拖曳換位
+  const handleColDrop = (targetColKey: string) => {
+    if (!draggedColKey || draggedColKey === targetColKey) {
+      setDraggedColKey(null);
+      setDragOverColKey(null);
+      return;
+    }
+    const newOrder = [...columnOrder];
+    const fromIdx = newOrder.indexOf(draggedColKey);
+    const toIdx = newOrder.indexOf(targetColKey);
+    if (fromIdx > -1 && toIdx > -1) {
+      newOrder.splice(fromIdx, 1);
+      newOrder.splice(toIdx, 0, draggedColKey);
+      setColumnOrder(newOrder);
+    }
+    setDraggedColKey(null);
+    setDragOverColKey(null);
   };
 
   // 計算每個釘選欄位的 sticky left 偏移值
@@ -858,20 +1155,6 @@ export const WebAdminRoster: React.FC = () => {
             ))}
           </select>
 
-          {/* 純圖示重新整理按鈕 */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={() => {
-              loadEvents();
-              if (selectedEventId) loadSignups(selectedEventId);
-            }}
-            title="重新整理名冊"
-            style={{ padding: '7px 10px' }}
-          >
-            <RefreshCw size={15} className={loadingSignups ? 'animate-spin' : ''} />
-          </button>
-
           {/* 搜尋關鍵字輸入框 */}
           <div style={{ position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--wa-text-muted)' }} />
@@ -898,11 +1181,6 @@ export const WebAdminRoster: React.FC = () => {
             <option value="CHECKING">僅顯示審核中</option>
             <option value="CANCELLED">僅顯示已取消</option>
           </select>
-
-          {/* 筆數提示 */}
-          <div style={{ fontSize: '0.84rem', color: 'var(--wa-text-muted)' }}>
-            篩選：<strong>{filteredSignups.length}</strong> 人 / 總報名：<strong>{signups.length}</strong> 人
-          </div>
         </div>
 
         <div className="web-admin-toolbar-right" style={{ gap: 8, position: 'relative' }}>
@@ -932,6 +1210,20 @@ export const WebAdminRoster: React.FC = () => {
               </button>
             </div>
           )}
+
+          {/* 重新整理按鈕（移至隱藏按鈕左邊） */}
+          <button
+            type="button"
+            className="web-admin-btn web-admin-btn-secondary"
+            onClick={() => {
+              loadEvents();
+              if (selectedEventId) loadSignups(selectedEventId);
+            }}
+            title="重新整理名冊"
+            style={{ padding: '7px 10px' }}
+          >
+            <RefreshCw size={15} className={loadingSignups ? 'animate-spin' : ''} />
+          </button>
 
           {/* 顯示隱藏項目按鈕（眼睛圖示） */}
           <div style={{ position: 'relative' }}>
@@ -983,6 +1275,7 @@ export const WebAdminRoster: React.FC = () => {
                       <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', cursor: 'pointer' }}>
                         <input
                           type="checkbox"
+                          className="wa-checkbox"
                           checked={!isHidden}
                           onChange={() => {
                             if (isHidden) {
@@ -1001,12 +1294,12 @@ export const WebAdminRoster: React.FC = () => {
             )}
           </div>
 
-          {/* 一鍵恢復預設欄位寬度（左右箭頭圖示） */}
+          {/* 一鍵恢復預設欄位寬度與高度（左右箭頭圖示） */}
           <button
             type="button"
             className="web-admin-btn web-admin-btn-secondary"
-            onClick={resetColumnWidths}
-            title="一鍵恢復預設欄位寬度"
+            onClick={resetColumnWidthsAndHeights}
+            title="一鍵恢復預設欄寬與列高"
             style={{ padding: '7px 10px' }}
           >
             <ArrowLeftRight size={15} />
@@ -1021,6 +1314,63 @@ export const WebAdminRoster: React.FC = () => {
             style={{ padding: '7px 10px' }}
           >
             {copiedSuccess ? <Check size={15} color="var(--wa-primary)" /> : <Copy size={15} />}
+          </button>
+
+          {/* 建立資料夾與 Google 試算表 / 即時同步並開啟試算表 */}
+          <button
+            type="button"
+            className="web-admin-btn web-admin-btn-secondary"
+            onClick={handleSyncOrOpenSheet}
+            disabled={syncingSheet}
+            title={
+              currentEvent?.spreadsheet_url
+                ? '即時同步名冊並開啟 Google 試算表'
+                : '為此活動在雲端硬碟建立資料夾與 Google 試算表'
+            }
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px' }}
+          >
+            {syncingSheet ? (
+              <>
+                <RefreshCw size={15} className="animate-spin" />
+                <span>同步中...</span>
+              </>
+            ) : currentEvent?.spreadsheet_url ? (
+              <>
+                <FileSpreadsheet size={15} />
+                <span>開啟試算表</span>
+              </>
+            ) : (
+              <>
+                <FolderPlus size={15} />
+                <span>建立資料夾與試算表</span>
+              </>
+            )}
+          </button>
+
+          {/* 一鍵發送通知按鈕 (綠色按鈕白字) */}
+          <button
+            type="button"
+            className="web-admin-btn"
+            onClick={handleSendNotifications}
+            disabled={sendingNotification}
+            title="一鍵推播審核結果與行前通知至已報名社員 LINE"
+            style={{
+              backgroundColor: '#10b981',
+              color: '#ffffff',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              fontWeight: 600,
+            }}
+          >
+            {sendingNotification ? (
+              <RefreshCw size={15} className="animate-spin" />
+            ) : (
+              <Send size={15} />
+            )}
+            <span>發送通知</span>
           </button>
         </div>
       </div>
@@ -1039,9 +1389,11 @@ export const WebAdminRoster: React.FC = () => {
           <thead>
             <tr>
               {/* 全選核取方塊 */}
-              <th style={{ width: 44, minWidth: 44, maxWidth: 44, textAlign: 'center', position: 'sticky', left: 0, zIndex: 20, backgroundColor: '#f8fafc' }}>
+              <th style={{ width: 44, minWidth: 44, maxWidth: 44, textAlign: 'center', position: 'sticky', left: 0, zIndex: 20, backgroundColor: '#f8fafc', borderRight: '1px solid var(--wa-border)' }}>
                 <input
+                  ref={selectAllRef}
                   type="checkbox"
+                  className="wa-checkbox"
                   checked={
                     filteredSignups.length > 0 &&
                     filteredSignups.every((s) => selectedSignupIds.has(s.id))
@@ -1051,7 +1403,7 @@ export const WebAdminRoster: React.FC = () => {
               </th>
 
               {/* 序號表頭 改為 # */}
-              <th style={{ width: 46, minWidth: 46, maxWidth: 46, textAlign: 'center', position: 'sticky', left: 44, zIndex: 20, backgroundColor: '#f8fafc' }}>
+              <th style={{ width: 46, minWidth: 46, maxWidth: 46, textAlign: 'center', position: 'sticky', left: 44, zIndex: 20, backgroundColor: '#f8fafc', borderRight: '1px solid var(--wa-border)' }}>
                 #
               </th>
 
@@ -1073,14 +1425,40 @@ export const WebAdminRoster: React.FC = () => {
                       left: isPinned ? stickyLeft : undefined,
                       zIndex: isPinned ? 15 : undefined,
                       backgroundColor: '#f8fafc',
+                      borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
                     }}
-                    className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                    className={`${isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''} ${
+                      dragOverColKey === col.key ? 'wa-col-drag-over' : ''
+                    }`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (draggedColKey && draggedColKey !== col.key) {
+                        setDragOverColKey(col.key);
+                      }
+                    }}
+                    onDragLeave={() => setDragOverColKey(null)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleColDrop(col.key);
+                    }}
                   >
                     <div className="wa-th-cell">
                       <span className="wa-th-label" title={col.label}>{col.label}</span>
 
                       {/* 懸浮時靠左覆蓋表頭名稱之動作工具列 */}
                       <div className="wa-th-actions-overlay">
+                        {/* 左右拖曳欄位手柄 */}
+                        <div
+                          className="wa-col-drag-handle"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', col.key);
+                            setDraggedColKey(col.key);
+                          }}
+                          title="按住拖拉調整欄位順序"
+                        >
+                          <GripVertical size={13} />
+                        </div>
                         <button
                           type="button"
                           className="wa-th-btn"
@@ -1126,14 +1504,14 @@ export const WebAdminRoster: React.FC = () => {
                           <EyeOff size={13} />
                         </button>
                       </div>
-
-                      {/* 欄位邊緣調寬拖曳柄 */}
-                      <div
-                        className="wa-col-resizer"
-                        onMouseDown={(e) => startResizing(col.key, e)}
-                        title="拖曳調整欄寬"
-                      />
                     </div>
+
+                    {/* 欄位邊緣調寬拖曳柄（置於 th 邊界線上） */}
+                    <div
+                      className="wa-col-resizer"
+                      onMouseDown={(e) => startResizing(col.key, e)}
+                      title="拖曳調整欄寬"
+                    />
                   </th>
                 );
               })}
@@ -1164,7 +1542,24 @@ export const WebAdminRoster: React.FC = () => {
                 const normStatus = normalizeStatus(s.status);
 
                 return (
-                  <tr key={s.id} className={`${isSelected ? 'selected' : ''} ${isRowPinned ? 'wa-row-pinned' : ''}`}>
+                  <tr
+                    key={s.id}
+                    className={`${isSelected ? 'selected' : ''} ${isRowPinned ? 'wa-row-pinned' : ''} ${
+                      dragOverRowId === s.id ? 'wa-row-drag-over' : ''
+                    }`}
+                    style={{ height: rowHeights[s.id] ? `${rowHeights[s.id]}px` : undefined }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (draggedRowId && draggedRowId !== s.id) {
+                        setDragOverRowId(s.id);
+                      }
+                    }}
+                    onDragLeave={() => setDragOverRowId(null)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleRowDrop(s.id);
+                    }}
+                  >
                     {/* 勾選核取方塊 */}
                     <td
                       style={{
@@ -1173,10 +1568,12 @@ export const WebAdminRoster: React.FC = () => {
                         left: 0,
                         zIndex: 10,
                         backgroundColor: '#ffffff',
+                        borderRight: '1px solid var(--wa-border)',
                       }}
                     >
                       <input
                         type="checkbox"
+                        className="wa-checkbox"
                         checked={isSelected}
                         onChange={() => {
                           const next = new Set(selectedSignupIds);
@@ -1187,7 +1584,7 @@ export const WebAdminRoster: React.FC = () => {
                       />
                     </td>
 
-                    {/* 序號儲存格與四角懸浮操作列 */}
+                    {/* 序號儲存格與四角懸浮操作列 + 中央拖曳手柄 */}
                     <td
                       className="wa-row-index-cell"
                       style={{
@@ -1195,6 +1592,7 @@ export const WebAdminRoster: React.FC = () => {
                         left: 44,
                         zIndex: 10,
                         backgroundColor: isRowPinned ? '#f0fdf4' : '#ffffff',
+                        borderRight: '1px solid var(--wa-border)',
                       }}
                     >
                       <span className="wa-row-index-text">{idx + 1}</span>
@@ -1217,6 +1615,20 @@ export const WebAdminRoster: React.FC = () => {
                         >
                           <Pin size={11} />
                         </button>
+
+                        {/* 中央上下拖曳換位手柄 */}
+                        <div
+                          className="wa-row-drag-handle"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', s.id);
+                            setDraggedRowId(s.id);
+                          }}
+                          title="按住拖拉調整列順序"
+                        >
+                          <GripVertical size={13} />
+                        </div>
+
                         <button
                           type="button"
                           className="wa-row-quad-btn wa-row-quad-bl"
@@ -1234,6 +1646,13 @@ export const WebAdminRoster: React.FC = () => {
                           <EyeOff size={11} />
                         </button>
                       </div>
+
+                      {/* 拖曳調整列高柄 */}
+                      <div
+                        className="wa-row-resizer"
+                        onMouseDown={(e) => startRowResizing(s.id, e)}
+                        title="拖曳調整列高"
+                      />
                     </td>
 
                     {/* 動態渲染可見欄位內容 */}
@@ -1243,7 +1662,7 @@ export const WebAdminRoster: React.FC = () => {
                       const isLastPinned = col.key === lastPinnedKey;
                       const textVal = col.formatText(s);
 
-                      // 專屬特殊欄位渲染
+                      // 1. 審核狀態欄位 (下拉選單即時更新)
                       if (col.key === 'status') {
                         return (
                           <td
@@ -1253,6 +1672,7 @@ export const WebAdminRoster: React.FC = () => {
                               left: isPinned ? stickyLeft : undefined,
                               zIndex: isPinned ? 8 : undefined,
                               backgroundColor: '#ffffff',
+                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
                             }}
                             className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
                           >
@@ -1292,6 +1712,90 @@ export const WebAdminRoster: React.FC = () => {
                         );
                       }
 
+                      // 2. 通知狀態欄位 (下拉選單即時修改)
+                      if (col.key === 'notification_status') {
+                        const notifyVal = s.notification_status || '未通知';
+                        return (
+                          <td
+                            key={col.key}
+                            style={{
+                              position: isPinned ? 'sticky' : undefined,
+                              left: isPinned ? stickyLeft : undefined,
+                              zIndex: isPinned ? 8 : undefined,
+                              backgroundColor: '#ffffff',
+                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
+                            }}
+                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                          >
+                            <select
+                              className="wa-status-select"
+                              value={notifyVal}
+                              onChange={(e) => handleNotificationStatusChange(s.id, e.target.value)}
+                              disabled={isUpdating}
+                              style={{
+                                color: notifyVal === '已通知' ? '#047857' : '#64748b',
+                                backgroundColor: notifyVal === '已通知' ? 'rgba(5, 150, 105, 0.1)' : '#f1f5f9',
+                              }}
+                            >
+                              <option value="未通知">未通知</option>
+                              <option value="已通知">已通知</option>
+                            </select>
+                          </td>
+                        );
+                      }
+
+                      // 3. 幹部備註欄位 (點擊直接打字編輯)
+                      if (col.key === 'notes') {
+                        const isEditingNotes = editingNotesId === s.id;
+                        return (
+                          <td
+                            key={col.key}
+                            style={{
+                              position: isPinned ? 'sticky' : undefined,
+                              left: isPinned ? stickyLeft : undefined,
+                              zIndex: isPinned ? 8 : undefined,
+                              backgroundColor: '#ffffff',
+                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
+                              cursor: 'pointer',
+                            }}
+                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                            onClick={() => {
+                              if (!isEditingNotes) {
+                                setEditingNotesId(s.id);
+                                setEditingNotesText(s.notes || '');
+                              }
+                            }}
+                            title="點擊可直接編輯幹部備註"
+                          >
+                            {isEditingNotes ? (
+                              <input
+                                type="text"
+                                className="wa-notes-input"
+                                autoFocus
+                                value={editingNotesText}
+                                onChange={(e) => setEditingNotesText(e.target.value)}
+                                onBlur={() => handleSaveNotes(s.id, editingNotesText)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveNotes(s.id, editingNotesText);
+                                  if (e.key === 'Escape') setEditingNotesId(null);
+                                }}
+                              />
+                            ) : (
+                              <span style={{ fontSize: '0.82rem' }}>
+                                {s.notes ? (
+                                  s.notes
+                                ) : (
+                                  <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.78rem' }}>
+                                    點擊輸入備註...
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      }
+
+                      // 4. 繳費狀態欄位徽章
                       if (col.key === 'payment_status') {
                         const isPaid = textVal.includes('已繳費') || textVal.includes('Paid');
                         return (
@@ -1302,6 +1806,7 @@ export const WebAdminRoster: React.FC = () => {
                               left: isPinned ? stickyLeft : undefined,
                               zIndex: isPinned ? 8 : undefined,
                               backgroundColor: '#ffffff',
+                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
                             }}
                             className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
                           >
@@ -1312,7 +1817,44 @@ export const WebAdminRoster: React.FC = () => {
                         );
                       }
 
-                      // 長文字或支援點擊展開的儲存格
+                      // 姓名欄位 (質感綠色膠囊按鈕，點擊開啟個資檢視彈窗)
+                      if (col.key === 'name') {
+                        return (
+                          <td
+                            key={col.key}
+                            style={{
+                              position: isPinned ? 'sticky' : undefined,
+                              left: isPinned ? stickyLeft : undefined,
+                              zIndex: isPinned ? 8 : undefined,
+                              backgroundColor: '#ffffff',
+                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
+                            }}
+                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                          >
+                            <button
+                              type="button"
+                              className="wa-name-capsule-btn"
+                              onClick={() => {
+                                setProfileModalUserId(s.line_user_id || null);
+                                setProfileModalMember(
+                                  s.members
+                                    ? { ...s.members, line_user_id: s.line_user_id, name: s.members.name || s.name }
+                                    : { line_user_id: s.line_user_id, name: s.name }
+                                );
+                              }}
+                              title="查看報名者詳細個人資料"
+                            >
+                              <User size={12} />
+                              <span>{textVal}</span>
+                            </button>
+                          </td>
+                        );
+                      }
+
+                      // 5. 一般欄位 (長文字原地展開)
+                      const cellKey = `${s.id}:${col.key}`;
+                      const isExpanded = expandedCells.has(cellKey);
+
                       return (
                         <td
                           key={col.key}
@@ -1323,18 +1865,16 @@ export const WebAdminRoster: React.FC = () => {
                             zIndex: isPinned ? 8 : undefined,
                             backgroundColor: '#ffffff',
                             maxWidth: columnWidths[col.key] || col.defaultWidth,
+                            borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
                           }}
                           onClick={() => {
                             if (textVal && textVal !== '-') {
-                              setDetailModal({
-                                title: `${col.label}（${s.members?.name || s.name || '報名者'}）`,
-                                content: textVal,
-                              });
+                              toggleCellExpand(cellKey);
                             }
                           }}
-                          title={textVal !== '-' ? '點擊檢視全文' : undefined}
+                          title={textVal !== '-' ? (isExpanded ? '點擊收合' : '點擊展開全文') : undefined}
                         >
-                          <span className="wa-cell-ellipsis">
+                          <span className={isExpanded ? 'wa-cell-expanded' : 'wa-cell-ellipsis'}>
                             {textVal}
                           </span>
                         </td>
@@ -1348,46 +1888,40 @@ export const WebAdminRoster: React.FC = () => {
         </table>
       </div>
 
-      {/* 長文字浮動卡片 Popover Modal */}
-      {detailModal && (
-        <div className="wa-popover-overlay" onClick={() => setDetailModal(null)}>
-          <div className="wa-popover-card" onClick={(e) => e.stopPropagation()}>
-            <div className="wa-popover-header">
-              <h4 className="wa-popover-title">{detailModal.title}</h4>
-              <button
-                type="button"
-                onClick={() => setDetailModal(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="wa-popover-body">
-              {detailModal.content}
-            </div>
-            <div className="wa-popover-footer">
-              <button
-                type="button"
-                className="web-admin-btn web-admin-btn-secondary"
-                onClick={() => {
-                  navigator.clipboard.writeText(detailModal.content);
-                  setDetailModal(null);
-                }}
-              >
-                <Copy size={14} />
-                <span>複製內容</span>
-              </button>
-              <button
-                type="button"
-                className="web-admin-btn"
-                onClick={() => setDetailModal(null)}
-              >
-                <span>關閉</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 報名者個人資料檢視彈窗 */}
+      <MemberProfileModal
+        isOpen={Boolean(profileModalUserId)}
+        onClose={() => {
+          setProfileModalUserId(null);
+          setProfileModalMember(null);
+        }}
+        userId={profileModalUserId}
+        officerUserId={session.userId}
+        initialMember={profileModalMember}
+        onOpenEditDrawer={(uid) => {
+          setProfileModalUserId(null);
+          setProfileModalMember(null);
+          setEditDrawerUserId(uid);
+          setEditDrawerOpen(true);
+        }}
+      />
+
+      {/* 右側滑出式個人資料編輯抽屜 */}
+      <MemberEditDrawer
+        isOpen={editDrawerOpen}
+        onClose={() => {
+          setEditDrawerOpen(false);
+          setEditDrawerUserId(null);
+        }}
+        userId={editDrawerUserId}
+        officerUserId={session.userId}
+        jwt={session.jwt}
+        onSaved={(_updated) => {
+          if (selectedEventId) {
+            loadSignups(selectedEventId);
+          }
+        }}
+      />
     </div>
   );
 };
