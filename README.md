@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.235-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.236-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.235)](#7-最新版本異動紀錄-changelog-v01235)
+- [7. 最新版本異動紀錄 (Changelog v0.1.236)](#7-最新版本異動紀錄-changelog-v01236)
 
 ---
 
@@ -1824,6 +1824,7 @@ pnpm test
     - 新增 test/94_fitness_proof_upload_and_drive_delete.test.mjs 單元測試，涵蓋縮圖結構、虛線框、燈箱、機制 B 連動刪除與中英多國語系驗證。
     - 全專案 78 個測試套件、426 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包零錯誤，全篇無 Emoji。
 
+
 ### v0.1.235 (2026-09-27)
 - 體能證明照片完全清空 (0 Proofs) 與上傳錯誤透明化修復 (saveMemberProfileToSupabase & Register.tsx):
   - 根因分析：
@@ -1836,3 +1837,14 @@ pnpm test
   - 測試與建置檢查：
     - 更新 test/94_fitness_proof_upload_and_drive_delete.test.mjs 增加對 members.proof_urls 直更邏輯檢驗。
     - 全專案 78 個測試套件、426 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包無錯誤，恪守社團規範全篇零 Emoji。
+
+### v0.1.236 (2026-09-27)
+- 入會與個資登記頁 (Register.tsx) 個人資料儲存推播等待連線與相片刪除連動優化:
+  - 修正與強化措施：
+    - 確實等待推播連線：在 Register.tsx 儲存個人資料後，將發送至 GAS notify_profile_saved 之 fetch 呼叫改為以 await 確實等待回應，並配置 8 秒 AbortController 超時守衛與錯誤捕捉，杜絕因隨後立即執行 alert 與 liff.closeWindow() 銷毀 WebKit WebView 導致背景推播請求被作業系統強制中斷之問題。
+    - 體能證明相片刪除直更優化：在點擊縮圖刪除「x」按鈕確認後，立即自前台表單狀態中剔除該網址；於表單送出時，精確將最新之照片清單（包含全數刪除為空陣列）傳入 Supabase 保存，同時維持已標記刪除之 Google Drive 檔案在背景完全非同步（fire-and-forget）發送移入垃圾桶，確保主流程絕不阻塞。
+  - 測試與建置檢查：
+    - 全專案 78 個測試套件、427 項單元測試 100% 通過，TypeScript 與 Vite 生產打包無錯誤，恪守社團規範全篇零 Emoji。
+
+
+

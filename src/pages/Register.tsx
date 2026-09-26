@@ -595,19 +595,29 @@ function Register({ userId }: { userId: string }) {
             if (norm(finalFormData.preferredLanguage) !== norm(originalFormData.preferredLanguage)) changedFields.push('preferredLanguage');
           }
 
-          fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(withAuthPayload({
-              action: 'notify_profile_saved',
-              userId: userId,
-              formData: finalFormData,
-              isNewUser: isNewUser,
-              isOfficerIntentNew: isOfficerIntentNew,
-              previousOfficerIntent: initialOfficerIntent,
-              changedFields: !isNewUser ? changedFields : undefined
-            }))
-          }).catch(notifyErr => console.warn('[Register] 非同步推播通知略過:', notifyErr));
+          // 確實等待 GAS 推播請求完成，避免隨後 liff.closeWindow() 銷毀 WebKit 中斷連線
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const notifyRes = await fetch(GAS_API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              signal: controller.signal,
+              body: JSON.stringify(withAuthPayload({
+                action: 'notify_profile_saved',
+                userId: userId,
+                formData: finalFormData,
+                isNewUser: isNewUser,
+                isOfficerIntentNew: isOfficerIntentNew,
+                previousOfficerIntent: initialOfficerIntent,
+                changedFields: !isNewUser ? changedFields : undefined
+              }))
+            });
+            clearTimeout(timeoutId);
+            await notifyRes.json().catch(() => ({}));
+          } catch (notifyErr: any) {
+            console.warn('[Register] 推播通知發送例外 (不影響基本資料儲存):', notifyErr?.message || notifyErr);
+          }
         }
 
         const draftKey = 'register_draft_' + (userId || 'guest');
