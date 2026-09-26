@@ -237,7 +237,7 @@ export const WebAdminEvents: React.FC = () => {
         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.88);
         setSelectedFile({ base64: compressedBase64, name: file.name });
         setPreviewImage(compressedBase64);
-        setFormData((prev) => ({ ...prev, cover_image_url: compressedBase64 }));
+        setFormData((prev) => ({ ...prev, cover_image_url: '' }));
       };
       img.src = event.target?.result as string;
     };
@@ -301,7 +301,7 @@ export const WebAdminEvents: React.FC = () => {
       deadline: event.deadline ? event.deadline.split('T')[0] : '',
       fee: event.fee !== undefined ? String(event.fee) : '0',
       line_group_url: event.line_group_url || '',
-      cover_image_url: existingImg,
+      cover_image_url: existingImg.startsWith('data:image/') ? '' : existingImg,
       title: event.title || '',
       summary: event.summary || '',
       itinerary: event.itinerary || '',
@@ -426,10 +426,15 @@ export const WebAdminEvents: React.FC = () => {
       if (selectedFile) {
         try {
           const uploadPayload = {
-            action: 'upload_image_to_drive',
-            base64Data: selectedFile.base64,
-            fileName: `event_${formData.id}_cover_${Date.now()}.jpg`,
-            folderName: `活動封面_${formData.id}`
+            action: 'upload_drive_file',
+            userId: session.userId || 'officer',
+            folderType: 'events',
+            files: [
+              {
+                name: `event_${formData.id.trim()}_cover_${Date.now()}.jpg`,
+                base64: selectedFile.base64,
+              },
+            ],
           };
 
           const gasRes = await fetch(GAS_API_URL, {
@@ -439,15 +444,25 @@ export const WebAdminEvents: React.FC = () => {
             redirect: 'follow',
           });
 
-          if (gasRes.ok) {
-            const gasData = await gasRes.json();
-            if (gasData.status === 'success' && gasData.imageUrl) {
-              finalCoverUrl = gasData.imageUrl;
-            }
+          if (!gasRes.ok) {
+            throw new Error(`[封面圖片上傳失敗]: GAS 回應狀態碼 ${gasRes.status}`);
           }
-        } catch (uploadErr) {
-          console.warn('[WebAdminEvents] 本機圖檔上傳 Drive 失敗，採用既有網址:', uploadErr);
+
+          const gasData = await gasRes.json();
+          if (gasData.status === 'success' && Array.isArray(gasData.urls) && gasData.urls.length > 0) {
+            finalCoverUrl = gasData.urls[0];
+          } else {
+            throw new Error(`[封面圖片上傳失敗]: ${gasData.message || '無法從 Google Drive 取得檔案直連網址'}`);
+          }
+        } catch (uploadErr: any) {
+          console.error('[WebAdminEvents] 本機圖檔上傳 Drive 失敗:', uploadErr);
+          throw new Error(`[封面圖片上傳失敗]: ${uploadErr.message || String(uploadErr)}`);
         }
+      }
+
+      // 防禦性校驗：若最終網址仍為 base64（表示上傳未完成或非正常 URL），嚴禁寫入 Supabase 以防污染資料庫與 LINE Flex 卡片
+      if (finalCoverUrl.startsWith('data:image/')) {
+        finalCoverUrl = '';
       }
 
       // 使用 save_admin_event_rpc 預存程序 (SECURITY DEFINER，完全豁免 RLS 42501，自帶 sync_queue 佇列同步)
@@ -464,7 +479,7 @@ export const WebAdminEvents: React.FC = () => {
         shortDescEn: formData.summary_en.trim(),
         fullDesc: formData.itinerary.trim(),
         fullDescEn: formData.itinerary_en.trim(),
-        imageUrl: finalCoverUrl || formData.cover_image_url || '',
+        imageUrl: finalCoverUrl,
         lineGroupUrl: formData.line_group_url.trim(),
       };
 

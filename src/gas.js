@@ -4358,7 +4358,7 @@ function handleLiffHelperApi(json) {
   var action = json.action;
 
   // 1. Google Drive 照片上傳 Helper (純上傳，不碰試算表)
-  if (action === "upload_drive_file") {
+  if (action === "upload_drive_file" || action === "upload_drive_files" || action === "upload_image_to_drive") {
     return _handleDriveUploadHelper(json);
   }
 
@@ -4445,7 +4445,14 @@ function _handleDriveUploadHelper(json) {
     var files = json.files || [];
 
     if (!Array.isArray(files) || files.length === 0) {
-      return _errorResponse("缺少上傳檔案內容");
+      if (json.base64Data || json.base64) {
+        files = [{
+          name: json.fileName || json.name || ("upload_" + Date.now() + ".jpg"),
+          base64: json.base64Data || json.base64
+        }];
+      } else {
+        return _errorResponse("缺少上傳檔案內容");
+      }
     }
 
     var folderPath = "Wilderness_" + folderType;
@@ -4470,6 +4477,7 @@ function _handleDriveUploadHelper(json) {
 
     return _successResponse({
       urls: uploadedUrls,
+      imageUrl: uploadedUrls.length > 0 ? uploadedUrls[0] : "",
       message: "成功上傳 " + uploadedUrls.length + " 個檔案至 Google Drive！"
     });
   } catch (err) {

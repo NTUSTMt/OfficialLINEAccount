@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.232-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.233-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.232)](#7-最新版本異動紀錄-changelog-v01232)
+- [7. 最新版本異動紀錄 (Changelog v0.1.233)](#7-最新版本異動紀錄-changelog-v01233)
 
 ---
 
@@ -1789,5 +1789,19 @@ pnpm test
     - save_admin_event_rpc 內部自帶 INSERT INTO sync_queue，活動新增或變更後自動排入佇列，由後台 Sync Worker 排程自動同步至活動專屬試算表。
   - 全系統單一信任源架構對齊：
     - 電腦版 WebAdminEvents.tsx 與手機版 AdminEvents.tsx 統一採用 save_admin_event_rpc 進行活動建立與編輯，確保跨端行為完全一致。
+  - 測試與建置檢查：
+    - 全專案 77 個測試套件、421 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，恪守社團規範全篇零 Emoji。
+
+### v0.1.233 (2026-09-26)
+- 電腦版活動管理 (WebAdminEvents.tsx) 活動封面圖片上傳至 Google Drive 與防 Base64 污染修復:
+  - 根因分析：
+    - 先前 WebAdminEvents.tsx 於圖片上傳區塊呼叫 GAS API 時，請求 Action 誤寫為未支援之 upload_image_to_drive，且解析回傳結構未對齊（GAS 回傳 urls 陣列，前端誤取 imageUrl）。
+    - 上傳失敗時靜默回退，將瀏覽器端的巨大 Base64 Data URI (data:image/jpeg;base64,...) 寫入 Supabase events 表的 cover_image_url 欄位。
+    - LINE 官方帳號的 Flex Message 輪播卡片（Carousel Hero）規範必須為合法之 https:// 直連網址，GAS 於 _buildEventBubble 檢核發現非 http 開頭即自動略過 Hero 區塊，導致活動卡片封面圖片完全無法顯示。
+  - 修正與強化措施：
+    - 正名 API 呼叫 Action 為 upload_drive_file，傳送 folderType: 'events' 與標準 files 陣列，解析 urls[0] 取得標準 Google Drive 直連網址 (https://lh3.googleusercontent.com/d/{id}=s0)。
+    - 落實錯誤透明度原則：若 Google Drive 上傳失敗，直接拋出具體錯誤訊息（[封面圖片上傳失敗]: ...），中斷儲存流程，絕不靜默回退。
+    - 防禦性檢查：若 finalCoverUrl 仍為 data:image/ 開頭，自動阻絕寫入 Supabase，杜絕龐大 Base64 污染資料庫與外部通訊協定。
+    - 後端 GAS (gas.js 與 06_Helper_Services.js) 補充 upload_image_to_drive 別名相容與單一檔案格式容錯，提升系統強韌度。
   - 測試與建置檢查：
     - 全專案 77 個測試套件、421 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，恪守社團規範全篇零 Emoji。
