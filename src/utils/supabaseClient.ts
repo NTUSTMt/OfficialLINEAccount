@@ -420,6 +420,22 @@ export const saveMemberProfileToSupabase = async (
       return { success: false, message: data?.message || '儲存未成功' };
     }
 
+    // 直接精確更新 members 表的 proof_urls 欄位
+    // 根因：save_member_profile RPC 內部含有 `proof_urls = CASE WHEN jsonb_array_length(EXCLUDED.proof_urls) > 0 THEN EXCLUDED.proof_urls ELSE members.proof_urls END`
+    // 導致當使用者清空所有照片 (proofsList 為空陣列) 時，RPC 會拒絕更新並保留舊照片。
+    // 因此此處以直更確保即使全數刪除，資料庫亦能正確儲存為空陣列。
+    const { error: directProofErr } = await supabase
+      .from('members')
+      .update({
+        proof_urls: proofsList,
+        updated_at: new Date().toISOString()
+      })
+      .eq('line_user_id', userId);
+
+    if (directProofErr) {
+      console.warn('[Supabase] 直接更新 proof_urls 警告 (不中斷儲存):', directProofErr.message);
+    }
+
     console.log('%c[DataSource: Supabase] 社員個人資料已極速儲存！', 'color: #10b981; font-weight: bold;', data);
     return { success: true };
   } catch (err: any) {

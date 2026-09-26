@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.234-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.235-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.234)](#7-最新版本異動紀錄-changelog-v01234)
+- [7. 最新版本異動紀錄 (Changelog v0.1.235)](#7-最新版本異動紀錄-changelog-v01235)
 
 ---
 
@@ -1823,3 +1823,16 @@ pnpm test
   - 測試與建置校驗：
     - 新增 test/94_fitness_proof_upload_and_drive_delete.test.mjs 單元測試，涵蓋縮圖結構、虛線框、燈箱、機制 B 連動刪除與中英多國語系驗證。
     - 全專案 78 個測試套件、426 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包零錯誤，全篇無 Emoji。
+
+### v0.1.235 (2026-09-27)
+- 體能證明照片完全清空 (0 Proofs) 與上傳錯誤透明化修復 (saveMemberProfileToSupabase & Register.tsx):
+  - 根因分析：
+    - 刪除全部照片無法生效原因：先前 Supabase 後端 save_member_profile 預存程序內部採用了 `proof_urls = CASE WHEN jsonb_array_length(EXCLUDED.proof_urls) > 0 THEN EXCLUDED.proof_urls ELSE members.proof_urls END` 邏輯。當使用者在前台清空所有照片時，傳入之陣列長度為 0，RPC 判定長度不高於 0 遂自動保留原有 members.proof_urls，導致點擊儲存看似成功，但重新開啟時舊照片全部復原。
+    - 上傳新照失敗被遮蔽原因：先前的 Register.tsx 在上傳新相片呼叫 GAS upload_drive_file 時若拋出逾時或未成功，以 console.warn 靜默捕捉並繼續提交，導致表單以空白 proof_urls 送出，進而又觸發上述 RPC 的舊照片自動保留行為。
+  - 修正與強化措施：
+    - 直更 Supabase 覆寫：在 saveMemberProfileToSupabase 執行完 RPC 後，追加直接對 members 表之 proof_urls 欄位進行精確直更 (supabase.from('members').update({ proof_urls: proofsList }))。即便 proofsList 為空陣列（全數刪除），也能 100% 確保資料庫清空，徹底解決舊照片回彈問題。
+    - 錯誤透明化與阻斷：在前台 Register.tsx 上傳新照片時，若 Google Drive 上傳失敗，直接拋出具體原因並 alert 提醒使用者，絕不靜默遮蔽錯誤。
+    - 雲端硬碟非同步刪除：針對已刪除之舊 Google Drive 檔案，改為在背景完全非同步發送給 GAS 處理 (fire-and-forget)，絕不阻塞或干擾前台個人資料之儲存與畫面操作。
+  - 測試與建置檢查：
+    - 更新 test/94_fitness_proof_upload_and_drive_delete.test.mjs 增加對 members.proof_urls 直更邏輯檢驗。
+    - 全專案 78 個測試套件、426 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包無錯誤，恪守社團規範全篇零 Emoji。

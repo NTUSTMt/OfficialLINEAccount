@@ -101,4 +101,14 @@ describe('94. 體能證明上傳 UI 重構與 Google Drive 檔案連動刪除驗
     assert.ok(zhContent.register.step4.maxProofTip, '繁體中文需包含 maxProofTip');
     assert.ok(enContent.register.step4.maxProofTip, '英文需包含 maxProofTip');
   });
+
+  it('6. 驗證 saveMemberProfileToSupabase 直接覆寫 members.proof_urls 支援完全清空', () => {
+    const supabaseClientPath = path.join(rootDir, 'src/utils/supabaseClient.ts');
+    const supabaseClientContent = fs.readFileSync(supabaseClientPath, 'utf-8');
+    assert.ok(
+      supabaseClientContent.includes(".update({\n        proof_urls: proofsList,") ||
+      supabaseClientContent.includes("proof_urls: proofsList"),
+      'supabaseClient.ts 必須具備直接更新 members.proof_urls 之直更呼叫'
+    );
+  });
 });

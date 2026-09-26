@@ -494,8 +494,10 @@ function Register({ userId }: { userId: string }) {
               }))
             });
             const uploadResult = await uploadRes.json();
-            if (uploadResult.status === 'success' && Array.isArray(uploadResult.urls)) {
+            if (uploadResult.status === 'success' && Array.isArray(uploadResult.urls) && uploadResult.urls.length > 0) {
               uploadedUrls.push(...uploadResult.urls);
+            } else {
+              throw new Error(uploadResult.message || uploadResult.error || 'Google Drive 照片上傳未回傳有效連結');
             }
           }
           if (uploadedUrls.length > 0) {
@@ -504,28 +506,27 @@ function Register({ userId }: { userId: string }) {
               .join('\n');
             finalFormData.strengthProof = combinedProofs;
           }
-        } catch (uploadErr) {
-          console.warn('[Register] 上傳體能證明照例外，繼續儲存資料:', uploadErr);
+        } catch (uploadErr: any) {
+          console.error('[Register] 上傳體能證明照失敗:', uploadErr);
+          alert(`上傳體能證明照失敗: ${uploadErr?.message || uploadErr}`);
+          setIsSubmitting(false);
+          return;
         }
       }
 
-      // 1.1 若有標記刪除的舊 Drive 檔案 (機制 B)，背景通知 GAS 移入垃圾桶
+      // 1.1 若有標記刪除的舊 Drive 檔案，在背景非同步發送給 GAS 移入垃圾桶 (不阻塞主流程，自己慢慢刪除)
       if (deletedProofUrls.length > 0) {
-        try {
-          fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(withAuthPayload({
-              action: 'delete_drive_files',
-              userId: userId || 'TEST_USER_ID',
-              urls: deletedProofUrls
-            }))
-          }).catch((delErr) => {
-            console.warn('[Register] 背景刪除 Drive 檔案失敗 (不影響儲存流程):', delErr);
-          });
-        } catch (delErr) {
-          console.warn('[Register] 呼叫 Drive 刪除例外:', delErr);
-        }
+        fetch(GAS_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(withAuthPayload({
+            action: 'delete_drive_files',
+            userId: userId || 'TEST_USER_ID',
+            urls: deletedProofUrls
+          }))
+        }).catch((delErr) => {
+          console.warn('[Register] 背景刪除 Drive 檔案略過 (不影響儲存流程):', delErr);
+        });
       }
 
       // 2. ⚡ 100% 直寫 Supabase (< 50ms，以安全 RPC 限制本人存取，DB Triggers 自動排入 sync_queue)
@@ -612,6 +613,10 @@ function Register({ userId }: { userId: string }) {
         const draftKey = 'register_draft_' + (userId || 'guest');
         localStorage.removeItem(draftKey);
         setHasDraftRestored(false);
+        setStrengthProofFiles([]);
+        setDeletedProofUrls([]);
+        setOriginalFormData(finalFormData);
+        setFormData(finalFormData);
 
         // 儲存成功後依據偏好語言切換 LIFF 介面語系並持久化
         const chosenLang = finalFormData.preferredLanguage === 'en' ? 'en' : 'zh';
