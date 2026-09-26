@@ -20,14 +20,18 @@ import {
   ArrowDown,
   ChevronLeft,
   ChevronRight,
-  GripVertical
+  GripVertical,
+  Send,
+  Save
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import {
   fetchFinanceItemsFromSupabase,
-  updatePaymentAndLinkedStatusInSupabase
+  updatePaymentAndLinkedStatusInSupabase,
+  fetchAllLoansFromSupabase,
+  updateLoanStatusInSupabase
 } from '../../utils/supabaseClient';
-import type { AdminFinanceItem } from '../../types/admin';
+import type { AdminFinanceItem, AdminLoanItem } from '../../types/admin';
 import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
 import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
 import { useAdvancedTable, type AdvancedColumnDef } from '../../components/admin/useAdvancedTable';
@@ -38,13 +42,14 @@ import './webAdmin.css';
 const FINANCE_COLUMNS: AdvancedColumnDef[] = [
   { key: 'id', label: '款項單號', defaultWidth: 160, minWidth: 120 },
   { key: 'applicant', label: '繳費 / 申請人', defaultWidth: 150, minWidth: 120 },
-  { key: 'type', label: '款項說明', defaultWidth: 200, minWidth: 140 },
+  { key: 'type', label: '款項說明', defaultWidth: 220, minWidth: 160 },
   { key: 'amount', label: '金額', defaultWidth: 100, minWidth: 80 },
   { key: 'bank_last5', label: '帳號末五碼', defaultWidth: 110, minWidth: 90 },
   { key: 'status', label: '核銷狀態', defaultWidth: 130, minWidth: 100 },
-  { key: 'created_at', label: '申報時間', defaultWidth: 150, minWidth: 120 },
+  { key: 'notification_status', label: '通知狀態', defaultWidth: 110, minWidth: 90 },
+  { key: 'created_at', label: '時間戳記', defaultWidth: 160, minWidth: 120 },
   { key: 'notes', label: '備註說明', defaultWidth: 180, minWidth: 120 },
-  { key: 'actions', label: '操作', defaultWidth: 120, minWidth: 90 },
+  { key: 'actions', label: '操作', defaultWidth: 80, minWidth: 70 },
 ];
 
 export const WebAdminFinance: React.FC = () => {
@@ -84,6 +89,21 @@ export const WebAdminFinance: React.FC = () => {
   const [drawerNotes, setDrawerNotes] = useState('');
   const [isSavingDrawer, setIsSavingDrawer] = useState(false);
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
+
+  // 側邊同級裝備借用編輯抽屜
+  const [sideLoanItem, setSideLoanItem] = useState<AdminLoanItem | null>(null);
+  const [sideLoanLoading, setSideLoanLoading] = useState(false);
+  const [sideLoanSaving, setSideLoanSaving] = useState(false);
+  const [sideLoanStatus, setSideLoanStatus] = useState<AdminLoanItem['status']>('待領取 To Be Collected');
+  const [sideLoanNotes, setSideLoanNotes] = useState('');
+
+  // 側邊同級個人詳細資料面板
+  const [sideProfileUserId, setSideProfileUserId] = useState<string | null>(null);
+
+  // 排序方式與批次通知狀態
+  type SortMethod = 'TIME_DESC' | 'TIME_ASC' | 'AMOUNT_DESC' | 'AMOUNT_ASC' | 'STATUS';
+  const [sortMethod, setSortMethod] = useState<SortMethod>('TIME_DESC');
+  const [isBatchNotifying, setIsBatchNotifying] = useState(false);
 
   // 欄位點擊調整欄高 (Cell Expansion)
   const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set());
@@ -167,11 +187,35 @@ export const WebAdminFinance: React.FC = () => {
     });
   }, [items, searchKeyword, statusFilter, categoryFilter]);
 
+  // 依排序方式進行排序
+  const sortedFilteredItems = useMemo(() => {
+    const list = [...filteredItems];
+    switch (sortMethod) {
+      case 'TIME_DESC':
+        return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      case 'TIME_ASC':
+        return list.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+      case 'AMOUNT_DESC':
+        return list.sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
+      case 'AMOUNT_ASC':
+        return list.sort((a, b) => (Number(a.amount) || 0) - (Number(b.amount) || 0));
+      case 'STATUS':
+        return list.sort((a, b) => {
+          const orderA = a.status.includes('待確認') ? 0 : a.status.includes('待繳費') ? 1 : 2;
+          const orderB = b.status.includes('待確認') ? 0 : b.status.includes('待繳費') ? 1 : 2;
+          return orderA - orderB;
+        });
+      default:
+        return list;
+    }
+  }, [filteredItems, sortMethod]);
+
   // 高階表格狀態管理
   const {
     pinnedColumns,
     hiddenColumns,
     columnWidths,
+    rowHeights,
     pinnedRowIds,
     hiddenRowIds,
     showHiddenMenu,
@@ -185,6 +229,7 @@ export const WebAdminFinance: React.FC = () => {
     unhideAllColumnsAndRows,
     resetColumnWidthsAndHeights,
     startResizing,
+    startRowResizing,
     moveRow,
     togglePinRow,
     hideRow,
@@ -198,7 +243,7 @@ export const WebAdminFinance: React.FC = () => {
   } = useAdvancedTable<AdminFinanceItem>({
     storageKey: 'wa_finance_table_prefs_v1',
     columns: FINANCE_COLUMNS,
-    items: filteredItems,
+    items: sortedFilteredItems,
     getItemId: (item) => item.id,
   });
 
@@ -248,7 +293,7 @@ export const WebAdminFinance: React.FC = () => {
         newStatus: '已核銷 Confirmed',
         officerName: session.displayName || '管理幹部',
         lineUserId: item.line_user_id,
-        notes: item.officer_notes || item.notes,
+        notes: item.officer_notes || '',
         officerUserId: session.userId,
         notificationStatus: '未通知'
       });
@@ -301,7 +346,7 @@ export const WebAdminFinance: React.FC = () => {
           newStatus: '已核銷 Confirmed',
           officerName: session.displayName || '管理幹部',
           lineUserId: item.line_user_id,
-          notes: item.officer_notes || item.notes,
+          notes: item.officer_notes || '',
           officerUserId: session.userId,
           notificationStatus: '未通知'
         });
@@ -375,6 +420,283 @@ export const WebAdminFinance: React.FC = () => {
     if (isSavingDrawer) return;
     setDrawerOpen(false);
     setEditingItem(null);
+    setSideLoanItem(null);
+    setSideProfileUserId(null);
+  };
+
+  // 格式化款項說明標籤 (［活動］、［社費］、［裝備］)，保持單行不折行並純化活動名稱
+  const renderPaymentType = (
+    item: AdminFinanceItem,
+    onOpenLoan?: (loanId: string) => void
+  ) => {
+    const cat = item.itemCategory || (
+      (item.type || '').includes('活動') || item.sourceType === 'event_signup' ? 'activity' :
+        (item.type || '').includes('裝備') || item.sourceType === 'loan' ? 'equipment' :
+          (item.type || '').includes('社籍') || (item.type || '').includes('社費') ? 'membership' : 'other'
+    );
+
+    if (cat === 'activity') {
+      let cleanTitle = item.type || item.target_id || '社團活動';
+      // 移除前綴：［活動］、[活動]、符號前綴、活動費用 (...)
+      cleanTitle = cleanTitle
+        .replace(/^(\[|［)活動(\]|］)\s*/, '')
+        .replace(/^[^\w\u4e00-\u9fa5（(]*活動[：:\s]*/u, '')
+        .replace(/^活動費用\s*\((.*?)\)$/, '$1')
+        .trim();
+
+      const fullTitle = `［活動］ ${cleanTitle}`;
+
+      return (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            flexWrap: 'nowrap',
+            whiteSpace: 'nowrap',
+            maxWidth: '100%',
+            overflow: 'hidden'
+          }}
+          title={fullTitle}
+        >
+          <span className="wa-tag wa-tag-activity" style={{ flexShrink: 0 }}>［活動］</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {cleanTitle}
+          </span>
+        </div>
+      );
+    }
+
+    if (cat === 'membership') {
+      let text = item.type || '社籍與社費';
+      text = text
+        .replace(/^(\[|［)社費(\]|］)\s*/, '')
+        .replace(/^(\[|［)社籍(\]|］)\s*/, '')
+        .replace(/^[^\w\u4e00-\u9fa5]*社籍與社費\s*/u, '')
+        .trim();
+      if (!text || text === 'Membership Fee') {
+        text = '社籍與社費';
+      }
+      if (!text.includes('有效至')) {
+        const expiryYear = new Date().getFullYear() + 1;
+        text = `${text.replace(/\s*\(Membership Fee\)/i, '')}（有效至 ${expiryYear}/01/31）`;
+      }
+      const fullText = `［社費］ ${text}`;
+
+      return (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            flexWrap: 'nowrap',
+            whiteSpace: 'nowrap',
+            maxWidth: '100%',
+            overflow: 'hidden'
+          }}
+          title={fullText}
+        >
+          <span className="wa-tag wa-tag-membership" style={{ flexShrink: 0 }}>［社費］</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {text}
+          </span>
+        </div>
+      );
+    }
+
+    if (cat === 'equipment') {
+      const loanId = item.target_id || (item.sourceType === 'loan' ? item.id : '') || (item.type?.match(/(ORD_\w+|LN_\w+)/)?.[0] || item.type || '');
+      const cleanId = loanId.replace(/^[^\w\u4e00-\u9fa5]*裝備[:：]?\s*/u, '').replace(/^裝備租借[:：]?\s*/, '').trim() || item.id;
+      const fullText = `［裝備］ 裝備租借（${cleanId}）`;
+
+      return (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            flexWrap: 'nowrap',
+            whiteSpace: 'nowrap',
+            maxWidth: '100%',
+            overflow: 'hidden'
+          }}
+          title={fullText}
+        >
+          <span className="wa-tag wa-tag-equipment" style={{ flexShrink: 0 }}>［裝備］</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenLoan) onOpenLoan(cleanId);
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              color: 'var(--wa-primary)',
+              cursor: 'pointer',
+              fontWeight: 600,
+              textDecoration: 'underline',
+              fontFamily: 'monospace',
+              fontSize: 'inherit',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+            title="點擊滑出裝備借用編輯抽屜"
+          >
+            裝備租借（{cleanId}）
+          </button>
+        </div>
+      );
+    }
+
+    const fallbackText = item.type || item.target_id || '-';
+    return (
+      <span
+        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: '100%' }}
+        title={fallbackText}
+      >
+        {fallbackText}
+      </span>
+    );
+  };
+
+  // 開啟側邊裝備借用編輯抽屜
+  const handleOpenLoanDrawer = async (loanId: string, financeItem?: AdminFinanceItem) => {
+    setSideLoanLoading(true);
+    try {
+      if (financeItem && !drawerOpen) {
+        handleOpenDrawer(financeItem);
+      }
+      const loans = await fetchAllLoansFromSupabase(session.userId);
+      let found = loans.find(l => l.id === loanId || loanId.includes(l.id) || l.id.includes(loanId));
+      if (!found) {
+        const { data } = await client
+          .from('loans')
+          .select('*, loan_items(equipment_id, quantity, equipments(name))')
+          .eq('id', loanId)
+          .maybeSingle();
+        if (data) {
+          found = {
+            ...data,
+            days: data.days || (data.start_date && data.end_date ? Math.max(1, Math.round((new Date(data.end_date).getTime() - new Date(data.start_date).getTime()) / 86400000) + 1) : 1),
+            total_fee: data.total_rent || data.total_fee || 0,
+            items: Array.isArray(data.loan_items) ? data.loan_items.map((li: any) => ({
+              name: li.equipments?.name || li.equipment_id,
+              quantity: li.quantity || 1,
+              rent: 0
+            })) : []
+          } as AdminLoanItem;
+        }
+      }
+      if (found) {
+        setSideLoanItem(found);
+        setSideLoanStatus(found.status);
+        setSideLoanNotes(found.notes || '');
+      } else {
+        setErrorMsg(`找不到編號為 [${loanId}] 的裝備借用單`);
+      }
+    } catch (err: any) {
+      console.error('[WebAdminFinance] handleOpenLoanDrawer error:', err);
+      setErrorMsg(`讀取裝備借用單失敗: ${err.message || String(err)}`);
+    } finally {
+      setSideLoanLoading(false);
+    }
+  };
+
+  // 儲存側邊裝備借用單變更
+  const handleSaveSideLoan = async () => {
+    if (!sideLoanItem) return;
+    setSideLoanSaving(true);
+    setErrorMsg(null);
+    try {
+      const res = await updateLoanStatusInSupabase(
+        sideLoanItem.id,
+        sideLoanStatus,
+        sideLoanNotes,
+        session.userId
+      );
+      if (!res.success) {
+        throw new Error(res.error || '更新裝備借用狀態失敗');
+      }
+      setSideLoanItem(prev => prev ? { ...prev, status: sideLoanStatus, notes: sideLoanNotes } : null);
+      setSuccessMsg(`裝備借用單 [${sideLoanItem.id}] 狀態已更新為 ${sideLoanStatus}`);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      console.error('[WebAdminFinance] handleSaveSideLoan error:', err);
+      setErrorMsg(err.message || String(err));
+    } finally {
+      setSideLoanSaving(false);
+    }
+  };
+
+  // 一鍵發送通知（針對已核銷 Confirmed 且未通知者）
+  const handleBatchNotify = async () => {
+    const candidatePool = selectedIds.size > 0
+      ? items.filter(it => selectedIds.has(it.id))
+      : filteredItems;
+
+    const targetItems = candidatePool.filter(
+      it => (it.status.includes('已核銷') || it.status.includes('Confirmed') || it.payment_status?.includes('已繳費')) &&
+        it.notification_status !== '已通知' &&
+        Boolean(it.line_user_id)
+    );
+
+    if (targetItems.length === 0) {
+      setErrorMsg('目前沒有已核銷且未通知的款項需要發送通知。');
+      return;
+    }
+
+    setIsBatchNotifying(true);
+    setErrorMsg(null);
+    let successCount = 0;
+
+    for (const item of targetItems) {
+      try {
+        await fetch(GAS_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: 'notify_payment_confirmed',
+            paymentId: item.id,
+            userName: item.name,
+            amount: item.amount,
+            items: item.type,
+            lineUserId: item.line_user_id,
+            confirmedBy: session.displayName || '電腦工作站幹部審核'
+          })
+        }).catch(e => console.warn('[WebAdminFinance] 推播呼叫異常:', e));
+
+        await updatePaymentAndLinkedStatusInSupabase({
+          paymentId: item.id,
+          sourceType: item.sourceType,
+          targetType: item.target_type,
+          targetId: item.target_id,
+          newStatus: item.status,
+          officerName: session.displayName || '電腦工作站幹部',
+          lineUserId: item.line_user_id,
+          notes: item.officer_notes || '',
+          officerUserId: session.userId,
+          notificationStatus: '已通知'
+        });
+
+        successCount++;
+      } catch (e) {
+        console.warn(`[WebAdminFinance] 推播通知失敗 ${item.id}:`, e);
+      }
+    }
+
+    setItems(prev => prev.map(p => {
+      if (targetItems.some(t => t.id === p.id)) {
+        return { ...p, notification_status: '已通知' };
+      }
+      return p;
+    }));
+
+    setSuccessMsg(`一鍵推播完成！已成功發送 ${successCount} / ${targetItems.length} 筆 LINE 核銷通知。`);
+    setTimeout(() => setSuccessMsg(null), 3000);
+    setIsBatchNotifying(false);
   };
 
   // 儲存右側編輯視窗之變更
@@ -435,17 +757,17 @@ export const WebAdminFinance: React.FC = () => {
         prev.map((p) =>
           p.id === editingItem.id
             ? {
-                ...p,
-                status: drawerStatus,
-                payment_status:
-                  drawerStatus === '已核銷 Confirmed'
-                    ? '已繳費 Paid'
-                    : drawerStatus === '待繳費 Unpaid'
+              ...p,
+              status: drawerStatus,
+              payment_status:
+                drawerStatus === '已核銷 Confirmed'
+                  ? '已繳費 Paid'
+                  : drawerStatus === '待繳費 Unpaid'
                     ? '未繳費 Unpaid'
                     : '待確認 Checking',
-                notification_status: finalNotificationStatus,
-                officer_notes: drawerNotes
-              }
+              notification_status: finalNotificationStatus,
+              officer_notes: drawerNotes
+            }
             : p
         )
       );
@@ -565,6 +887,20 @@ export const WebAdminFinance: React.FC = () => {
             <option value="membership">社籍社費</option>
           </select>
 
+          {/* 排序方式下拉選單 */}
+          <select
+            className="web-admin-select"
+            value={sortMethod}
+            onChange={(e) => setSortMethod(e.target.value as any)}
+            title="排序方式"
+          >
+            <option value="TIME_DESC">時間戳記：新到舊</option>
+            <option value="TIME_ASC">時間戳記：舊到新</option>
+            <option value="AMOUNT_DESC">金額：高到低</option>
+            <option value="AMOUNT_ASC">金額：低到高</option>
+            <option value="STATUS">核銷狀態排序</option>
+          </select>
+
           {/* 重新整理純圖示按鈕 */}
           <button
             type="button"
@@ -656,6 +992,23 @@ export const WebAdminFinance: React.FC = () => {
         </div>
 
         <div className="web-admin-toolbar-right">
+          {/* 一鍵發送通知按鈕 */}
+          <button
+            type="button"
+            className="web-admin-btn web-admin-btn-secondary"
+            onClick={handleBatchNotify}
+            disabled={isBatchNotifying || loading}
+            title="發送 LINE 核銷通知給所有符合「已核銷且未通知」之申報人"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: '0.82rem' }}
+          >
+            {isBatchNotifying ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Send size={14} />
+            )}
+            <span>一鍵發送通知</span>
+          </button>
+
           {selectedIds.size > 0 && (
             <button
               type="button"
@@ -677,7 +1030,7 @@ export const WebAdminFinance: React.FC = () => {
 
       {/* 財務紀錄資料表格 */}
       <div className="web-admin-grid-container">
-        <table className="web-admin-table">
+        <table className="web-admin-table" style={{ tableLayout: 'fixed' }}>
           <thead>
             <tr>
               <th
@@ -729,9 +1082,8 @@ export const WebAdminFinance: React.FC = () => {
                 return (
                   <th
                     key={col.key}
-                    className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === col.key ? 'wa-col-pinned-last' : ''} ${
-                      dragOverColKey === col.key ? 'wa-col-drag-over' : ''
-                    }`}
+                    className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === col.key ? 'wa-col-pinned-last' : ''} ${dragOverColKey === col.key ? 'wa-col-drag-over' : ''
+                      }`}
                     style={{
                       width: `${width}px`,
                       minWidth: `${col.minWidth || 80}px`,
@@ -841,12 +1193,6 @@ export const WebAdminFinance: React.FC = () => {
                 const isItemProcessing = processingId === item.id;
                 const isRowPinned = pinnedRowIds.has(item.id);
 
-                const isConfirmed =
-                  item.status.includes('已核銷') ||
-                  item.status.includes('Confirmed') ||
-                  item.status.includes('已繳費') ||
-                  item.status.includes('Paid');
-
                 const isChecking =
                   item.status.includes('待確認') ||
                   item.status.includes('Checking');
@@ -858,10 +1204,12 @@ export const WebAdminFinance: React.FC = () => {
                 return (
                   <tr
                     key={item.id}
-                    className={`${isSelected ? 'selected' : ''} ${isRowPinned ? 'wa-row-pinned' : ''} ${
-                      dragOverRowId === item.id ? 'wa-row-drag-over' : ''
-                    }`}
-                    style={{ backgroundColor: isSelected ? 'rgba(5, 150, 105, 0.04)' : undefined }}
+                    className={`${isSelected ? 'selected' : ''} ${isRowPinned ? 'wa-row-pinned' : ''} ${dragOverRowId === item.id ? 'wa-row-drag-over' : ''
+                      }`}
+                    style={{
+                      backgroundColor: isSelected ? 'rgba(5, 150, 105, 0.04)' : undefined,
+                      height: rowHeights[item.id] ? `${rowHeights[item.id]}px` : undefined
+                    }}
                     onDragOver={(e) => {
                       e.preventDefault();
                       if (draggedRowId && draggedRowId !== item.id) {
@@ -955,6 +1303,12 @@ export const WebAdminFinance: React.FC = () => {
                           <EyeOff size={11} />
                         </button>
                       </div>
+
+                      <div
+                        className="wa-row-resizer"
+                        onMouseDown={(e) => startRowResizing(item.id, e)}
+                        title="拖曳調整列高"
+                      />
                     </td>
 
                     {/* 動態渲染可見欄位資料 */}
@@ -992,6 +1346,9 @@ export const WebAdminFinance: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'applicant' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                maxWidth: columnWidths['applicant'] || col.defaultWidth || 150,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
                                 position: isPinned ? 'sticky' : undefined,
                                 left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
                                 zIndex: isPinned ? 10 : undefined,
@@ -1001,7 +1358,7 @@ export const WebAdminFinance: React.FC = () => {
                                 type="button"
                                 className="wa-name-capsule-btn"
                                 onClick={() => handleOpenProfileModal(item)}
-                                title="點擊查看完整個人資料"
+                                title={item.name ? `${item.name} (點擊查看完整個人資料)` : '點擊查看完整個人資料'}
                               >
                                 <User size={13} />
                                 <span>{item.name || '未知申請人'}</span>
@@ -1023,9 +1380,9 @@ export const WebAdminFinance: React.FC = () => {
                               onClick={() => toggleCellExpand(`${item.id}:type`)}
                               title={isTypeExpanded ? '點擊收合' : '點擊展開全文'}
                             >
-                              <span className={isTypeExpanded ? 'wa-cell-expanded' : 'wa-cell-ellipsis'}>
-                                {item.type || item.target_id || '-'}
-                              </span>
+                              <div className={isTypeExpanded ? 'wa-cell-expanded' : 'wa-cell-ellipsis'}>
+                                {renderPaymentType(item, (loanId) => handleOpenLoanDrawer(loanId, item))}
+                              </div>
                             </td>
                           );
 
@@ -1105,6 +1462,24 @@ export const WebAdminFinance: React.FC = () => {
                             </td>
                           );
 
+                        case 'notification_status':
+                          const isNotified = item.notification_status === '已通知';
+                          return (
+                            <td
+                              key={col.key}
+                              className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'notification_status' ? 'wa-col-pinned-last' : ''}`}
+                              style={{
+                                position: isPinned ? 'sticky' : undefined,
+                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
+                                zIndex: isPinned ? 10 : undefined,
+                              }}
+                            >
+                              <span className={`web-admin-badge ${isNotified ? 'web-admin-badge-success' : 'web-admin-badge-neutral'}`}>
+                                {isNotified ? '已通知' : '未通知'}
+                              </span>
+                            </td>
+                          );
+
                         case 'created_at':
                           return (
                             <td
@@ -1156,35 +1531,15 @@ export const WebAdminFinance: React.FC = () => {
                                 zIndex: isPinned ? 10 : undefined,
                               }}
                             >
-                              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                {isConfirmed ? (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--wa-success)', fontSize: '0.78rem', fontWeight: 600 }}>
-                                    <Check size={13} />
-                                    <span>已核銷</span>
-                                  </span>
-                                ) : isChecking ? (
-                                  <button
-                                    type="button"
-                                    className="web-admin-btn"
-                                    style={{ padding: '3px 8px', fontSize: '0.76rem' }}
-                                    disabled={isItemProcessing}
-                                    onClick={() => handleVerifyItem(item)}
-                                  >
-                                    {isItemProcessing ? '處理中' : '確認核銷'}
-                                  </button>
-                                ) : null}
-
-                                <button
-                                  type="button"
-                                  className="web-admin-btn web-admin-btn-secondary"
-                                  style={{ padding: '4px 6px', borderRadius: 4 }}
-                                  title="編輯此筆財務款項詳情"
-                                  aria-label="編輯此筆財務款項詳情"
-                                  onClick={() => handleOpenDrawer(item)}
-                                >
-                                  <Pencil size={13} />
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                className="wa-icon-action-btn"
+                                title="編輯此筆財務款項詳情"
+                                aria-label="編輯此筆財務款項詳情"
+                                onClick={() => handleOpenDrawer(item)}
+                              >
+                                <Pencil size={13} />
+                              </button>
                             </td>
                           );
 
@@ -1241,9 +1596,185 @@ export const WebAdminFinance: React.FC = () => {
         }}
       />
 
-      {/* 右側滑出式編輯視窗 (Floating Slide-Over Drawer) */}
+      {/* 右側滑出式編輯視窗 (Floating Slide-Over Drawer: 支援三欄同級並列與水平滾動) */}
       {drawerOpen && editingItem && (
         <div className="wa-drawer-backdrop" onClick={handleCloseDrawer}>
+          {/* 最左欄：裝備借用單編輯抽屜 (同級並列) */}
+          {sideLoanItem && (
+            <div className="wa-drawer-side-loan" onClick={(e) => e.stopPropagation()}>
+              <div className="wa-drawer-side-loan-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: '0.95rem' }}>裝備借用單詳情</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--wa-text-muted)', fontFamily: 'monospace' }}>
+                      {sideLoanItem.id}
+                    </div>
+                  </div>
+                  {sideLoanLoading && <Loader2 size={14} className="animate-spin" />}
+                </div>
+                <button
+                  type="button"
+                  className="wa-drawer-close-btn"
+                  onClick={() => setSideLoanItem(null)}
+                  title="關閉裝備借用單"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="wa-drawer-side-loan-body">
+                <div className="wa-form-section">
+                  <div className="wa-form-section-title">借用人資訊</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: '0.86rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: 'var(--wa-text-muted)' }}>姓名：</span>
+                      <button
+                        type="button"
+                        className="wa-name-capsule-btn"
+                        onClick={() => {
+                          if (sideProfileUserId === sideLoanItem.line_user_id) {
+                            setSideProfileUserId(null);
+                          } else {
+                            setSideProfileUserId(sideLoanItem.line_user_id);
+                          }
+                        }}
+                        title="展開個人詳細資料"
+                      >
+                        <User size={13} />
+                        <span>{sideLoanItem.name}</span>
+                      </button>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--wa-text-muted)' }}>電話：</span>
+                      <span>{sideLoanItem.phone || '-'}</span>
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <span style={{ color: 'var(--wa-text-muted)' }}>系所 / 學號：</span>
+                      <span>{`${sideLoanItem.department || ''} ${sideLoanItem.student_id || ''}`.trim() || '-'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="wa-form-section">
+                  <div className="wa-form-section-title">借用時程與帳務</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: '0.86rem' }}>
+                    <div>
+                      <span style={{ color: 'var(--wa-text-muted)' }}>預計領取：</span>
+                      <strong>{sideLoanItem.start_date}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--wa-text-muted)' }}>預計歸還：</span>
+                      <strong>{sideLoanItem.end_date}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--wa-text-muted)' }}>借用天數：</span>
+                      <span>{sideLoanItem.days} 天</span>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--wa-text-muted)' }}>應收租金：</span>
+                      <strong style={{ color: 'var(--wa-primary)' }}>${sideLoanItem.total_fee || sideLoanItem.total_rent || 0} 元</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="wa-form-section">
+                  <div className="wa-form-section-title">借用裝備清單 ({sideLoanItem.items?.length || 0} 項)</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--wa-border)', color: 'var(--wa-text-muted)' }}>
+                        <th style={{ textAlign: 'left', padding: '4px 0' }}>品項名稱</th>
+                        <th style={{ textAlign: 'center', padding: '4px 0' }}>數量</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(sideLoanItem.items || []).map((item: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--wa-border)' }}>
+                          <td style={{ padding: '6px 0', fontWeight: 600 }}>{item.name || item.equipment_id}</td>
+                          <td style={{ textAlign: 'center', padding: '6px 0' }}>{item.quantity || 1}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="wa-form-section">
+                  <div className="wa-form-section-title">裝備租借狀態調整</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <select
+                      className="web-admin-select"
+                      style={{ width: '100%' }}
+                      value={sideLoanStatus}
+                      onChange={(e) => setSideLoanStatus(e.target.value as any)}
+                    >
+                      <option value="待領取 To Be Collected">待領取 To Be Collected</option>
+                      <option value="租借中 Borrowed">租借中 Borrowed</option>
+                      <option value="已歸還 Returned">已歸還 Returned</option>
+                      <option value="已取消 Cancelled">已取消 Cancelled</option>
+                    </select>
+
+                    <textarea
+                      className="web-admin-textarea"
+                      rows={2}
+                      placeholder="幹部審核備註..."
+                      value={sideLoanNotes}
+                      onChange={(e) => setSideLoanNotes(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="wa-drawer-footer">
+                <button
+                  type="button"
+                  className="web-admin-btn web-admin-btn-secondary"
+                  onClick={() => setSideLoanItem(null)}
+                  disabled={sideLoanSaving}
+                >
+                  關閉
+                </button>
+                <button
+                  type="button"
+                  className="web-admin-btn"
+                  onClick={handleSaveSideLoan}
+                  disabled={sideLoanSaving}
+                >
+                  {sideLoanSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span>{sideLoanSaving ? '儲存中...' : '儲存租借狀態'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 中間欄：個人詳細資料同級面板 (inline 模式) */}
+          {sideProfileUserId && (
+            <MemberProfileModal
+              isOpen={Boolean(sideProfileUserId)}
+              mode="inline"
+              onClose={() => setSideProfileUserId(null)}
+              userId={sideProfileUserId}
+              officerUserId={session.userId}
+              initialMember={
+                editingItem && editingItem.line_user_id === sideProfileUserId
+                  ? {
+                    line_user_id: editingItem.line_user_id,
+                    name: editingItem.name,
+                    notes: editingItem.notes,
+                  }
+                  : undefined
+              }
+              onNavigateToDetail={(uid) => {
+                handleCloseDrawer();
+                navigate(`/admin-web/members?userId=${encodeURIComponent(uid)}`);
+              }}
+              onOpenEditDrawer={(uid) => {
+                setSideProfileUserId(null);
+                setEditDrawerUserId(uid);
+                setEditDrawerOpen(true);
+              }}
+            />
+          )}
+
+          {/* 最右欄：財務對帳編輯面板 */}
           <div className="wa-drawer-panel" onClick={(e) => e.stopPropagation()}>
             <div className="wa-drawer-header">
               <div>
@@ -1273,8 +1804,14 @@ export const WebAdminFinance: React.FC = () => {
                     <button
                       type="button"
                       className="wa-name-capsule-btn"
-                      onClick={() => handleOpenProfileModal(editingItem)}
-                      title="點擊查看完整個人資料"
+                      onClick={() => {
+                        if (sideProfileUserId === editingItem.line_user_id) {
+                          setSideProfileUserId(null);
+                        } else {
+                          setSideProfileUserId(editingItem.line_user_id || null);
+                        }
+                      }}
+                      title="點擊於左側展開個人資料"
                     >
                       <User size={13} />
                       <span>{editingItem.name || '未知申請人'}</span>
@@ -1288,7 +1825,9 @@ export const WebAdminFinance: React.FC = () => {
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <span style={{ color: 'var(--wa-text-muted)' }}>款項說明：</span>
-                    <span style={{ fontWeight: 600 }}>{editingItem.type || editingItem.target_id || '-'}</span>
+                    <span style={{ marginLeft: 6 }}>
+                      {renderPaymentType(editingItem, (loanId) => handleOpenLoanDrawer(loanId, editingItem))}
+                    </span>
                   </div>
                   <div>
                     <span style={{ color: 'var(--wa-text-muted)' }}>帳號末五碼：</span>
@@ -1297,7 +1836,7 @@ export const WebAdminFinance: React.FC = () => {
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--wa-text-muted)' }}>申報時間：</span>
+                    <span style={{ color: 'var(--wa-text-muted)' }}>時間戳記：</span>
                     <span>
                       {editingItem.created_at ? new Date(editingItem.created_at).toLocaleString('zh-TW', { hour12: false }) : '-'}
                     </span>
@@ -1391,7 +1930,7 @@ export const WebAdminFinance: React.FC = () => {
                       style={{ width: '100%' }}
                       value={drawerNotes}
                       onChange={(e) => setDrawerNotes(e.target.value)}
-                      placeholder="輸入幹部核銷與查對備註..."
+                      placeholder="輸入幹部核銷內部備註..."
                     />
                   </div>
                 </div>

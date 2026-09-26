@@ -19,19 +19,21 @@ import {
   fetchMemberActiveStatsFromSupabase,
   updateMemberFullDetailInSupabase
 } from '../utils/supabaseClient';
-import type { MemberFullRecord, MemberActiveStats } from '../types/admin';
 import { safeNavigateBack } from '../utils/navigationUtils';
+import { NATIONALITY_LIST, getNationalityLabel } from '../constants/nationalities';
+import type { MemberFullRecord, MemberActiveStats } from '../types/admin';
 
 // 欄位繁體中文顯示名稱對照表
 const FIELD_LABELS: Record<string, string> = {
   name: '真實姓名',
   gender: '性別',
+  nationality: '國籍 (Nationality)',
   birthday: '出生年月日',
   id_card: '證件號碼 (身分證/居留證)',
   phone: '聯絡電話',
   email: '電子信箱',
   address: '聯絡地址',
-  line_id: '自訂 LINE ID',
+  line_id: 'LINE ID',
   preferred_language: '偏好語言 (Preferred Language)',
   want_to_say: '想說的話 (留言)',
   identity_status: '身分狀態',
@@ -106,6 +108,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
       setFormData({
         name: detail.name || '',
         gender: detail.gender || '',
+        nationality: detail.nationality || '中華民國',
         birthday: detail.birthday || '',
         id_card: detail.id_card || '',
         phone: detail.phone || '',
@@ -404,7 +407,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
               {activeStats.unfinishedEvents.length === 0 ? (
                 <div style={{ fontSize: '13px', color: '#94a3b8' }}>目前無進行中活動</div>
               ) : (
-                activeStats.unfinishedEvents.map(e => (
+                activeStats.unfinishedEvents.map((e: any) => (
                   <div key={e.id} style={{ fontSize: '12px', marginBottom: '4px' }}>
                     <div style={{ fontWeight: 600, color: '#0f172a' }}>{e.title}</div>
                     <div style={{ color: '#64748b', fontSize: '11px' }}>
@@ -424,7 +427,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
               {activeStats.activeLoans.length === 0 ? (
                 <div style={{ fontSize: '13px', color: '#94a3b8' }}>目前無未歸還裝備</div>
               ) : (
-                activeStats.activeLoans.map(l => (
+                activeStats.activeLoans.map((l: any) => (
                   <div key={l.id} style={{ fontSize: '12px', marginBottom: '4px' }}>
                     <div style={{ fontWeight: 600, color: '#0f172a' }}>{l.itemsSummary}</div>
                     <div style={{ color: '#64748b', fontSize: '11px' }}>
@@ -448,7 +451,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {activeStats.pendingItems && activeStats.pendingItems.length > 0 ? (
-                    activeStats.pendingItems.map((item, idx) => (
+                    activeStats.pendingItems.map((item: any, idx: number) => (
                       <div key={idx} style={{ fontSize: '12px', color: '#0f172a', backgroundColor: '#ffffff', padding: '6px 8px', borderRadius: '6px', border: '1px solid #fde68a' }}>
                         <div style={{ fontWeight: 600 }}>{item.title}</div>
                         <div style={{ fontSize: '11px', color: '#d97706', marginTop: '2px' }}>狀態：{item.status}</div>
@@ -513,6 +516,24 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                     </select>
                   </div>
                   <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>國籍</label>
+                    <select
+                      value={getNationalityLabel(formData.nationality, 'zh')}
+                      onChange={e => handleFieldChange('nationality', e.target.value)}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    >
+                      {NATIONALITY_LIST.map(item => (
+                        <option key={item.zh} value={item.zh}>
+                          {item.zh} ({item.en})
+                        </option>
+                      ))}
+                      <option value="其他">其他 (自行輸入)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>生日 (YYYY-MM-DD)</label>
                     <input
                       type="text"
@@ -535,7 +556,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>自訂 LINE ID</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>LINE ID</label>
                     <input
                       type="text"
                       value={formData.line_id || ''}

@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS members (
     line_user_id TEXT PRIMARY KEY,       -- 系統識別碼 (U1234567...)
     name TEXT NOT NULL,                  -- 姓名
     gender TEXT,                         -- 性別
+    nationality TEXT,                    -- 國籍 (預設為空白，外籍儲存國家名)
     line_id TEXT,                        -- Line ID
     email TEXT,                          -- Email
     phone TEXT,                          -- 聯絡電話
@@ -116,7 +117,7 @@ CREATE TABLE IF NOT EXISTS event_signups (
     event_id TEXT NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
     line_user_id TEXT NOT NULL REFERENCES members(line_user_id) ON DELETE RESTRICT,
     name TEXT,                           -- 社員姓名 (方便後台直觀辨識)
-    line_id TEXT,                        -- 自訂 Line ID (關聯 members.line_id 方便幹部聯絡)
+    line_id TEXT,                        -- LINE ID (關聯 members.line_id 方便幹部聯絡)
     status event_signup_status_enum NOT NULL DEFAULT '審核中 Checking', 
     payment_status payment_status_enum NOT NULL DEFAULT '未繳費 Unpaid',
     is_official_member_snapshot BOOLEAN NOT NULL DEFAULT FALSE,

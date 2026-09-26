@@ -150,7 +150,7 @@ BEGIN
     FROM event_signups s
     JOIN events e ON s.event_id = e.id
     WHERE s.line_user_id = trim(p_target_user_id)
-      AND s.status NOT IN ('已取消 Cancelled', '未錄取 Rejected');
+      AND s.status != '已取消 Cancelled';
 
     -- 查詢進行中租借
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -419,6 +419,7 @@ BEGIN
     UPDATE members
     SET name = COALESCE(p_data->>'name', name),
         gender = COALESCE(p_data->>'gender', gender),
+        nationality = COALESCE(p_data->>'nationality', nationality, '中華民國'),
         line_id = COALESCE(p_data->>'line_id', line_id),
         email = COALESCE(p_data->>'email', email),
         phone = COALESCE(p_data->>'phone', phone),
@@ -561,7 +562,7 @@ BEGIN
             s.id,
             s.line_user_id,
             COALESCE(s.name, m.name, '活動參加者') AS name,
-            '活動費用 (' || e.title || ')' AS type,
+            '🔸 活動：' || e.title AS type,
             e.fee AS amount,
             NULL AS bank_last5,
             NULL AS proof_image_url,

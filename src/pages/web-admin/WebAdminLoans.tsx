@@ -13,7 +13,8 @@ import {
   RotateCcw,
   User,
   ArrowRight,
-  ImageIcon
+  ImageIcon,
+  ExternalLink
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import { fetchAllLoansFromSupabase, updateLoanStatusInSupabase } from '../../utils/supabaseClient';
@@ -126,19 +127,19 @@ export const WebAdminLoans: React.FC = () => {
           created_at: l.created_at,
           items: Array.isArray(l.items)
             ? l.items.map((item: any) => ({
-                equipment_id: item.equipment_id || item.id,
-                name: item.name || item.equipment_name || item.equipment_id || '裝備品項',
-                quantity: item.quantity || 1,
-                rent: item.rent || item.rent_fee || 0,
-                deposit: item.deposit || item.deposit_fee || 0,
-              }))
+              equipment_id: item.equipment_id || item.id,
+              name: item.name || item.equipment_name || item.equipment_id || '裝備品項',
+              quantity: item.quantity || 1,
+              rent: item.rent || item.rent_fee || 0,
+              deposit: item.deposit || item.deposit_fee || 0,
+            }))
             : (l.loan_items || []).map((item: any) => ({
-                equipment_id: item.equipment_id,
-                name: item.equipment_name || item.equipment_id,
-                quantity: item.quantity || 1,
-                rent: item.rent_fee || 0,
-                deposit: item.deposit_fee || 0,
-              })),
+              equipment_id: item.equipment_id,
+              name: item.equipment_name || item.equipment_id,
+              quantity: item.quantity || 1,
+              rent: item.rent_fee || 0,
+              deposit: item.deposit_fee || 0,
+            })),
         }));
         setLoans(mappedList);
       }
@@ -449,20 +450,31 @@ export const WebAdminLoans: React.FC = () => {
                   <ImageIcon size={16} color="var(--wa-primary)" />
                   <span>體能證明照片預覽</span>
                 </div>
-                <button
-                  type="button"
-                  className="wa-drawer-close-btn"
-                  onClick={() => setPreviewPhotoUrl(null)}
-                  title="關閉預覽"
-                >
-                  <X size={16} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <a
+                    href={previewPhotoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--wa-text-muted)', display: 'flex', alignItems: 'center' }}
+                    title="另開新視窗查看原圖"
+                  >
+                    <ExternalLink size={16} />
+                  </a>
+                  <button
+                    type="button"
+                    className="wa-drawer-close-btn"
+                    onClick={() => setPreviewPhotoUrl(null)}
+                    title="關閉預覽"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
               <div className="wa-drawer-side-preview-body">
                 <img
                   src={previewPhotoUrl}
                   alt="體能證明大圖預覽"
-                  style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', borderRadius: 8, display: 'block', margin: '0 auto' }}
+                  className="wa-drawer-side-preview-img"
                 />
               </div>
             </div>
@@ -482,18 +494,23 @@ export const WebAdminLoans: React.FC = () => {
               initialMember={
                 selectedLoan && selectedLoan.line_user_id === sideProfileUserId
                   ? {
-                      line_user_id: selectedLoan.line_user_id,
-                      name: selectedLoan.name,
-                      phone: selectedLoan.phone,
-                      student_id: selectedLoan.student_id,
-                      department: selectedLoan.department,
-                      line_id: selectedLoan.line_id,
-                    }
+                    line_user_id: selectedLoan.line_user_id,
+                    name: selectedLoan.name,
+                    phone: selectedLoan.phone,
+                    student_id: selectedLoan.student_id,
+                    department: selectedLoan.department,
+                    line_id: selectedLoan.line_id,
+                  }
                   : undefined
               }
               onNavigateToDetail={(uid) => {
                 handleCloseDrawer();
                 navigate(`/admin-web/members?userId=${encodeURIComponent(uid)}`);
+              }}
+              onOpenEditDrawer={(uid) => {
+                setSideProfileUserId(null);
+                setEditDrawerUserId(uid);
+                setEditDrawerOpen(true);
               }}
               onPreviewPhoto={(url) => {
                 setPreviewPhotoUrl(url);
@@ -548,7 +565,7 @@ export const WebAdminLoans: React.FC = () => {
                     <span>{selectedLoan.phone || '-'}</span>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--wa-text-muted)' }}>學號 / 系所：</span>
+                    <span style={{ color: 'var(--wa-text-muted)' }}>系所 / 學號：</span>
                     <span>{`${selectedLoan.department || ''} ${selectedLoan.student_id || ''}`.trim() || '-'}</span>
                   </div>
                   <div>
@@ -718,9 +735,10 @@ export const WebAdminLoans: React.FC = () => {
         }}
       />
 
-      {/* 右側滑出式個人資料編輯抽屜 */}
+      {/* 右側滑出式個人資料編輯抽屜 (若底層有借用抽屜，疊加覆蓋於最上層) */}
       <MemberEditDrawer
         isOpen={editDrawerOpen}
+        isStacked={drawerOpen}
         onClose={() => {
           setEditDrawerOpen(false);
           setEditDrawerUserId(null);
@@ -728,8 +746,18 @@ export const WebAdminLoans: React.FC = () => {
         userId={editDrawerUserId}
         officerUserId={session.userId}
         jwt={session.jwt}
-        onSaved={(_updated) => {
+        onSaved={(updated) => {
           loadLoans();
+          if (selectedLoan && updated && selectedLoan.line_user_id === updated.line_user_id) {
+            setSelectedLoan((prev) => prev ? {
+              ...prev,
+              name: updated.name || prev.name,
+              phone: updated.phone || prev.phone,
+              student_id: updated.student_id || prev.student_id,
+              department: updated.department || prev.department,
+              line_id: updated.line_id || prev.line_id,
+            } : null);
+          }
         }}
       />
 

@@ -13,6 +13,7 @@ export interface AdminMemberListItem {
   phone?: string | null;
   email?: string | null;
   officer_intent?: string | null;
+  nationality?: string | null;
 }
 
 export interface MemberFullRecord {
@@ -21,6 +22,7 @@ export interface MemberFullRecord {
   student_id?: string | null;
   department?: string | null;
   gender?: string | null;
+  nationality?: string | null;
   phone?: string | null;
   email?: string | null;
   birthday?: string | null;

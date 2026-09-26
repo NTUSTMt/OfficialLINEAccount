@@ -209,6 +209,8 @@ export const WebAdminInventory: React.FC = () => {
     stickyLeftPositions,
     lastPinnedKey,
     sortedItems,
+    rowHeights,
+    startRowResizing,
   } = useAdvancedTable<EquipmentItem>({
     storageKey: 'wa_inventory_table_prefs_v1',
     columns: INVENTORY_COLUMNS,
@@ -770,7 +772,7 @@ export const WebAdminInventory: React.FC = () => {
 
       {/* 裝備資料表格 */}
       <div className="web-admin-grid-container">
-        <table className="web-admin-table">
+        <table className="web-admin-table" style={{ tableLayout: 'fixed' }}>
           <thead>
             {/* 相容測試靜態標籤註解: <th>編號</th> <th>基礎價 (2天)</th> */}
             <tr>
@@ -915,6 +917,9 @@ export const WebAdminInventory: React.FC = () => {
                     className={`${isRowPinned ? 'wa-row-pinned' : ''} ${
                       dragOverRowId === item.id ? 'wa-row-drag-over' : ''
                     }`}
+                    style={{
+                      height: rowHeights[item.id] ? `${rowHeights[item.id]}px` : undefined,
+                    }}
                     onDragOver={(e) => {
                       e.preventDefault();
                       if (draggedRowId && draggedRowId !== item.id) {
@@ -987,6 +992,13 @@ export const WebAdminInventory: React.FC = () => {
                           <EyeOff size={11} />
                         </button>
                       </div>
+
+                      {/* 拖曳調整列高柄 */}
+                      <div
+                        className="wa-row-resizer"
+                        onMouseDown={(e) => startRowResizing(item.id, e)}
+                        title="拖曳調整列高"
+                      />
                     </td>
 
                     {/* 動態渲染可見欄位資料 */}
@@ -1247,12 +1259,11 @@ export const WebAdminInventory: React.FC = () => {
                             >
                               <button
                                 type="button"
-                                className="web-admin-btn web-admin-btn-secondary"
-                                style={{ padding: '4px 8px' }}
+                                className="wa-icon-action-btn"
                                 onClick={() => handleOpenEditDrawer(item)}
                                 title="編輯裝備詳情與相片"
                               >
-                                <Pencil size={13} color="var(--wa-primary)" />
+                                <Pencil size={15} />
                               </button>
                             </td>
                           );
@@ -1294,8 +1305,6 @@ export const WebAdminInventory: React.FC = () => {
             <div className="wa-drawer-body" style={{ textAlign: 'left' }}>
               {/* 1:1 正方形相片輪播與管理區 */}
               <div className="wa-form-section" style={{ margin: 0, padding: 12 }}>
-                <div className="wa-form-section-title">裝備相片 ({formState.images.length}/5 張)</div>
-
                 <div
                   className={`wa-inventory-carousel-box ${formState.images.length === 0 ? 'dashed' : ''}`}
                   style={{ marginTop: 8 }}

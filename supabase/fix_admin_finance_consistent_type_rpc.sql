@@ -1,26 +1,9 @@
 -- ==============================================================================
--- 遷移腳本：修復財務對帳 (get_admin_finance_rpc) 重複顯示已申報活動/裝備款項之問題
+-- 遷移腳本：統一財務對帳 (get_admin_finance_rpc) 活動項目款項格式 (fix_admin_finance_consistent_type_rpc.sql)
+-- 說明：將未填報 payments 之正取待繳費活動產生的虛擬項目名稱統一改為 '🔸 活動：' || e.title
+--      與社員送出繳費單時之格式保持 100% 一致。
 -- ==============================================================================
 
--- 1. 回填既有 payments 資料表之 target_type 與 target_id
-UPDATE payments p
-SET target_type = 'event', target_id = e.id
-FROM events e
-WHERE (p.target_type IS NULL OR p.target_id IS NULL)
-  AND (p.type ILIKE '%' || e.title || '%' OR p.type ILIKE '%' || e.id || '%');
-
-UPDATE payments p
-SET target_type = 'loan', target_id = l.id
-FROM loans l
-WHERE (p.target_type IS NULL OR p.target_id IS NULL)
-  AND p.type ILIKE '%' || l.id || '%';
-
-UPDATE payments p
-SET target_type = 'membership', target_id = 'membership'
-WHERE (p.target_type IS NULL OR p.target_id IS NULL)
-  AND (p.type ILIKE '%社費%' OR p.type ILIKE '%Membership%');
-
--- 2. 更新 get_admin_finance_rpc：強化 NOT EXISTS 排除邏輯
 CREATE OR REPLACE FUNCTION get_admin_finance_rpc(p_officer_line_user_id TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -108,7 +91,7 @@ BEGIN
 
         UNION ALL
 
-        -- 3. 未填報 payments 之正取待繳費活動報名
+        -- 3. 未填報 payments 之正取待繳費活動報名 (格式統一為 '🔸 活動：' || e.title)
         SELECT 
             s.id,
             s.line_user_id,

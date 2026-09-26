@@ -33,6 +33,7 @@
 | `student_id` | `TEXT` | 是 | NULL | - | **學號** (校外人士可填身分備註) |
 | `department` | `TEXT` | 是 | NULL | - | **系所** (如：資工系、企管所) |
 | `gender` | `TEXT` | 是 | NULL | `男`, `女`, `其他` | **性別** |
+| `nationality` | `TEXT` | 是 | `'中華民國'` | - | **國籍** (預設中華民國，外籍社員記錄國家名稱) |
 | `phone` | `TEXT` | 是 | NULL | - | **聯絡電話** (手機號碼) |
 | `email` | `TEXT` | 是 | NULL | - | **聯絡信箱** |
 | `birthday` | `TEXT` | 是 | NULL | - | **生日** (格式：`YYYY-MM-DD` 或 `YYYY/MM/DD`) |
@@ -48,7 +49,7 @@
 | `membership_expires_at` | `DATE` | 是 | NULL | - | **社籍到期日** (格式：`YYYY-MM-DD`) |
 | `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | - | **建立時間** |
 | `updated_at` | `TIMESTAMPTZ` | 是 | `NOW()` | - | **最後更新時間** |
-| `line_id` | `TEXT` | 是 | NULL | - | **自訂 Line ID** (方便幹部聯絡) |
+| `line_id` | `TEXT` | 是 | NULL | - | **LINE ID** (方便幹部聯絡) |
 | `payment_status` | `payment_status_enum` | 否 | `'未繳費 Unpaid'` | 1. `已繳費 Paid`<br>2. `待確認 Checking`<br>3. `未繳費 Unpaid` | **社員社費繳納狀態** |
 | `address` | `TEXT` | 是 | NULL | - | **聯絡地址** (學生租屋處或戶籍地址) |
 | `medical_history` | `TEXT` | 是 | NULL | - | **個人特殊病史或過敏藥物** (入山安全防護) |
@@ -119,7 +120,7 @@
 | `event_id` | `TEXT` | 否 | 無 | - | **活動編號** (關聯 `events.id`) |
 | `line_user_id` | `TEXT` | 否 | 無 | - | **系統識別碼** (關聯 `members.line_user_id`) |
 | `name` | `TEXT` | 是 | NULL | - | **隊員姓名** (直觀檢視) |
-| `line_id` | `TEXT` | 是 | NULL | - | **自訂 Line ID** (關聯 `members.line_id`，方便幹部出隊聯絡) |
+| `line_id` | `TEXT` | 是 | NULL | - | **LINE ID** (關聯 `members.line_id`，方便幹部出隊聯絡) |
 | `status` | `event_signup_status_enum` | 否 | `'審核中 Checking'` | 1. `正取 Confirmed`<br>2. `正取（已繳費）Confirmed (Paid)`<br>3. `備取 Waitlisted`<br>4. `備取（有意願）Waitlisted (Interested)`<br>5. `審核中 Checking`<br>6. `已取消 Cancelled` | **審核結果 / 報名狀態** |
 | `payment_status` | `payment_status_enum` | 否 | `'未繳費 Unpaid'` | 1. `已繳費 Paid`<br>2. `待確認 Checking`<br>3. `未繳費 Unpaid` | **活動繳費狀態** |
 | `notification_status` | `TEXT` | 是 | `'未發送'` | `未發送`, `已發送` | **LINE 推播通知發送狀態** |

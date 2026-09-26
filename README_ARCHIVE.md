@@ -1620,7 +1620,7 @@
 
 ### 148. Members 與 Events 表結構精準對齊與前端 Supabase Client 同步升級 (v0.1.48)
 - **Members 表 24 欄位 100% 精準對齊 (Members Schema Alignment)**：
-  - 於 [supabase/schema.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/schema.sql) 補齊試算表實際存在的 7 大欄位：`line_id` (自訂 Line ID)、`payment_status` (繳費狀態)、`address` (聯絡地址)、`medical_history` (個人特殊病史或過敏)、`identity_status` (身分狀態)、`join_membership_intent` (加入社員意願)、`officer_intent` (擔任幹部意願)。
+  - 於 [supabase/schema.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/schema.sql) 補齊試算表實際存在的 7 大欄位：`line_id` (LINE ID)、`payment_status` (繳費狀態)、`address` (聯絡地址)、`medical_history` (個人特殊病史或過敏)、`identity_status` (身分狀態)、`join_membership_intent` (加入社員意願)、`officer_intent` (擔任幹部意願)。
   - 保留 `is_official_member` 布林欄位，由繳費狀態包含「已繳費/Paid」自動計算，確保數位社員證與前端資格快速識別。
 - **Events 表剔除多餘欄位與精簡 10 大核心欄位 (Events Schema Optimization)**：
   - 精簡 `events` 資料表，徹底移除試算表不存在之多餘欄位（`category`、`location`、`max_participants`、`non_member_fee`、`notes`、`notified_at`）。

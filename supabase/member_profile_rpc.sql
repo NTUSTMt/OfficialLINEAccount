@@ -58,6 +58,7 @@ BEGIN
         line_user_id,
         name,
         gender,
+        nationality,
         line_id,
         email,
         phone,
@@ -86,6 +87,7 @@ BEGIN
         trim(p_line_user_id),
         COALESCE(p_data->>'name', ''),
         p_data->>'gender',
+        COALESCE(p_data->>'nationality', '中華民國'),
         p_data->>'line_id',
         p_data->>'email',
         p_data->>'phone',
@@ -113,6 +115,7 @@ BEGIN
     ON CONFLICT (line_user_id) DO UPDATE SET
         name = EXCLUDED.name,
         gender = EXCLUDED.gender,
+        nationality = COALESCE(EXCLUDED.nationality, members.nationality, '中華民國'),
         line_id = EXCLUDED.line_id,
         email = EXCLUDED.email,
         phone = EXCLUDED.phone,

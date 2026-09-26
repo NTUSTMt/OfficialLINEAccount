@@ -2,7 +2,7 @@
 -- 台科登山社資料庫遷移：event_signups 新增 line_id 欄位並自動綁定 members.line_id
 -- ==============================================================================
 
--- 1. 在 event_signups 新增 line_id 欄位 (自訂 LINE ID)
+-- 1. 在 event_signups 新增 line_id 欄位 (LINE ID)
 ALTER TABLE event_signups ADD COLUMN IF NOT EXISTS line_id TEXT;
 
 -- 2. 歷史資料回填：自 members 自動補齊現有報名之 line_id

@@ -422,7 +422,7 @@
   }
 }
 
-/* 借用人姓名膠囊徽章按鈕 */
+/* 借用人/申報人姓名膠囊徽章按鈕 */
 .wa-name-capsule-btn {
   display: inline-flex;
   align-items: center;
@@ -436,6 +436,19 @@
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease-in-out;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.wa-name-capsule-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-name-capsule-btn svg {
+  flex-shrink: 0;
 }
 
 .wa-name-capsule-btn:hover {
@@ -776,15 +789,29 @@
   backdrop-filter: blur(2px);
   z-index: 1000;
   display: flex;
-  justify-content: flex-end;
   align-items: center;
   padding: 16px;
   animation: fadeIn 0.15s ease-out;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+  flex-wrap: nowrap;
+}
+
+.wa-drawer-backdrop > *:first-child {
+  margin-left: auto;
+}
+
+.wa-drawer-backdrop.wa-drawer-backdrop-stacked {
+  z-index: 1060;
 }
 
 .wa-drawer-panel {
   width: 100%;
   max-width: 640px;
+  min-width: 360px;
+  flex-shrink: 0;
   height: 100%;
   max-height: calc(100vh - 32px);
   background-color: var(--wa-surface);
@@ -798,32 +825,35 @@
   border: 1px solid var(--wa-border);
 }
 
-/* 側邊大圖檢視面板 (Side Photo Lightbox) */
+/* 側邊大圖檢視面板 (Side Photo Lightbox - 亮色藝廊風格) */
 .wa-drawer-side-preview {
-  width: 500px;
-  max-width: calc(100vw - 700px);
+  width: 480px;
+  max-width: 480px;
+  min-width: 320px;
+  flex-shrink: 0;
   height: 100%;
   max-height: calc(100vh - 32px);
-  background-color: #0f172a;
+  background-color: var(--wa-surface);
   border-radius: 18px;
-  box-shadow: 0 20px 35px rgba(0, 0, 0, 0.35);
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12), 0 20px 25px -5px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   margin-right: 16px;
   animation: fadeIn 0.18s ease-out;
   z-index: 1010;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--wa-border);
 }
 
 .wa-drawer-side-preview-header {
-  padding: 12px 18px;
+  padding: 14px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: rgba(30, 41, 59, 0.95);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  color: #f8fafc;
+  background-color: var(--wa-surface-alt);
+  border-bottom: 1px solid var(--wa-border);
+  font-weight: 700;
+  color: var(--wa-text);
 }
 
 .wa-drawer-side-preview-body {
@@ -833,7 +863,7 @@
   justify-content: center;
   padding: 16px;
   overflow: auto;
-  background-color: #090d16;
+  background-color: #f8fafc;
 }
 
 .wa-drawer-side-preview-img {
@@ -841,28 +871,57 @@
   max-height: 100%;
   object-fit: contain;
   border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--wa-border);
 }
 
-@media (max-width: 1500px) {
-  .wa-drawer-side-preview {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 90vw;
-    max-width: 600px;
-    height: auto;
-    max-height: 85vh;
-    z-index: 1050;
-    margin-right: 0;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  }
+/* 側邊歷史履歷時間軸面板 (Side Timeline Panel) */
+.wa-drawer-side-timeline {
+  width: 480px;
+  max-width: 480px;
+  min-width: 320px;
+  flex-shrink: 0;
+  height: 100%;
+  max-height: calc(100vh - 32px);
+  background-color: var(--wa-surface);
+  border-radius: 18px;
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12), 0 20px 25px -5px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-right: 16px;
+  animation: fadeIn 0.18s ease-out;
+  z-index: 1010;
+  border: 1px solid var(--wa-border);
+}
+
+.wa-drawer-side-timeline-header {
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--wa-surface-alt);
+  border-bottom: 1px solid var(--wa-border);
+  font-weight: 700;
+  color: var(--wa-text);
+}
+
+.wa-drawer-side-timeline-body {
+  flex: 1;
+  padding: 18px 20px;
+  overflow-y: auto;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* 側邊個人資料檢視面板 (Side Profile Panel) */
 .wa-drawer-side-profile {
-  width: 480px;
-  max-width: calc(100vw - 700px);
+  width: 560px;
+  max-width: 580px;
+  min-width: 320px;
+  flex-shrink: 0;
   height: 100%;
   max-height: calc(100vh - 32px);
   background-color: var(--wa-surface);
@@ -898,16 +957,95 @@
   gap: 16px;
 }
 
-@media (max-width: 1024px) {
-  .wa-drawer-side-profile {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    width: auto;
-    max-width: none;
-    z-index: 1020;
-    margin-right: 0;
-  }
+/* 側邊裝備借用檢視與編輯面板 (Side Equipment Loan Panel) */
+.wa-drawer-side-loan {
+  width: 480px;
+  max-width: 480px;
+  min-width: 320px;
+  flex-shrink: 0;
+  height: 100%;
+  max-height: calc(100vh - 32px);
+  background-color: var(--wa-surface);
+  border-radius: 18px;
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12), 0 20px 25px -5px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-right: 16px;
+  animation: fadeIn 0.18s ease-out;
+  z-index: 1010;
+  border: 1px solid var(--wa-border);
+}
+
+.wa-drawer-side-loan-header {
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--wa-surface-alt);
+  border-bottom: 1px solid var(--wa-border);
+  font-weight: 700;
+  color: var(--wa-text);
+}
+
+.wa-drawer-side-loan-body {
+  flex: 1;
+  padding: 18px 20px;
+  overflow-y: auto;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 款項說明分類標籤 */
+.wa-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  margin-right: 6px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.wa-tag-activity {
+  background-color: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.wa-tag-membership {
+  background-color: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.wa-tag-equipment {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+/* 操作欄位純圖示按鈕 (懸浮變色、無外框) */
+.wa-icon-action-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--wa-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.wa-icon-action-btn:hover {
+  color: var(--wa-primary);
+  background-color: rgba(5, 150, 105, 0.1);
 }
 
 @keyframes slideInRight {

@@ -9,8 +9,19 @@ import {
   Package,
   CreditCard,
   Loader2,
+  Clock,
+  ImageIcon,
+  ChevronDown,
+  ChevronUp,
+  User,
+  FileText,
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, logWebAuditAction } from '../../utils/webAuth';
+import { fetchMemberTimelineRecordsFromSupabase, type MemberTimelineResult } from '../../utils/supabaseClient';
+import type { MemberTimelineRecord } from '../../types/admin';
+import { NotionFilterBar } from './NotionFilterBar';
+import { NATIONALITY_LIST, getNationalityLabel } from '../../constants/nationalities';
+import { getDriveThumbnail } from '../../utils/driveUtils';
 import '../../pages/web-admin/webAdmin.css';
 
 export interface MemberRecord {
@@ -21,6 +32,7 @@ export interface MemberRecord {
   department?: string;
   identity_status?: string;
   gender?: string;
+  nationality?: string;
   birthday?: string;
   id_card?: string;
   phone?: string;
@@ -45,15 +57,16 @@ export interface MemberRecord {
   created_at?: string;
 }
 
-export const FIELD_LABELS: Record<string, string> = {
+const FIELD_LABELS: Record<string, string> = {
   name: '真實姓名',
   gender: '性別',
+  nationality: '國籍 (Nationality)',
   birthday: '出生年月日',
   id_card: '證件號碼 (身分證/居留證)',
   phone: '聯絡電話',
   email: '電子信箱',
   address: '居住通訊地址',
-  line_id: '自訂 LINE ID',
+  line_id: 'LINE ID',
   identity_status: '身分狀態',
   department: '就讀系所',
   student_id: '學號',
@@ -86,18 +99,10 @@ export interface MemberEditDrawerProps {
   jwt: string;
   initialMember?: any | null;
   onSaved?: (updatedMember: MemberRecord) => void;
+  isStacked?: boolean;
 }
 
-// 輔助函式：將 Google Drive 檔案連結轉換為可直接在網頁顯示的縮圖網址
-export const getDriveThumbnail = (url?: string | null): string => {
-  if (!url) return '';
-  if (url.includes('lh3.googleusercontent.com')) return url;
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
-  if (match && match[1]) {
-    return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
-  }
-  return url;
-};
+// getDriveThumbnail 已移至 src/utils/driveUtils.ts，此處透過 import 引用
 
 export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
   isOpen,
@@ -107,8 +112,9 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
   jwt,
   initialMember,
   onSaved,
+  isStacked = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'timeline'>('profile');
+  const [showTimeline, setShowTimeline] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -125,9 +131,19 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
   const [diffModalOpen, setDiffModalOpen] = useState(false);
   const [diffList, setDiffList] = useState<DiffItem[]>([]);
 
-  // 履歷時間軸
+  // 個人歷史紀錄狀態
   const [timelineLoading, setTimelineLoading] = useState(false);
-  const [timelineRecords, setTimelineRecords] = useState<any[]>([]);
+  const [timelineRecords, setTimelineRecords] = useState<MemberTimelineRecord[]>([]);
+  const [timelineMemberInfo, setTimelineMemberInfo] = useState<MemberTimelineResult['member']>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('timestamp');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const backdropRef = React.useRef<HTMLDivElement>(null);
 
   const client = useMemo(() => {
     return createAuthenticatedSupabaseClient(jwt);
@@ -141,11 +157,11 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
       setFormData(null);
       setInitialSnapshot(null);
       setPreviewPhotoUrl(null);
+      setShowTimeline(false);
       setDiffModalOpen(false);
       setDiffList([]);
       setErrorMsg(null);
       setSuccessMsg(null);
-      setActiveTab('profile');
       return;
     }
 
@@ -182,51 +198,106 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
     fetchMember();
   }, [isOpen, targetUserId, initialMember, client]);
 
-  // 載入社員歷史履歷時間軸
-  const loadMemberTimeline = async (tUserId: string) => {
+  // 載入社員個人歷史全紀錄
+  const loadMemberTimeline = async (tUserId: string, isManualRefresh = false) => {
+    if (isManualRefresh) setIsRefreshing(true);
     setTimelineLoading(true);
     try {
-      const { data, error } = await client.rpc('get_admin_member_records_rpc', {
-        p_officer_line_user_id: officerUserId,
-        p_target_user_id: tUserId,
-      });
-
-      if (!error && data && Array.isArray(data.records)) {
-        setTimelineRecords(data.records);
-      } else {
-        // 直查 event_signups 與 loans
-        const [signupsRes, loansRes] = await Promise.all([
-          client.from('event_signups').select('id, event_id, status, created_at, events(title)').eq('line_user_id', tUserId),
-          client.from('loans').select('id, start_date, end_date, status, total_rent').eq('line_user_id', tUserId),
-        ]);
-        const combined = [
-          ...(signupsRes.data || []).map((s: any) => ({
-            type: 'event',
-            title: `活動：${s.events?.title || s.event_id}`,
-            status: s.status,
-            date: s.created_at,
-          })),
-          ...(loansRes.data || []).map((l: any) => ({
-            type: 'loan',
-            title: `裝備借用 [${l.id}]`,
-            status: l.status,
-            date: l.start_date,
-          })),
-        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setTimelineRecords(combined);
+      const res = await fetchMemberTimelineRecordsFromSupabase(tUserId, officerUserId);
+      if (res) {
+        if (res.records) setTimelineRecords(res.records);
+        if (res.member) setTimelineMemberInfo(res.member);
       }
     } catch (err: any) {
       console.warn('[MemberEditDrawer] timeline load warning:', err);
     } finally {
       setTimelineLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    if (isOpen && activeTab === 'timeline' && targetUserId) {
+    if (isOpen && showTimeline && targetUserId) {
       loadMemberTimeline(targetUserId);
     }
-  }, [isOpen, activeTab, targetUserId]);
+  }, [isOpen, showTimeline, targetUserId]);
+
+  // 篩選與排序後的個人歷史紀錄
+  const filteredTimelineRecords = useMemo(() => {
+    let list = [...timelineRecords];
+
+    if (categoryFilter !== 'all') {
+      list = list.filter((r) => r.category === categoryFilter);
+    }
+
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'confirmed') {
+        list = list.filter((r) => r.status?.includes('已核銷') || r.status?.includes('已歸還') || r.status?.includes('已繳費') || r.paymentStatus?.includes('已繳費'));
+      } else if (statusFilter === 'pending') {
+        list = list.filter((r) => r.status?.includes('待確認') || r.status?.includes('待領取') || r.paymentStatus?.includes('待確認'));
+      } else if (statusFilter === 'accepted') {
+        list = list.filter((r) => r.status?.includes('正取') || r.status?.includes('租借中'));
+      } else if (statusFilter === 'waitlist') {
+        list = list.filter((r) => r.status?.includes('候補') || r.status?.includes('備取'));
+      }
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((r) => {
+        const titleMatch = (r.title || '').toLowerCase().includes(q);
+        const statusMatch = (r.status || '').toLowerCase().includes(q);
+        const payMatch = (r.paymentStatus || '').toLowerCase().includes(q);
+        const notesMatch = (r.notes || '').toLowerCase().includes(q);
+        const officerNotesMatch = (r.officerNotes || '').toLowerCase().includes(q);
+        const dateMatch = (r.dateDisplay || '').toLowerCase().includes(q);
+        const amountMatch = r.amount !== undefined ? String(r.amount).includes(q) : false;
+        const detailsStr = JSON.stringify(r.details || {}).toLowerCase();
+        const detailsMatch = detailsStr.includes(q);
+        return titleMatch || statusMatch || payMatch || notesMatch || officerNotesMatch || dateMatch || amountMatch || detailsMatch;
+      });
+    }
+
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'timestamp') {
+        const timeA = new Date(a.timestamp).getTime();
+        const timeB = new Date(b.timestamp).getTime();
+        cmp = timeA - timeB;
+      } else if (sortBy === 'category') {
+        cmp = a.category.localeCompare(b.category);
+      }
+      return sortOrder === 'desc' ? -cmp : cmp;
+    });
+
+    return list;
+  }, [timelineRecords, categoryFilter, statusFilter, searchQuery, sortBy, sortOrder]);
+
+  const toggleRecordExpand = (recordId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(recordId)) {
+        next.delete(recordId);
+      } else {
+        next.add(recordId);
+      }
+      return next;
+    });
+  };
+
+  // 當左側大圖或歷史履歷展開時，若超出寬度自動平滑捲動至最左側以呈現新面板
+  useEffect(() => {
+    if (!isOpen || !backdropRef.current) return;
+    const el = backdropRef.current;
+    if (previewPhotoUrl || showTimeline) {
+      const timer = setTimeout(() => {
+        if (el && el.scrollWidth > el.clientWidth) {
+          el.scrollTo({ left: 0, behavior: 'smooth' });
+        }
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [showTimeline, previewPhotoUrl, isOpen]);
 
   // 比對 Diff 並準備彈窗。若無差異，直接關閉抽屜
   const handleTriggerDiffCheck = (e: React.FormEvent) => {
@@ -314,23 +385,28 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
   return (
     <>
       <div
-        className="wa-drawer-backdrop"
+        ref={backdropRef}
+        className={`wa-drawer-backdrop ${isStacked ? 'wa-drawer-backdrop-stacked' : ''}`}
         onClick={() => {
           onClose();
           setPreviewPhotoUrl(null);
+          setShowTimeline(false);
         }}
       >
-        {/* 左側照片放大檢視面板 */}
+        {/* 最左側照片放大檢視同級面板 (亮色藝廊風格) */}
         {previewPhotoUrl && (
           <div className="wa-drawer-side-preview" onClick={(e) => e.stopPropagation()}>
             <div className="wa-drawer-side-preview-header">
-              <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>體能測驗證明照片預覽</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', fontWeight: 600 }}>
+                <ImageIcon size={16} color="var(--wa-primary)" />
+                <span>體能測驗證明照片預覽</span>
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <a
                   href={previewPhotoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}
+                  style={{ color: 'var(--wa-text-muted)', display: 'flex', alignItems: 'center' }}
                   title="另開新視窗查看原圖"
                 >
                   <ExternalLink size={16} />
@@ -338,7 +414,7 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
                 <button
                   type="button"
                   onClick={() => setPreviewPhotoUrl(null)}
-                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 2 }}
+                  style={{ background: 'none', border: 'none', color: 'var(--wa-text-muted)', cursor: 'pointer', padding: 2 }}
                   title="關閉照片預覽"
                 >
                   <X size={18} />
@@ -355,48 +431,287 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
           </div>
         )}
 
-        {/* 右側滑出抽屜主面板 */}
+        {/* 中間欄：個人歷史紀錄同級展開面板 */}
+        {showTimeline && (
+          <div className="wa-drawer-side-timeline" onClick={(e) => e.stopPropagation()}>
+            <div className="wa-drawer-side-timeline-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Clock size={16} color="var(--wa-primary)" />
+                <span>個人歷史紀錄</span>
+              </div>
+              <button
+                type="button"
+                className="wa-drawer-close-btn"
+                onClick={() => setShowTimeline(false)}
+                title="關閉個人歷史紀錄"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="wa-drawer-side-timeline-body">
+              {/* 頂部個人資訊摘要 */}
+              <div style={{
+                backgroundColor: 'var(--wa-surface-alt)',
+                border: '1px solid var(--wa-border)',
+                borderRadius: 10,
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                flexShrink: 0
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div className="wa-record-avatar" style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    backgroundColor: '#e2e8f0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--wa-text-muted)'
+                  }}>
+                    <User size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--wa-text)' }}>
+                      {timelineMemberInfo?.name || formData?.name || '社員'}
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--wa-text-muted)' }}>
+                      {timelineMemberInfo?.student_id || formData?.student_id || '未設定學號'} · {timelineMemberInfo?.department || formData?.department || '未設定系級'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <span className="web-admin-badge web-admin-badge-neutral" style={{ fontSize: '0.72rem' }}>
+                    {timelineMemberInfo?.role || formData?.identity_status || '社員'}
+                  </span>
+                  {formData?.membership_expires_at && (
+                    <span style={{ fontSize: '0.7rem', color: 'var(--wa-text-muted)' }}>
+                      有效至 {formData.membership_expires_at}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* 搜尋、篩選與排序工具列 */}
+              <div style={{ flexShrink: 0 }}>
+                <NotionFilterBar
+                  popoverMode={true}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  searchPlaceholder="搜尋紀錄項目..."
+                  filters={[
+                    {
+                      key: 'category',
+                      label: '類別',
+                      selected: categoryFilter,
+                      options: [
+                        { value: 'all', label: '全部類別' },
+                        { value: 'activity', label: '活動出隊' },
+                        { value: 'equipment', label: '裝備借用' },
+                        { value: 'payment', label: '繳費紀錄' },
+                      ],
+                      onChange: setCategoryFilter,
+                    },
+                    {
+                      key: 'status',
+                      label: '狀態',
+                      selected: statusFilter,
+                      options: [
+                        { value: 'all', label: '全部狀態' },
+                        { value: 'confirmed', label: '已完成 / 已核銷' },
+                        { value: 'pending', label: '待確認 / 待領取' },
+                        { value: 'accepted', label: '正取 / 租借中' },
+                        { value: 'waitlist', label: '候補 / 備取' },
+                      ],
+                      onChange: setStatusFilter,
+                    },
+                  ]}
+                  sortOptions={[
+                    { key: 'timestamp', label: '依時間戳記' },
+                    { key: 'category', label: '依紀錄類別' },
+                  ]}
+                  sortBy={sortBy}
+                  sortOrder={sortOrder}
+                  onSortChange={(key, order) => {
+                    setSortBy(key);
+                    setSortOrder(order);
+                  }}
+                  onRefresh={() => targetUserId && loadMemberTimeline(targetUserId, true)}
+                  isRefreshing={isRefreshing}
+                />
+              </div>
+
+              {timelineLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--wa-text-muted)' }}>
+                  <Loader2 size={24} className="animate-spin" />
+                  <div style={{ marginTop: 8 }}>正在載入個人歷史紀錄...</div>
+                </div>
+              ) : filteredTimelineRecords.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '36px 12px', color: 'var(--wa-text-muted)', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid var(--wa-border)' }}>
+                  <FileText size={32} color="#cbd5e1" style={{ margin: '0 auto 8px', display: 'block' }} />
+                  <div style={{ fontSize: '0.86rem', fontWeight: 600 }}>尚無符合條件的歷史紀錄</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {filteredTimelineRecords.map((item) => {
+                    const isExpanded = expandedIds.has(item.id);
+                    const isEvent = item.category === 'activity';
+                    const isLoan = item.category === 'equipment';
+
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          backgroundColor: '#ffffff',
+                          border: '1px solid var(--wa-border)',
+                          borderRadius: 10,
+                          padding: 12,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          boxShadow: isExpanded ? '0 4px 12px rgba(0,0,0,0.06)' : 'none',
+                        }}
+                        onClick={() => toggleRecordExpand(item.id)}
+                      >
+                        {/* 收合狀態常駐標題列 */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.86rem' }}>
+                            {isEvent ? (
+                              <Calendar size={14} color="#059669" />
+                            ) : isLoan ? (
+                              <Package size={14} color="#2563eb" />
+                            ) : (
+                              <CreditCard size={14} color="#d97706" />
+                            )}
+                            <span style={{ color: 'var(--wa-text)' }}>{item.title}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span className="web-admin-badge web-admin-badge-neutral" style={{ fontSize: '0.72rem' }}>
+                              {item.status || '已完成'}
+                            </span>
+                            {isExpanded ? <ChevronUp size={14} color="var(--wa-text-muted)" /> : <ChevronDown size={14} color="var(--wa-text-muted)" />}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, fontSize: '0.74rem', color: 'var(--wa-text-muted)' }}>
+                          <span>時間戳記：{item.dateDisplay || item.timestamp?.split('T')[0] || '-'}</span>
+                          {item.amount !== undefined && item.amount !== null && Number(item.amount) > 0 && (
+                            <span style={{ fontWeight: 700, fontFamily: 'monospace', color: 'var(--wa-text)' }}>
+                              ${Number(item.amount).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 點擊向下展開之詳細內容 */}
+                        {isExpanded && (
+                          <div
+                            style={{
+                              marginTop: 10,
+                              paddingTop: 10,
+                              borderTop: '1px dashed var(--wa-border)',
+                              fontSize: '0.78rem',
+                              color: '#334155',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              textAlign: 'left',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {item.paymentStatus && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--wa-text-muted)' }}>繳費狀態：</span>
+                                <span style={{ fontWeight: 600 }}>{item.paymentStatus}</span>
+                              </div>
+                            )}
+                            {item.details && Object.keys(item.details).length > 0 && (
+                              <div style={{ backgroundColor: 'var(--wa-surface-alt)', padding: '6px 10px', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {item.details.loanId && <div>借用單號：<span style={{ fontFamily: 'monospace' }}>{item.details.loanId}</span></div>}
+                                {item.details.paymentId && <div>繳費單號：<span style={{ fontFamily: 'monospace' }}>{item.details.paymentId}</span></div>}
+                                {item.details.bankLast5 && <div>帳號末五碼：<span style={{ fontFamily: 'monospace' }}>{item.details.bankLast5}</span></div>}
+                                {item.details.items && Array.isArray(item.details.items) && (
+                                  <div>品項：{item.details.items.map((i: any) => `${i.equipmentName} x ${i.quantity}`).join(', ')}</div>
+                                )}
+                                {item.details.proofImageUrl && (
+                                  <div style={{ marginTop: 4 }}>
+                                    <span style={{ color: 'var(--wa-text-muted)' }}>繳費憑證：</span>
+                                    <img
+                                      src={item.details.proofImageUrl}
+                                      alt="單據"
+                                      style={{ width: 60, height: 45, objectFit: 'cover', borderRadius: 4, cursor: 'pointer', border: '1px solid var(--wa-border)', verticalAlign: 'middle', marginLeft: 6 }}
+                                      onClick={() => setPreviewPhotoUrl(item.details.proofImageUrl)}
+                                      title="點擊放大預覽"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {item.notes && (
+                              <div style={{ backgroundColor: '#f1f5f9', padding: '6px 10px', borderRadius: 6 }}>
+                                <span style={{ color: 'var(--wa-text-muted)' }}>申請備註：</span>{item.notes}
+                              </div>
+                            )}
+                            {item.officerNotes && (
+                              <div style={{ backgroundColor: '#fef3c7', padding: '6px 10px', borderRadius: 6, color: '#92400e' }}>
+                                <span style={{ fontWeight: 600 }}>幹部備註：</span>{item.officerNotes}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 右側滑出抽屜主面板 (個資編輯表單) */}
         <div className="wa-drawer-panel" onClick={(e) => e.stopPropagation()}>
           <div className="wa-drawer-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <h2 className="wa-drawer-title">
                 {formData ? `${formData.name} - 詳細資料` : '載入社員資料中...'}
               </h2>
-              {/* 分頁切換器 */}
-              <div style={{ display: 'flex', background: '#f1f5f9', padding: 2, borderRadius: 6 }}>
-                <button
-                  type="button"
-                  style={{
-                    border: 'none',
-                    background: activeTab === 'profile' ? '#ffffff' : 'transparent',
-                    color: activeTab === 'profile' ? 'var(--wa-primary)' : 'var(--wa-text-muted)',
-                    fontWeight: 600,
-                    fontSize: '0.82rem',
-                    padding: '4px 10px',
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setActiveTab('profile')}
-                >
-                  個資編輯
-                </button>
-                <button
-                  type="button"
-                  style={{
-                    border: 'none',
-                    background: activeTab === 'timeline' ? '#ffffff' : 'transparent',
-                    color: activeTab === 'timeline' ? 'var(--wa-primary)' : 'var(--wa-text-muted)',
-                    fontWeight: 600,
-                    fontSize: '0.82rem',
-                    padding: '4px 10px',
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setActiveTab('timeline')}
-                >
-                  歷史履歷
-                </button>
-              </div>
+              {/* 個人歷史紀錄展開切換鈕 */}
+              <button
+                type="button"
+                style={{
+                  border: showTimeline ? '1px solid var(--wa-primary)' : '1px solid var(--wa-border)',
+                  background: showTimeline ? '#eff6ff' : '#f8fafc',
+                  color: showTimeline ? 'var(--wa-primary)' : 'var(--wa-text-muted)',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease',
+                }}
+                onClick={() => setShowTimeline(!showTimeline)}
+                title={showTimeline ? '收合左側個人歷史紀錄' : '從左側滑出同級個人歷史紀錄'}
+              >
+                <Clock size={14} />
+                <span>個人歷史紀錄</span>
+                {timelineRecords.length > 0 && (
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      padding: '1px 6px',
+                      borderRadius: '10px',
+                      backgroundColor: showTimeline ? 'var(--wa-primary)' : '#e2e8f0',
+                      color: showTimeline ? '#ffffff' : '#475569',
+                    }}
+                  >
+                    {timelineRecords.length}
+                  </span>
+                )}
+              </button>
             </div>
 
             <button
@@ -405,6 +720,7 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
               onClick={() => {
                 onClose();
                 setPreviewPhotoUrl(null);
+                setShowTimeline(false);
               }}
               title="關閉"
             >
@@ -435,7 +751,7 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--wa-text-muted)' }}>
               查無此社員資料
             </div>
-          ) : activeTab === 'profile' ? (
+          ) : (
             <form onSubmit={handleTriggerDiffCheck} style={{ display: 'flex', flexDirection: 'column', height: 'calc(100% - 65px)', textAlign: 'left' }}>
               <div className="wa-drawer-body">
                 {/* 基本個資 */}
@@ -471,13 +787,19 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div className="wa-form-group">
-                      <label className="wa-form-label">出生年月日</label>
-                      <input
-                        type="date"
-                        className="wa-form-input"
-                        value={formData.birthday || ''}
-                        onChange={(e) => setFormData({ ...formData, birthday: e.target.value })}
-                      />
+                      <label className="wa-form-label">國籍</label>
+                      <select
+                        className="wa-form-select"
+                        value={getNationalityLabel(formData.nationality, 'zh')}
+                        onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                      >
+                        {NATIONALITY_LIST.map((item) => (
+                          <option key={item.zh} value={item.zh}>
+                            {item.zh} ({item.en})
+                          </option>
+                        ))}
+                        <option value="其他">其他 (自行輸入)</option>
+                      </select>
                     </div>
 
                     <div className="wa-form-group">
@@ -487,6 +809,18 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
                         className="wa-form-input"
                         value={formData.id_card || ''}
                         onChange={(e) => setFormData({ ...formData, id_card: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="wa-form-group">
+                      <label className="wa-form-label">出生年月日</label>
+                      <input
+                        type="date"
+                        className="wa-form-input"
+                        value={formData.birthday || ''}
+                        onChange={(e) => setFormData({ ...formData, birthday: e.target.value })}
                       />
                     </div>
                   </div>
@@ -508,7 +842,7 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
                     </div>
 
                     <div className="wa-form-group">
-                      <label className="wa-form-label">自訂 LINE ID</label>
+                      <label className="wa-form-label">LINE ID</label>
                       <input
                         type="text"
                         className="wa-form-input"
@@ -753,7 +1087,7 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
                                 cursor: 'pointer',
                                 backgroundColor: '#f1f5f9',
                               }}
-                              onClick={() => setPreviewPhotoUrl(thumbUrl || url)}
+                              onClick={() => setPreviewPhotoUrl(previewPhotoUrl === url ? null : url)}
                               title="點擊在左側放大預覽照片"
                             >
                               <img
@@ -786,6 +1120,7 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
                   onClick={() => {
                     onClose();
                     setPreviewPhotoUrl(null);
+                    setShowTimeline(false);
                   }}
                   disabled={saving}
                 >
@@ -801,78 +1136,6 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
                 </button>
               </div>
             </form>
-          ) : (
-            /* 歷史履歷時間軸 */
-            <div className="wa-drawer-body" style={{ padding: '16px 20px', textAlign: 'left' }}>
-              {timelineLoading ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--wa-text-muted)' }}>
-                  <Loader2 size={24} className="animate-spin" />
-                  <div style={{ marginTop: 8 }}>正在載入履歷時間軸...</div>
-                </div>
-              ) : timelineRecords.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--wa-text-muted)' }}>
-                  此社員尚無任何活動報名、裝備借用或繳費歷史紀錄
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {timelineRecords.map((item, idx) => {
-                    const isEvent = item.type === 'event' || item.type === 'activity';
-                    const isLoan = item.type === 'loan' || item.type === 'equipment';
-
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          backgroundColor: '#ffffff',
-                          border: '1px solid var(--wa-border)',
-                          borderRadius: 8,
-                          padding: 12,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 6,
-                          textAlign: 'left',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.88rem' }}>
-                            {isEvent ? (
-                              <Calendar size={14} color="#059669" />
-                            ) : isLoan ? (
-                              <Package size={14} color="#d97706" />
-                            ) : (
-                              <CreditCard size={14} color="#2563eb" />
-                            )}
-                            <span>{item.title || item.event_title || '紀錄項目'}</span>
-                          </div>
-                          <span className="web-admin-badge web-admin-badge-neutral" style={{ fontSize: '0.72rem' }}>
-                            {item.status || item.payment_status || '已完成'}
-                          </span>
-                        </div>
-
-                        <div style={{ fontSize: '0.76rem', color: 'var(--wa-text-muted)' }}>
-                          時間：{item.date ? new Date(item.date).toISOString().split('T')[0] : item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : '無日期'}
-                        </div>
-
-                        {(item.amount || item.payment_status || item.details?.items) && (
-                          <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            {item.amount !== undefined && item.amount !== null && Number(item.amount) > 0 && (
-                              <div>金額：NT$ {Number(item.amount).toLocaleString()}</div>
-                            )}
-                            {item.payment_status && item.payment_status !== item.status && (
-                              <div>付款狀態：{item.payment_status}</div>
-                            )}
-                            {item.details?.items && Array.isArray(item.details.items) && (
-                              <div>品項：{item.details.items.map((i: any) => `${i.equipmentName} x ${i.quantity}`).join(', ')}</div>
-                            )}
-                            {item.notes && <div>備註：{item.notes}</div>}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           )}
         </div>
       </div>

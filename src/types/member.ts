@@ -1,6 +1,7 @@
 export interface ProfileData {
   name: string;
   gender: string;
+  nationality?: string;
   department: string;
   identityStatus: string;
   studentId: string;

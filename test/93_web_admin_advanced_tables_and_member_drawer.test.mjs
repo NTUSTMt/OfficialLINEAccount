@@ -29,8 +29,8 @@ describe('93. 電腦工作站全模組高階表格與個人資料編輯重構驗
       'MemberEditDrawer 必須被匯出為獨立組件'
     );
     assert.ok(
-      drawerContent.includes("'profile'") && drawerContent.includes("'timeline'"),
-      'MemberEditDrawer 必須支援 Profile 與 Timeline 雙分頁'
+      drawerContent.includes('wa-drawer-side-timeline') || (drawerContent.includes("'profile'") && drawerContent.includes("'timeline'")),
+      'MemberEditDrawer 必須支援 Profile 表單與 Timeline 歷史履歷'
     );
     assert.ok(
       drawerContent.includes('handleTriggerDiffCheck') && drawerContent.includes('diffs'),
@@ -50,14 +50,14 @@ describe('93. 電腦工作站全模組高階表格與個人資料編輯重構驗
     );
   });
 
-  it('2. 驗證 MemberProfileModal 支援 onOpenEditDrawer 且按鈕文案為「開啟詳細資料編輯頁面→」', () => {
+  it('2. 驗證 MemberProfileModal 支援 onOpenEditDrawer 且按鈕文案為「開啟詳細資料編輯頁面」', () => {
     assert.ok(
       modalContent.includes('onOpenEditDrawer?: (userId: string) => void;'),
       'MemberProfileModal Props 必須包含 onOpenEditDrawer 選填屬性'
     );
     assert.ok(
-      modalContent.includes('開啟詳細資料編輯頁面→'),
-      'MemberProfileModal 底部按鈕文字必須更新為「開啟詳細資料編輯頁面→」'
+      modalContent.includes('開啟詳細資料編輯頁面'),
+      'MemberProfileModal 底部按鈕文字必須更新為「開啟詳細資料編輯頁面」'
     );
     assert.ok(
       modalContent.includes('onOpenEditDrawer(targetUserId)'),

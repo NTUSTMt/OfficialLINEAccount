@@ -407,7 +407,7 @@ function _getDefaultSchemaColumns(tableName) {
     ],
     "payments": [
       "id", "line_user_id", "name", "type", "target_type", "target_id", "amount",
-      "bank_last5", "proof_image_url", "status", "officer_notes", "confirmed_by",
+      "bank_last5", "proof_image_url", "status", "notes", "officer_notes", "confirmed_by",
       "confirmed_at", "created_at", "updated_at"
     ],
     "reflections": [

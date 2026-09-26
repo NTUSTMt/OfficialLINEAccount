@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.217-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.231-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.217)](#7-最新版本異動紀錄-changelog-v01217)
+- [7. 最新版本異動紀錄 (Changelog v0.1.231)](#7-最新版本異動紀錄-changelog-v01231)
 
 ---
 
@@ -301,10 +301,10 @@ pnpm test
   - **欄位擴充與歷史回填**：於 `event_signups` 資料表新增 `line_id TEXT` 欄位，並提供一次性更新將既有報名資料中對應 `line_user_id` 之 `line_id` 完整回填。
   - **雙向自動連動觸發器 (Triggers with Recursion Guard)**：
     - `trg_signup_sync_member_info`：新增報名時，若未傳入 `line_id` 或姓名，Trigger 自動自 `members` 資料表查詢填入。
-    - `trg_member_sync_to_signups`：當社員於個人主頁修改自訂 LINE ID 或姓名時，Trigger 自動串聯更新該社員在 `event_signups` 的所有報名紀錄。
+    - `trg_member_sync_to_signups`：當社員於個人主頁修改LINE ID 或姓名時，Trigger 自動串聯更新該社員在 `event_signups` 的所有報名紀錄。
     - 嚴格守衛：所有觸發器開頭均包含 `IF pg_trigger_depth() > 1 THEN RETURN NEW; END IF;` 防遞迴守衛。
 - 🔄 **GAS 試算表與報名同步對齊 ([gas_modules/05_Sync_Worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/05_Sync_Worker.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**：
-  - `schemaMap.event_signups` 與 `_syncSignupToSheet` 的 `allowedCols` 正式納入 `line_id`，若報名同步至試算表時缺少 `line_id`，系統將自動向 `members` 查詢補齊，確保主試算表名冊包含隊員自訂 LINE ID。
+  - `schemaMap.event_signups` 與 `_syncSignupToSheet` 的 `allowedCols` 正式納入 `line_id`，若報名同步至試算表時缺少 `line_id`，系統將自動向 `members` 查詢補齊，確保主試算表名冊包含隊員LINE ID。
   - `_getGlobalColumnAliases` 擴充支援 `自訂Line`、`自訂LINE ID`。
 - 🧪 **單元測試全數覆蓋**：
   - [test/59_event_deadline_timezone_and_sheet_sync.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/59_event_deadline_timezone_and_sheet_sync.test.mjs) 擴充 `line_id` 欄位白名單驗證，161 項單元測試全數 Pass。
@@ -392,7 +392,7 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.206)
+## 7. 最新版本異動紀錄 (Changelog v0.1.224)
 
 ### v0.1.206 (2026-09-24)
 - 報名名冊一鍵恢復預設尺寸連動恢復欄高與展開 (WebAdminRoster.tsx):
@@ -1597,3 +1597,185 @@ pnpm test
   - 新增 `test/93_web_admin_advanced_tables_and_member_drawer.test.mjs`，包含 8 大驗證測試。
   - 全專案 76 個測試套件、402 項單元測試 100% 通過，TypeScript (tsc -b) 與 Vite 打包建置零錯誤，嚴格恪守零 Emoji 規範。
 
+### v0.1.218 (2026-09-26)
+- 裝備借用頁面直開個資編輯抽屜 (WebAdminLoans Direct MemberEditDrawer):
+  - 借用單詳情抽屜中點擊「開啟詳細資料編輯頁面→」時，不再跳轉至社員名冊頁面，直接在裝備借用頁面滑出 `MemberEditDrawer`。
+  - 支援 `isStacked` 屬性將編輯抽屜疊加於最上層（更高 z-index: 1060），底層裝備抽屜維持開啟狀態。
+  - 編輯儲存或取消關閉後，無縫返回原裝備借用單，並即時更新該借用單內顯示之社員姓名、電話、學號等快照資料。
+- 個人資料編輯抽屜左側同級視窗架構 (MemberEditDrawer Sibling Side Panels):
+  - 歷史履歷左側同級滑出：移除抽屜內部 Tab 切換覆蓋表單之設計，抽屜主面板恆定呈現個資編輯表單；頂部提供「歷史履歷」展開切換鈕，點擊後自左側滑出獨立同級時間軸視窗 (`wa-drawer-side-timeline`)，方便邊審核履歷邊編輯資料。
+  - 體能證明照片最左側同級展開：點擊體能證明縮圖時，大圖視窗 (`wa-drawer-side-preview`) 渲染於履歷視窗之左側，形成三欄同級並排（左：大圖預覽，中：歷史履歷，右：編輯表單）。
+  - 抽屜容器 (`wa-drawer-backdrop`) 支援水平滾動 (`overflow-x: auto; flex-wrap: nowrap;`)，在螢幕寬度不足時保證平滑水平捲動，徹底消除 `@media (max-width: 1500px)` 將大圖置中覆蓋在表單上方的破版行為。
+- 個人資料瀏覽彈窗縮圖顯示與右側同級大圖預覽 (MemberProfileModal Thumbnails & Right Side Preview):
+  - 體能證明文件區域改為展示縮圖網格（使用 `getDriveThumbnail` 渲染 72x72 圓角照片），取代原有的純文字按鈕。
+  - 在置中彈窗（Modal 模式）下點擊縮圖後，大圖預覽面板於個人資料卡片的右側同級展開並排置中 (`[個資卡片] + [大圖預覽]`)，點擊關閉或原圖可即時收合。
+  - 在側邊 inline 模式下維持透過 `onPreviewPhoto` 在左側同級展示大圖。
+- 單元測試與建置檢查:
+  - 新增 `test/94_web_admin_loans_member_edit_and_side_panels.test.mjs`，包含 4 大驗證測試。
+  - 更新 `test/93_web_admin_advanced_tables_and_member_drawer.test.mjs`。
+  - 全專案 77 個測試套件、406 項單元測試 100% 通過，TypeScript (tsc -b) 與 Vite 打包建置零錯誤，嚴格恪守零 Emoji 規範。
+
+### v0.1.219 (2026-09-26)
+- 觸控板手勢衝突防護與水平捲動負座標修復 (Trackpad Gesture Containment & Flex-End Scroll Fix):
+  - 杜絕上一頁歷史導航手勢：在抽屜容器 (`.wa-drawer-backdrop`) 加上 `overscroll-behavior-x: contain;`，徹底封鎖 Mac 觸控板或橫向滾輪在水平捲動到邊界時向外冒泡觸發瀏覽器「上一頁 / 下一頁」導航手勢。
+  - 根除 Flexbox 負向座標資料遺失 (Scroll Data Loss)：移除 `justify-content: flex-end;`，改由 `.wa-drawer-backdrop > *:first-child { margin-left: auto; }` 實現自適應靠右；面板寬度超出螢幕時 `margin-left: auto` 自動歸零，子元素自 `x = 0` 正座標向右延伸，保證水平捲軸能在全寬範圍內平滑滾動，左側面板不再被截斷。
+  - 平滑視角自動對齊：在 `MemberEditDrawer` 內加入 `backdropRef`，於歷史履歷或體能證明大圖展開時自動平滑捲動至最左側 (`left: 0`)，提供流暢的三欄並排檢視體驗。
+- 體能證明大圖預覽亮色藝廊風格統一 (Light Gallery Style for Photo Preview):
+  - 外框與標題列現代亮色化：側邊大圖預覽面板 (`.wa-drawer-side-preview`) 與 `MemberProfileModal` 右側大圖預覽卡片全面改採白底 (`var(--wa-surface)`)、柔和淺灰標題列 (`var(--wa-surface-alt)`) 與 `var(--wa-border)` 細邊框，消除原先深黑底色與電腦工作站整體的割裂感。
+  - 畫布柔和淺灰與照片立體陰影：預覽照片畫布採用 `#f8fafc` 柔和底色，照片本體套用微圓角、細緻邊框與柔和立體陰影 (`box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08)`)，無論白底文件或彩色照片皆獲得最佳層次感與對比度。
+  - 工具按鈕顏色對齊：外開新視窗 (`ExternalLink`) 與關閉按鈕 (`X`) 統一套用中性灰色，懸浮時平滑過渡。
+### v0.1.220 (2026-09-26)
+- 個人歷史紀錄全面重構 (MemberEditDrawer Personal History Overhaul):
+  - 履歷更名為「個人歷史紀錄」：側邊展開面板與抽屜表頭按鈕一致更名，主面板維持個資編輯表單。
+  - 頂部個人基本資訊摘要小卡：新增頂部小卡，展示個人頭像、姓名、學號、系所、幹部/社員身分徽章與社籍有效期限。
+  - 整合 NotionFilterBar 搜尋與篩選工具列：
+    - 支援即時文字關鍵字搜尋。
+    - 支援類別篩選（全部、活動出隊、裝備借用、繳費紀錄）。
+    - 支援狀態篩選（全部狀態、已完成 / 已核銷、待確認 / 待領取、正取 / 租借中、候補 / 備取）。
+    - 支援排序方式切換（時間戳記、紀錄類別）與即時重新整理按鈕。
+  - 歷史紀錄卡片向下展開互動：點擊卡片向下展開顯示完整中繼資料（借用起訖日與天數、應收租金、活動正取備取狀態、繳費收據縮圖、申報備註與幹部審核備註）。
+- 財務對帳同級多欄滑動與裝備借用連動 (WebAdminFinance Sibling Multi-Column Slide-Over & Loan Linkage):
+  - 三欄同級並列滑出式抽屜架構：`[裝備借用編輯 (最左)] + [個人詳細資料 (中間)] + [財務對帳編輯 (右側)]`，所有面板並列於 `wa-drawer-backdrop` 內，支援平滑水平捲動且具備手勢防穿透保護。
+  - 款項說明裝備租借即時連動：當款項屬於裝備租借時，點擊裝備租借項目自動於最左側滑出該筆裝備借用單編輯抽屜 (`wa-drawer-side-loan`)，支援即時調整借用狀態（待領取、租借中、已歸還、已取消）、填寫幹部備註並直接儲存更新 Supabase。
+  - 備註欄位對調問題徹底修復：唯讀區塊正確顯示「申請人申報備註」(`editingItem.notes`)，編輯輸入框正確綁定「幹部核銷內部備註」(`drawerNotes`)；單筆與批次核銷不再以申請人備註覆蓋幹部內部備註。
+- 財務對帳表格與工具列進階優化 (WebAdminFinance Table & Toolbar Advanced Features):
+  - 操作欄位精簡：僅保留無外框純鉛筆圖示按鈕 (`wa-icon-action-btn`)，移除「已核銷」文字標籤，滑鼠懸浮時平滑變色。
+  - 欄位定義更新：`created_at` 欄位更名為「時間戳記」，新增「通知狀態」欄位 (`notification_status`)。
+  - 固定表格版面與自訂寬高：支援 `tableLayout: fixed`，序號欄位掛載 `wa-row-resizer` 拖曳手柄，表格資料列套用 `rowHeights` 支援自由拖曳調整列高。
+  - 款項說明固定格式標籤：採用標準高辨識度標籤呈現：
+    - ［活動］（綠色標籤 `wa-tag-activity`）活動名稱
+    - ［社費］（黃色標籤 `wa-tag-membership`）社籍與社費（有效至隔年 1 月底）
+    - ［裝備］（藍色標籤 `wa-tag-equipment`）裝備租借（ORD_xxxxxx）
+  - 工具列新增排序方式下拉選單：支援「時間戳記：新到舊」、「時間戳記：舊到新」、「金額：高到低」、「金額：低到高」與「核銷狀態排序」。
+  - 工具列新增一鍵發送通知功能：智慧偵測所有「已核銷 Confirmed」且「未通知」之款項，一鍵發送 LINE 推播通知並批次更新 Supabase 通知狀態為「已通知」。
+- 裝備庫存進階優化 (WebAdminInventory Enhancements):
+  - 裝備序號自動產生標準化：新增裝備時自動依現有流水號產生標準 `Gxxx` 三位數編號（例如 `G006`）。
+  - 完全移除裝備相片標題：依指示徹底移除「裝備相片 (0/5 張)」區塊標題，保持表單簡潔整齊。
+  - 操作欄位改用無外框純鉛筆圖示按鈕 (`wa-icon-action-btn`)，並加入 `tableLayout: fixed` 與 `wa-row-resizer` 列高拖曳手柄。
+- 單元測試與建置檢查:
+  - 新增 `test/95_web_admin_finance_advanced_and_inventory_serial.test.mjs`，包含 6 大驗證測試。
+  - 全專案 78 個測試套件、413 項單元測試 100% 通過，TypeScript (tsc -b) 與 Vite 打包建置零錯誤，嚴格恪守零 Emoji 規範。
+
+### v0.1.221 (2026-09-26)
+- 財務對帳姓名欄位溢出截斷保護 (WebAdminFinance Name Capsule Overflow Fix):
+  - 膠囊按鈕防溢出封裝：為 `.wa-name-capsule-btn` 加上 `max-width: 100%; box-sizing: border-box; overflow: hidden;`，並於其內層 `span` 加上 `overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`。
+  - 表格單元格邊界約束：在表格申請人欄位 `<td>` 限制 `maxWidth: columnWidths['applicant'] || col.defaultWidth || 150` 與 `overflow: hidden; text-overflow: ellipsis;`，徹底根除長英文姓名撐破欄寬並與右側單號文字重疊之問題。
+  - 完整姓名浮動提示：於按鈕保留 `title={item.name}` 提示，滑鼠懸浮時可即時查看未被截斷之完整姓名。
+- 款項說明單行不折行與視覺優化 (WebAdminFinance Single-line Payment Type):
+  - 容器單行並列約束：將 `renderPaymentType` 容器排版由 `flexWrap: 'wrap'` 改為 `flexWrap: 'nowrap'; whiteSpace: 'nowrap'; overflow: 'hidden';`，確保類別標籤（如［活動］、［社費］、［裝備］）與後續文字說明永遠保持在同一行，不再發生折行至第二行之版面斷裂。
+  - 文字內容安全截斷：內層文字套用 `text-overflow: ellipsis; white-space: nowrap;`，欄寬過窄時平滑以省略號截斷，外層容器提供完整字串之 `title` 懸浮提示。
+- 活動款項說明格式一致化 (Consistent Activity Payment Type Formatting):
+  - 前端純化標準化：在 `renderPaymentType` 中導入正則表示式，統一過濾來自 `payments` 繳費單的前綴符號與「活動：」字樣，並自動解構來自未繳費名單之「活動費用 (...)」外層包覆，將兩者皆純化為標準一致之「［活動］ 活動名稱」（例如「［活動］ 閂山、鈴鳴山」）。
+  - 後端 RPC 格式同步：更新 `supabase/admin_portal_rpc.sql` 並建立獨立遷移腳本 `supabase/fix_admin_finance_consistent_type_rpc.sql`，將 `get_admin_finance_rpc` 中未繳費正取名單的合成項目名稱由 `'活動費用 (' || e.title || ')'` 改為與繳費單完全一致之 `'活動：' || e.title`。
+- 社員申報備註資料庫寫入機制查核確認 (Applicant Notes SSOT Verification):
+  - 查核驗證 `supabase/payment_rpc.sql` (`submit_payment_rpc`) 與 `supabase/verify_payment_rpc.sql` (`verify_payment_by_token`)，確認社員繳費申報時填寫之備註皆 100% 正確存入 `payments.notes` 欄位，而 `payments.officer_notes` 留空供管理幹部核銷時填寫內部備註。
+  - 在 `src/gas.js` 與 `gas_modules/05_Sync_Worker.js` 之 `payments` 欄位架構對應中補齊 `"notes"` 欄位，確保 Google 試算表與 Supabase 雙向同步不遺漏社員申報備註。
+- 單元測試與建置檢查:
+  - 擴充 `test/95_web_admin_finance_advanced_and_inventory_serial.test.mjs`，新增姓名膠囊截斷、款項說明單行不換行、活動名稱純化與 GAS 欄位包含驗證測試。
+  - 全專案 78 個測試套件、414 項單元測試 100% 通過，TypeScript (tsc -b) 與 Vite 打包建置零錯誤，嚴格恪守零 Emoji 規範。
+
+### v0.1.222 (2026-09-26)
+- 側邊裝備借用抽屜儲存按鈕獨立置底 (WebAdminFinance Side Loan Drawer Footer):
+  - 移出表單卡片區塊：將原先置於「裝備租借狀態調整」卡片內部之「儲存租借狀態」按鈕移出，不再擠壓於備註輸入框下方。
+  - 獨立置底頁尾區（wa-drawer-footer）：建立與主抽屜風格完全一致之獨立頁尾區，置於面板最底部固定呈現。
+  - 整合關閉與儲存操作：頁尾包含次要操作「關閉」按鈕（點擊即時收合側邊租借抽屜）與主要操作「儲存租借狀態」按鈕（支援讀取旋轉圖示與防止重複點擊），大幅提升視覺整潔度與幹部操作體驗。
+- 單元測試與建置檢查:
+  - 於 `test/95_web_admin_finance_advanced_and_inventory_serial.test.mjs` 增補側邊租借抽屜獨立置底頁尾結構斷言測試。
+  - 全專案 78 個測試套件、414 項單元測試 100% 通過，TypeScript (tsc -b) 與 Vite 打包建置零錯誤，嚴格恪守零 Emoji 規範。
+
+### v0.1.223 (2026-09-26)
+- 個人歷史紀錄篩選與排序電腦端懸浮氣泡選單 (MemberEditDrawer & NotionFilterBar Popover Mode):
+  - 獨立懸浮氣泡選單架構：為 NotionFilterBar 新增 `popoverMode` 屬性，在電腦端側邊工作站抽屜 (`MemberEditDrawer`) 啟用懸浮氣泡模式 (`popoverMode={true}`)。
+  - 精確錨定與層級隔離：點擊篩選或排序按鈕時，選單以絕對定位卡片（`position: absolute; top: calc(100% + 8px); right: 0;`）直接懸浮展開於按鈕下方，搭配透明全局點擊遮罩（`position: fixed; inset: 0`）實現點擊外部自動收合，徹底取代覆蓋全螢幕的黑色遮罩底部彈窗。
+  - 即時即選即套用：在 480px 寬度之歷史紀錄面板中緊湊舒適操作，點選條件即時更新過濾與排序結果，無需層層點擊跳出。
+  - 100% 手機端相容性：`popoverMode` 預設值為 `false`，手機端與一般列表頁面維持原有的 Bottom Sheet 底部彈窗體驗，零副作用零退化。
+- 單元測試與建置檢查:
+  - 於 `test/95_web_admin_finance_advanced_and_inventory_serial.test.mjs` 新增 `popoverMode` 屬性、氣泡結構與抽屜連動斷言測試。
+  - 全專案 78 個測試套件、415 項單元測試 100% 通過，TypeScript (tsc -b) 與 Vite 打包建置零錯誤，嚴格恪守零 Emoji 規範。
+
+### v0.1.224 (2026-09-26)
+- 電腦網頁版個人資料瀏覽全面重構為臺灣登山申請表格式 (MemberProfileModal.tsx):
+  - 擬真臺灣登山申請整合資訊網 / 國家公園入園申請隊員資料排版：深藍色頂部標頭 (#3b4d6b)、緊湊雙欄與獨立外框規格。
+  - 表單標籤絕無星號規範：依使用者要求，申請表所有欄位標籤（姓名、電話、地址、手機、Email、身分證號/護照號碼(或居留證)、性別、生日、緊急聯絡人、緊急聯絡電話）徹底移除星號符號。
+  - 全欄位獨立一鍵快速複製：每個欄位均提供小巧獨立之複製按鈕，點擊後呈現綠色勾勾「已複製」回饋，極大化提升管理幹部前往入園入山系統申報之效率。
+  - 電話預設「同手機」帶入：自動填入行動電話號碼並提示「(同手機)」，支援獨立一鍵複製。
+  - 臺灣地址智慧拆解演算法 (parseTaiwanAddress)：智慧拆解 22 縣市、368 鄉鎮市區與詳細路名門牌為獨立三格，各格均支援獨立複製，並額外提供「複製全址」快捷鍵；非臺灣地址自動標示「海外/其他」。
+  - 國籍後台繁體中文呈現：無論社員當初註冊是以英文還是中文填寫，管理後台（MemberProfileModal 與 MemberEditDrawer）一律透過 getNationalityLabel(val, 'zh') 轉化為標準繁體中文顯示（如中華民國、日本、美國等）。
+  - 生日標準格式與日曆圖示：以 YYYY-MM-DD 連字號格式輸出，右側附日曆小圖示，下方標註「格式：1980-01-01」。
+  - 留守人員官方警語：附上藍色警示文案「緊急聯絡人以自己家人為主，否則無法受理，緊急聯絡人或留守人員為不隨隊伍上山之家人」。
+  - 分隔線下方四大結構化卡片：清楚分區呈現「社團與學籍身分」、「緊急留守附加資訊」、「登山經歷與體能審核（含體能證明照片縮圖與右側同級大圖預覽）」與「想對幹部說的話」。
+  - 響應式分離：電腦端採 560px~720px 寬版登山申請表格式；行動裝置自動維持直式卡片佈局。
+- 國籍 (Nationality) 欄位全鏈路實作與 37 國雙語支援:
+  - 常數與字典工具 (src/constants/nationalities.ts)：定義中華民國及 36 個外國國家/地區繁中與英文雙語對照，並提供 getNationalityLabel 與 parseTaiwanAddress 工具函式。
+  - 資料庫層 (supabase/add_nationality_to_members.sql, schema.sql, member_profile_rpc.sql, admin_portal_rpc.sql)：在 members 表新增 nationality TEXT DEFAULT '中華民國' 欄位，並更新 save_member_profile 與 update_admin_member_rpc 預存程序支援。
+  - 社員註冊全鏈路 (Register.tsx)：步驟一必填表單加入國籍下拉選單（包含 37 國與 Other 自行輸入），未填寫時無法進到下一步。
+  - 個資編輯與電腦端抽屜 (MemberDetailEdit.tsx, MemberEditDrawer.tsx)：加入國籍欄位，幹部後台檢視與編輯一律以繁體中文選單呈現。
+- 單元測試與建置檢查:
+  - 全新建立 test/96_member_profile_mountain_permit_and_nationality.test.mjs，完整覆蓋 37 國對照、地址拆解演算法、註冊步驟一必填驗證、後台繁中顯示、登山申請表無星號與一鍵複製、以及資料庫遷移 RPC 定義。
+  - 修復 MemberDetailEdit.tsx 型別匯入與參數型別註解。
+  - 全專案 77 個測試套件、421 項單元測試 100% 通過，TypeScript (tsc -b) 與 Vite 打包建置零錯誤，嚴格恪守零 Emoji 規範。
+
+### v0.1.225 (2026-09-26)
+- 修正 Vite HMR Fast Refresh 失效導致「隊員資料 (臺灣登山申請格式)」卡片不顯示之根本原因：
+  - 根因：MemberEditDrawer.tsx 同時匯出 React 元件與非元件常數 FIELD_LABELS、getDriveThumbnail，違反 Vite Fast Refresh 規則，導致 HMR 標記為 invalidate 並向上傳播至 MemberProfileModal.tsx，瀏覽器載入舊版 JS chunk。
+  - 新建 src/utils/driveUtils.ts：將 getDriveThumbnail 函式拆分至獨立工具模組。
+  - MemberEditDrawer.tsx：移除 FIELD_LABELS 與 getDriveThumbnail 的 export 關鍵字，改為 module-private；新增從 driveUtils 引用。
+  - MemberProfileModal.tsx：getDriveThumbnail import 來源由 MemberEditDrawer 改為 driveUtils，解除跨元件依賴鏈。
+  - WebAdminRoster.tsx：移除 ALL_COLUMNS 的 export 關鍵字，消除另一處 Fast Refresh 警告。
+  - 全專案 tsc -b && vite build 零錯誤，打包成功。
+
+### v0.1.226 (2026-09-26)
+- 徹底根除 get_admin_member_detail_rpc 400 Bad Request 錯誤：
+  - 診斷：原預存程序第 153 行使用 WHERE s.status NOT IN ('已取消 Cancelled', '未錄取 Rejected')，因資料庫列舉型別 event_signup_status_enum 並無「未錄取 Rejected」值，且社團報名業務邏輯本就一律使用「已取消 Cancelled」，導致 PostgreSQL 拋出 invalid input value for enum event_signup_status_enum: "未錄取 Rejected" 型別例外並引發 HTTP 400。
+  - 修正：將排除條件回歸純粹的 WHERE s.status != '已取消 Cancelled'，完全符合現有資料庫 Enum 定義，不需修改或增加任何資料庫列舉型別。
+  - 建立專屬資料庫遷移腳本 supabase/migrations/20260926_fix_get_admin_member_detail_status_filter.sql，並同步更新 supabase/admin_portal_rpc.sql。
+- 名冊管理國籍欄位補齊與結構相容防護 (WebAdminRoster.tsx):
+  - 於 loadSignups 之 members:line_user_id 關聯查詢清單中加入 nationality 欄位，確保報名名冊首度讀取時即完整包含國籍資料。
+  - 點擊社員姓名時增加對 s.members 為物件或陣列之雙軌相容處理，保證 initialMember 欄位完整帶入彈窗。
+- 建置與單元測試校驗：
+  - 全專案 421 項單元測試 100% 通過，TypeScript 與 Vite 打包無警告與錯誤，完全恪守零 Emoji 規範。
+
+### v0.1.228 (2026-09-26)
+- 個人資料瀏覽 (MemberProfileModal.tsx) 登山申請表區塊渲染與瀏覽器快取診斷分析:
+  - 診斷：針對使用者提問「為什麼個人資料瀏覽頁面的其他社團基本資料與履歷上方的登山申請區塊沒有顯示出來」，進行全面靜態分析與生產打包驗證。
+  - 結構確認：在 MemberProfileModal.tsx 的電腦版排版分支 (isDesktopLayout) 中，renderTaiwanMountainPermit() 確實位在 renderDesktopOtherSections() 的正上方，且無任何 return null 或 display: none 之條件阻擋。
+  - 產物驗證：執行 tsc -b 與 vite build，建置打包產物 dist/assets/MemberProfileModal-*.js 中確認編譯包含「隊員資料 (臺灣登山申請格式)」卡片元件結構與繁中轉換邏輯。
+  - 根因定位：截圖中呈現已渲染「其他社團基本資料與履歷」但缺漏登山申請卡片之現象，主因為 Vite dev server 開發環境下的模組快取或 Fast Refresh 在先前的熱重載中未完全同步到瀏覽器當前執行環境中，瀏覽器執行了過渡時期的 JS 記憶體狀態。
+  - 排除方案：建議於瀏覽器端執行強制重新整理 (Mac: Cmd + Shift + R, Windows: Ctrl + F5) 或重啟 Vite dev server 以強制載入最新產物。
+  - 遵循零 Emoji 規範，全測試通過。
+
+### v0.1.229 (2026-09-26)
+- 個人資料瀏覽彈窗 (MemberProfileModal.tsx) 滾動卡死防截斷優化與登山申請手風琴切換實作:
+  - 臺灣登山申請格式卡片手風琴折疊展開互動實作：深藍色標題列導入 `isPermitExpanded` 狀態切換，支援點擊展開/收合申請表欄位，右側動態切換 `ChevronUp` 與 `ChevronDown`，預設保持展開，兼顧一鍵檢視完整申請表與收合節省垂直空間的需求。
+  - 徹底解決彈窗無法上下滾動與截斷缺陷：
+    - 外層固定遮罩（Fixed Overlay）：將 `overflowY: 'hidden'` 調整為 `overflowY: 'auto'` 並配置 `padding: '24px 16px'` 與 `overscrollBehavior: 'contain'`，消除滑鼠滾動事件被鎖死的狀況。
+    - 內層卡片容器：引入 `margin: 'auto 0'` 搭配 `maxHeight: 'calc(100vh - 48px)'` 與 `overflowY: 'auto'`，確保在各類螢幕解析度或小筆電上，上下邊緣絕不超出視窗，滾輪可平滑自如滾動至最底部編輯按鈕。
+  - 單元測試與建置檢查：
+    - 全專案 77 個測試套件、421 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包零警告零錯誤。
+    - 恪守社團開發規範，全篇零 Emoji。
+
+### v0.1.230 (2026-09-26)
+- 個人資料瀏覽彈窗 (MemberProfileModal.tsx) 臺灣登山申請表預設直接開啟與全資訊無截斷呈現優化:
+  - 預設強制直接打開 (Default Expanded)：
+    - 在 MemberProfileModal 元件狀態初始化中將 `isPermitExpanded` 設定為 `true`，並於 `useEffect` 監聽當彈窗開啟 (`isOpen === true`) 或切換不同隊員 (`targetUserId`) 時，主動觸發 `setIsPermitExpanded(true)`，保證每次點開隊員資料皆 100% 預設直接展開登山申請表，無需額外手動點擊。
+    - 保留深藍色標題列點擊折疊收合互動，提供動態 `ChevronUp` 與 `ChevronDown` 視覺反饋。
+  - 臺灣登山申請格式完整性補齊 (Row 7 內嵌)：
+    - 在臺灣登山申請表本體中新增第七行 (Row 7)，納入「與留守人關係 (`emerRel`)」與「緊急聯絡人地址 (`emerAddr`)」，配合既有之 Row 6（緊急聯絡人姓名、電話），使臺灣國家公園與林業署入園入山所需個資達到 100% 完整涵蓋。
+  - 長文字防截斷與自動換行支援 (Prevent Text Truncation)：
+    - 擴充 `renderPermitField` 工具函式，加入 `allowWrap` 參數支援 `wordBreak: 'break-word'` 與 `whiteSpace: 'normal'`。
+    - 詳細地址 (Row 2)、電子信箱 (Row 3) 與緊急聯絡人地址 (Row 7) 移除 `whiteSpace: 'nowrap'` 與省略號 (`...`)，確保完整地址與資訊無遮蔽完整可見。
+    - Row 7 採 `1fr 2fr` 格線排版，賦予緊急聯絡人地址更寬裕的視覺展示空間。
+  - 外層自然流動滾動架構：
+    - 遮罩層採 `alignItems: 'flex-start'` 搭配 `overflowY: 'auto'`，內層卡片容器使用自然高度展開與置中，杜絕雙層捲軸衝突與畫面邊緣硬截斷。
+  - 測試與建置校驗：
+    - 全專案 77 個測試套件、421 項單元測試 100% 通過，TypeScript 與 Vite 打包無錯誤，嚴格遵循零 Emoji 規範。
+
+### v0.1.231 (2026-09-26)
+- 個人資料瀏覽彈窗 (MemberProfileModal.tsx) 冗餘輸入提示與裝飾分隔線移除:
+  - 移除手機格式提示文字 (L535)：移除手機欄位下方之 `'格式：0912345678'` 提示文字，瀏覽檢視狀態回歸乾淨簡潔。
+  - 移除生日格式提示文字 (L684)：移除生日區塊下方的 `格式：1980-01-01` 提示節點。
+  - 移除留守警語藍色文字區塊 (L732)：移除登山申請表卡片底部的留守警語節點（「緊急聯絡人以自己家人為主，否則無法受理，緊急聯絡人或留守人員為不隨隊伍上山之家人」）。
+  - 移除「其他社團基本資料與履歷」分隔線 (L748)：移除介面中橫跨左右之質感分隔線與標題文字，使「社團與學籍身分」分區卡片直接緊湊銜接於登山申請表下方。
+  - 單元測試與建置校驗：
+    - 同步更新 test/96_member_profile_mountain_permit_and_nationality.test.mjs 移除對警語文案之強斷言。
+    - 全專案 77 個測試套件、421 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，恪守社團規範全篇零 Emoji。

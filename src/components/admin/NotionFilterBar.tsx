@@ -29,6 +29,7 @@ interface NotionFilterBarProps {
   addTooltip?: string;
   prefixElement?: React.ReactNode;
   extraBeforeAdd?: React.ReactNode;
+  popoverMode?: boolean;
 }
 
 export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
@@ -45,7 +46,8 @@ export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
   onAdd,
   addTooltip = '新增',
   prefixElement,
-  extraBeforeAdd
+  extraBeforeAdd,
+  popoverMode = false
 }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
@@ -114,73 +116,350 @@ export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
           )}
         </div>
 
-        {/* Notion 篩選圖示按鈕 (平常完全收起) */}
+        {/* Notion 篩選圖示按鈕 */}
         {filters.length > 0 && (
-          <button
-            onClick={() => setIsFilterOpen(true)}
-            title="篩選條件"
-            style={{
-              position: 'relative',
-              width: '38px',
-              height: '38px',
-              borderRadius: '10px',
-              border: activeFiltersCount > 0 ? '1px solid #10b981' : '1px solid #e2e8f0',
-              backgroundColor: activeFiltersCount > 0 ? '#ecfdf5' : '#ffffff',
-              color: activeFiltersCount > 0 ? '#059669' : '#64748b',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <Filter size={17} />
-            {activeFiltersCount > 0 && (
-              <span style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                backgroundColor: '#10b981',
-                color: '#ffffff',
-                fontSize: '10px',
-                fontWeight: 'bold',
-                width: '16px',
-                height: '16px',
-                borderRadius: '50%',
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                setIsFilterOpen(!isFilterOpen);
+                if (isSortOpen) setIsSortOpen(false);
+              }}
+              title="篩選條件"
+              style={{
+                position: 'relative',
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                border: activeFiltersCount > 0 ? '1px solid #10b981' : '1px solid #e2e8f0',
+                backgroundColor: activeFiltersCount > 0 ? '#ecfdf5' : '#ffffff',
+                color: activeFiltersCount > 0 ? '#059669' : '#64748b',
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: '2px solid #ffffff'
-              }}>
-                {activeFiltersCount}
-              </span>
+                flexShrink: 0,
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Filter size={17} />
+              {activeFiltersCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  backgroundColor: '#10b981',
+                  color: '#ffffff',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '2px solid #ffffff'
+                }}>
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+
+            {/* 電腦端懸浮氣泡選單 (Popover Dropdown) */}
+            {popoverMode && isFilterOpen && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 1040 }}
+                  onClick={() => setIsFilterOpen(false)}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    width: '320px',
+                    maxHeight: '440px',
+                    overflowY: 'auto',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '14px',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)',
+                    padding: '16px',
+                    boxSizing: 'border-box',
+                    zIndex: 1050,
+                    textAlign: 'left'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '14px',
+                    borderBottom: '1px solid #f1f5f9',
+                    paddingBottom: '10px'
+                  }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>篩選條件</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {activeFiltersCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => filters.forEach(f => f.onChange('all'))}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#64748b',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            padding: '2px 6px'
+                          }}
+                        >
+                          重設全部
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setIsFilterOpen(false)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#64748b',
+                          cursor: 'pointer',
+                          padding: '2px',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {filters.map((group) => (
+                      <div key={group.key}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                          {group.label}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {group.options.map((opt) => {
+                            const isSelected = group.selected === opt.value;
+                            return (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => group.onChange(opt.value)}
+                                style={{
+                                  padding: '5px 10px',
+                                  borderRadius: '6px',
+                                  fontSize: '12px',
+                                  border: isSelected ? '1px solid #10b981' : '1px solid #e2e8f0',
+                                  backgroundColor: isSelected ? '#ecfdf5' : '#f8fafc',
+                                  color: isSelected ? '#059669' : '#334155',
+                                  fontWeight: isSelected ? 600 : 400,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                {isSelected && <Check size={12} />}
+                                <span>{opt.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsFilterOpen(false)}
+                    style={{
+                      width: '100%',
+                      marginTop: '16px',
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: '#059669',
+                      color: '#ffffff',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    完成
+                  </button>
+                </div>
+              </>
             )}
-          </button>
+          </div>
         )}
 
-        {/* Notion 排序圖示按鈕 (平常完全收起) */}
+        {/* Notion 排序圖示按鈕 */}
         {sortOptions.length > 0 && onSortChange && (
-          <button
-            onClick={() => setIsSortOpen(true)}
-            title="排序依據"
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0',
-              backgroundColor: '#ffffff',
-              color: '#64748b',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <ArrowUpDown size={17} />
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                setIsSortOpen(!isSortOpen);
+                if (isFilterOpen) setIsFilterOpen(false);
+              }}
+              title="排序依據"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0',
+                backgroundColor: '#ffffff',
+                color: '#64748b',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <ArrowUpDown size={17} />
+            </button>
+
+            {/* 電腦端懸浮氣泡選單 (Popover Dropdown) */}
+            {popoverMode && isSortOpen && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 1040 }}
+                  onClick={() => setIsSortOpen(false)}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    width: '260px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '14px',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)',
+                    padding: '16px',
+                    boxSizing: 'border-box',
+                    zIndex: 1050,
+                    textAlign: 'left'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '12px',
+                    borderBottom: '1px solid #f1f5f9',
+                    paddingBottom: '8px'
+                  }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>排序設定</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsSortOpen(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        padding: '2px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>順序</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => onSortChange(sortBy, 'desc')}
+                        style={{
+                          padding: '6px',
+                          borderRadius: '6px',
+                          border: sortOrder === 'desc' ? '1px solid #10b981' : '1px solid #e2e8f0',
+                          backgroundColor: sortOrder === 'desc' ? '#ecfdf5' : '#f8fafc',
+                          color: sortOrder === 'desc' ? '#059669' : '#475569',
+                          fontWeight: sortOrder === 'desc' ? 600 : 400,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <ArrowDown size={12} />
+                        <span>降冪 (新至舊)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSortChange(sortBy, 'asc')}
+                        style={{
+                          padding: '6px',
+                          borderRadius: '6px',
+                          border: sortOrder === 'asc' ? '1px solid #10b981' : '1px solid #e2e8f0',
+                          backgroundColor: sortOrder === 'asc' ? '#ecfdf5' : '#f8fafc',
+                          color: sortOrder === 'asc' ? '#059669' : '#475569',
+                          fontWeight: sortOrder === 'asc' ? 600 : 400,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <ArrowUp size={12} />
+                        <span>升冪 (舊至新)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>排序依據欄位</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {sortOptions.map((opt) => {
+                        const isSelected = sortBy === opt.key;
+                        return (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => {
+                              onSortChange(opt.key, sortOrder);
+                              setIsSortOpen(false);
+                            }}
+                            style={{
+                              padding: '8px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              border: isSelected ? '1px solid #10b981' : '1px solid #e2e8f0',
+                              backgroundColor: isSelected ? '#ecfdf5' : '#ffffff',
+                              color: isSelected ? '#059669' : '#1e293b',
+                              fontWeight: isSelected ? 600 : 400,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              textAlign: 'left'
+                            }}
+                          >
+                            <span>{opt.label}</span>
+                            {isSelected && <Check size={14} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* 重新整理圖示按鈕 */}
@@ -243,7 +522,7 @@ export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
       </div>
 
       {/* 篩選面板 (Bottom Sheet) */}
-      {isFilterOpen && (
+      {isFilterOpen && !popoverMode && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -371,7 +650,7 @@ export const NotionFilterBar: React.FC<NotionFilterBarProps> = ({
       )}
 
       {/* 排序面板 (Bottom Sheet) */}
-      {isSortOpen && sortOptions.length > 0 && onSortChange && (
+      {isSortOpen && !popoverMode && sortOptions.length > 0 && onSortChange && (
         <div style={{
           position: 'fixed',
           top: 0,

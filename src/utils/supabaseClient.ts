@@ -325,6 +325,7 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
     const profile: ProfileData = {
       name: data.name || '',
       gender: data.gender || '',
+      nationality: data.nationality || '中華民國',
       department: data.department || '',
       identityStatus: data.identity_status || '臺科大在校學生',
       studentId: data.student_id || '',
@@ -381,6 +382,7 @@ export const saveMemberProfileToSupabase = async (
     const payload = {
       name: formData.name.trim(),
       gender: formData.gender,
+      nationality: (formData.nationality || '中華民國').trim(),
       line_id: formData.realLineId.trim(),
       email: formData.email.trim(),
       phone: formData.phone.trim(),
@@ -1629,7 +1631,7 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
               id: s.id,
               line_user_id: s.line_user_id,
               name: s.name || '活動參加者',
-              type: `活動費用 (${s.events?.title || s.event_id})`,
+              type: `活動：${s.events?.title || s.event_id}`,
               amount: fee,
               status: s.payment_status === '已繳費 Paid'
                 ? '已核銷 Confirmed'
@@ -1978,7 +1980,7 @@ export const fetchAllInventoryFromSupabase = async (): Promise<AdminInventoryIte
  * 幹部後台：自動計算下一筆裝備流水號 (例如 EQ_001, EQ_002...)
  */
 export const getNextEquipmentIdFromSupabase = async (): Promise<string> => {
-  if (!supabase) return 'EQ_001';
+  if (!supabase) return 'G001';
 
   try {
     const { data, error } = await supabase
@@ -1986,22 +1988,32 @@ export const getNextEquipmentIdFromSupabase = async (): Promise<string> => {
       .select('id');
 
     if (error || !data || data.length === 0) {
-      return 'EQ_001';
+      return 'G001';
     }
 
     let maxNum = 0;
     data.forEach((row: any) => {
-      const match = String(row.id).match(/^EQ_(\d+)$/i);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
+      const gMatch = String(row.id).match(/^G(\d+)$/i);
+      if (gMatch && gMatch[1]) {
+        const num = parseInt(gMatch[1], 10);
         if (num > maxNum) maxNum = num;
       }
     });
 
+    if (maxNum === 0) {
+      data.forEach((row: any) => {
+        const eqMatch = String(row.id).match(/^EQ_(\d+)$/i);
+        if (eqMatch && eqMatch[1]) {
+          const num = parseInt(eqMatch[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      });
+    }
+
     const nextNum = maxNum + 1;
-    return `EQ_${String(nextNum).padStart(3, '0')}`;
+    return `G${String(nextNum).padStart(3, '0')}`;
   } catch {
-    return 'EQ_001';
+    return 'G001';
   }
 };
 

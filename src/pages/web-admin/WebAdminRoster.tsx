@@ -95,7 +95,7 @@ const STATUS_OPTIONS = [
   { value: '已取消 Cancelled', label: '已取消 Cancelled' },
 ];
 
-export function normalizeStatus(raw: string | undefined): string {
+function normalizeStatus(raw: string | undefined): string {
   if (!raw) return '審核中 Checking';
   const str = String(raw).trim();
   if (str.includes('已繳費')) return '正取（已繳費）Confirmed (Paid)';
@@ -107,7 +107,8 @@ export function normalizeStatus(raw: string | undefined): string {
   return str;
 }
 
-export const ALL_COLUMNS: ColumnDef[] = [
+const ALL_COLUMNS: ColumnDef[] = [
+
   {
     key: 'name',
     label: '姓名',
@@ -571,6 +572,7 @@ export const WebAdminRoster: React.FC = () => {
           members:line_user_id (
             name,
             gender,
+            nationality,
             line_id,
             email,
             department,
@@ -1835,10 +1837,11 @@ export const WebAdminRoster: React.FC = () => {
                               type="button"
                               className="wa-name-capsule-btn"
                               onClick={() => {
+                                const mData: any = Array.isArray(s.members) ? s.members[0] : s.members;
                                 setProfileModalUserId(s.line_user_id || null);
                                 setProfileModalMember(
-                                  s.members
-                                    ? { ...s.members, line_user_id: s.line_user_id, name: s.members.name || s.name }
+                                  mData
+                                    ? { ...mData, line_user_id: s.line_user_id, name: mData.name || s.name }
                                     : { line_user_id: s.line_user_id, name: s.name }
                                 );
                               }}

@@ -87,6 +87,52 @@ export function useAdvancedTable<T>({
   const [customRowOrder, setCustomRowOrder] = useState<string[]>([]);
   const [draggedRowId, setDraggedRowId] = useState<string | null>(null);
 
+  // 列高狀態
+  const [rowHeights, setRowHeights] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem(`${storageKey}_row_heights`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
+    return {};
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${storageKey}_row_heights`, JSON.stringify(rowHeights));
+    } catch {}
+  }, [storageKey, rowHeights]);
+
+  const rowResizingRef = useRef<{ rowId: string; startY: number; startHeight: number } | null>(null);
+
+  const startRowResizing = useCallback(
+    (rowId: string, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const currentHeight = rowHeights[rowId] || 38;
+      rowResizingRef.current = { rowId, startY: e.clientY, startHeight: currentHeight };
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!rowResizingRef.current) return;
+        const deltaY = moveEvent.clientY - rowResizingRef.current.startY;
+        const newHeight = Math.max(38, rowResizingRef.current.startHeight + deltaY);
+        setRowHeights((prev) => ({ ...prev, [rowResizingRef.current!.rowId]: newHeight }));
+      };
+
+      const handleMouseUp = () => {
+        rowResizingRef.current = null;
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    },
+    [rowHeights]
+  );
+
   // 隱藏面板控制
   const [showHiddenMenu, setShowHiddenMenu] = useState(false);
   const hiddenMenuRef = useRef<HTMLDivElement>(null);
@@ -185,6 +231,7 @@ export function useAdvancedTable<T>({
     setPinnedRowIds(new Set());
     setHiddenRowIds(new Set());
     setCustomRowOrder([]);
+    setRowHeights({});
   }, [columns]);
 
   // 欄位調寬拖曳
@@ -347,5 +394,8 @@ export function useAdvancedTable<T>({
     stickyLeftPositions,
     lastPinnedKey,
     sortedItems,
+    rowHeights,
+    setRowHeights,
+    startRowResizing,
   };
 }

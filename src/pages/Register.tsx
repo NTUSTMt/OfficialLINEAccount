@@ -6,11 +6,13 @@ import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
 import { fetchMemberProfileFromSupabase, saveMemberProfileToSupabase } from '../utils/supabaseClient';
+import { NATIONALITY_LIST } from '../constants/nationalities';
 import '../App.css';
 
 interface ProfileData {
   name: string;
   gender: string;
+  nationality?: string;
   birthday: string;
   idNumber: string;
   department: string;
@@ -45,9 +47,11 @@ function Register({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNewUser, setIsNewUser] = useState(true);
+  const [isCustomNationality, setIsCustomNationality] = useState(false);
   const [formData, setFormData] = useState<ProfileData>({
     name: '',
     gender: '',
+    nationality: '中華民國',
     birthday: '',
     idNumber: '',
     department: '',
@@ -121,6 +125,10 @@ function Register({ userId }: { userId: string }) {
             }));
             setOriginalFormData(loadedData);
             setInitialOfficerIntent(sbProfile.intendOfficer ? String(sbProfile.intendOfficer) : '');
+            if (sbProfile.nationality) {
+              const isStandard = NATIONALITY_LIST.some((item) => item.en === sbProfile.nationality || item.zh === sbProfile.nationality);
+              setIsCustomNationality(!isStandard);
+            }
             setPrivacyAgreed(true);
           } else {
             // Supabase 尚未有紀錄或連線失敗，向 GAS 查詢現有社員資料 fallback
@@ -367,9 +375,10 @@ function Register({ userId }: { userId: string }) {
   const isStepValid = useMemo(() => {
     switch (step) {
       case 1:
-        // 姓名 (name)、身分狀態 (identityStatus)、系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId)、偏好語言 (preferredLanguage) 均為必填
+        // 姓名 (name)、國籍 (nationality)、身分狀態 (identityStatus)、系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId)、偏好語言 (preferredLanguage) 均為必填
         return (
           formData.name.trim() !== '' &&
+          Boolean(formData.nationality && formData.nationality.trim() !== '') &&
           formData.identityStatus.trim() !== '' &&
           formData.department.trim() !== '' &&
           formData.studentId.trim() !== '' &&
@@ -405,6 +414,7 @@ function Register({ userId }: { userId: string }) {
 
     const isStep1Complete = Boolean(
       formData.name.trim() !== '' &&
+      Boolean(formData.nationality && formData.nationality.trim() !== '') &&
       formData.identityStatus.trim() !== '' &&
       formData.department.trim() !== '' &&
       formData.studentId.trim() !== '' &&
@@ -776,6 +786,42 @@ function Register({ userId }: { userId: string }) {
                 <option value="zh">{t('register.step1.preferredLanguageZh')}</option>
                 <option value="en">{t('register.step1.preferredLanguageEn')}</option>
               </select>
+            </div>
+
+            <div className="form-group">
+              <label className="required">國籍 (Nationality)</label>
+              <select
+                name="nationality"
+                value={isCustomNationality ? 'Other' : (formData.nationality || '中華民國')}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'Other') {
+                    setIsCustomNationality(true);
+                    setFormData((prev) => ({ ...prev, nationality: '' }));
+                  } else {
+                    setIsCustomNationality(false);
+                    setFormData((prev) => ({ ...prev, nationality: val }));
+                  }
+                }}
+                required
+              >
+                {NATIONALITY_LIST.map((item) => (
+                  <option key={item.zh} value={item.en}>
+                    {item.en}
+                  </option>
+                ))}
+                <option value="Other">Other (其他國家自行輸入)</option>
+              </select>
+              {isCustomNationality && (
+                <input
+                  type="text"
+                  placeholder="請輸入國籍國家名稱 (Enter your nationality)"
+                  value={formData.nationality || ''}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))}
+                  required
+                  style={{ marginTop: '8px' }}
+                />
+              )}
             </div>
           </div>
         )}
