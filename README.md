@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.233-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.234-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.233)](#7-最新版本異動紀錄-changelog-v01233)
+- [7. 最新版本異動紀錄 (Changelog v0.1.234)](#7-最新版本異動紀錄-changelog-v01234)
 
 ---
 
@@ -1805,3 +1805,21 @@ pnpm test
     - 後端 GAS (gas.js 與 06_Helper_Services.js) 補充 upload_image_to_drive 別名相容與單一檔案格式容錯，提升系統強韌度。
   - 測試與建置檢查：
     - 全專案 77 個測試套件、421 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，恪守社團規範全篇零 Emoji。
+
+### v0.1.234 (2026-09-27)
+- 入會與個資登記頁 (Register.tsx) 體能證明上傳 UI 重構、大圖燈箱與 Google Drive 連動刪除:
+  - UI 與互動重構（對齊手繪草圖）：
+    - 體能證明上傳區域改為固定尺寸（84x84px）正方形縮圖網格，以系統淺灰與 Slate 色系打造俐落質感。
+    - 支援未達 5 張上限時顯示 2px 虛線邊框之「+」新增方塊，點擊觸發原生相簿/檔案選取；已滿 5 張時自動隱藏「+」虛線框。
+    - 歷史已上傳之雲端證明與本次新選取之本機證明合併於同一個縮圖列表統一排版。
+    - 每張縮圖右上角配置半透明深色圓形關閉按鈕，點擊時跳出二次確認對話框（「確定要刪除這張體能證明照片嗎？」），確認後立即自清單移除。
+    - 點選縮圖本體彈出滿版暗色遮罩燈箱（Lightbox Modal），提供清晰大圖預覽與獨立關閉按鈕。
+  - 機制 B：Google Drive 檔案連動刪除實作：
+    - 針對歷史已上傳的照片，於使用者確認刪除時記錄於待刪除清單中。
+    - 於最終按下「確認送出」時，前端將待刪除之 Drive 檔案 URL 陣列透過 GAS API action: delete_drive_files 發送。
+    - 後端 GAS (src/gas.js) 新增 _handleDriveDeleteHelper，解析 Drive File ID 並調用 DriveApp.getFileById(fid).setTrashed(true) 安全移入垃圾桶，避免未送出前誤刪檔案。
+  - 多國語系支援 (i18n)：
+    - 於 zh.json 與 en.json 完整同步補齊刪除二次確認 (deleteConfirm)、預覽提示 (previewProof)、新增按鈕 (addProof)、關閉燈箱 (closePreview) 與上限說明 (maxProofTip)。
+  - 測試與建置校驗：
+    - 新增 test/94_fitness_proof_upload_and_drive_delete.test.mjs 單元測試，涵蓋縮圖結構、虛線框、燈箱、機制 B 連動刪除與中英多國語系驗證。
+    - 全專案 78 個測試套件、426 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包零錯誤，全篇無 Emoji。

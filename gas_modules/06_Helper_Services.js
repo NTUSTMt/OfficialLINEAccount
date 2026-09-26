@@ -14,6 +14,11 @@ function handleLiffHelperApi(json) {
     return _handleDriveUploadHelper(json);
   }
 
+  // 1.1 Google Drive 照片刪除 Helper (移入垃圾桶，不碰試算表)
+  if (action === "delete_drive_file" || action === "delete_drive_files") {
+    return _handleDriveDeleteHelper(json);
+  }
+
   // 2. 裝備租借幹部推播 Helper (純發訊息，不碰試算表)
   if (action === "notify_officers_loan") {
     return _handleNotifyOfficersLoan(json);
@@ -125,6 +130,50 @@ function _handleDriveUploadHelper(json) {
   } catch (err) {
     console.error("Google Drive 上傳失敗:", err);
     return _errorResponse("Drive 上傳例外: " + err.toString());
+  }
+}
+
+/**
+ * Google Drive 檔案刪除 Helper (移入垃圾桶，機制 B)
+ */
+function _handleDriveDeleteHelper(json) {
+  try {
+    var fileIds = Array.isArray(json.fileIds) ? json.fileIds.slice() : [];
+    if (json.fileId) fileIds.push(json.fileId);
+    if (Array.isArray(json.urls)) {
+      for (var u = 0; u < json.urls.length; u++) {
+        var rawUrl = String(json.urls[u] || "");
+        var m = rawUrl.match(/(?:file\/d\/|id=|(?:\/|^)d\/)([a-zA-Z0-9_-]+)/);
+        if (m && m[1]) {
+          fileIds.push(m[1]);
+        }
+      }
+    }
+
+    var deletedCount = 0;
+    var seen = {};
+    for (var i = 0; i < fileIds.length; i++) {
+      var fid = String(fileIds[i]).trim();
+      if (!fid || seen[fid]) continue;
+      seen[fid] = true;
+      try {
+        var file = DriveApp.getFileById(fid);
+        if (file) {
+          file.setTrashed(true);
+          deletedCount++;
+        }
+      } catch (fErr) {
+        console.warn("無法將 Drive 檔案移入垃圾桶 (ID: " + fid + "): " + fErr.toString());
+      }
+    }
+
+    return _successResponse({
+      deletedCount: deletedCount,
+      message: "成功將 " + deletedCount + " 個 Google Drive 檔案移入垃圾桶"
+    });
+  } catch (err) {
+    console.error("Google Drive 檔案刪除例外:", err);
+    return _errorResponse("Drive 刪除例外: " + err.toString());
   }
 }
 

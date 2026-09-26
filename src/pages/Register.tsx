@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { Check, ShieldCheck, Info } from 'lucide-react';
+import { ShieldCheck, Info, Plus, X } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { getDirectImageUrl } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
@@ -77,6 +77,25 @@ function Register({ userId }: { userId: string }) {
 
   // 上傳檔案狀態
   const [strengthProofFiles, setStrengthProofFiles] = useState<UploadedFile[]>([]);
+  // 記錄待刪除的舊 Drive 檔案 (機制 B)
+  const [deletedProofUrls, setDeletedProofUrls] = useState<string[]>([]);
+  // 點選縮圖時燈箱預覽大圖
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+  // 隱藏的 input file ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 解析歷史已儲存的體能證明照片 URL 清單
+  const historicalProofUrls = useMemo(() => {
+    if (!formData.strengthProof || !formData.strengthProof.trim()) return [];
+    return formData.strengthProof
+      .split(/[\n,，;\s]+/)
+      .map((u) => u.trim())
+      .filter((u) => u.startsWith('http'))
+      .filter((u, idx, arr) => arr.indexOf(u) === idx);
+  }, [formData.strengthProof]);
+
+  // 目前所有照片總數 (歷史 + 新選取)
+  const totalProofsCount = historicalProofUrls.length + strengthProofFiles.length;
 
   // 隱私權同意書勾選
   const [privacyAgreed, setPrivacyAgreed] = useState(false);
@@ -278,12 +297,17 @@ function Register({ userId }: { userId: string }) {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // 處理多個檔案讀取並在前端自動壓縮為 JPEG Base64 (最大 1024px, 品質 0.7)
+  // 處理多個檔案讀取並在前端自動壓縮為 JPEG Base64 (最大 2048px, 品質 0.88)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const remainingLimit = 5 - strengthProofFiles.length;
+    const remainingLimit = 5 - (historicalProofUrls.length + strengthProofFiles.length);
+    if (remainingLimit <= 0) {
+      alert(t('register.step4.maxProofTip'));
+      e.target.value = '';
+      return;
+    }
     if (files.length > remainingLimit) {
       alert(t('register.alert.maxFiles', { limit: remainingLimit }));
       e.target.value = '';
@@ -369,6 +393,23 @@ function Register({ userId }: { userId: string }) {
     });
 
     e.target.value = '';
+  };
+
+  // 刪除歷史已上傳照片 (二次確認 + 加入待刪除清單機制 B)
+  const handleRemoveHistoricalProof = (urlToRemove: string) => {
+    if (!window.confirm(t('register.step4.deleteConfirm'))) return;
+    const remaining = historicalProofUrls.filter((u) => u !== urlToRemove);
+    setFormData((prev) => ({
+      ...prev,
+      strengthProof: remaining.join('\n')
+    }));
+    setDeletedProofUrls((prev) => (prev.includes(urlToRemove) ? prev : [...prev, urlToRemove]));
+  };
+
+  // 刪除新選取的待上傳照片 (二次確認)
+  const handleRemoveNewFile = (idxToRemove: number) => {
+    if (!window.confirm(t('register.step4.deleteConfirm'))) return;
+    setStrengthProofFiles((prev) => prev.filter((_, idx) => idx !== idxToRemove));
   };
 
   // 驗證各步驟欄位
@@ -465,6 +506,25 @@ function Register({ userId }: { userId: string }) {
           }
         } catch (uploadErr) {
           console.warn('[Register] 上傳體能證明照例外，繼續儲存資料:', uploadErr);
+        }
+      }
+
+      // 1.1 若有標記刪除的舊 Drive 檔案 (機制 B)，背景通知 GAS 移入垃圾桶
+      if (deletedProofUrls.length > 0) {
+        try {
+          fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(withAuthPayload({
+              action: 'delete_drive_files',
+              userId: userId || 'TEST_USER_ID',
+              urls: deletedProofUrls
+            }))
+          }).catch((delErr) => {
+            console.warn('[Register] 背景刪除 Drive 檔案失敗 (不影響儲存流程):', delErr);
+          });
+        } catch (delErr) {
+          console.warn('[Register] 呼叫 Drive 刪除例外:', delErr);
         }
       }
 
@@ -979,87 +1039,176 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             {/* 上傳體能證明 */}
-            <div className="form-group">
-              <label>{t('register.step4.uploadProofLabel')}</label>
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+                {t('register.step4.uploadProofLabel')}
+              </label>
+              <p style={{ fontSize: '12px', color: '#64748b', marginTop: '0', marginBottom: '12px', lineHeight: 1.5 }}>
+                {t('register.step4.uploadTip')}
+              </p>
+
+              {/* 隱藏的原始檔案選取器 */}
               <input
+                ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 multiple
                 onChange={handleFileChange}
-                className="file-input"
-                disabled={strengthProofFiles.length >= 5}
+                style={{ display: 'none' }}
               />
-              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                {t('register.step4.uploadTip')}
-              </p>
 
-              {/* 顯示目前選取的待上傳檔案 */}
-              {strengthProofFiles.length > 0 && (
-                <div className="selected-files-list" style={{ marginTop: '8px' }}>
-                  <p style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' }}>
-                    {t('register.step4.selectedFiles', { count: strengthProofFiles.length })}
-                  </p>
-                  {strengthProofFiles.map((file, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f3f4f6', padding: '6px 12px', borderRadius: '4px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '13px', color: '#374151', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '80%', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <Check size={14} color="#16a34a" />
-                        <span>{file.name}</span>
-                      </span>
-                      <button 
-                        type="button" 
-                        onClick={() => setStrengthProofFiles(prev => prev.filter((_, i) => i !== idx))}
-                        style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+              {/* 水平縮圖與虛線上傳方框容器 */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                  alignItems: 'center'
+                }}
+              >
+                {/* 1. 歷史已上傳照片縮圖 */}
+                {historicalProofUrls.map((url, idx) => {
+                  const directThumb = getDirectImageUrl(url, 200) || url;
+                  return (
+                    <div
+                      key={`hist-${idx}`}
+                      style={{
+                        position: 'relative',
+                        width: '84px',
+                        height: '84px',
+                        borderRadius: '10px',
+                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#f8fafc',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+                      }}
+                      onClick={() => setLightboxImageUrl(url)}
+                      title={t('register.step4.previewProof')}
+                    >
+                      <img
+                        src={directThumb}
+                        alt={`proof-hist-${idx + 1}`}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = url;
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveHistoricalProof(url);
+                        }}
+                        style={{
+                          position: 'absolute',
+                          top: '4px',
+                          right: '4px',
+                          width: '22px',
+                          height: '22px',
+                          borderRadius: '50%',
+                          backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                          border: 'none',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          padding: 0
+                        }}
+                        title={t('register.step4.remove')}
                       >
-                        {t('register.step4.remove')}
+                        <X size={14} />
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
 
-              {/* 顯示已上傳的舊檔案連結 */}
-              {formData.strengthProof && formData.strengthProof.trim() !== '' && (
-                <div className="proof-history-card">
-                  <p className="proof-history-title">{t('register.step4.uploadedFiles')}</p>
-                  <div className="proof-item-list">
-                    {formData.strengthProof
-                      .split(/[\n,，;\s]+/)
-                      .map((u) => u.trim())
-                      .filter((u) => u.startsWith('http'))
-                      .filter((u, idx, arr) => arr.indexOf(u) === idx)
-                      .slice(-5)
-                      .map((url, idx) => {
-                        const directThumb = getDirectImageUrl(url, 200);
-                        return (
-                          <a
-                            key={idx}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="proof-item-row"
-                          >
-                            <img
-                              src={directThumb || url}
-                              alt={`proof-${idx + 1}`}
-                              className="proof-thumb"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
-                            <div className="proof-info">
-                              <span className="proof-name">
-                                {t('register.step4.viewUploaded', { num: idx + 1 })}
-                              </span>
-                              <span className="proof-link-text">
-                                點擊另開原始檔案 (View full image)
-                              </span>
-                            </div>
-                          </a>
-                        );
-                      })}
+                {/* 2. 本次新選取的待上傳照片縮圖 */}
+                {strengthProofFiles.map((file, idx) => (
+                  <div
+                    key={`new-${idx}`}
+                    style={{
+                      position: 'relative',
+                      width: '84px',
+                      height: '84px',
+                      borderRadius: '10px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#f8fafc',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+                    }}
+                    onClick={() => setLightboxImageUrl(file.base64)}
+                    title={t('register.step4.previewProof')}
+                  >
+                    <img
+                      src={file.base64}
+                      alt={file.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveNewFile(idx);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '4px',
+                        width: '22px',
+                        height: '22px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                        border: 'none',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
+                      title={t('register.step4.remove')}
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
-                </div>
-              )}
+                ))}
+
+                {/* 3. 虛線「+」新增方塊 (未滿 5 張時顯示，滿 5 張自動隱藏) */}
+                {totalProofsCount < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      width: '84px',
+                      height: '84px',
+                      borderRadius: '10px',
+                      border: '2px dashed #94a3b8',
+                      backgroundColor: '#f8fafc',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: '#64748b',
+                      gap: '4px',
+                      padding: '4px',
+                      boxSizing: 'border-box',
+                      flexShrink: 0
+                    }}
+                    title={t('register.step4.addProof')}
+                  >
+                    <Plus size={24} color="#64748b" />
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>
+                      {t('register.step4.addProof')}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 隱私權同意書 */}
@@ -1228,6 +1377,67 @@ function Register({ userId }: { userId: string }) {
         <div className="submitting-overlay animate-fade-in">
           <div className="spinner"></div>
           <p>{t('register.submitting')}</p>
+        </div>
+      )}
+
+      {/* 體能證明大圖預覽燈箱 Lightbox Modal */}
+      {lightboxImageUrl && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+          onClick={() => setLightboxImageUrl(null)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              maxWidth: '92vw',
+              maxHeight: '90vh',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setLightboxImageUrl(null)}
+              style={{
+                position: 'absolute',
+                top: '-42px',
+                right: '0',
+                background: 'transparent',
+                border: 'none',
+                color: '#ffffff',
+                cursor: 'pointer',
+                padding: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              title={t('register.step4.closePreview')}
+            >
+              <X size={28} />
+            </button>
+            <img
+              src={lightboxImageUrl}
+              alt="證明照片大圖預覽"
+              style={{
+                maxWidth: '92vw',
+                maxHeight: '82vh',
+                objectFit: 'contain',
+                borderRadius: '8px',
+                boxShadow: '0 12px 36px rgba(0, 0, 0, 0.6)'
+              }}
+            />
+          </div>
         </div>
       )}
     </div>
