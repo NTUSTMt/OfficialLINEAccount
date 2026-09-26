@@ -450,47 +450,51 @@ export const WebAdminEvents: React.FC = () => {
         }
       }
 
-      const payload: Record<string, any> = {
-        title: formData.title.trim(),
-        title_en: formData.title_en.trim() || null,
+      // 使用 save_admin_event_rpc 預存程序 (SECURITY DEFINER，完全豁免 RLS 42501，自帶 sync_queue 佇列同步)
+      const eventData = {
+        eventId: editingEventId || formData.id.trim(),
+        name: formData.title.trim(),
+        nameEn: formData.title_en.trim(),
+        startDate: formData.start_date,
+        endDate: formData.end_date || formData.start_date,
+        deadline: formData.deadline ? `${formData.deadline} 23:59:59+08` : (formData.start_date ? `${formData.start_date} 23:59:59+08` : ''),
+        cost: String(formData.fee || 0),
         status: formData.status,
-        start_date: formData.start_date || null,
-        end_date: formData.end_date || formData.start_date || null,
-        deadline: formData.deadline ? `${formData.deadline} 23:59:59+08` : null,
-        fee: Number(formData.fee) || 0,
-        summary: formData.summary.trim() || null,
-        summary_en: formData.summary_en.trim() || null,
-        itinerary: formData.itinerary.trim() || null,
-        itinerary_en: formData.itinerary_en.trim() || null,
-        line_group_url: formData.line_group_url.trim() || null,
-        cover_image_url: finalCoverUrl || null,
+        shortDesc: formData.summary.trim(),
+        shortDescEn: formData.summary_en.trim(),
+        fullDesc: formData.itinerary.trim(),
+        fullDescEn: formData.itinerary_en.trim(),
+        imageUrl: finalCoverUrl || formData.cover_image_url || '',
+        lineGroupUrl: formData.line_group_url.trim(),
       };
 
+      const { data: rpcRes, error } = await client.rpc('save_admin_event_rpc', {
+        p_officer_line_user_id: session.userId,
+        p_event_data: eventData,
+      });
+
+      if (error) {
+        throw new Error(`[${editingEventId ? '更新' : '新增'}活動失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
+      }
+
+      if (rpcRes?.status === 'error') {
+        throw new Error(`[${editingEventId ? '更新' : '新增'}活動失敗]: ${rpcRes.message || '權限不足或資料格式錯誤'}`);
+      }
+
+      const savedEventId = rpcRes?.eventId || editingEventId || formData.id.trim();
+
+      await logWebAuditAction(
+        client,
+        session.userId,
+        editingEventId ? 'UPDATE_EVENT' : 'CREATE_EVENT',
+        'events',
+        savedEventId,
+        eventData
+      );
+
       if (editingEventId) {
-        // 更新現有活動
-        const { error } = await client
-          .from('events')
-          .update(payload)
-          .eq('id', editingEventId);
-
-        if (error) {
-          throw new Error(`[更新活動失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
-        }
-
-        await logWebAuditAction(client, session.userId, 'UPDATE_EVENT', 'events', editingEventId, payload);
         setSuccessMsg(`活動「${formData.title}」已成功更新！`);
       } else {
-        // 新增活動
-        payload.id = formData.id.trim();
-        const { error } = await client
-          .from('events')
-          .insert(payload);
-
-        if (error) {
-          throw new Error(`[新增活動失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
-        }
-
-        await logWebAuditAction(client, session.userId, 'CREATE_EVENT', 'events', payload.id, payload);
         setSuccessMsg(`新活動「${formData.title}」已成功建立！`);
       }
 
@@ -500,7 +504,7 @@ export const WebAdminEvents: React.FC = () => {
           const query = new URLSearchParams({
             action: 'notify_officer_event',
             userId: session.userId,
-            eventId: editingEventId || payload.id,
+            eventId: savedEventId,
             name: formData.title.trim(),
             startDate: formData.start_date || '',
             endDate: formData.end_date || formData.start_date || '',

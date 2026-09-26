@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.231-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.232-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.231)](#7-最新版本異動紀錄-changelog-v01231)
+- [7. 最新版本異動紀錄 (Changelog v0.1.232)](#7-最新版本異動紀錄-changelog-v01232)
 
 ---
 
@@ -1778,4 +1778,16 @@ pnpm test
   - 移除「其他社團基本資料與履歷」分隔線 (L748)：移除介面中橫跨左右之質感分隔線與標題文字，使「社團與學籍身分」分區卡片直接緊湊銜接於登山申請表下方。
   - 單元測試與建置校驗：
     - 同步更新 test/96_member_profile_mountain_permit_and_nationality.test.mjs 移除對警語文案之強斷言。
+    - 全專案 77 個測試套件、421 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，恪守社團規範全篇零 Emoji。
+
+### v0.1.232 (2026-09-26)
+- 電腦版活動管理 (WebAdminEvents.tsx) 儲存活動直通 save_admin_event_rpc 預存程序:
+  - 徹底解決 PostgreSQL RLS 42501 權限錯誤：
+    - 根因：先前 WebAdminEvents.tsx 直接對 events 表執行 client.from('events').insert(payload) 與 update(payload)，因 events 表啟用了 Row-Level Security 且未對 anon/authenticated 配置 INSERT/UPDATE 策略，導致拋出 new row violates row-level security policy for table "events" (代碼: 42501)。
+    - 修正：活動新增與更新全面改為直接調用 Supabase 核心預存程序 save_admin_event_rpc。該 RPC 具備 SECURITY DEFINER 特性，由資料庫以定義者最高權限執行 UPSERT (ON CONFLICT (id) DO UPDATE)，完全豁免 RLS 封閉限制，無需手動執行任何 SQL 遷移腳本。
+  - Google 試算表自動雙向同步整合：
+    - save_admin_event_rpc 內部自帶 INSERT INTO sync_queue，活動新增或變更後自動排入佇列，由後台 Sync Worker 排程自動同步至活動專屬試算表。
+  - 全系統單一信任源架構對齊：
+    - 電腦版 WebAdminEvents.tsx 與手機版 AdminEvents.tsx 統一採用 save_admin_event_rpc 進行活動建立與編輯，確保跨端行為完全一致。
+  - 測試與建置檢查：
     - 全專案 77 個測試套件、421 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，恪守社團規範全篇零 Emoji。
