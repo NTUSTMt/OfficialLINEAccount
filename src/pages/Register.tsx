@@ -53,7 +53,7 @@ function Register({ userId }: { userId: string }) {
   const [formData, setFormData] = useState<ProfileData>({
     name: '',
     gender: '',
-    nationality: '中華民國',
+    nationality: '',
     birthday: '',
     idNumber: '',
     department: '',
@@ -169,8 +169,16 @@ function Register({ userId }: { userId: string }) {
             setOriginalFormData(loadedData);
             setInitialOfficerIntent(sbProfile.intendOfficer ? String(sbProfile.intendOfficer) : '');
             if (sbProfile.nationality) {
-              const isStandard = NATIONALITY_LIST.some((item) => item.en === sbProfile.nationality || item.zh === sbProfile.nationality);
-              setIsCustomNationality(!isStandard);
+              const clean = sbProfile.nationality.trim();
+              const matchedItem = NATIONALITY_LIST.find(
+                (item) => item.zh === clean || item.en.toLowerCase() === clean.toLowerCase() || item.label === clean || item.native === clean
+              );
+              if (matchedItem) {
+                setIsCustomNationality(false);
+                setFormData((prev) => ({ ...prev, nationality: matchedItem.zh }));
+              } else {
+                setIsCustomNationality(true);
+              }
             }
             setPrivacyAgreed(true);
           } else {
@@ -197,6 +205,7 @@ function Register({ userId }: { userId: string }) {
               const loadedData: ProfileData = {
                 name: p.name ? String(p.name) : '',
                 gender: p.gender ? String(p.gender) : '',
+                nationality: p.nationality ? String(p.nationality) : '',
                 birthday: birthdayStr,
                 idNumber: p.idNumber ? String(p.idNumber) : '',
                 department: p.department ? String(p.department) : '',
@@ -909,10 +918,10 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label className="required">國籍 (Nationality)</label>
+              <label className="required">{t('register.step1.nationalityLabel', '國籍')}</label>
               <select
                 name="nationality"
-                value={isCustomNationality ? 'Other' : (formData.nationality || '中華民國')}
+                value={isCustomNationality ? 'Other' : (formData.nationality || '')}
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val === 'Other') {
@@ -925,17 +934,22 @@ function Register({ userId }: { userId: string }) {
                 }}
                 required
               >
+                <option value="" disabled>
+                  {t('register.step1.nationalityDefault', '請選擇')}
+                </option>
                 {NATIONALITY_LIST.map((item) => (
-                  <option key={item.zh} value={item.en}>
-                    {item.en}
+                  <option key={item.zh} value={item.zh}>
+                    {item.label}
                   </option>
                 ))}
-                <option value="Other">Other (其他國家自行輸入)</option>
+                <option value="Other">
+                  {t('register.step1.nationalityOther', '其他 (自行輸入)')}
+                </option>
               </select>
               {isCustomNationality && (
                 <input
                   type="text"
-                  placeholder="請輸入國籍國家名稱 (Enter your nationality)"
+                  placeholder={t('register.step1.nationalityPlaceholder', '請輸入國籍國家名稱')}
                   value={formData.nationality || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))}
                   required

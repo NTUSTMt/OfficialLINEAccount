@@ -152,3 +152,43 @@ test('驗證 v0.1.243: MemberProfileModal 登山申請格式與結構化區塊�
     '底部按鈕外層容器必須包含 flexShrink: 0'
   );
 });
+
+test('驗證 v0.1.244: 國籍 Supabase 直更補底、請選擇與其他中英文獨立、國旗與母語格式', async () => {
+  const supabaseClientCode = fs.readFileSync(path.join(rootDir, 'src/utils/supabaseClient.ts'), 'utf-8');
+  const registerCode = fs.readFileSync(path.join(rootDir, 'src/pages/Register.tsx'), 'utf-8');
+  const zhJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'src/locales/zh.json'), 'utf-8'));
+  const enJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'src/locales/en.json'), 'utf-8'));
+  const sqlCode = fs.readFileSync(path.join(rootDir, 'supabase/fix_save_member_profile_nationality.sql'), 'utf-8');
+
+  // 1. supabaseClient.ts directUpdatePayload 必須包含 nationality 直更
+  assert.match(
+    supabaseClientCode,
+    /const directUpdatePayload:\s*Record<string,\s*any>\s*=\s*\{[\s\S]*?nationality:\s*\(formData\.nationality \|\| ''\)\.trim\(\)/,
+    'supabaseClient.ts 必須在 directUpdatePayload 中包含 nationality 直更'
+  );
+
+  // 2. Register.tsx nationality 預設值為空字串，且選單具備請選擇 disabled option
+  assert.match(
+    registerCode,
+    /nationality:\s*'',/,
+    'Register.tsx 初始狀態 nationality 必須為空字串，不可寫死中華民國'
+  );
+  assert.match(
+    registerCode,
+    /<option value="" disabled>\s*\{t\('register\.step1\.nationalityDefault'/,
+    'Register.tsx 必須具備請選擇 disabled option'
+  );
+
+  // 3. 中英文語系獨立，絕不混合顯示
+  assert.equal(zhJson.register.step1.nationalityLabel, '國籍');
+  assert.equal(zhJson.register.step1.nationalityDefault, '請選擇');
+  assert.equal(zhJson.register.step1.nationalityOther, '其他 (自行輸入)');
+  assert.equal(enJson.register.step1.nationalityLabel, 'Nationality');
+  assert.equal(enJson.register.step1.nationalityDefault, 'Please Select');
+  assert.equal(enJson.register.step1.nationalityOther, 'Other (Please specify)');
+
+  // 4. SQL 遷移包含 nationality
+  assert.match(sqlCode, /nationality,\s*line_id/);
+  assert.match(sqlCode, /nationality\s*=\s*COALESCE\(EXCLUDED\.nationality,\s*members\.nationality\)/);
+});
+

@@ -4,60 +4,70 @@
 export interface NationalityItem {
   zh: string;
   en: string;
+  native: string;
+  flag: string;
+  label: string;
 }
 
 export const NATIONALITY_LIST: NationalityItem[] = [
-  { zh: '中華民國', en: '中華民國' },
-  { zh: '香港', en: 'Hong Kong' },
-  { zh: '馬來西亞', en: 'Malaysia' },
-  { zh: '菲律賓', en: 'Philippines' },
-  { zh: '日本', en: 'Japan' },
-  { zh: '新加坡', en: 'Singapore' },
-  { zh: '美國', en: 'United States' },
-  { zh: '中國大陸', en: 'China' },
-  { zh: '韓國', en: 'South Korea' },
-  { zh: '德國', en: 'Germany' },
-  { zh: '印尼', en: 'Indonesia' },
-  { zh: '法國', en: 'France' },
-  { zh: '英國', en: 'United Kingdom' },
-  { zh: '加拿大', en: 'Canada' },
-  { zh: '澳大利亞', en: 'Australia' },
-  { zh: '泰國', en: 'Thailand' },
-  { zh: '越南', en: 'Vietnam' },
-  { zh: '荷蘭', en: 'Netherlands' },
-  { zh: '印度', en: 'India' },
-  { zh: '捷克', en: 'Czech Republic' },
-  { zh: '波蘭', en: 'Poland' },
-  { zh: '比利時', en: 'Belgium' },
-  { zh: '澳門', en: 'Macau' },
-  { zh: '瑞士', en: 'Switzerland' },
-  { zh: '西班牙', en: 'Spain' },
-  { zh: '奧地利', en: 'Austria' },
-  { zh: '義大利', en: 'Italy' },
-  { zh: '紐西蘭', en: 'New Zealand' },
-  { zh: '俄羅斯', en: 'Russia' },
-  { zh: '瑞典', en: 'Sweden' },
-  { zh: '丹麥', en: 'Denmark' },
-  { zh: '挪威', en: 'Norway' },
-  { zh: '緬甸', en: 'Myanmar' },
-  { zh: '以色列', en: 'Israel' },
-  { zh: '南非共和國', en: 'South Africa' },
-  { zh: '匈牙利', en: 'Hungary' },
-  { zh: '芬蘭', en: 'Finland' },
+  { zh: '中華民國', en: 'Taiwan', native: '中華民國', flag: '🇹🇼', label: '🇹🇼 中華民國 - Taiwan' },
+  { zh: '日本', en: 'Japan', native: '日本', flag: '🇯🇵', label: '🇯🇵 日本 - Japan' },
+  { zh: '韓國', en: 'Korea', native: '대한민국', flag: '🇰🇷', label: '🇰🇷 대한민국 - Korea' },
+  { zh: '香港', en: 'Hong Kong', native: '香港', flag: '🇭🇰', label: '🇭🇰 香港 - Hong Kong' },
+  { zh: '澳門', en: 'Macau', native: '澳門', flag: '🇲🇴', label: '🇲🇴 澳門 - Macau' },
+  { zh: '馬來西亞', en: 'Malaysia', native: 'Malaysia', flag: '🇲🇾', label: '🇲🇾 Malaysia - Malaysia' },
+  { zh: '新加坡', en: 'Singapore', native: 'Singapore', flag: '🇸🇬', label: '🇸🇬 Singapore - Singapore' },
+  { zh: '越南', en: 'Vietnam', native: 'Việt Nam', flag: '🇻🇳', label: '🇻🇳 Việt Nam - Vietnam' },
+  { zh: '印尼', en: 'Indonesia', native: 'Indonesia', flag: '🇮🇩', label: '🇮🇩 Indonesia - Indonesia' },
+  { zh: '菲律賓', en: 'Philippines', native: 'Pilipinas', flag: '🇵🇭', label: '🇵🇭 Pilipinas - Philippines' },
+  { zh: '泰國', en: 'Thailand', native: 'ประเทศไทย', flag: '🇹🇭', label: '🇹🇭 ประเทศไทย - Thailand' },
+  { zh: '美國', en: 'USA', native: 'United States', flag: '🇺🇸', label: '🇺🇸 United States - USA' },
+  { zh: '加拿大', en: 'Canada', native: 'Canada', flag: '🇨🇦', label: '🇨🇦 Canada - Canada' },
+  { zh: '英國', en: 'UK', native: 'United Kingdom', flag: '🇬🇧', label: '🇬🇧 United Kingdom - UK' },
+  { zh: '德國', en: 'Germany', native: 'Deutschland', flag: '🇩🇪', label: '🇩🇪 Deutschland - Germany' },
+  { zh: '法國', en: 'France', native: 'France', flag: '🇫🇷', label: '🇫🇷 France - France' },
+  { zh: '荷蘭', en: 'Netherlands', native: 'Nederland', flag: '🇳🇱', label: '🇳🇱 Nederland - Netherlands' },
+  { zh: '比利時', en: 'Belgium', native: 'België', flag: '🇧🇪', label: '🇧🇪 België - Belgium' },
+  { zh: '瑞士', en: 'Switzerland', native: 'Schweiz', flag: '🇨🇭', label: '🇨🇭 Schweiz - Switzerland' },
+  { zh: '奧地利', en: 'Austria', native: 'Österreich', flag: '🇦🇹', label: '🇦🇹 Österreich - Austria' },
+  { zh: '捷克', en: 'Czech Republic', native: 'Česko', flag: '🇨🇿', label: '🇨🇿 Česko - Czech Republic' },
+  { zh: '波蘭', en: 'Poland', native: 'Polska', flag: '🇵🇱', label: '🇵🇱 Polska - Poland' },
+  { zh: '西班牙', en: 'Spain', native: 'España', flag: '🇪🇸', label: '🇪🇸 España - Spain' },
+  { zh: '義大利', en: 'Italy', native: 'Italia', flag: '🇮🇹', label: '🇮🇹 Italia - Italy' },
+  { zh: '俄羅斯', en: 'Russia', native: 'Россия', flag: '🇷🇺', label: '🇷🇺 Россия - Russia' },
+  { zh: '瑞典', en: 'Sweden', native: 'Sverige', flag: '🇸🇪', label: '🇸🇪 Sverige - Sweden' },
+  { zh: '丹麥', en: 'Denmark', native: 'Danmark', flag: '🇩🇰', label: '🇩🇰 Danmark - Denmark' },
+  { zh: '挪威', en: 'Norway', native: 'Norge', flag: '🇳🇴', label: '🇳🇴 Norge - Norway' },
+  { zh: '芬蘭', en: 'Finland', native: 'Suomi', flag: '🇫🇮', label: '🇫🇮 Suomi - Finland' },
+  { zh: '匈牙利', en: 'Hungary', native: 'Magyarország', flag: '🇭🇺', label: '🇭🇺 Magyarország - Hungary' },
+  { zh: '澳大利亞', en: 'Australia', native: 'Australia', flag: '🇦🇺', label: '🇦🇺 Australia - Australia' },
+  { zh: '紐西蘭', en: 'New Zealand', native: 'New Zealand', flag: '🇳🇿', label: '🇳🇿 New Zealand - New Zealand' },
+  { zh: '印度', en: 'India', native: 'भारत', flag: '🇮🇳', label: '🇮🇳 भारत - India' },
+  { zh: '緬甸', en: 'Myanmar', native: 'မြန်မာ', flag: '🇲🇲', label: '🇲🇲 မြန်မာ - Myanmar' },
+  { zh: '中國大陸', en: 'China', native: '中国', flag: '🇨🇳', label: '🇨🇳 中国 - China' },
+  { zh: '以色列', en: 'Israel', native: 'ישראל', flag: '🇮🇱', label: '🇮🇱 ישראל - Israel' },
+  { zh: '南非共和國', en: 'South Africa', native: 'South Africa', flag: '🇿🇦', label: '🇿🇦 South Africa - South Africa' }
 ];
 
 /**
  * 取得國籍顯示文字
- * @param val 儲存於資料庫的國籍字串 (可能為中文、英文或自訂字串)
+ * @param val 儲存於資料庫的國籍字串 (可能為中文、英文、自訂字串或完整標籤)
  * @param targetLang 目標語系 ('zh' 給管理後台，'en' 給英文介面)
  */
 export function getNationalityLabel(val?: string | null, targetLang: 'zh' | 'en' = 'zh'): string {
   if (!val || !val.trim()) {
-    return targetLang === 'zh' ? '中華民國' : '中華民國';
+    return targetLang === 'zh' ? '中華民國' : 'Taiwan';
   }
   const clean = val.trim();
+  const cleanLower = clean.toLowerCase();
   const found = NATIONALITY_LIST.find(
-    (item) => item.zh === clean || item.en.toLowerCase() === clean.toLowerCase()
+    (item) =>
+      item.zh === clean ||
+      item.en.toLowerCase() === cleanLower ||
+      item.native === clean ||
+      item.label === clean ||
+      cleanLower.includes(item.en.toLowerCase()) ||
+      clean.includes(item.zh)
   );
   if (found) {
     return targetLang === 'zh' ? found.zh : found.en;

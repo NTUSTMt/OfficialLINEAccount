@@ -325,7 +325,7 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
     const profile: ProfileData = {
       name: data.name || '',
       gender: data.gender || '',
-      nationality: data.nationality || '中華民國',
+      nationality: data.nationality || '',
       department: data.department || '',
       identityStatus: data.identity_status || '臺科大在校學生',
       studentId: data.student_id || '',
@@ -383,7 +383,7 @@ export const saveMemberProfileToSupabase = async (
     const payload = {
       name: formData.name.trim(),
       gender: formData.gender,
-      nationality: (formData.nationality || '中華民國').trim(),
+      nationality: (formData.nationality || '').trim(),
       line_id: formData.realLineId.trim(),
       email: formData.email.trim(),
       phone: formData.phone.trim(),
@@ -422,11 +422,10 @@ export const saveMemberProfileToSupabase = async (
       return { success: false, message: data?.message || '儲存未成功' };
     }
 
-    // 直接精確更新 members 表的 proof_urls 與 avatar_url 欄位
-    // 根因：save_member_profile RPC 內部含有 `proof_urls = CASE WHEN jsonb_array_length(EXCLUDED.proof_urls) > 0 THEN EXCLUDED.proof_urls ELSE members.proof_urls END`
-    // 導致當使用者清空所有照片 (proofsList 為空陣列) 時，RPC 會拒絕更新並保留舊照片。
-    // 因此此處以直更確保即使全數刪除，資料庫亦能正確儲存為空陣列。
+    // 直接精確更新 members 表的 nationality, proof_urls 與 avatar_url 欄位
+    // 確保即使 DB 上的 RPC 函式因版本漂移未更新 nationality，直更也能 100% 寫入
     const directUpdatePayload: Record<string, any> = {
+      nationality: (formData.nationality || '').trim(),
       proof_urls: proofsList,
       updated_at: new Date().toISOString()
     };

@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.243-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.244-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.243)](#7-最新版本異動紀錄-changelog-v01243)
+- [7. 最新版本異動紀錄 (Changelog v0.1.244)](#7-最新版本異動紀錄-changelog-v01244)
 
 ---
 
@@ -1975,6 +1975,23 @@ pnpm test
   - 單元測試與打包驗證：
     - 擴充 test/100_web_admin_table_resizing_and_overflow.test.mjs，新增 v0.1.243 驗證測試，確保 flexShrink: 0 規格全數落實。
     - 全專案 80 個測試套件、443 項單元測試 100% 通過，TypeScript 與 Vite 生產打包零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.244 (2026-09-27)
+- 國籍資料儲存鏈路修復、請選擇與其他中英文獨立、國旗與母語格式支援：
+  - 國籍未存入 Supabase 根本原因修復：
+    - 資料庫層：先前歷史 migration 重新發布 save_member_profile 預存程序時漏列 nationality 欄位，導致 RPC 執行時忽略前端傳入的國籍。新增 supabase/fix_save_member_profile_nationality.sql 完整包含 nationality 欄位（INSERT 與 ON CONFLICT DO UPDATE）。
+    - 客戶端層 (src/utils/supabaseClient.ts)：在 saveMemberProfileToSupabase 的 directUpdatePayload 中補入 nationality 直更，確保即使資料庫端 RPC 暫時未更新，直連 members 表亦能 100% 寫入；讀取個人資料 fetchMemberProfileFromSupabase 移除強制寫死中華民國，改為自然空字串。
+  - 註冊頁面 (Register.tsx) 國籍下拉選單優化：
+    - 預設值改為空字串，選單第一項為禁用之「請選擇 (Please Select)」，強迫使用者主動選取，未選擇時無法進入下一步，杜絕外籍生或未填者被誤設為本國籍。
+    - 選項格式升級為「國旗 當地語言 - 英文名」，例如：中華民國 - Taiwan、日本 - Japan、대한민국 - Korea 等 37 個國家地區。
+    - 標籤、請選擇、其他與輸入提示依據語系完全獨立（zh.json 與 en.json），中英文互不干擾混雜，友善外籍社員操作。
+  - 管理後台與抽屜同步更新：
+    - MemberDetailEdit.tsx 與 MemberEditDrawer.tsx 下拉選單同步套用新格式。
+    - nationalities.ts 的 getNationalityLabel 支援以完整標籤、英文或母語等多重方式精確反查繁體中文標準國名，保障後台資料庫與名冊一致性。
+  - 單元測試與建置檢查：
+    - 更新 test/96_member_profile_mountain_permit_and_nationality.test.mjs 與 test/100_web_admin_table_resizing_and_overflow.test.mjs。
+    - 全專案 80 個測試套件、444 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，全篇嚴格零 Emoji。
+
 
 
 

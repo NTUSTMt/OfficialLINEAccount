@@ -524,7 +524,7 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                     >
                       {NATIONALITY_LIST.map(item => (
                         <option key={item.zh} value={item.zh}>
-                          {item.zh} ({item.en})
+                          {item.label}
                         </option>
                       ))}
                       <option value="其他">其他 (自行輸入)</option>

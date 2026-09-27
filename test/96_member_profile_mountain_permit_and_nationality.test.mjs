@@ -23,11 +23,18 @@ const NATIONALITY_LIST = eval(listMatch[1]);
 // 實作與 nationalities.ts 一致之純函式測試
 function getNationalityLabel(val, targetLang = 'zh') {
   if (!val || !val.trim()) {
-    return targetLang === 'zh' ? '中華民國' : '中華民國';
+    return targetLang === 'zh' ? '中華民國' : 'Taiwan';
   }
   const clean = val.trim();
+  const cleanLower = clean.toLowerCase();
   const found = NATIONALITY_LIST.find(
-    (item) => item.zh === clean || item.en.toLowerCase() === clean.toLowerCase()
+    (item) =>
+      item.zh === clean ||
+      item.en.toLowerCase() === cleanLower ||
+      item.native === clean ||
+      item.label === clean ||
+      cleanLower.includes(item.en.toLowerCase()) ||
+      clean.includes(item.zh)
   );
   if (found) {
     return targetLang === 'zh' ? found.zh : found.en;
@@ -94,27 +101,32 @@ test('1. 國籍常數與轉換函式驗證 (NATIONALITY_LIST & getNationalityLab
   
   const roc = NATIONALITY_LIST.find(n => n.zh === '中華民國');
   assert.ok(roc, '必須包含中華民國');
-  assert.equal(roc.en, '中華民國');
+  assert.equal(roc.label, '🇹🇼 中華民國 - Taiwan');
 
   const japan = NATIONALITY_LIST.find(n => n.zh === '日本');
   assert.ok(japan, '必須包含日本');
-  assert.equal(japan.en, 'Japan');
+  assert.equal(japan.label, '🇯🇵 日本 - Japan');
+
+  const korea = NATIONALITY_LIST.find(n => n.zh === '韓國');
+  assert.ok(korea, '必須包含韓國');
+  assert.equal(korea.label, '🇰🇷 대한민국 - Korea');
 
   const us = NATIONALITY_LIST.find(n => n.zh === '美國');
   assert.ok(us, '必須包含美國');
-  assert.equal(us.en, 'United States');
 
   // 驗證 getNationalityLabel 轉為後台繁中顯示
   assert.equal(getNationalityLabel('Japan', 'zh'), '日本');
+  assert.equal(getNationalityLabel('🇯🇵 日本 - Japan', 'zh'), '日本');
   assert.equal(getNationalityLabel('United States', 'zh'), '美國');
+  assert.equal(getNationalityLabel('🇹🇼 中華民國 - Taiwan', 'zh'), '中華民國');
   assert.equal(getNationalityLabel('中華民國', 'zh'), '中華民國');
-  assert.equal(getNationalityLabel('South Korea', 'zh'), '韓國');
+  assert.equal(getNationalityLabel('🇰🇷 대한민국 - Korea', 'zh'), '韓國');
   assert.equal(getNationalityLabel('OtherCountry', 'zh'), 'OtherCountry');
   assert.equal(getNationalityLabel(null, 'zh'), '中華民國');
 
   // 驗證 getNationalityLabel 英文介面轉換
   assert.equal(getNationalityLabel('日本', 'en'), 'Japan');
-  assert.equal(getNationalityLabel('美國', 'en'), 'United States');
+  assert.equal(getNationalityLabel('韓國', 'en'), 'Korea');
 });
 
 test('2. 臺灣地址智慧拆解演算法驗證 (parseTaiwanAddress)', async () => {
@@ -161,11 +173,16 @@ test('3. 註冊頁面 (Register.tsx) 步驟一國籍必填全鏈路驗證', asyn
     'Register.tsx 必須引入 NATIONALITY_LIST'
   );
 
-  // 驗證步驟一包含國籍選單與 Other 自訂輸入
+  // 驗證步驟一包含國籍選單與 Other 自訂輸入 (中英文獨立)
   assert.match(
     registerCode,
-    /國籍 \(Nationality\)/,
-    'Register.tsx 必須具備 國籍 (Nationality) 表單欄位'
+    /nationalityLabel/,
+    'Register.tsx 必須透過多語系 i18n 獨立顯示國籍標籤'
+  );
+  assert.match(
+    registerCode,
+    /nationalityDefault/,
+    'Register.tsx 必須包含請選擇預設未選中選項'
   );
   assert.match(
     registerCode,
