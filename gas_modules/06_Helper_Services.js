@@ -728,6 +728,10 @@ function _handleNotifyProfileSaved(json) {
         detailsZh.push("• 加入社員意願：" + offIntent);
         detailsEn.push("• Club Membership Intent: " + _translateValueToEn(offIntent));
       }
+      if (data.nationality) {
+        detailsZh.push("• 國籍：" + data.nationality);
+        detailsEn.push("• Nationality: " + data.nationality);
+      }
       if (data.exp) {
         detailsZh.push("• 爬山經歷：已更新");
         detailsEn.push("• Hiking Experience: Updated");
@@ -752,6 +756,10 @@ function _handleNotifyProfileSaved(json) {
         if (cFields.indexOf("gender") > -1) {
           detailsZh.push("• 性別：" + (data.gender || "已更新"));
           detailsEn.push("• Gender: " + _translateValueToEn(data.gender || "已更新"));
+        }
+        if (cFields.indexOf("nationality") > -1) {
+          detailsZh.push("• 國籍：" + (data.nationality || "已更新"));
+          detailsEn.push("• Nationality: " + (data.nationality || "Updated"));
         }
         if (cFields.indexOf("birthday") > -1) {
           detailsZh.push("• 生日：" + (data.birthday || "已更新"));
@@ -838,6 +846,10 @@ function _handleNotifyProfileSaved(json) {
       detailsEn.push("• Emergency Contact: " + (emerName === "未填寫" ? "Not provided" : emerName) + " (" + _translateValueToEn(emerRel) + ")");
       detailsZh.push("• 加入社員意願：" + offIntent);
       detailsEn.push("• Club Membership Intent: " + _translateValueToEn(offIntent));
+      if (data.nationality) {
+        detailsZh.push("• 國籍：" + data.nationality);
+        detailsEn.push("• Nationality: " + data.nationality);
+      }
       if (data.exp) {
         detailsZh.push("• 爬山經歷：已更新");
         detailsEn.push("• Hiking Experience: Updated");

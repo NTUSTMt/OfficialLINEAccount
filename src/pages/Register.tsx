@@ -592,6 +592,7 @@ function Register({ userId }: { userId: string }) {
             const norm = (v?: string) => (v || '').trim();
             if (norm(finalFormData.name) !== norm(originalFormData.name)) changedFields.push('name');
             if (norm(finalFormData.gender) !== norm(originalFormData.gender)) changedFields.push('gender');
+            if (norm(finalFormData.nationality) !== norm(originalFormData.nationality)) changedFields.push('nationality');
             if (norm(finalFormData.birthday) !== norm(originalFormData.birthday)) changedFields.push('birthday');
             if (norm(finalFormData.idNumber) !== norm(originalFormData.idNumber)) changedFields.push('idNumber');
             if (

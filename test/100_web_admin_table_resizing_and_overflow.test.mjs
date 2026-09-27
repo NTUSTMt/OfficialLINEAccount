@@ -192,3 +192,28 @@ test('驗證 v0.1.244: 國籍 Supabase 直更補底、請選擇與其他中英�
   assert.match(sqlCode, /nationality\s*=\s*COALESCE\(EXCLUDED\.nationality,\s*members\.nationality\)/);
 });
 
+test('驗證 v0.1.245: 國籍異動比對納入 changedFields，以及 LIFF Webhook replyToken 免費回覆通知', async () => {
+  const registerCode = fs.readFileSync(path.join(rootDir, 'src/pages/Register.tsx'), 'utf-8');
+  const webhookCode = fs.readFileSync(path.join(rootDir, 'gas_modules/02_LineBot_Webhook.js'), 'utf-8');
+  const helperCode = fs.readFileSync(path.join(rootDir, 'gas_modules/06_Helper_Services.js'), 'utf-8');
+  const gasCode = fs.readFileSync(path.join(rootDir, 'src/gas.js'), 'utf-8');
+
+  // 1. Register.tsx 包含 nationality 比對
+  assert.match(
+    registerCode,
+    /if\s*\(\s*norm\(finalFormData\.nationality\)\s*!==\s*norm\(originalFormData\.nationality\)\s*\)\s*changedFields\.push\('nationality'\);/,
+    'Register.tsx changedFields 必須包含 nationality 欄位比對'
+  );
+
+  // 2. Webhook 包含破冰訊息攔截與 _handleMemberProfileNoticeReply
+  assert.match(webhookCode, /_handleMemberProfileNoticeReply\(replyToken,\s*userId,\s*text\);/);
+  assert.match(gasCode, /_handleMemberProfileNoticeReply\(replyToken,\s*userId,\s*text\);/);
+  assert.match(webhookCode, /function _handleMemberProfileNoticeReply\(replyToken,\s*userId,\s*text\)/);
+  assert.match(gasCode, /function _handleMemberProfileNoticeReply\(replyToken,\s*userId,\s*text\)/);
+
+  // 3. GAS _handleNotifyProfileSaved 包含 nationality 欄位
+  assert.match(helperCode, /if\s*\(cFields\.indexOf\("nationality"\)\s*>\s*-1\)/);
+  assert.match(gasCode, /if\s*\(cFields\.indexOf\("nationality"\)\s*>\s*-1\)/);
+});
+
+

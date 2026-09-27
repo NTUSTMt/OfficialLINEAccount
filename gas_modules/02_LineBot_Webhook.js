@@ -249,6 +249,19 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
+  // 3.5 社員完成/更新個人資料破冰發話，透過 replyToken 免費即時回覆個資摘要 (0 額度消耗)
+  if (
+    text === "我已完成個人資料填寫" ||
+    text === "我已更新個人資料" ||
+    text.indexOf("我已完成個人資料填寫") > -1 ||
+    text.indexOf("我已更新個人資料") > -1 ||
+    lowerText === "i have completed my registration" ||
+    lowerText === "i have updated my profile"
+  ) {
+    _handleMemberProfileNoticeReply(replyToken, userId, text);
+    return;
+  }
+
   // 4. Gemini AI 客服（僅在明確呼叫「小岳」或「Yue」時調用）
   if (isYueMentioned) {
     if (!cleanText) {
@@ -755,4 +768,92 @@ function pushAdminMessage(text, customSubject, optionsOrHtml) {
     console.error("pushAdminMessage LINE 例外拋出: " + err.toString());
   }
 }
+
+/**
+ * 處理個人資料填寫/更新之 Webhook 回覆 (使用 replyToken 免費發送，0 額度消耗)
+ */
+function _handleMemberProfileNoticeReply(replyToken, userId, text) {
+  try {
+    if (!replyToken || !userId) return;
+    var isNew = (text.indexOf("完成") > -1 || text.indexOf("completed") > -1);
+    var sbMembers = _supabaseGet("members", { line_user_id: "eq." + userId });
+    var m = (sbMembers && sbMembers.length > 0) ? sbMembers[0] : null;
+    if (!m) {
+      _replyMessage(replyToken, "【個人資料填寫完成】\n感謝您的填寫！系統已收到您的個人資料。");
+      return;
+    }
+
+    var name = m.name || "社員";
+    var dept = m.department || "未填寫";
+    var studentId = m.student_id ? _maskString(m.student_id, 2, 2) : "未填寫";
+    var phone = m.phone ? _maskString(m.phone, 4, 3) : "未填寫";
+    var nationality = m.nationality || "未填寫";
+    var emerName = m.emergency_contact_name || "未填寫";
+    var emerRel = m.emergency_contact_rel || "未填寫";
+    var offIntent = m.join_membership_intent || "未填寫";
+    var prefLang = (m.preferred_language || "zh").toLowerCase();
+
+    var titleZh = isNew ? "【歡迎加入！基本資料註冊成功】" : "【基本資料已成功更新】";
+    var titleEn = isNew ? "【Welcome! Registration Success】" : "【Profile Updated Successfully】";
+
+    var introZh = isNew ? ("您好 " + name + "！感謝您完成台科登山社社團系統個人資料註冊：") : ("您好 " + name + "！您已於系統中成功更新個人檔案：");
+    var introEn = isNew ? ("Hello " + name + "! Thank you for registering your profile with the NTUST Mountaineering Club:") : ("Hello " + name + "! You have successfully updated your profile:");
+
+    var detailsZh = [
+      "• 姓名：" + name,
+      "• 國籍：" + nationality,
+      "• 系所 / 學號：" + dept + " (" + studentId + ")",
+      "• 聯絡電話：" + phone,
+      "• 緊急聯絡人：" + emerName + " (" + emerRel + ")",
+      "• 加入社員意願：" + offIntent
+    ];
+
+    var detailsEn = [
+      "• Name: " + name,
+      "• Nationality: " + nationality,
+      "• Dept / Student ID: " + dept + " (" + studentId + ")",
+      "• Phone Number: " + phone,
+      "• Emergency Contact: " + emerName + " (" + emerRel + ")",
+      "• Club Membership Intent: " + offIntent
+    ];
+
+    // 檢查活動出隊保險與審核必備之 13 項資料完整度
+    var activityMissing = [];
+    if (!String(m.name || "").trim()) activityMissing.push("姓名");
+    if (!String(m.gender || "").trim()) activityMissing.push("性別");
+    if (!String(m.phone || "").trim()) activityMissing.push("聯絡電話");
+    if (!String(m.birthday || "").trim()) activityMissing.push("生日");
+    if (!String(m.id_card || "").trim()) activityMissing.push("身分證/護照");
+    if (!String(m.address || "").trim()) activityMissing.push("通訊地址");
+    if (!String(m.emergency_contact_name || "").trim()) activityMissing.push("緊急聯絡人姓名");
+    if (!String(m.emergency_contact_rel || "").trim()) activityMissing.push("與緊急聯絡人關係");
+    if (!String(m.emergency_contact_address || "").trim()) activityMissing.push("緊急聯絡人地址");
+    if (!String(m.emergency_contact_phone || "").trim()) activityMissing.push("緊急聯絡人電話");
+    if (!String(m.fitness_desc || "").trim()) activityMissing.push("體能自評");
+    if (!String(m.proof_urls || "").trim()) activityMissing.push("體能證明");
+    if (!String(m.outdoor_experience || "").trim()) activityMissing.push("爬山經驗");
+    var isActivityReady = (activityMissing.length === 0);
+
+    var footerZh = "";
+    var footerEn = "";
+    if (isActivityReady) {
+      footerZh = "[提示] 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！";
+      footerEn = "[Notice] Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via \"Activities\", or reserve gear via \"Equipment Loan\" anytime!";
+    } else {
+      var missingText = activityMissing.slice(0, 4).join("、") + (activityMissing.length > 4 ? " 等 " + activityMissing.length + " 項" : "");
+      footerZh = "[提示] 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n[提醒] 出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！";
+      footerEn = "[Notice] You can reserve outdoor gear anytime via \"Equipment Loan\"!\n\n[Trip Notice] Participating in hiking events requires safety insurance. Please update your profile via \"Register\" in the menu to enable one-click signup!";
+    }
+
+    var zhBlock = introZh + "\n\n" + detailsZh.join("\n") + "\n\n" + footerZh;
+    var enBlock = introEn + "\n\n" + detailsEn.join("\n") + "\n\n" + footerEn;
+
+    var fullMsg = (prefLang === "en") ? (titleEn + "\n\n" + enBlock) : (titleZh + "\n\n" + zhBlock);
+    _replyMessage(replyToken, fullMsg);
+  } catch (err) {
+    console.error("_handleMemberProfileNoticeReply 處理失敗:", err);
+    _replyMessage(replyToken, "【個人資料填寫完成】\n您的個人資料已成功儲存！");
+  }
+}
+
 

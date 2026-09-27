@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.244-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.245-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.244)](#7-最新版本異動紀錄-changelog-v01244)
+- [7. 最新版本異動紀錄 (Changelog v0.1.245)](#7-最新版本異動紀錄-changelog-v01245)
 
 ---
 
@@ -1991,6 +1991,20 @@ pnpm test
   - 單元測試與建置檢查：
     - 更新 test/96_member_profile_mountain_permit_and_nationality.test.mjs 與 test/100_web_admin_table_resizing_and_overflow.test.mjs。
     - 全專案 80 個測試套件、444 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.245 (2026-09-27)
+- 國籍異動比對補齊、LIFF 破冰免額度 Webhook 回覆通知、全系統主動推播盤點：
+  - 國籍欄位異動比對與通知完整性補齊：
+    - 前端註冊頁 (src/pages/Register.tsx)：在 changedFields 欄位異動比對中補入 nationality 檢查，確保使用者修改國籍時，系統精確識別為異動欄位，避免誤判為未變更。
+    - 後端服務 (gas_modules/06_Helper_Services.js 與 src/gas.js)：在 _handleNotifyProfileSaved 中的 isNew、cFields 判定及向下相容 fallback 區塊全面納入 nationality 顯示，支援中英文雙語。
+  - 突破 LINE 免費推播每月 200 則限制 (0 額度消耗通知)：
+    - 原因分析：先前基本資料填寫/更新透過前端發送 notify_profile_saved 請求後端調用 pushMessage，受限於 LINE 官方帳號免費方案每月 200 則 Push Message 額度，額度用盡後即被 LINE API 阻斷 (429/400)。
+    - 解法實作：前端於 LIFF 提交成功時透過 liff.sendMessages 發送「我已完成個人資料填寫」或「我已更新個人資料」。GAS Webhook (gas_modules/02_LineBot_Webhook.js 與 src/gas.js) 於 _handleTextMessage 中進行精準攔截，透過 _handleMemberProfileNoticeReply 直接利用帶有合法期限之 replyToken 進行 Reply Message 回覆，100% 免費且完全不扣每月的 200 則 Push 額度，同時直查 Supabase members 表提供個資摘要與活動出隊 13 項保險必備欄位完整度引導。
+  - 全專案主動推播 (Push Message) 全面盤點與稽核：
+    - 完整盤點所有調用 _pushMessage(userId) 與 pushAdminMessage(text) 之通知點，分類列出社員個人推播（7 種情境）與幹部群組推播（9 種情境），供管理者全面檢視並規劃後續額度分流策略。
+  - 單元測試與建置驗證：
+    - 擴充 test/100_web_admin_table_resizing_and_overflow.test.mjs，新增 v0.1.245 驗證測試。
+    - 全專案 80 個測試套件、445 項單元測試 100% 通過，TypeScript 與 Vite 打包無錯誤，全篇嚴格零 Emoji。
 
 
 
