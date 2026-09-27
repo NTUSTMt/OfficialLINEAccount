@@ -14,9 +14,7 @@ import {
   ExternalLink,
   MessageSquare,
   Loader2,
-  Calendar,
-  ChevronDown,
-  ChevronUp
+  Calendar
 } from 'lucide-react';
 import { fetchMemberFullDetailFromSupabase } from '../../utils/supabaseClient';
 import { openExternalUrl, parseProofUrls } from '../../utils/applicantUtils';
@@ -54,7 +52,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [internalPreviewUrl, setInternalPreviewUrl] = useState<string | null>(null);
-  const [isPermitExpanded, setIsPermitExpanded] = useState(true);
+  const [avatarImgError, setAvatarImgError] = useState(false);
 
   // 電腦版 / 行動版視窗寬度偵測
   const [isDesktop, setIsDesktop] = useState(
@@ -80,8 +78,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
       return;
     }
 
-    // 每次開啟彈窗一律預設直接展開臺灣登山申請表
-    setIsPermitExpanded(true);
+    setAvatarImgError(false);
 
     // 若傳入的 initialMember 已含有完整欄位 (如 phone, email, emergency_contact_name)
     if (initialMember && (initialMember.phone || initialMember.emergency_contact_name || initialMember.emergency_contact_phone)) {
@@ -157,6 +154,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
   const phone = merged.phone || merged.mobile || merged.cellphone || '';
   const email = merged.email || '';
   const address = merged.address || merged.studentAddr || merged.student_addr || '';
+  const avatarUrl = merged.avatar_url || merged.avatarUrl || merged.picture_url || merged.pictureUrl || '';
 
   const emerName = merged.emergency_contact_name || merged.emerName || merged.emer_name || merged.emergencyContactName || '';
   const emerRel = merged.emergency_contact_rel || merged.emerRel || merged.emer_rel || merged.emergencyContactRel || '';
@@ -289,7 +287,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
           <div style={{
             backgroundColor: '#f1f5f9',
             borderRight: '1px solid #cbd5e1',
-            padding: '8px 10px',
+            padding: '6px 10px',
             fontSize: '13px',
             fontWeight: 600,
             color: '#334155',
@@ -297,7 +295,9 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            minWidth: '95px',
+            width: 'fit-content',
+            minWidth: 'fit-content',
+            whiteSpace: 'nowrap',
             textAlign: 'center'
           }}>
             {label}
@@ -344,94 +344,57 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
       <div
         className="wa-mountain-permit-card"
         style={{
-          border: '1px solid #cbd5e1',
+          border: '1px solid #e2e8f0',
           borderRadius: '10px',
           overflow: 'hidden',
-          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
-          backgroundColor: '#ffffff'
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+          backgroundColor: '#ffffff',
+          padding: '14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          flexShrink: 0
         }}
       >
-        {/* 深藍色頂部標題列 (點擊可展開/收合) */}
-        <div
-          onClick={() => setIsPermitExpanded((prev) => !prev)}
-          title={isPermitExpanded ? '點擊收合臺灣登山申請表' : '點擊展開臺灣登山申請表'}
-          style={{
-            backgroundColor: '#3b4d6b',
-            padding: '10px 14px',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            cursor: 'pointer',
-            userSelect: 'none',
-            transition: 'background-color 0.15s ease'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px' }}>
-            <span style={{
-              backgroundColor: '#e11d48',
-              borderRadius: '4px',
-              padding: '3px 6px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <User size={14} color="#ffffff" />
-            </span>
-            <span>隊員資料 (臺灣登山申請格式)</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '11px', color: '#cbd5e1', backgroundColor: 'rgba(255,255,255,0.12)', padding: '2px 8px', borderRadius: '4px' }}>
-              入園入山標準格式
-            </span>
-            {isPermitExpanded ? (
-              <ChevronUp size={16} color="#cbd5e1" />
-            ) : (
-              <ChevronDown size={16} color="#cbd5e1" />
-            )}
-          </div>
+        {/* Row 1: 姓名 + 電話 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          {renderPermitField('姓名', name, 'permit-name', name)}
+          {renderPermitField(
+            '電話',
+            phone ? `${phone} (同手機)` : '未填',
+            'permit-tel',
+            phone
+          )}
         </div>
 
-        {/* 申請表欄位本體 */}
-        {isPermitExpanded && (
-          <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {/* Row 1: 姓名 + 電話 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {renderPermitField('姓名', name, 'permit-name', name)}
-            {renderPermitField(
-              '電話',
-              phone ? `${phone} (同手機)` : '未填',
-              'permit-tel',
-              phone
-            )}
-          </div>
-
-          {/* Row 2: 地址 (縣市 + 鄉鎮市區 + 詳細地址) */}
+        {/* Row 2: 地址 (縣市 + 鄉鎮市區 + 詳細地址) */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'stretch',
+          border: '1px solid #cbd5e1',
+          borderRadius: '6px',
+          overflow: 'hidden',
+          backgroundColor: '#ffffff',
+          minHeight: '38px'
+        }}>
           <div style={{
+            backgroundColor: '#f1f5f9',
+            borderRight: '1px solid #cbd5e1',
+            padding: '6px 10px',
+            fontSize: '13px',
+            fontWeight: 600,
+            color: '#334155',
             display: 'flex',
-            alignItems: 'stretch',
-            border: '1px solid #cbd5e1',
-            borderRadius: '6px',
-            overflow: 'hidden',
-            backgroundColor: '#ffffff',
-            minHeight: '38px'
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            width: 'fit-content',
+            minWidth: 'fit-content',
+            whiteSpace: 'nowrap',
+            textAlign: 'center'
           }}>
-            <div style={{
-              backgroundColor: '#f1f5f9',
-              borderRight: '1px solid #cbd5e1',
-              padding: '8px 10px',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#334155',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              minWidth: '95px',
-              textAlign: 'center'
-            }}>
-              地址
-            </div>
+            地址
+          </div>
             <div style={{
               flex: 1,
               padding: '5px 8px',
@@ -556,7 +519,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             <div style={{
               backgroundColor: '#f1f5f9',
               borderRight: '1px solid #cbd5e1',
-              padding: '8px 10px',
+              padding: '6px 10px',
               fontSize: '13px',
               fontWeight: 600,
               color: '#334155',
@@ -564,7 +527,9 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              minWidth: '190px',
+              width: 'fit-content',
+              minWidth: 'fit-content',
+              whiteSpace: 'nowrap',
               textAlign: 'center'
             }}>
               身分證號/護照號碼(或居留證)
@@ -646,7 +611,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
                 <div style={{
                   backgroundColor: '#f1f5f9',
                   borderRight: '1px solid #cbd5e1',
-                  padding: '8px 10px',
+                  padding: '6px 10px',
                   fontSize: '13px',
                   fontWeight: 600,
                   color: '#334155',
@@ -654,7 +619,9 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
-                  minWidth: '95px',
+                  width: 'fit-content',
+                  minWidth: 'fit-content',
+                  whiteSpace: 'nowrap',
                   textAlign: 'center'
                 }}>
                   生日
@@ -717,15 +684,13 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
           </div>
 
         </div>
-      )}
-      </div>
     );
   };
 
   // 2. 電腦網頁版專用：其他資料分區結構化卡片
   const renderDesktopOtherSections = () => {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flexShrink: 0 }}>
         {/* 卡片 1: 社團與學籍身分 */}
         <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>
@@ -775,28 +740,6 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             )}
           </div>
         </div>
-
-        {/* 卡片 2: 緊急留守附加資訊 */}
-        {(emerRel || emerAddr) && (
-          <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>
-              <ShieldAlert size={14} color="#e11d48" />
-              <span>緊急留守附加資訊</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
-              {emerRel && (
-                <div><span style={{ color: '#64748b' }}>關係：</span><span style={{ color: '#0f172a', fontWeight: 600 }}>{emerRel}</span></div>
-              )}
-              {emerAddr && (
-                <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ color: '#64748b', flexShrink: 0 }}>留守人地址：</span>
-                  <span style={{ color: '#0f172a' }}>{emerAddr}</span>
-                  {renderCopyBtn('emer-addr', emerAddr, '複製留守人地址')}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* 卡片 3: 登山經歷與體能審核 */}
         <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
@@ -887,7 +830,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
   // 3. 手機版專用：緊湊直式卡片排版
   const renderMobileContent = () => {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0 }}>
         {/* 手機內容區塊 1: 基本資料 */}
         <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px 14px', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>
@@ -1081,7 +1024,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
   const innerContent = (
     <>
       {/* 標題欄 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: '38px',
@@ -1092,9 +1035,20 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#16a34a'
+            color: '#16a34a',
+            overflow: 'hidden',
+            flexShrink: 0
           }}>
-            <User size={22} />
+            {avatarUrl && !avatarImgError ? (
+              <img
+                src={avatarUrl}
+                alt={name}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={() => setAvatarImgError(true)}
+              />
+            ) : (
+              <User size={22} />
+            )}
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1191,7 +1145,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
       )}
 
       {/* 底部按鈕：開啟詳細資料編輯頁面 */}
-      <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '14px', marginTop: '4px' }}>
+      <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '14px', marginTop: '4px', flexShrink: 0 }}>
         <button
           type="button"
           disabled={!targetUserId}
@@ -1253,14 +1207,14 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
         bottom: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.65)',
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'center',
         zIndex: 10001,
-        padding: '32px 16px',
+        padding: '24px 16px',
         overflowX: 'auto',
         overflowY: 'auto',
         overscrollBehavior: 'contain',
-        gap: '16px'
+        gap: '12px'
       }}
       onClick={() => {
         onClose();
@@ -1274,27 +1228,29 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
           borderRadius: '16px',
           maxWidth: isDesktopLayout ? '720px' : '520px',
           width: '100%',
+          maxHeight: 'calc(100vh - 48px)',
+          overflowY: 'auto',
           padding: '24px',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
           display: 'flex',
           flexDirection: 'column',
           gap: '14px',
           textAlign: 'left',
-          flexShrink: 0,
-          margin: '0 auto'
+          flexShrink: 0
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {innerContent}
       </div>
 
-      {/* 右側同級大圖預覽面板 (Right - 亮色藝廊風格) */}
+      {/* 右側同級大圖預覽面板 (Right - 亮色藝廊風格，固定在螢幕間) */}
       {internalPreviewUrl && (
         <div
           style={{
             width: '480px',
-            maxHeight: '90vh',
-            height: '100%',
+            maxHeight: 'calc(100vh - 48px)',
+            height: 'auto',
+            alignSelf: 'center',
             backgroundColor: 'var(--wa-surface)',
             borderRadius: '16px',
             display: 'flex',
@@ -1359,7 +1315,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
               alt="體能證明大圖預覽"
               style={{
                 maxWidth: '100%',
-                maxHeight: '75vh',
+                maxHeight: 'calc(100vh - 140px)',
                 objectFit: 'contain',
                 borderRadius: 8,
                 boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08)',

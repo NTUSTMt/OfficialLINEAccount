@@ -71,7 +71,7 @@ const INVENTORY_COLUMNS: AdvancedColumnDef[] = [
   { key: 'price_extra_day', label: '續租每日', defaultWidth: 100, minWidth: 70 },
   { key: 'notes', label: '備註', defaultWidth: 180, minWidth: 100 },
   { key: 'updated_at', label: '更新時間', defaultWidth: 110, minWidth: 80 },
-  { key: 'actions', label: '操作', defaultWidth: 80, minWidth: 60 },
+  { key: 'actions', label: '操作', defaultWidth: 50, minWidth: 44 },
 ];
 
 export const WebAdminInventory: React.FC = () => {
@@ -804,8 +804,9 @@ export const WebAdminInventory: React.FC = () => {
                     }`}
                     style={{
                       width: `${width}px`,
-                      minWidth: `${col.minWidth || 60}px`,
+                      minWidth: `${width}px`,
                       maxWidth: `${width}px`,
+                      boxSizing: 'border-box',
                       position: isPinned ? 'sticky' : undefined,
                       left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
                       zIndex: isPinned ? 20 : undefined,
@@ -1005,6 +1006,17 @@ export const WebAdminInventory: React.FC = () => {
                     {visibleColumns.map((col) => {
                       const isPinned = pinnedColumns.includes(col.key);
                       const stickyLeft = isPinned ? (stickyLeftPositions[col.key] !== undefined ? stickyLeftPositions[col.key] - 44 : undefined) : undefined;
+                      const width = columnWidths[col.key] || col.defaultWidth;
+                      const baseTdStyle: React.CSSProperties = {
+                        width: `${width}px`,
+                        minWidth: `${width}px`,
+                        maxWidth: `${width}px`,
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
+                        position: isPinned ? 'sticky' : undefined,
+                        left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
+                        zIndex: isPinned ? 10 : undefined,
+                      };
 
                       switch (col.key) {
                         case 'id':
@@ -1013,14 +1025,14 @@ export const WebAdminInventory: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'id' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 fontFamily: 'monospace',
                                 fontWeight: 600,
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
-                              {item.id}
+                              <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {item.id}
+                              </span>
                             </td>
                           );
 
@@ -1030,13 +1042,14 @@ export const WebAdminInventory: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'name' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 fontWeight: 600,
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
+                              title={item.name}
                             >
-                              {item.name}
+                              <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {item.name}
+                              </span>
                             </td>
                           );
 
@@ -1045,14 +1058,11 @@ export const WebAdminInventory: React.FC = () => {
                             <td
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'category' ? 'wa-col-pinned-last' : ''}`}
-                              style={{
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
-                              }}
+                              style={baseTdStyle}
                             >
                               <select
                                 className="wa-table-select"
+                                style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden', textOverflow: 'ellipsis' }}
                                 value={item.category || '其他裝備'}
                                 disabled={isUpdating}
                                 onChange={(e) => handleCategoryChange(item, e.target.value)}
@@ -1072,30 +1082,26 @@ export const WebAdminInventory: React.FC = () => {
                             <td
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'total_qty' ? 'wa-col-pinned-last' : ''}`}
-                              style={{
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
-                              }}
+                              style={baseTdStyle}
                             >
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%', overflow: 'hidden' }}>
                                 <button
                                   type="button"
                                   className="web-admin-btn web-admin-btn-secondary"
-                                  style={{ padding: '2px 6px', fontSize: '0.75rem' }}
+                                  style={{ padding: '2px 6px', fontSize: '0.75rem', flexShrink: 0 }}
                                   disabled={isUpdating || item.total_qty <= 0}
                                   onClick={() => handleAdjustTotalQty(item, -1)}
                                   title="減少 1 件總庫存"
                                 >
                                   <Minus size={10} />
                                 </button>
-                                <span style={{ fontFamily: 'monospace', fontWeight: 700, minWidth: 24, textAlign: 'center' }}>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, minWidth: 20, textAlign: 'center' }}>
                                   {item.total_qty}
                                 </span>
                                 <button
                                   type="button"
                                   className="web-admin-btn web-admin-btn-secondary"
-                                  style={{ padding: '2px 6px', fontSize: '0.75rem' }}
+                                  style={{ padding: '2px 6px', fontSize: '0.75rem', flexShrink: 0 }}
                                   disabled={isUpdating}
                                   onClick={() => handleAdjustTotalQty(item, 1)}
                                   title="增加 1 件總庫存"
@@ -1111,17 +1117,13 @@ export const WebAdminInventory: React.FC = () => {
                             <td
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'available_qty' ? 'wa-col-pinned-last' : ''}`}
-                              style={{
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
-                              }}
+                              style={baseTdStyle}
                             >
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%', overflow: 'hidden' }}>
                                 <button
                                   type="button"
                                   className="web-admin-btn web-admin-btn-secondary"
-                                  style={{ padding: '2px 6px', fontSize: '0.75rem' }}
+                                  style={{ padding: '2px 6px', fontSize: '0.75rem', flexShrink: 0 }}
                                   disabled={isUpdating || item.available_qty <= 0}
                                   onClick={() => handleAdjustAvailableQty(item, -1)}
                                   title="減少 1 件可借"
@@ -1132,7 +1134,7 @@ export const WebAdminInventory: React.FC = () => {
                                   style={{
                                     fontFamily: 'monospace',
                                     fontWeight: 700,
-                                    minWidth: 24,
+                                    minWidth: 20,
                                     textAlign: 'center',
                                     color: item.available_qty > 0 ? 'var(--wa-success-text)' : 'var(--wa-danger-text)',
                                   }}
@@ -1142,7 +1144,7 @@ export const WebAdminInventory: React.FC = () => {
                                 <button
                                   type="button"
                                   className="web-admin-btn web-admin-btn-secondary"
-                                  style={{ padding: '2px 6px', fontSize: '0.75rem' }}
+                                  style={{ padding: '2px 6px', fontSize: '0.75rem', flexShrink: 0 }}
                                   disabled={isUpdating || item.available_qty >= item.total_qty}
                                   onClick={() => handleAdjustAvailableQty(item, 1)}
                                   title="增加 1 件可借"
@@ -1158,16 +1160,12 @@ export const WebAdminInventory: React.FC = () => {
                             <td
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'is_borrowable' ? 'wa-col-pinned-last' : ''}`}
-                              style={{
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
-                              }}
+                              style={baseTdStyle}
                             >
                               <button
                                 type="button"
                                 className={`web-admin-badge ${item.is_borrowable ? 'web-admin-badge-success' : 'web-admin-badge-danger'}`}
-                                style={{ cursor: 'pointer', border: 'none' }}
+                                style={{ cursor: 'pointer', border: 'none', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                 disabled={isUpdating}
                                 onClick={() => handleToggleBorrowable(item)}
                                 title="點擊切換開放/暫停借用"
@@ -1183,10 +1181,8 @@ export const WebAdminInventory: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'price_2day' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 fontFamily: 'monospace',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               {item.price_2day || 0}
@@ -1199,10 +1195,8 @@ export const WebAdminInventory: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'price_extra_day' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 fontFamily: 'monospace',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               {item.price_extra_day || 0}
@@ -1214,11 +1208,7 @@ export const WebAdminInventory: React.FC = () => {
                             <td
                               key={col.key}
                               className={`wa-table-note-cell ${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'notes' ? 'wa-col-pinned-last' : ''}`}
-                              style={{
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
-                              }}
+                              style={baseTdStyle}
                               onClick={() => setExpandedNotesId(isNotesExpanded ? null : item.id)}
                               title="點擊展開/收合完整備註"
                             >
@@ -1234,11 +1224,9 @@ export const WebAdminInventory: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'updated_at' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 color: 'var(--wa-text-muted)',
                                 fontSize: '0.76rem',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               {item.updated_at ? new Date(item.updated_at).toLocaleDateString('zh-TW') : '-'}
@@ -1251,10 +1239,8 @@ export const WebAdminInventory: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'actions' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 textAlign: 'center',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               <button
@@ -1269,7 +1255,7 @@ export const WebAdminInventory: React.FC = () => {
                           );
 
                         default:
-                          return <td key={col.key}>-</td>;
+                          return <td key={col.key} style={baseTdStyle}>-</td>;
                       }
                     })}
                   </tr>

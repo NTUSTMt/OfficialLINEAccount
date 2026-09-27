@@ -212,16 +212,11 @@ test('5. 電腦端個人資料瀏覽 (MemberProfileModal.tsx) 臺灣登山申請
     'utf-8'
   );
 
-  // 驗證登山申請表結構
+  // 驗證登山申請表結構 (v0.1.242 移除可收合深藍標題列，常態直接展開)
   assert.match(
     modalCode,
     /wa-mountain-permit-card/,
     'MemberProfileModal 必須具備 wa-mountain-permit-card 登山申請表卡片'
-  );
-  assert.match(
-    modalCode,
-    /隊員資料 \(臺灣登山申請格式\)/,
-    '登山申請表卡片標題必須為「隊員資料 (臺灣登山申請格式)」'
   );
 
   // 驗證所有表單標籤均無星號 (*)
@@ -259,9 +254,8 @@ test('5. 電腦端個人資料瀏覽 (MemberProfileModal.tsx) 臺灣登山申請
     '國籍欄位必須透過 getNationalityLabel 以繁中呈現'
   );
 
-  // 驗證下方結構化卡片
+  // 驗證下方結構化卡片 (v0.1.242: 留守人資訊已在登山申請表完整呈現，故移除多餘卡片)
   assert.match(modalCode, /社團與學籍身分/, '必須包含「社團與學籍身分」分區');
-  assert.match(modalCode, /緊急留守附加資訊/, '必須包含「緊急留守附加資訊」分區');
   assert.match(modalCode, /登山經歷與體能審核/, '必須包含「登山經歷與體能審核」分區');
   assert.match(modalCode, /想對幹部說的話/, '必須包含「想對幹部說的話」分區');
 });

@@ -86,8 +86,8 @@ test('WebAdminFinance 欄位定義更新、操作欄位純鉛筆圖示、時間�
   );
   assert.match(
     financeCode,
-    /key:\s*'actions',\s*label:\s*'操作',\s*defaultWidth:\s*80/,
-    'actions 操作欄位寬度必須精簡'
+    /key:\s*'actions',\s*label:\s*'操作',\s*defaultWidth:\s*50/,
+    'actions 操作欄位寬度必須精簡至 50'
   );
 
   // 表格 tableLayout: fixed 與 wa-row-resizer

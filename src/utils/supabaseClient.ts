@@ -346,7 +346,8 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
       intendOfficial: data.join_membership_intent || '',
       intendOfficer: data.officer_intent || '',
       wantToSay: data.want_to_say || '',
-      preferredLanguage: data.preferred_language || 'zh'
+      preferredLanguage: data.preferred_language || 'zh',
+      avatarUrl: data.avatar_url || ''
     };
 
     console.log('%c[DataSource: Supabase] 社員個人資料預填讀取成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', profile);
@@ -403,7 +404,8 @@ export const saveMemberProfileToSupabase = async (
       join_membership_intent: formData.intendOfficial.trim(),
       officer_intent: formData.intendOfficer.trim(),
       want_to_say: formData.wantToSay ? formData.wantToSay.trim() : '',
-      preferred_language: formData.preferredLanguage || 'zh'
+      preferred_language: formData.preferredLanguage || 'zh',
+      avatar_url: formData.avatarUrl || null
     };
 
     const { data, error } = await supabase.rpc('save_member_profile', {
@@ -420,20 +422,25 @@ export const saveMemberProfileToSupabase = async (
       return { success: false, message: data?.message || '儲存未成功' };
     }
 
-    // 直接精確更新 members 表的 proof_urls 欄位
+    // 直接精確更新 members 表的 proof_urls 與 avatar_url 欄位
     // 根因：save_member_profile RPC 內部含有 `proof_urls = CASE WHEN jsonb_array_length(EXCLUDED.proof_urls) > 0 THEN EXCLUDED.proof_urls ELSE members.proof_urls END`
     // 導致當使用者清空所有照片 (proofsList 為空陣列) 時，RPC 會拒絕更新並保留舊照片。
     // 因此此處以直更確保即使全數刪除，資料庫亦能正確儲存為空陣列。
+    const directUpdatePayload: Record<string, any> = {
+      proof_urls: proofsList,
+      updated_at: new Date().toISOString()
+    };
+    if (formData.avatarUrl) {
+      directUpdatePayload.avatar_url = formData.avatarUrl;
+    }
+
     const { error: directProofErr } = await supabase
       .from('members')
-      .update({
-        proof_urls: proofsList,
-        updated_at: new Date().toISOString()
-      })
+      .update(directUpdatePayload)
       .eq('line_user_id', userId);
 
     if (directProofErr) {
-      console.warn('[Supabase] 直接更新 proof_urls 警告 (不中斷儲存):', directProofErr.message);
+      console.warn('[Supabase] 直接更新 proof_urls/avatar_url 警告 (不中斷儲存):', directProofErr.message);
     }
 
     console.log('%c[DataSource: Supabase] 社員個人資料已極速儲存！', 'color: #10b981; font-weight: bold;', data);

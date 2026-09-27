@@ -50,7 +50,7 @@ const FINANCE_COLUMNS: AdvancedColumnDef[] = [
   { key: 'notification_status', label: '通知狀態', defaultWidth: 110, minWidth: 90 },
   { key: 'created_at', label: '時間戳記', defaultWidth: 160, minWidth: 120 },
   { key: 'notes', label: '備註說明', defaultWidth: 180, minWidth: 120 },
-  { key: 'actions', label: '操作', defaultWidth: 80, minWidth: 70 },
+  { key: 'actions', label: '操作', defaultWidth: 50, minWidth: 44 },
 ];
 
 export const WebAdminFinance: React.FC = () => {
@@ -423,6 +423,7 @@ export const WebAdminFinance: React.FC = () => {
     setEditingItem(null);
     setSideLoanItem(null);
     setSideProfileUserId(null);
+    setPreviewReceiptUrl(null);
   };
 
   // 格式化款項說明標籤 (［活動］、［社費］、［裝備］)，保持單行不折行並純化活動名稱
@@ -1087,8 +1088,9 @@ export const WebAdminFinance: React.FC = () => {
                       }`}
                     style={{
                       width: `${width}px`,
-                      minWidth: `${col.minWidth || 80}px`,
+                      minWidth: `${width}px`,
                       maxWidth: `${width}px`,
+                      boxSizing: 'border-box',
                       position: isPinned ? 'sticky' : undefined,
                       left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
                       zIndex: isPinned ? 20 : undefined,
@@ -1316,6 +1318,17 @@ export const WebAdminFinance: React.FC = () => {
                     {visibleColumns.map((col) => {
                       const isPinned = pinnedColumns.includes(col.key);
                       const stickyLeft = isPinned ? stickyLeftPositions[col.key] : undefined;
+                      const width = columnWidths[col.key] || col.defaultWidth;
+                      const baseTdStyle: React.CSSProperties = {
+                        width: `${width}px`,
+                        minWidth: `${width}px`,
+                        maxWidth: `${width}px`,
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
+                        position: isPinned ? 'sticky' : undefined,
+                        left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
+                        zIndex: isPinned ? 10 : undefined,
+                      };
 
                       switch (col.key) {
                         case 'id':
@@ -1324,13 +1337,10 @@ export const WebAdminFinance: React.FC = () => {
                               key={col.key}
                               className={`wa-clickable-cell ${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'id' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 fontFamily: 'monospace',
                                 fontSize: '0.8rem',
                                 color: 'var(--wa-text-muted)',
-                                maxWidth: 160,
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                               onClick={() => toggleCellExpand(`${item.id}:id`)}
                               title={isIdExpanded ? '點擊收合' : '點擊展開全文'}
@@ -1347,22 +1357,21 @@ export const WebAdminFinance: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'applicant' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 maxWidth: columnWidths['applicant'] || col.defaultWidth || 150,
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               <button
                                 type="button"
                                 className="wa-name-capsule-btn"
+                                style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                 onClick={() => handleOpenProfileModal(item)}
                                 title={item.name ? `${item.name} (點擊查看完整個人資料)` : '點擊查看完整個人資料'}
                               >
-                                <User size={13} />
-                                <span>{item.name || '未知申請人'}</span>
+                                <User size={13} style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name || '未知申請人'}</span>
                               </button>
                             </td>
                           );
@@ -1372,12 +1381,7 @@ export const WebAdminFinance: React.FC = () => {
                             <td
                               key={col.key}
                               className={`wa-clickable-cell ${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'type' ? 'wa-col-pinned-last' : ''}`}
-                              style={{
-                                maxWidth: 220,
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
-                              }}
+                              style={baseTdStyle}
                               onClick={() => toggleCellExpand(`${item.id}:type`)}
                               title={isTypeExpanded ? '點擊收合' : '點擊展開全文'}
                             >
@@ -1393,12 +1397,10 @@ export const WebAdminFinance: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'amount' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 fontFamily: 'monospace',
                                 fontWeight: 700,
                                 color: 'var(--wa-text)',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               ${item.amount}
@@ -1411,11 +1413,9 @@ export const WebAdminFinance: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'bank_last5' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 fontFamily: 'monospace',
                                 fontWeight: 600,
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               {item.bank_last5 ? (
@@ -1432,10 +1432,8 @@ export const WebAdminFinance: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'proof_image_url' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 textAlign: 'center',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               {item.proof_image_url ? (
@@ -1474,20 +1472,18 @@ export const WebAdminFinance: React.FC = () => {
                             <td
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'status' ? 'wa-col-pinned-last' : ''}`}
-                              style={{
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
-                              }}
+                              style={baseTdStyle}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                {getStatusBadge(item.status)}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', overflow: 'hidden', maxWidth: '100%' }}>
+                                <div style={{ minWidth: 0, flexShrink: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {getStatusBadge(item.status)}
+                                </div>
 
                                 {isChecking ? (
                                   <button
                                     type="button"
                                     className="web-admin-btn"
-                                    style={{ padding: '3px 8px', fontSize: '0.74rem' }}
+                                    style={{ padding: '3px 8px', fontSize: '0.74rem', flexShrink: 0 }}
                                     disabled={isItemProcessing}
                                     onClick={() => handleVerifyItem(item)}
                                     title="單鍵直接核銷此款項"
@@ -1512,13 +1508,13 @@ export const WebAdminFinance: React.FC = () => {
                             <td
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'notification_status' ? 'wa-col-pinned-last' : ''}`}
-                              style={{
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
-                              }}
+                              style={baseTdStyle}
                             >
-                              <span className={`web-admin-badge ${isNotified ? 'web-admin-badge-success' : 'web-admin-badge-neutral'}`}>
+                              <span
+                                className={`web-admin-badge ${isNotified ? 'web-admin-badge-success' : 'web-admin-badge-neutral'}`}
+                                style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}
+                                title={isNotified ? '已通知' : '未通知'}
+                              >
                                 {isNotified ? '已通知' : '未通知'}
                               </span>
                             </td>
@@ -1530,11 +1526,9 @@ export const WebAdminFinance: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'created_at' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 fontSize: '0.78rem',
                                 color: 'var(--wa-text-muted)',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               {item.created_at ? new Date(item.created_at).toLocaleString('zh-TW', { hour12: false }) : '-'}
@@ -1547,12 +1541,9 @@ export const WebAdminFinance: React.FC = () => {
                               key={col.key}
                               className={`wa-clickable-cell ${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'notes' ? 'wa-col-pinned-last' : ''}`}
                               style={{
-                                maxWidth: 200,
+                                ...baseTdStyle,
                                 fontSize: '0.82rem',
                                 color: 'var(--wa-text-muted)',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                               onClick={() => toggleCellExpand(`${item.id}:notes`)}
                               title={isNotesExpanded ? '點擊收合' : '點擊展開全文'}
@@ -1569,10 +1560,8 @@ export const WebAdminFinance: React.FC = () => {
                               key={col.key}
                               className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'actions' ? 'wa-col-pinned-last' : ''}`}
                               style={{
+                                ...baseTdStyle,
                                 textAlign: 'center',
-                                position: isPinned ? 'sticky' : undefined,
-                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
-                                zIndex: isPinned ? 10 : undefined,
                               }}
                             >
                               <button
@@ -1588,7 +1577,7 @@ export const WebAdminFinance: React.FC = () => {
                           );
 
                         default:
-                          return <td key={col.key}>-</td>;
+                          return <td key={col.key} style={baseTdStyle}>-</td>;
                       }
                     })}
                   </tr>
@@ -1643,7 +1632,45 @@ export const WebAdminFinance: React.FC = () => {
       {/* 右側滑出式編輯視窗 (Floating Slide-Over Drawer: 支援三欄同級並列與水平滾動) */}
       {drawerOpen && editingItem && (
         <div className="wa-drawer-backdrop" onClick={handleCloseDrawer}>
-          {/* 最左欄：裝備借用單編輯抽屜 (同級並列) */}
+          {/* 最左欄：若點擊匯款證明照片，於左側滑出同級大圖藝廊面板 */}
+          {previewReceiptUrl && (
+            <div className="wa-drawer-side-preview" onClick={(e) => e.stopPropagation()}>
+              <div className="wa-drawer-side-preview-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <ImageIcon size={16} color="var(--wa-primary)" />
+                  <span>匯款單據 / 證明照片預覽</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <a
+                    href={previewReceiptUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--wa-text-muted)', display: 'flex', alignItems: 'center' }}
+                    title="另開新視窗查看原圖"
+                  >
+                    <ExternalLink size={16} />
+                  </a>
+                  <button
+                    type="button"
+                    className="wa-drawer-close-btn"
+                    onClick={() => setPreviewReceiptUrl(null)}
+                    title="關閉預覽"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+              <div className="wa-drawer-side-preview-body">
+                <img
+                  src={previewReceiptUrl}
+                  alt="匯款收據大圖預覽"
+                  className="wa-drawer-side-preview-img"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 裝備借用單編輯抽屜 (同級並列) */}
           {sideLoanItem && (
             <div className="wa-drawer-side-loan" onClick={(e) => e.stopPropagation()}>
               <div className="wa-drawer-side-loan-header">
@@ -2010,8 +2037,8 @@ export const WebAdminFinance: React.FC = () => {
         </div>
       )}
 
-      {/* 匯款收據證明圖片放大檢視彈窗 */}
-      {previewReceiptUrl && (
+      {/* 匯款收據證明圖片放大檢視彈窗 (僅在未開啟詳細抽屜時呈現) */}
+      {!drawerOpen && previewReceiptUrl && (
         <div className="wa-modal-backdrop" onClick={() => setPreviewReceiptUrl(null)}>
           <div
             className="wa-modal-container"

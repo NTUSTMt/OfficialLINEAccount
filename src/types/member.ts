@@ -23,4 +23,5 @@ export interface ProfileData {
   intendOfficer: string;
   wantToSay?: string;
   preferredLanguage?: string;
+  avatarUrl?: string;
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ShieldCheck, Compass, Tent, CreditCard, X, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 
@@ -71,7 +72,7 @@ export const SystemGuideModal: React.FC<SystemGuideModalProps> = ({ isOpen, onCl
 
   const stepData = steps[currentStep];
 
-  return (
+  return createPortal(
     <div
       style={{
         position: 'fixed',
@@ -79,14 +80,19 @@ export const SystemGuideModal: React.FC<SystemGuideModalProps> = ({ isOpen, onCl
         left: 0,
         right: 0,
         bottom: 0,
+        width: '100vw',
+        height: '100dvh',
         backgroundColor: 'rgba(15, 23, 42, 0.72)',
         backdropFilter: 'blur(5px)',
         WebkitBackdropFilter: 'blur(5px)',
-        zIndex: 9999,
+        zIndex: 99999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '16px'
+        padding: '16px',
+        boxSizing: 'border-box',
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch'
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) handleFinish();
@@ -96,13 +102,15 @@ export const SystemGuideModal: React.FC<SystemGuideModalProps> = ({ isOpen, onCl
         style={{
           width: '100%',
           maxWidth: '460px',
+          maxHeight: 'min(88vh, calc(100dvh - 32px))',
           backgroundColor: '#ffffff',
           borderRadius: '20px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          position: 'relative'
+          position: 'relative',
+          margin: 'auto'
         }}
       >
         {/* Header Bar */}
@@ -112,7 +120,8 @@ export const SystemGuideModal: React.FC<SystemGuideModalProps> = ({ isOpen, onCl
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 20px',
-            borderBottom: '1px solid #f1f5f9'
+            borderBottom: '1px solid #f1f5f9',
+            flexShrink: 0
           }}
         >
           <div>
@@ -145,7 +154,14 @@ export const SystemGuideModal: React.FC<SystemGuideModalProps> = ({ isOpen, onCl
         </div>
 
         {/* Card Body */}
-        <div style={{ padding: '24px 22px 18px 22px' }}>
+        <div
+          style={{
+            padding: '20px 22px 14px 22px',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            flex: 1
+          }}
+        >
           {/* Step Icon & Tag */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div
@@ -234,7 +250,7 @@ export const SystemGuideModal: React.FC<SystemGuideModalProps> = ({ isOpen, onCl
                 LINE
               </div>
               <div style={{ fontSize: '12px', color: '#334155', lineHeight: '1.4' }}>
-                頂部右上角綠框圓形頭貼選單，隨時點擊即可切換頁面
+                {t('guide.step2.avatarTip')}
               </div>
             </div>
           )}
@@ -247,7 +263,8 @@ export const SystemGuideModal: React.FC<SystemGuideModalProps> = ({ isOpen, onCl
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            paddingBottom: '14px'
+            paddingBottom: '14px',
+            flexShrink: 0
           }}
         >
           {steps.map((_, idx) => (
@@ -278,7 +295,8 @@ export const SystemGuideModal: React.FC<SystemGuideModalProps> = ({ isOpen, onCl
             padding: '14px 20px',
             backgroundColor: '#f8fafc',
             borderTop: '1px solid #f1f5f9',
-            gap: '10px'
+            gap: '10px',
+            flexShrink: 0
           }}
         >
           {currentStep > 0 ? (
@@ -364,7 +382,8 @@ export const SystemGuideModal: React.FC<SystemGuideModalProps> = ({ isOpen, onCl
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 export default SystemGuideModal;

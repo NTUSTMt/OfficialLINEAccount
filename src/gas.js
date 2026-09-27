@@ -1609,7 +1609,7 @@ function sendEventList(replyToken, userId) {
 
     var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
     var displayStatusZh = isFuture ? "未來開放" : (isOpen ? "開放" : "報名截止");
-    var displayStatusEn = isFuture ? "Coming Soon" : (isOpen ? "Open" : "Registration Closed");
+    var displayStatusEn = isFuture ? "Coming Soon" : (isOpen ? "Open" : "Reg. Closed");
     var displayStatus = (prefLang === "en") ? displayStatusEn : (prefLang === "zh" ? displayStatusZh : (displayStatusZh + " " + displayStatusEn));
 
     var regCount = signupCounts[eventId] || 0;

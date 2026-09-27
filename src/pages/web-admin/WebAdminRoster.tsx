@@ -82,6 +82,7 @@ interface ColumnDef {
   key: string;
   label: string;
   defaultWidth: number;
+  minWidth?: number;
   getValue: (row: SignupRow) => any;
   formatText: (row: SignupRow) => string;
 }
@@ -805,14 +806,18 @@ export const WebAdminRoster: React.FC = () => {
   const startResizing = (key: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const startWidth = columnWidths[key] || 100;
-    resizingRef.current = { key, startX: e.clientX, startWidth };
+    const colDef = ALL_COLUMNS.find((c) => c.key === key);
+    const minWidth = colDef?.minWidth || 50;
+    const startWidth = columnWidths[key] || colDef?.defaultWidth || 100;
+    const startX = e.clientX;
+    const targetKey = key;
+    resizingRef.current = { key: targetKey, startX, startWidth };
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!resizingRef.current) return;
-      const delta = moveEvent.clientX - resizingRef.current.startX;
-      const newWidth = Math.max(50, resizingRef.current.startWidth + delta);
-      setColumnWidths((prev) => ({ ...prev, [resizingRef.current!.key]: newWidth }));
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(minWidth, startWidth + delta);
+      setColumnWidths((prev) => ({ ...prev, [targetKey]: newWidth }));
     };
 
     const handleMouseUp = () => {
@@ -1663,19 +1668,26 @@ export const WebAdminRoster: React.FC = () => {
                       const stickyLeft = stickyLeftPositions[col.key];
                       const isLastPinned = col.key === lastPinnedKey;
                       const textVal = col.formatText(s);
+                      const width = columnWidths[col.key] || col.defaultWidth;
+                      const baseTdStyle: React.CSSProperties = {
+                        width: `${width}px`,
+                        minWidth: `${width}px`,
+                        maxWidth: `${width}px`,
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
+                        position: isPinned ? 'sticky' : undefined,
+                        left: isPinned ? stickyLeft : undefined,
+                        zIndex: isPinned ? 8 : undefined,
+                        backgroundColor: '#ffffff',
+                        borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
+                      };
 
                       // 1. 審核狀態欄位 (下拉選單即時更新)
                       if (col.key === 'status') {
                         return (
                           <td
                             key={col.key}
-                            style={{
-                              position: isPinned ? 'sticky' : undefined,
-                              left: isPinned ? stickyLeft : undefined,
-                              zIndex: isPinned ? 8 : undefined,
-                              backgroundColor: '#ffffff',
-                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
-                            }}
+                            style={baseTdStyle}
                             className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
                           >
                             <select
@@ -1684,10 +1696,12 @@ export const WebAdminRoster: React.FC = () => {
                               onChange={(e) => handleStatusChange(s.id, e.target.value)}
                               disabled={isUpdating}
                               style={{
-                                padding: '3px 8px',
+                                width: '100%',
+                                maxWidth: '100%',
+                                boxSizing: 'border-box',
+                                padding: '3px 6px',
                                 fontSize: '0.8rem',
                                 fontWeight: 600,
-                                minWidth: 140,
                                 backgroundColor: normStatus.includes('正取')
                                   ? 'rgba(5, 150, 105, 0.1)'
                                   : normStatus.includes('備取')
@@ -1720,13 +1734,7 @@ export const WebAdminRoster: React.FC = () => {
                         return (
                           <td
                             key={col.key}
-                            style={{
-                              position: isPinned ? 'sticky' : undefined,
-                              left: isPinned ? stickyLeft : undefined,
-                              zIndex: isPinned ? 8 : undefined,
-                              backgroundColor: '#ffffff',
-                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
-                            }}
+                            style={baseTdStyle}
                             className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
                           >
                             <select
@@ -1735,6 +1743,9 @@ export const WebAdminRoster: React.FC = () => {
                               onChange={(e) => handleNotificationStatusChange(s.id, e.target.value)}
                               disabled={isUpdating}
                               style={{
+                                width: '100%',
+                                maxWidth: '100%',
+                                boxSizing: 'border-box',
                                 color: notifyVal === '已通知' ? '#047857' : '#64748b',
                                 backgroundColor: notifyVal === '已通知' ? 'rgba(5, 150, 105, 0.1)' : '#f1f5f9',
                               }}
@@ -1753,11 +1764,7 @@ export const WebAdminRoster: React.FC = () => {
                           <td
                             key={col.key}
                             style={{
-                              position: isPinned ? 'sticky' : undefined,
-                              left: isPinned ? stickyLeft : undefined,
-                              zIndex: isPinned ? 8 : undefined,
-                              backgroundColor: '#ffffff',
-                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
+                              ...baseTdStyle,
                               cursor: 'pointer',
                             }}
                             className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
@@ -1781,9 +1788,10 @@ export const WebAdminRoster: React.FC = () => {
                                   if (e.key === 'Enter') handleSaveNotes(s.id, editingNotesText);
                                   if (e.key === 'Escape') setEditingNotesId(null);
                                 }}
+                                style={{ width: '100%', boxSizing: 'border-box' }}
                               />
                             ) : (
-                              <span style={{ fontSize: '0.82rem' }}>
+                              <span style={{ fontSize: '0.82rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {s.notes ? (
                                   s.notes
                                 ) : (
@@ -1803,16 +1811,13 @@ export const WebAdminRoster: React.FC = () => {
                         return (
                           <td
                             key={col.key}
-                            style={{
-                              position: isPinned ? 'sticky' : undefined,
-                              left: isPinned ? stickyLeft : undefined,
-                              zIndex: isPinned ? 8 : undefined,
-                              backgroundColor: '#ffffff',
-                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
-                            }}
+                            style={baseTdStyle}
                             className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
                           >
-                            <span className={`web-admin-badge ${isPaid ? 'web-admin-badge-success' : 'web-admin-badge-warning'}`}>
+                            <span
+                              className={`web-admin-badge ${isPaid ? 'web-admin-badge-success' : 'web-admin-badge-warning'}`}
+                              style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            >
                               {textVal}
                             </span>
                           </td>
@@ -1824,31 +1829,26 @@ export const WebAdminRoster: React.FC = () => {
                         return (
                           <td
                             key={col.key}
-                            style={{
-                              position: isPinned ? 'sticky' : undefined,
-                              left: isPinned ? stickyLeft : undefined,
-                              zIndex: isPinned ? 8 : undefined,
-                              backgroundColor: '#ffffff',
-                              borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
-                            }}
+                            style={baseTdStyle}
                             className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
                           >
                             <button
                               type="button"
                               className="wa-name-capsule-btn"
+                              style={{ maxWidth: '100%', boxSizing: 'border-box' }}
                               onClick={() => {
                                 const mData: any = Array.isArray(s.members) ? s.members[0] : s.members;
                                 setProfileModalUserId(s.line_user_id || null);
                                 setProfileModalMember(
                                   mData
-                                    ? { ...mData, line_user_id: s.line_user_id, name: mData.name || s.name }
-                                    : { line_user_id: s.line_user_id, name: s.name }
+                                    ? { ...mData, line_user_id: s.line_user_id, name: mData.name || s.name, avatar_url: mData.avatar_url || (s as any).avatar_url }
+                                    : { line_user_id: s.line_user_id, name: s.name, avatar_url: (s as any).avatar_url }
                                 );
                               }}
                               title="查看報名者詳細個人資料"
                             >
-                              <User size={12} />
-                              <span>{textVal}</span>
+                              <User size={12} style={{ flexShrink: 0 }} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{textVal}</span>
                             </button>
                           </td>
                         );
@@ -1863,12 +1863,9 @@ export const WebAdminRoster: React.FC = () => {
                           key={col.key}
                           className={`wa-clickable-cell ${isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}`}
                           style={{
-                            position: isPinned ? 'sticky' : undefined,
-                            left: isPinned ? stickyLeft : undefined,
-                            zIndex: isPinned ? 8 : undefined,
-                            backgroundColor: '#ffffff',
-                            maxWidth: columnWidths[col.key] || col.defaultWidth,
-                            borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
+                            ...baseTdStyle,
+                            overflow: isExpanded ? 'visible' : 'hidden',
+                            whiteSpace: isExpanded ? 'normal' : 'nowrap',
                           }}
                           onClick={() => {
                             if (textVal && textVal !== '-') {
@@ -1877,7 +1874,16 @@ export const WebAdminRoster: React.FC = () => {
                           }}
                           title={textVal !== '-' ? (isExpanded ? '點擊收合' : '點擊展開全文') : undefined}
                         >
-                          <span className={isExpanded ? 'wa-cell-expanded' : 'wa-cell-ellipsis'}>
+                          <span
+                            className={isExpanded ? 'wa-cell-expanded' : 'wa-cell-ellipsis'}
+                            style={{
+                              display: 'block',
+                              overflow: isExpanded ? 'visible' : 'hidden',
+                              textOverflow: isExpanded ? 'clip' : 'ellipsis',
+                              whiteSpace: isExpanded ? 'normal' : 'nowrap',
+                              wordBreak: isExpanded ? 'break-word' : 'normal',
+                            }}
+                          >
                             {textVal}
                           </span>
                         </td>

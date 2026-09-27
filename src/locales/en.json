@@ -674,7 +674,8 @@
     "step2": {
       "tag": "Step 2 / 4",
       "title": "Switch Pages via Avatar",
-      "desc": "Important tip: Tap your LINE Avatar at the top right anytime to open the quick navigation dropdown! Instantly jump between Dashboard, Profile, Events, Gear Loan, and Payment."
+      "desc": "Important tip: Tap your LINE Avatar at the top right anytime to open the quick navigation dropdown! Instantly jump between Dashboard, Profile, Events, Gear Loan, and Payment.",
+      "avatarTip": "Green circular avatar menu at top right: click anytime to switch pages"
     },
     "step3": {
       "tag": "Step 3 / 4",

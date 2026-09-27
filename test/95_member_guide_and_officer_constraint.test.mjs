@@ -68,6 +68,14 @@ describe('95. 社團幹部意願限制與社員系統使用導覽 (Officer Inten
       guideModalContent.includes('currentStep'),
       '必須具備分頁卡片切換步驟狀態'
     );
+    assert.ok(
+      guideModalContent.includes('createPortal') && guideModalContent.includes('document.body'),
+      '必須使用 createPortal 掛載至 document.body 杜絕父容器 backdrop-filter 定位捕獲'
+    );
+    assert.ok(
+      guideModalContent.includes('maxHeight') && guideModalContent.includes('overflowY'),
+      '必須具備 maxHeight 與 overflowY 捲動防截斷保護'
+    );
   });
 
   it('4. 驗證 App.tsx 大頭貼下拉選單常駐「使用指南」選項', () => {
@@ -94,6 +102,9 @@ describe('95. 社團幹部意願限制與社員系統使用導覽 (Officer Inten
 
     assert.ok(zhContent.guide.step2.desc.includes('LINE 大頭貼'), '中文步驟二需特別提及 LINE 大頭貼切換');
     assert.ok(enContent.guide.step2.desc.includes('Avatar'), '英文步驟二需特別提及 LINE Avatar 切換');
+    assert.strictEqual(zhContent.guide.step2.avatarTip, '頂部右上角綠框圓形頭貼選單，隨時點擊即可切換頁面');
+    assert.strictEqual(enContent.guide.step2.avatarTip, 'Green circular avatar menu at top right: click anytime to switch pages');
+    assert.ok(guideModalContent.includes("t('guide.step2.avatarTip')"), 'SystemGuideModal 必須使用 avatarTip 翻譯鍵');
     assert.strictEqual(zhContent.guide.start, '開始填寫');
     assert.strictEqual(enContent.guide.start, 'Get Started');
   });

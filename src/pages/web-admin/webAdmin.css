@@ -384,6 +384,8 @@
   color: var(--wa-text);
   vertical-align: middle;
   background-clip: padding-box;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .web-admin-table tr:hover td {
@@ -539,6 +541,11 @@
   font-size: 0.76rem;
   font-weight: 600;
   line-height: 1.2;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .web-admin-badge-success {
@@ -1967,6 +1974,12 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   cursor: pointer;
   outline: none;
   transition: all 0.15s ease;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .wa-table-select:focus,
 .wa-table-select:hover {

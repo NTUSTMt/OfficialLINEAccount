@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.238-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.243-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.238)](#7-最新版本異動紀錄-changelog-v01238)
+- [7. 最新版本異動紀錄 (Changelog v0.1.243)](#7-最新版本異動紀錄-changelog-v01243)
 
 ---
 
@@ -392,7 +392,7 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.238)
+## 7. 最新版本異動紀錄 (Changelog v0.1.240)
 
 ### v0.1.206 (2026-09-24)
 - 報名名冊一鍵恢復預設尺寸連動恢復欄高與展開 (WebAdminRoster.tsx):
@@ -1891,6 +1891,94 @@ pnpm test
   - 測試與建置檢查：
     - 新增 test/96_payment_proof_image_and_locales.test.mjs 單元測試（5 項驗證涵蓋指南英文對齊、繳費證明雙語鍵值、Payment 匯款框規格、History / ConfirmPayment / WebAdminFinance 縮圖燈箱支援、GAS 後端整合）。
     - 全專案 80 個測試套件、438 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包編譯零錯誤。
+
+### v0.1.239 (2026-09-27)
+- 社員系統使用指南導覽燈箱 (SystemGuideModal.tsx) 大頭貼切換提示語系完整化：
+  - 語系鍵值補齊：
+    - 將步驟二「大頭貼快速切換分頁」中的視覺卡片提示字串抽取為多國語系鍵值 guide.step2.avatarTip。
+    - zh.json 定義為：「頂部右上角綠框圓形頭貼選單，隨時點擊即可切換頁面」。
+    - en.json 同步定義為：「Green circular avatar menu at top right: click anytime to switch pages」。
+  - 元件國際化改造：
+    - SystemGuideModal.tsx 取代原先硬編碼之中文文字，改由 t('guide.step2.avatarTip') 動態載入，確保英文介面切換時維持 100% 完整之雙語體驗。
+  - 單元測試與建置檢查：
+    - 更新 test/95_member_guide_and_officer_constraint.test.mjs 加入 avatarTip 中英文精準斷言與元件呼叫檢查。
+    - 全專案 80 個測試套件、438 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包編譯零錯誤，全篇零 Emoji。
+
+### v0.1.240 (2026-09-27)
+- 社員系統使用指南導覽燈箱 (SystemGuideModal.tsx) 移動端定位截斷修復與 React Portal 隔離：
+  - 根因排查：
+    - 全域導覽頂部 (.app-header) 具備 backdrop-filter: blur(12px) 與 position: sticky 特性，在 CSS 規範與 iOS WebKit 中強制建立獨立 Containing Block，導致其內部的 fixed 定位子元件無法相對視窗全螢幕置中，而是被約束在 Header 範圍內，當使用者滾動頁面時彈窗被往上推擠並自頂部截斷。
+    - 同時，在高度受限之手機螢幕（如 LINE 內建瀏覽器）中，Flex 置中在內容超過視窗時會將上方頂出可視區域（top < 0），導致標題與按鈕無法向上滾動檢視。
+  - 修復與架構優化：
+    - 導入 React createPortal 將 SystemGuideModal 直接掛載至 document.body，徹底脫離 .app-header 之 Stacking Context 與 Containing Block。
+    - 同步於 App.tsx 將 SystemGuideModal 移出 header 標籤。
+    - 彈窗卡片設定 maxHeight: min(88vh, calc(100dvh - 32px))，並將 Card Body 設為 overflowY: auto 與 flex: 1，確保頂部 Header 與底部按鈕常駐顯示，中間文字長度超長時平滑內部捲動。
+    - 外層遮罩容器配置 overflowY: auto 與 margin: auto，全面杜絕行動端任何向上裁切問題。
+  - 單元測試與建置檢查：
+    - 更新 test/95_member_guide_and_officer_constraint.test.mjs 擴充對 createPortal、document.body 掛載、maxHeight 與 overflowY 之架構檢查。
+    - 全專案 80 個測試套件、438 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包編譯零錯誤，全篇零 Emoji。
+
+### v0.1.241 (2026-09-27)
+- 網頁版財務對帳與裝備狀態表格縮小欄寬白屏崩潰與欄位內容超出溢出修復：
+  - 拖曳欄寬放開滑鼠白屏崩潰修復 (useAdvancedTable.ts, WebAdminRoster.tsx)：
+    - 根因排查：在 useAdvancedTable.ts 與 WebAdminRoster.tsx 中，表格欄寬拖曳使用 setColumnWidths((prev) => ({ ...prev, [resizingRef.current!.key]: newWidth })) 進行狀態更新。當使用者在 mouseup 放開滑鼠時，事件處理函式同步執行 resizingRef.current = null；由於 React 狀態更新排程採批次異步執行，在 updater 回呼實際被叫用時 resizingRef.current 已經為 null，引發未捕獲之 TypeError: Cannot read properties of null (reading 'key')，導致整個 React 元件樹崩潰出現白屏。
+    - 閉包鎖定修復：在 startResizing 監聽起點直接宣告區域常數 const targetKey = key;，並在 setColumnWidths 中直接以 targetKey 作為鍵值，徹底移除對 resizingRef.current 之異步解構依賴，杜絕空指標例外。
+  - 全域樣式防溢出與截斷保護 (webAdmin.css)：
+    - 為 .web-admin-badge 補齊 max-width: 100%、overflow: hidden、text-overflow: ellipsis、white-space: nowrap 與 box-sizing: border-box，解決「已核銷 Confirmed」等徽章於欄寬縮小時溢出至鄰近儲存格問題。
+    - 為 .wa-table-select 補齊 width: 100%、max-width: 100%、box-sizing: border-box、overflow: hidden、text-overflow: ellipsis 與 white-space: nowrap，確保系統分類在欄寬窄小時自適應省略不換行。
+    - 為 .web-admin-table td 增加 box-sizing: border-box 與 overflow: hidden。
+  - 財務對帳與裝備管理表格儲存格嚴格約束 (WebAdminFinance.tsx, WebAdminInventory.tsx)：
+    - WebAdminFinance.tsx：表頭 th 設定 minWidth 為實際欄寬並配置 boxSizing: border-box；所有 td 全面導入 baseTdStyle（設定 width, minWidth, maxWidth, boxSizing: border-box, overflow: hidden）；「核銷狀態」內部 flex 容器改為 nowrap 並限制 maxWidth: 100%，徽章與單鍵核銷按鈕配置縮小保護；「通知狀態」徽章補齊縮小截斷屬性。
+    - WebAdminInventory.tsx：表頭 th 補齊 minWidth 與 boxSizing: border-box；所有 td 統一套用 baseTdStyle；「系統分類」select 內嵌寬度百分之百約束；「是否開放借用」按鈕加上單行截斷保護。
+  - 單元測試與建置檢查：
+    - 新增 test/100_web_admin_table_resizing_and_overflow.test.mjs，完整驗證 useAdvancedTable 與 WebAdminRoster 閉包安全、CSS 截斷樣式與 baseTdStyle 規格。
+    - 全專案 81 個測試套件、441 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.242 (2026-09-27)
+- 個人資料登山申請格式自適應、體能證明大圖置中固定、名冊表格自由縮窄、操作欄精簡、財務詳情同級藝廊預覽與 LINE 破冰機制：
+  - 個人資料瀏覽頁面 (MemberProfileModal.tsx) 視覺與登山申請格式重構：
+    - 大圖預覽螢幕垂直置中固定：點擊體能證明縮圖後的大圖面板改設 alignSelf: 'center'，並將外部容器間距縮減至緊密貼合的 12px；個資主卡片設定內部滾動 (maxHeight: calc(100vh - 48px), overflowY: auto)，無論個資頁面如何上下滑動，大圖面板始終穩固停留在螢幕正中央，不隨之上下移位。
+    - 欄位名稱標籤自適應縮小：將臺灣登山申請格式中姓名、電話、地址、身分證號、生日、緊急聯絡人等所有標籤寬度由寫死之 95px/190px 全面改為自適應 fit-content (width: 'fit-content', minWidth: 'fit-content', whiteSpace: 'nowrap')，內距微調為 6px 10px，釋放寶貴的資料展示寬度。
+    - 移除可折疊深藍標題列：完全去除「隊員資料 (臺灣登山申請格式)」深藍色標題列與折疊狀態，改以白底乾淨卡片常態展開呈現。
+    - 移除緊急留守附加資訊卡片：因登山申請格式中已完整收錄留守人姓名、電話、關係與地址，完全刪除重疊多餘之「緊急留守附加資訊」分區卡片。
+    - 真實 LINE 頭貼渲染：頂部個人頭像區塊優先讀取社員 avatar_url，呈現 38x38 圓角真實頭貼並附帶錯誤降級保護。
+  - 社員 LINE 頭貼自動全鏈路同步與換頭貼自動更新：
+    - App.tsx 於 initializeLiff 取得 profile.pictureUrl 時，非同步背景更新 Supabase members 表的 avatar_url 欄位，社員更換 LINE 頭像後再次開啟應用程式即可自動無感同步。
+    - supabaseClient.ts 於 fetchMemberProfileFromSupabase 與 saveMemberProfileToSupabase 雙向讀寫 avatar_url 欄位。
+    - Register.tsx 表單於初始化讀取 LIFF 頭貼並於送出時儲存。
+    - WebAdminRoster.tsx 於開啟個資彈窗時傳入 avatar_url。
+  - LIFF sendMessages 破冰機制（告別幽靈社員）：
+    - 根因排查：LINE Official Account 規範中，使用者若未曾在聊天室發送過訊息，官方帳號後台無法建立 1 對 1 聊天室，導致管理員無法檢視聊天紀錄，亦無法確認繳費確認通知是否成功傳送。
+    - 破冰實作：在 Register.tsx 社員首次完成填寫個人資料或更新時，於 liff.isInClient() 環境透過安全 try-catch 呼叫 liff.sendMessages 發送「我已完成個人資料填寫」或「我已更新個人資料」，在不打擾使用者且不額外要求點選 Rich Menu 發訊息的情況下，自然達成破冰並解鎖後台聊天室。
+  - 報名名冊工作站 (WebAdminRoster.tsx) 表格欄寬完全解鎖：
+    - 移除「審核結果」select 寫死之 minWidth: 140。
+    - 資料列所有儲存格 (td) 全面導入 baseTdStyle，包含 width, minWidth, maxWidth 與 overflow: hidden，且 status、notification_status、notes、payment_status、name 內部元件均受 maxWidth: 100% 約束，允許幹部任意將欄位拉窄至極致而不溢出或白屏。
+  - 操作欄位寬度精簡 (WebAdminFinance.tsx, WebAdminInventory.tsx)：
+    - 財務對帳與裝備清單的 actions 操作欄位預設寬度縮小至 defaultWidth: 50, minWidth: 44。
+  - 財務對帳詳細頁面匯款證明縮圖與同級左側滑出大圖 (WebAdminFinance.tsx)：
+    - 詳情抽屜顯示縮圖卡片，點擊縮圖後於抽屜左側滑出同級的 .wa-drawer-side-preview 藝廊面板，並排呈現原圖與外部開啟按鈕。
+  - 單元測試與建置檢查：
+    - 更新 test/95_web_admin_finance_advanced_and_inventory_serial.test.mjs、test/96_member_profile_mountain_permit_and_nationality.test.mjs 與 test/100_web_admin_table_resizing_and_overflow.test.mjs。
+    - 全專案 80 個測試套件、442 項單元測試 100% 通過，TypeScript 與 Vite 打包零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.243 (2026-09-27)
+- 個人資料瀏覽彈窗 (MemberProfileModal.tsx) 臺灣登山申請格式與分區卡片防截斷修復：
+  - 截斷問題根本原因定位：
+    - 個資瀏覽外層彈窗卡片為 flex 縱向排版 (display: flex, flexDirection: column, maxHeight: calc(100vh - 48px), overflowY: auto)。
+    - 內部子區塊（包括 .wa-mountain-permit-card、renderDesktopOtherSections、renderMobileContent、頂部標題列與底部按鈕外層容器）原未明確設定 flexShrink: 0。
+    - 根據 Flexbox 預設行為 (flex-shrink: 1)，當內容高度超出螢幕時，各子區塊遭到 Flex 強制縮小壓縮，加上內部卡片帶有 overflow: hidden，導致 Row 4 身分證號被切成細線，Row 5~7（性別、生日、緊急聯絡人與關係/地址）完全被截斷無法展示。
+  - 防截斷修復實作：
+    - 為臺灣登山申請格式卡片 (.wa-mountain-permit-card) 明確設定 flexShrink: 0，杜絕高度被 Flexbox 壓縮。
+    - 為電腦版其他分區外層容器 (renderDesktopOtherSections) 與手機版容器 (renderMobileContent) 設定 flexShrink: 0。
+    - 為頂部標題列與底部按鈕容器設定 flexShrink: 0。
+    - 確保所有卡片與區塊 100% 完整撐開物理高度，內容超出螢幕時一律由外層卡片的 overflowY: auto 統一滑動瀏覽，徹底解決被截斷問題。
+  - 單元測試與打包驗證：
+    - 擴充 test/100_web_admin_table_resizing_and_overflow.test.mjs，新增 v0.1.243 驗證測試，確保 flexShrink: 0 規格全數落實。
+    - 全專案 80 個測試套件、443 項單元測試 100% 通過，TypeScript 與 Vite 生產打包零錯誤，全篇嚴格零 Emoji。
+
+
+
+
 
 
 

@@ -35,6 +35,7 @@ interface ProfileData {
   intendOfficer: string;
   wantToSay?: string;
   preferredLanguage?: string;
+  avatarUrl?: string;
 }
 
 interface UploadedFile {
@@ -74,6 +75,7 @@ function Register({ userId }: { userId: string }) {
     intendOfficer: '',
     wantToSay: '',
     preferredLanguage: 'zh',
+    avatarUrl: ''
   });
 
   // 上傳檔案狀態
@@ -131,13 +133,19 @@ function Register({ userId }: { userId: string }) {
       let memberFound = false;
       try {
         let lineDisplayName = '';
+        let linePictureUrl = '';
         // 1. 取得 LINE Profile
         if (liff.isLoggedIn()) {
           try {
             const profile = await liff.getProfile();
             lineDisplayName = profile.displayName || '';
-            // 預帶 LINE ID
-            setFormData((prev) => ({ ...prev, realLineId: lineDisplayName }));
+            linePictureUrl = profile.pictureUrl || '';
+            // 預帶 LINE ID 與頭像
+            setFormData((prev) => ({
+              ...prev,
+              realLineId: prev.realLineId || lineDisplayName,
+              avatarUrl: prev.avatarUrl || linePictureUrl
+            }));
           } catch (e) {
             console.warn('LIFF 取得 Profile 失敗:', e);
           }
@@ -152,6 +160,7 @@ function Register({ userId }: { userId: string }) {
             const loadedData: ProfileData = {
               ...sbProfile,
               realLineId: sbProfile.realLineId || lineDisplayName,
+              avatarUrl: sbProfile.avatarUrl || linePictureUrl,
             };
             setFormData((prev) => ({
               ...prev,
@@ -656,6 +665,16 @@ function Register({ userId }: { userId: string }) {
 
         alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
+          try {
+            await liff.sendMessages([
+              {
+                type: 'text',
+                text: isNewUser ? '我已完成個人資料填寫' : '我已更新個人資料'
+              }
+            ]);
+          } catch (sendErr) {
+            console.warn('[Register] LIFF sendMessages 略過或無權限:', sendErr);
+          }
           liff.closeWindow();
         }
       } else {
@@ -680,6 +699,16 @@ function Register({ userId }: { userId: string }) {
 
         alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
+          try {
+            await liff.sendMessages([
+              {
+                type: 'text',
+                text: isNewUser ? '我已完成個人資料填寫' : '我已更新個人資料'
+              }
+            ]);
+          } catch (sendErr) {
+            console.warn('[Register] LIFF sendMessages 略過或無權限:', sendErr);
+          }
           liff.closeWindow();
         }
       } else {

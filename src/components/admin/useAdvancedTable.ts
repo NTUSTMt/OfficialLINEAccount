@@ -241,14 +241,18 @@ export function useAdvancedTable<T>({
     (key: string, e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      const startWidth = columnWidths[key] || 100;
-      resizingRef.current = { key, startX: e.clientX, startWidth };
+      const colDef = columns.find((c) => c.key === key);
+      const minWidth = colDef?.minWidth || 50;
+      const startWidth = columnWidths[key] || colDef?.defaultWidth || 100;
+      const startX = e.clientX;
+      const targetKey = key;
+      resizingRef.current = { key: targetKey, startX, startWidth };
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         if (!resizingRef.current) return;
-        const delta = moveEvent.clientX - resizingRef.current.startX;
-        const newWidth = Math.max(50, resizingRef.current.startWidth + delta);
-        setColumnWidths((prev) => ({ ...prev, [resizingRef.current!.key]: newWidth }));
+        const delta = moveEvent.clientX - startX;
+        const newWidth = Math.max(minWidth, startWidth + delta);
+        setColumnWidths((prev) => ({ ...prev, [targetKey]: newWidth }));
       };
 
       const handleMouseUp = () => {
@@ -260,7 +264,7 @@ export function useAdvancedTable<T>({
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     },
-    [columnWidths]
+    [columns, columnWidths]
   );
 
   // 列級操作

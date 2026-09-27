@@ -8,7 +8,7 @@ import { appendAuthToken } from './utils/api';
 import { getCache, setCache } from './utils/cacheUtils';
 import { GAS_API_URL } from './constants/api';
 import { LIFF_URLS } from './constants/liff';
-import { fetchMemberProfileFromSupabase, checkOfficerStatusFromSupabase } from './utils/supabaseClient';
+import { fetchMemberProfileFromSupabase, checkOfficerStatusFromSupabase, supabase } from './utils/supabaseClient';
 import './App.css';
 
 const Borrow = lazy(() => import('./pages/Borrow'));
@@ -143,7 +143,8 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
   };
 
   return (
-    <header className="app-header" style={{ position: 'sticky', top: 0, width: '100%', boxSizing: 'border-box' }}>
+    <>
+      <header className="app-header" style={{ position: 'sticky', top: 0, width: '100%', boxSizing: 'border-box' }}>
       <div className="header-logo">
         <span className="logo-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</span>
         <div className="logo-text">
@@ -405,9 +406,11 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
         </div>
       </div>
 
+      </header>
+
       {/* 社員系統使用指南導覽燈箱 */}
       <SystemGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
-    </header>
+    </>
   );
 }
 
@@ -425,7 +428,7 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
         return;
       }
 
-      // ⚡ 快取檢查：若本次 session 已經驗證過個人資料完整，0ms 立即放行
+      // 快取檢查：若本次 session 已經驗證過個人資料完整，0ms 立即放行
       const cacheKey = `profile_complete_${userId}`;
       const cached = getCache<boolean>(cacheKey);
       if (cached === true) {
@@ -436,7 +439,7 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
 
       let checkedFromSupabase = false;
       try {
-        // ⚡ 1. 優先從 Supabase 秒級驗證個人資料完整性 (< 50ms)
+        // 1. 優先從 Supabase 秒級驗證個人資料完整性 (< 50ms)
         const sbProfile = await fetchMemberProfileFromSupabase(userId);
         if (sbProfile) {
           checkedFromSupabase = true;
@@ -582,7 +585,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
     return cached === true;
   });
 
-  // ⭐️ 雙平台核銷跳轉保證：若偵測到 liff.state 為 /confirm-payment，立即無條件強制導向正確路由 (防止停在 /dashboard 或 /borrow)
+  // 雙平台核銷跳轉保證：若偵測到 liff.state 為 /confirm-payment，立即無條件強制導向正確路由 (防止停在 /dashboard 或 /borrow)
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     let statePath = searchParams.get('liff.state');
@@ -602,7 +605,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
     }
     const cacheKey = `officer_status_${liffInit.userId}`;
 
-    // ⚡ 1. 優先從 Supabase 秒開檢查幹部身分 (< 30ms，免冷啟動)
+    // 1. 優先從 Supabase 秒開檢查幹部身分 (< 30ms，免冷啟動)
     checkOfficerStatusFromSupabase(liffInit.userId).then((sbOfficer) => {
       if (ignore) return;
       if (sbOfficer !== null) {
@@ -746,7 +749,7 @@ function App() {
           statePath = hashParams.get('liff.state') || '';
         }
 
-        // ⭐️ 核銷與電腦版幹部工作站專用直通通道：完全免連線 LINE LIFF，秒開渲染 (電腦、手機外部瀏覽器暢通無阻)
+        // 核銷與電腦版幹部工作站專用直通通道：完全免連線 LINE LIFF，秒開渲染 (電腦、手機外部瀏覽器暢通無阻)
         if (path.includes('/confirm-payment') || statePath.includes('/confirm-payment') || path.startsWith('/admin-web') || statePath.startsWith('/admin-web')) {
           setLiffInit({ loading: false, error: null, userId: '', displayName: '', pictureUrl: '' });
           return;
@@ -774,6 +777,19 @@ function App() {
           userId = profile.userId;
           displayName = profile.displayName;
           pictureUrl = profile.pictureUrl || '';
+
+          if (userId && pictureUrl && userId !== 'TEST_USER_ID') {
+            (async () => {
+              try {
+                await supabase
+                  ?.from('members')
+                  .update({ avatar_url: pictureUrl, updated_at: new Date().toISOString() })
+                  .eq('line_user_id', userId);
+              } catch (syncErr) {
+                console.warn('[App] 背景同步 LINE 頭像警告:', syncErr);
+              }
+            })();
+          }
         } else {
           // 若在 LINE 內部但未登入，且非 /confirm-payment，強制導向 LINE 登入
           if (liff.isInClient() && !path.includes('/confirm-payment') && !statePath.includes('/confirm-payment')) {
