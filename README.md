@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.236-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.238-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.236)](#7-最新版本異動紀錄-changelog-v01236)
+- [7. 最新版本異動紀錄 (Changelog v0.1.238)](#7-最新版本異動紀錄-changelog-v01238)
 
 ---
 
@@ -392,7 +392,7 @@ pnpm test
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
   - **移除不存在之個人成就勳章牆**：刪除「個人成就勳章牆 (Badges)」段落，將該章節聚焦於「出隊心得填寫 (Footprints & Reflections)」與活動評分、照片上傳。
-## 7. 最新版本異動紀錄 (Changelog v0.1.224)
+## 7. 最新版本異動紀錄 (Changelog v0.1.238)
 
 ### v0.1.206 (2026-09-24)
 - 報名名冊一鍵恢復預設尺寸連動恢復欄高與展開 (WebAdminRoster.tsx):
@@ -1845,6 +1845,53 @@ pnpm test
     - 體能證明相片刪除直更優化：在點擊縮圖刪除「x」按鈕確認後，立即自前台表單狀態中剔除該網址；於表單送出時，精確將最新之照片清單（包含全數刪除為空陣列）傳入 Supabase 保存，同時維持已標記刪除之 Google Drive 檔案在背景完全非同步（fire-and-forget）發送移入垃圾桶，確保主流程絕不阻塞。
   - 測試與建置檢查：
     - 全專案 78 個測試套件、427 項單元測試 100% 通過，TypeScript 與 Vite 生產打包無錯誤，恪守社團規範全篇零 Emoji。
+
+### v0.1.237 (2026-09-27)
+- 幹部意願在校生身分限制與社員系統使用指南導覽燈箱 (SystemGuideModal & Register.tsx & App.tsx):
+  - 幹部意願身分限制：
+    - 嚴格限定只有「臺科大在校學生」方可看見並勾選「我有意願成為社團幹部」；若身分選擇「畢業校友」或「校外人士」，步驟四將直接隱藏該區塊。
+    - 在步驟一動態切換身分別時，若非在校生則自動將表單狀態之 intendOfficer 清空為空字串，杜絕非在校生誤勾選或殘留值送出。
+  - 社員端系統使用指南導覽燈箱 (SystemGuideModal.tsx)：
+    - 打造高質感分頁切換卡片式導覽燈箱，包含四大核心引導：
+      1. 個人資料與出隊平安：說明填寫個資於登山平安險投保、國家公園入山入園證申請與資格審查之重要性。
+      2. 大頭貼快速切換分頁：特別圖文引導使用者點擊頂部右上角「LINE 大頭貼」展開快捷選單，在各子系統間秒速跳轉。
+      3. 最新活動與借裝 5 折：介紹活動一鍵報名與社員個人借用社團登山裝備獨享 5 折專屬福利。
+      4. 繳費申報與即時核銷：說明社費、活動費與借裝保證金合併申報，填寫帳號末五碼即時核銷機制。
+    - 提供上一步、下一步、開始填寫、跳過導覽按鈕與 4 步驟進度點點指示器。
+  - 初次進入觸發與常駐入口整合：
+    - 首次進入填寫個人資料頁面（Register.tsx）時，檢查 localStorage 自動跳出引導；完成或跳過後自動記錄避免重複干擾。
+    - 全域導覽頂部（GlobalHeader）於右上角大頭貼下拉選單常駐「使用指南 (User Guide)」（附 BookOpen 圖示），供全體社員在任何頁面隨時再次叫出查閱。
+  - 多國語系與測試建置：
+    - zh.json 與 en.json 完整同步 guide 命名空間與 nav.menuGuide 翻譯。
+    - 新增 test/95_member_guide_and_officer_constraint.test.mjs 單元測試（6 項子測試）。
+    - 全專案 79 個測試套件、433 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包零錯誤，全篇無 Emoji。
+
+### v0.1.238 (2026-09-27)
+- 繳費申報 (Payment.tsx) 匯款證明圖片上傳框與多端縮圖燈箱預覽：
+  - 繳費申報圖片上傳框 (Payment.tsx)：
+    - 於「社員申報備注」下方新增選填之匯款證明圖片上傳區塊，樣式採用與系統一致之 84x84px 正方形縮圖與 2px 灰色虛線邊框 (dashed)。
+    - 嚴格限制最多上傳 1 張照片；點選虛線新增框觸發本機相簿/檔案選擇，選取後立即隱藏虛線新增框，替換為已選取之照片縮圖。
+    - 縮圖右上角配置高對比刪除「x」按鈕，點擊時彈出瀏覽器二次確認視窗，確認後方自佇列中移除並恢復虛線新增框。
+    - 點擊縮圖本身彈出高品質 Lightbox Modal 燈箱大圖預覽，支援高解析度檢視與直覺的點擊關閉遮罩。
+    - 整合前端 Canvas 智慧等比例壓縮演算法（長寬上限 2048px、JPEG 0.88 品質），顯著縮減行動網路傳輸大小並防止 Base64 記憶體耗盡。
+    - 表單送出時，透過 GAS API upload_drive_file（指定資料夾分類 folderType: 'payments'）直連 Google Drive 上傳至社團專屬 Wilderness_payments 雲端硬碟資料夾，取得公開直連縮圖網址後直通寫入 Supabase 資料庫之 payments.proof_image_url。
+  - 多檢視端縮圖與燈箱大圖預覽全方位支援：
+    - 個人繳費歷史 (History.tsx)：點擊單筆繳費紀錄展開明細時，若具備匯款證明，渲染 64x64px 圓角縮圖，點擊彈出 Lightbox 放大檢視。
+    - 免登入單鍵核銷頁 (ConfirmPayment.tsx)：核銷卡片資訊區塊中渲染 72x72px 圓角縮圖，點擊即時開啟 Lightbox 大圖預覽，便利幹部核對。
+    - 幹部手機審核端 (AdminFinance.tsx)：待核銷卡片右側顯示 46x46px 縮圖，點擊直接彈出大圖燈箱，加速手機端對帳作業。
+    - 幹部網頁後台 (WebAdminFinance.tsx)：財務明細表格於帳號末五碼旁新增「匯款證明」欄位，顯示 36x36px 精巧縮圖，點擊連動現有收據燈箱預覽。
+    - 社員資料紀錄頁 (MemberRecords.tsx)：繳費歷史列表中若有證明圖檔，將文字連結升級為 60x60px 縮圖並支援點擊放大。
+  - 後端 GAS 幹部通知與單鍵核銷信件升級：
+    - _handleNotifyOfficersPayment 於接收到繳費申報時，將匯款證明圖片網址推播至 LINE 幹部管理群組。
+    - 幹部單鍵核銷 HTML Email 樣板同步內嵌匯款證明縮圖預覽與原圖開啟連結，幹部在電子信箱即可直觀核對單據。
+  - 英文多國語系同步與零 Emoji 規範：
+    - 依據 src/locales/zh.json (L626-L653) 修訂之「社員系統使用指南」最新文字，完整同步英文版 src/locales/en.json（包含步驟 1 出隊保險與國家公園入園申請說明、步驟 3 最新活動報名與裝備 5 折福利、步驟 4 合併繳費與末 5 碼即時核銷機制）。
+    - 於 zh.json 與 en.json 的 payment.form 補充匯款證明之提示與標籤語系鍵值。
+    - 全專案各模組程式碼、註解、JSON 與說明文件全面淨化，嚴格遵守零 Emoji 規範。
+  - 測試與建置檢查：
+    - 新增 test/96_payment_proof_image_and_locales.test.mjs 單元測試（5 項驗證涵蓋指南英文對齊、繳費證明雙語鍵值、Payment 匯款框規格、History / ConfirmPayment / WebAdminFinance 縮圖燈箱支援、GAS 後端整合）。
+    - 全專案 80 個測試套件、438 項單元測試 100% 通過，TypeScript 與 Vite 生產環境打包編譯零錯誤。
+
 
 
 

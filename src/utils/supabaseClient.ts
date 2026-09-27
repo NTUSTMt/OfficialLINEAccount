@@ -468,6 +468,7 @@ export interface PaymentSubmitDetails {
   totalAmount: number;
   note?: string;
   membershipExpiryDate?: string;
+  proofImageUrl?: string;
 }
 
 /**
@@ -543,6 +544,7 @@ export interface VerifyPaymentResult {
   amount?: number;
   items?: string;
   lineUserId?: string;
+  proofImageUrl?: string;
   message?: string;
   error?: string;
 }
@@ -586,6 +588,7 @@ export interface SupabaseHistoryItem {
   last5Digits: string;
   note?: string;
   status: string;
+  proofImageUrl?: string;
 }
 
 export interface SupabasePaymentHistoryData {

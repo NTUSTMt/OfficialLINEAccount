@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, Calendar, Tent, CreditCard, FileText, AlertCircle } from 'lucide-react';
+import { User, Calendar, Tent, CreditCard, FileText, AlertCircle, X } from 'lucide-react';
 import { appendAuthToken } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
 import { fetchPaymentHistoryFromSupabase } from '../utils/supabaseClient';
@@ -14,6 +14,7 @@ interface HistoryItem {
   amount: number;
   last5Digits: string;
   note?: string;
+  proofImageUrl?: string;
   status: string; // '已核銷 Confirmed' | '待確認 Checking' | '退件 Rejected' | etc.
 }
 
@@ -29,6 +30,7 @@ function History({ userId }: { userId: string }) {
   const [data, setData] = useState<PaymentHistoryData | null>(null);
   const [activeTab, setActiveTab] = useState<'全部' | '社費' | '活動' | '裝備'>('全部');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
 
   const getTabLabel = (tab: '全部' | '社費' | '活動' | '裝備') => {
     switch (tab) {
@@ -45,7 +47,7 @@ function History({ userId }: { userId: string }) {
     const fetchData = async () => {
       try {
         if (userId && userId !== 'TEST_USER_ID') {
-          // ⚡ 1. 優先嘗試從 Supabase 秒開個人繳費歷史 (< 50ms)
+          // 1. 優先嘗試從 Supabase 秒開個人繳費歷史 (< 50ms)
           let loadedFromSupabase = false;
           try {
             const sbData = await fetchPaymentHistoryFromSupabase(userId);
@@ -369,7 +371,7 @@ function History({ userId }: { userId: string }) {
                           if (!trimmed) return null;
                           return (
                             <div key={idx} style={{ padding: '2px 0', color: '#334155', fontWeight: '500' }}>
-                              {trimmed.startsWith('•') || trimmed.startsWith('🔹') || trimmed.startsWith('🔸') ? trimmed : `• ${trimmed}`}
+                              {trimmed.startsWith('•') || trimmed.startsWith('-') || /^[^a-zA-Z0-9\u4e00-\u9fa5]/.test(trimmed) ? trimmed : `• ${trimmed}`}
                             </div>
                           );
                         })}
@@ -379,6 +381,34 @@ function History({ userId }: { userId: string }) {
                     {item.note && (
                       <div style={{ marginTop: '4px', color: '#065f46' }}>
                         <strong>備註說明：</strong>{item.note}
+                      </div>
+                    )}
+                    {item.proofImageUrl && (
+                      <div style={{ marginTop: '10px' }}>
+                        <strong style={{ display: 'block', marginBottom: '6px', color: '#1e293b' }}>
+                          匯款證明截圖：
+                        </strong>
+                        <div
+                          style={{
+                            position: 'relative',
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            border: '1px solid #cbd5e1',
+                            cursor: 'pointer',
+                            backgroundColor: '#f8fafc',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                          }}
+                          onClick={() => setLightboxImageUrl(item.proofImageUrl || null)}
+                          title="點擊預覽大圖"
+                        >
+                          <img
+                            src={item.proofImageUrl}
+                            alt="匯款證明"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        </div>
                       </div>
                     )}
                     <div style={{ marginTop: '4px' }}>
@@ -392,6 +422,59 @@ function History({ userId }: { userId: string }) {
         )}
       </div>
 
+      {/* 圖片大圖檢視燈箱 (Lightbox Modal) */}
+      {lightboxImageUrl && (
+        <div
+          onClick={() => setLightboxImageUrl(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxImageUrl(null)}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              border: 'none',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={lightboxImageUrl}
+            alt="預覽大圖"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '92vw',
+              maxHeight: '85vh',
+              objectFit: 'contain',
+              borderRadius: '8px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

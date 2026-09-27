@@ -1,7 +1,8 @@
 import { useState, useEffect, Suspense, lazy, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle, Calendar, Users, PackageCheck, Layers, History as HistoryIcon } from 'lucide-react';
+import { Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle, Calendar, Users, PackageCheck, Layers, BookOpen, History as HistoryIcon } from 'lucide-react';
+import { SystemGuideModal } from './components/common/SystemGuideModal';
 import liff from '@line/liff';
 import { appendAuthToken } from './utils/api';
 import { getCache, setCache } from './utils/cacheUtils';
@@ -57,6 +58,7 @@ const getInitialRedirectPath = () => {
 function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: string; displayName: string; isOfficer?: boolean }) {
   const { t, i18n } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -382,11 +384,29 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
                     </div>
                   </>
                 )}
+
+                {/* 使用指南 (所有社員均可隨時開啟查閱) */}
+                <div style={{ margin: '4px 0', borderTop: '1px solid #e2e8f0' }} />
+                <div
+                  onClick={() => {
+                    setIsOpen(false);
+                    setIsGuideOpen(true);
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 600, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <BookOpen size={15} color="#64748b" />
+                  <span>{t('nav.menuGuide', '使用指南')}</span>
+                </div>
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* 社員系統使用指南導覽燈箱 */}
+      <SystemGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </header>
   );
 }

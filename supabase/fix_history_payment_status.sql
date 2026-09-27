@@ -56,6 +56,7 @@ BEGIN
             'name', COALESCE(name, ''),
             'last5Digits', COALESCE(bank_last5, ''),
             'note', COALESCE(officer_notes, ''),
+            'proofImageUrl', COALESCE(proof_image_url, ''),
             'status', COALESCE(status, '待確認 Checking')
         ) AS h,
         display_amount,
@@ -68,6 +69,7 @@ BEGIN
                 name,
                 bank_last5,
                 officer_notes,
+                proof_image_url,
                 status,
                 COALESCE(amount, 0) AS display_amount
             FROM payments

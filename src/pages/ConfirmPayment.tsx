@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle2, AlertTriangle, ShieldCheck, ArrowRight, Loader2, Info } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, ShieldCheck, ArrowRight, Loader2, Info, X } from 'lucide-react';
 import { verifyPaymentByTokenFromSupabase, type VerifyPaymentResult } from '../utils/supabaseClient';
 import { GAS_API_URL } from '../constants/api';
 import { LIFF_URLS } from '../constants/liff';
@@ -13,6 +13,7 @@ export default function ConfirmPayment() {
   const [status, setStatus] = useState<'loading' | 'success' | 'already' | 'error'>('loading');
   const [resultData, setResultData] = useState<VerifyPaymentResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
 
   const paymentId = searchParams.get('paymentId') || '';
   const token = searchParams.get('token') || searchParams.get('verifyToken') || '';
@@ -21,7 +22,7 @@ export default function ConfirmPayment() {
     if (liff.isInClient()) {
       navigate('/admin/events');
     } else {
-      // 🛡️ 外部瀏覽器：透過 LIFF 網址開啟，強制由 LINE 進行幹部身分驗證，杜絕未授權存取
+      // 外部瀏覽器：透過 LIFF 網址開啟，強制由 LINE 進行幹部身分驗證，杜絕未授權存取
       window.location.href = LIFF_URLS.ADMIN_EVENTS;
     }
   };
@@ -39,7 +40,7 @@ export default function ConfirmPayment() {
       }
 
       try {
-        // ⚡ 1. 直連 Supabase RPC 執行安全 Token 單鍵核銷 (< 50ms)
+        // 1. 直連 Supabase RPC 執行安全 Token 單鍵核銷 (< 50ms)
         const res = await verifyPaymentByTokenFromSupabase(paymentId, token);
 
         if (!isMounted) return;
@@ -57,7 +58,7 @@ export default function ConfirmPayment() {
         } else {
           setStatus('success');
 
-          // 2. ⚡ 非同步推播 LINE 通知 (社員個人 + 幹部管理群組)
+          // 2. 非同步推播 LINE 通知 (社員個人 + 幹部管理群組)
           try {
             fetch(GAS_API_URL, {
               method: 'POST',
@@ -185,6 +186,33 @@ export default function ConfirmPayment() {
                   {resultData?.items || '社團相關費用'}
                 </div>
               </div>
+
+              {resultData?.proofImageUrl && (
+                <div style={{ padding: '8px 0 2px 0', borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ color: '#64748b', marginBottom: '6px', fontSize: '13px' }}>匯款證明截圖</div>
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: '72px',
+                      height: '72px',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      border: '1px solid #cbd5e1',
+                      cursor: 'pointer',
+                      backgroundColor: '#f8fafc',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                    }}
+                    onClick={() => setLightboxImageUrl(resultData.proofImageUrl || null)}
+                    title="點擊放大查看"
+                  >
+                    <img
+                      src={resultData.proofImageUrl}
+                      alt="匯款證明"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{
@@ -201,7 +229,7 @@ export default function ConfirmPayment() {
               gap: '8px'
             }}>
               <ShieldCheck size={18} style={{ flexShrink: 0 }} />
-              <span>系統已自動推播【🎉 繳費成功通知】至該社員 LINE 聊天室與幹部群組！</span>
+              <span>系統已自動推播【繳費成功通知】至該社員 LINE 聊天室與幹部群組！</span>
             </div>
 
             <button
@@ -324,6 +352,60 @@ export default function ConfirmPayment() {
           </div>
         )}
       </div>
+
+      {/* 圖片大圖檢視燈箱 (Lightbox Modal) */}
+      {lightboxImageUrl && (
+        <div
+          onClick={() => setLightboxImageUrl(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxImageUrl(null)}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              border: 'none',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={lightboxImageUrl}
+            alt="預覽大圖"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '92vw',
+              maxHeight: '85vh',
+              objectFit: 'contain',
+              borderRadius: '8px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

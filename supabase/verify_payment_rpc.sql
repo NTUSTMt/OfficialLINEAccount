@@ -67,6 +67,7 @@ DECLARE
     v_expiry TEXT;
     v_member_name TEXT;
     v_equip_names TEXT;
+    v_proof_url TEXT;
     i INTEGER;
 BEGIN
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
@@ -78,6 +79,7 @@ BEGIN
     v_last5 := COALESCE(p_details->>'last5Digits', '00000');
     v_note := COALESCE(p_details->>'note', '');
     v_expiry := p_details->>'membershipExpiryDate';
+    v_proof_url := p_details->>'proofImageUrl';
 
     -- 取得社員姓名 (優先從 details 讀取，若無則查詢 members 表)
     v_member_name := COALESCE(p_details->>'userName', '');
@@ -85,7 +87,7 @@ BEGIN
         SELECT name INTO v_member_name FROM members WHERE line_user_id = p_line_user_id;
     END IF;
 
-    -- 🛡️ 防禦性確保 members 存在此使用者 (防止 payments_line_user_id_fkey 外鍵違規)
+    -- 防禦性確保 members 存在此使用者 (防止 payments_line_user_id_fkey 外鍵違規)
     INSERT INTO members (line_user_id, name, created_at, updated_at)
     VALUES (p_line_user_id, COALESCE(NULLIF(v_member_name, ''), '山友'), NOW(), NOW())
     ON CONFLICT (line_user_id) DO UPDATE
@@ -94,7 +96,7 @@ BEGIN
     -- 生成唯一繳費單號 PAY_YYYYMMDD_HH24MISS_xxx
     v_payment_id := 'PAY_' || to_char(NOW(), 'YYYYMMDD_HH24MISS_') || lpad(floor(random() * 1000)::text, 3, '0');
 
-    -- 🛡️ 生成 32 位元隨機安全憑證 (單次防偽核銷 Token，使用 PostgreSQL 核心內建 md5，免除 pgcrypto 相依性)
+    -- 生成 32 位元隨機安全憑證 (單次防偽核銷 Token，使用 PostgreSQL 核心內建 md5，免除 pgcrypto 相依性)
     v_verify_token := md5(random()::text || clock_timestamp()::text || p_line_user_id || v_payment_id);
 
     -- 檢查是否包含社費
@@ -117,9 +119,9 @@ BEGIN
             WHERE line_user_id = p_line_user_id;
 
             IF v_expiry IS NOT NULL AND v_expiry != '' THEN
-                v_item_labels := array_append(v_item_labels, '🔸 社籍與社費 (Membership Fee) (有效至 ' || v_expiry || ')');
+                v_item_labels := array_append(v_item_labels, '社籍與社費 (Membership Fee) (有效至 ' || v_expiry || ')');
             ELSE
-                v_item_labels := array_append(v_item_labels, '🔸 社籍與社費 (Membership Fee)');
+                v_item_labels := array_append(v_item_labels, '社籍與社費 (Membership Fee)');
             END IF;
 
         -- B. 活動
@@ -132,9 +134,9 @@ BEGIN
             WHERE line_user_id = p_line_user_id AND event_id = v_event_id;
 
             SELECT title INTO v_event_title FROM events WHERE id = v_event_id;
-            v_item_labels := array_append(v_item_labels, '🔸 活動：' || COALESCE(v_event_title, v_event_id));
+            v_item_labels := array_append(v_item_labels, '活動：' || COALESCE(v_event_title, v_event_id));
 
-        -- C. 裝備
+        -- C. 裝備租借
         ELSIF v_item_id LIKE 'eq_%' THEN
             v_loan_id := substring(v_item_id from 4);
 
@@ -161,14 +163,14 @@ BEGIN
             WHERE li.loan_id = v_loan_id;
 
             IF v_equip_names IS NOT NULL AND trim(v_equip_names) != '' THEN
-                v_item_labels := array_append(v_item_labels, '🔹 裝備：' || v_equip_names || ' (' || v_loan_id || ')' || CASE WHEN v_has_membership THEN ' (社員5折)' ELSE '' END);
+                v_item_labels := array_append(v_item_labels, '裝備：' || v_equip_names || ' (' || v_loan_id || ')' || CASE WHEN v_has_membership THEN ' (社員5折)' ELSE '' END);
             ELSE
-                v_item_labels := array_append(v_item_labels, '🔹 裝備租借：' || v_loan_id || CASE WHEN v_has_membership THEN ' (社員5折)' ELSE '' END);
+                v_item_labels := array_append(v_item_labels, '裝備租借：' || v_loan_id || CASE WHEN v_has_membership THEN ' (社員5折)' ELSE '' END);
             END IF;
         END IF;
     END LOOP;
 
-    -- 寫入 payments 資料表 (包含 verify_token，申報備註寫入 notes 欄位，通知狀態預設未通知)
+    -- 寫入 payments 資料表 (包含 verify_token 與 proof_image_url，申報備註寫入 notes 欄位，通知狀態預設未通知)
     INSERT INTO payments (
         id,
         line_user_id,
@@ -176,6 +178,7 @@ BEGIN
         type,
         amount,
         bank_last5,
+        proof_image_url,
         status,
         verify_token,
         notes,
@@ -190,6 +193,7 @@ BEGIN
         array_to_string(v_item_labels, ', '),
         v_total_amount,
         v_last5,
+        v_proof_url,
         '待確認 Checking',
         v_verify_token,
         v_note,
@@ -264,6 +268,7 @@ BEGIN
             'amount', v_payment.amount,
             'items', COALESCE(NULLIF(v_payment.type, ''), '社團活動/裝備費用'),
             'lineUserId', v_payment.line_user_id,
+            'proofImageUrl', v_payment.proof_image_url,
             'message', '該繳費單先前已完成核銷 (Already Confirmed)'
         );
     END IF;
@@ -336,6 +341,7 @@ BEGIN
         'amount', v_payment.amount,
         'items', COALESCE(NULLIF(v_payment.type, ''), '社團活動/裝備費用'),
         'lineUserId', v_payment.line_user_id,
+        'proofImageUrl', v_payment.proof_image_url,
         'message', '核銷成功！系統已自動連動更新對應之報名與租借狀態'
     );
 EXCEPTION WHEN OTHERS THEN

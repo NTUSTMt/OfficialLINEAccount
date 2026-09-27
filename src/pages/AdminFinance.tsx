@@ -420,6 +420,35 @@ export default function AdminFinance({ userId }: { userId?: string }) {
                     </div>
                   </div>
 
+                  {it.proof_image_url && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewImageUrl(it.proof_image_url || null);
+                      }}
+                      title="點擊放大匯款證明截圖"
+                      style={{
+                        position: 'relative',
+                        width: '46px',
+                        height: '46px',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        border: '1px solid #cbd5e1',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                        marginLeft: '10px',
+                        backgroundColor: '#f8fafc',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                    >
+                      <img
+                        src={it.proof_image_url}
+                        alt="匯款證明"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                  )}
+
                   <ChevronRight size={18} color="#94a3b8" style={{ flexShrink: 0, marginLeft: '8px' }} />
                 </div>
               );

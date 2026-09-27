@@ -45,6 +45,7 @@ const FINANCE_COLUMNS: AdvancedColumnDef[] = [
   { key: 'type', label: '款項說明', defaultWidth: 220, minWidth: 160 },
   { key: 'amount', label: '金額', defaultWidth: 100, minWidth: 80 },
   { key: 'bank_last5', label: '帳號末五碼', defaultWidth: 110, minWidth: 90 },
+  { key: 'proof_image_url', label: '匯款證明', defaultWidth: 90, minWidth: 70 },
   { key: 'status', label: '核銷狀態', defaultWidth: 130, minWidth: 100 },
   { key: 'notification_status', label: '通知狀態', defaultWidth: 110, minWidth: 90 },
   { key: 'created_at', label: '時間戳記', defaultWidth: 160, minWidth: 120 },
@@ -1419,6 +1420,49 @@ export const WebAdminFinance: React.FC = () => {
                             >
                               {item.bank_last5 ? (
                                 <span className="web-admin-badge web-admin-badge-neutral">{item.bank_last5}</span>
+                              ) : (
+                                <span style={{ color: 'var(--wa-text-muted)' }}>-</span>
+                              )}
+                            </td>
+                          );
+
+                        case 'proof_image_url':
+                          return (
+                            <td
+                              key={col.key}
+                              className={`${isPinned ? 'wa-col-pinned' : ''} ${lastPinnedKey === 'proof_image_url' ? 'wa-col-pinned-last' : ''}`}
+                              style={{
+                                textAlign: 'center',
+                                position: isPinned ? 'sticky' : undefined,
+                                left: stickyLeft !== undefined ? `${stickyLeft}px` : undefined,
+                                zIndex: isPinned ? 10 : undefined,
+                              }}
+                            >
+                              {item.proof_image_url ? (
+                                <div
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 6,
+                                    overflow: 'hidden',
+                                    border: '1px solid #cbd5e1',
+                                    cursor: 'pointer',
+                                    backgroundColor: '#f8fafc',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                    margin: '0 auto'
+                                  }}
+                                  onClick={() => setPreviewReceiptUrl(item.proof_image_url || null)}
+                                  title="點擊預覽匯款證明大圖"
+                                >
+                                  <img
+                                    src={item.proof_image_url}
+                                    alt="匯款證明"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                </div>
                               ) : (
                                 <span style={{ color: 'var(--wa-text-muted)' }}>-</span>
                               )}

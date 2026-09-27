@@ -21,7 +21,8 @@
     "menuAdminMembers": "社員資料",
     "menuAdminFinance": "財務對帳",
     "menuAdminLoans": "租借管理",
-    "menuAdminInventory": "裝備庫存"
+    "menuAdminInventory": "裝備庫存",
+    "menuGuide": "使用指南"
   },
   "register": {
     "loading": "載入個人資料中，請稍候...",
@@ -97,7 +98,7 @@
       "emerAddrPlaceholder": "請輸入緊急聯絡人居住地址"
     },
     "step4": {
-      "title": "登山經驗與體能 (Experience & Upload)",
+      "title": "登山經驗與體能",
       "fitnessNotice": "社團出團活動將依據「爬山經驗」與「體能狀況」進行審查評估。若近期有更好的經歷或紀錄，記得隨時至此更新，增加錄取機會！",
       "expLabel": "過往登山經驗簡述",
       "expPlaceholder": "例如：登頂合歡群峰、玉山主峰、嘉明湖，或百岳累積 5 座...等等",
@@ -119,7 +120,7 @@
       "intendOfficialYes": "我有意願成為社員 (享個人借裝 5 折)",
       "intendOfficialNo": "我目前沒有意願成為社員",
       "feeInfoTitle": "社費說明",
-      "feeInfoBenefit": "社員專屬福利：個人借用裝備享 5 折優惠",
+      "feeInfoBenefit": "社員專屬福利：個人借用裝備享 5 折優惠。若體能與經驗篩選與他人相同，將會優先錄取。",
       "feeInfoSemester": "一學期方案：$200",
       "feeInfoGraduation": "直到畢業方案：大學部 $800 / 研究所 $400",
       "feeInfoNote": "完成個人資料送出後，可隨時至「繳費系統」選擇方案並進行繳費回報。",
@@ -335,8 +336,8 @@
       "photoSaveSuccess": "裝備照片已成功更新！",
       "photoSaveFailed": "照片更新失敗，請稍後再試。",
       "confirmDeletePhoto": "確定要刪除這張照片嗎？",
-      "confirmDeleteLastPhoto": "⚠️ 這是此裝備最後一張照片，刪除並儲存後將無照片展示，確定要刪除嗎？",
-      "confirmSaveEmptyPhotos": "⚠️ 目前未保留任何照片，儲存後此裝備將無照片展示，確定要儲存嗎？"
+      "confirmDeleteLastPhoto": "這是此裝備最後一張照片，刪除並儲存後將無照片展示，確定要刪除嗎？",
+      "confirmSaveEmptyPhotos": "目前未保留任何照片，儲存後此裝備將無照片展示，確定要儲存嗎？"
     }
   },
   "payment": {
@@ -399,7 +400,7 @@
       "qtyUnit": "件",
       "modifyTip": "貼心提醒：需要修改訂單的話，請到個人頁面取消訂單再重新租借一次。",
       "discountBadge": "社員5折優惠",
-      "discountTip": "💡 同時勾選上方社費，此裝備租借費享 5 折現省 ${{save}}！",
+      "discountTip": "同時勾選上方社費，此裝備租借費享 5 折現省 ${{save}}！",
       "discountApplied": "含社員5折優惠"
     },
     "form": {
@@ -411,6 +412,13 @@
       "noteLabel": "匯款備註 (選填)",
       "notePlaceholder": "例如：王小明轉帳、兩筆合併匯款等備註說明",
       "noteTip": "此備註將同步顯示於幹部通知群組及繳費紀錄中。",
+      "proofLabel": "匯款證明 / 水單截圖 (選填)",
+      "proofTip": "支援上傳 1 張轉帳明細或水單截圖，點擊縮圖可放大預覽。",
+      "addProof": "新增證明",
+      "removeProof": "移除照片",
+      "previewProof": "點擊預覽大圖",
+      "confirmDeleteProof": "確定要移除此張匯款證明截圖嗎？",
+      "uploadingProof": "正在上傳匯款截圖至雲端...",
       "submittingBtn": "申報送出中...",
       "submitBtn": "確認申報繳費"
     }
@@ -621,5 +629,34 @@
       "confirmSendNotifications": "確定要透過 LINE 發送審核結果通知給所有尚未通知的正取與備取社員嗎？",
       "error": "操作失敗: {{message}}"
     }
+  },
+  "guide": {
+    "title": "社員系統使用指南",
+    "subtitle": "快速掌握社團四大核心功能與操作技巧",
+    "step1": {
+      "tag": "步驟 1 / 4",
+      "title": "個人資料與出隊平安",
+      "desc": "完整填寫個人基本資料是參與社團活動的第一步。我們將依據此資料為您投保登山平安險、辦理國家公園入山入園證，並由幹部進行體能與經驗安全審核。\n如果不報名活動的話，僅填寫基本必填資料即可租借裝備以及申報繳費。但要報名活動的話，請務必填寫完整資料ㄛ～"
+    },
+    "step2": {
+      "tag": "步驟 2 / 4",
+      "title": "大頭貼快速切換分頁",
+      "desc": "特別提醒：點擊頂部右上角的「LINE 大頭貼」，可隨時展開快捷選單！您可在個人主頁、資料填寫、最新活動、裝備租借、繳費申報等各系統間秒速跳轉，操作順暢免迷路。"
+    },
+    "step3": {
+      "tag": "步驟 3 / 4",
+      "title": "最新活動與借裝 5 折",
+      "desc": "在「最新活動」瀏覽所有出隊行程並一鍵報名。具備正式社員資格者，個人租借社團精選登山裝備（帳篷、睡袋、大背包等）獨享 5 折專屬優惠！\n報名活動後，若體能與經驗篩選與他人相同，將會優先錄取。"
+    },
+    "step4": {
+      "tag": "步驟 4 / 4",
+      "title": "繳費申報與即時核銷",
+      "desc": "社費、活動費用與裝備租借費用均可合併回報。轉帳完成後至「繳費系統」填寫帳號末五碼，幹部將即時對帳核銷，帳務透明無負擔。"
+    },
+    "prev": "上一步",
+    "next": "下一步",
+    "start": "開始填寫",
+    "skip": "跳過導覽"
   }
 }
+

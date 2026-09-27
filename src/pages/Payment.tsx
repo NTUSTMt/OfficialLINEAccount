@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, AlertCircle, Copy, Check, Building2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Copy, Check, Building2, X, Plus, Image as ImageIcon } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
 import { fetchUnpaidPaymentsFromSupabase, submitPaymentToSupabase, fetchDashboardFromSupabase } from '../utils/supabaseClient';
@@ -19,6 +19,11 @@ interface UnpaidItem {
   isOfficial?: string;
 }
 
+interface UploadedProofFile {
+  base64: string;
+  name: string;
+}
+
 function Payment({ userId }: { userId: string }) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
@@ -33,6 +38,10 @@ function Payment({ userId }: { userId: string }) {
   const [note, setNote] = useState('');
   const [copied, setCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const [proofFile, setProofFile] = useState<UploadedProofFile | null>(null);
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+  const proofInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
   const [membershipOption, setMembershipOption] = useState<'thisSem' | 'undergrad' | 'master'>('thisSem');
 
@@ -43,6 +52,78 @@ function Payment({ userId }: { userId: string }) {
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('複製失敗:', err);
+    }
+  };
+
+  // 處理匯款證明圖片選擇與前端壓縮為 JPEG (最大 2048px, 品質 0.88)
+  const handleProofFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    if (file.size > 10 * 1024 * 1024) {
+      alert('檔案過大（超過 10MB），請選擇較小的圖片');
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxWidth = 2048;
+        const maxHeight = 2048;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          alert('圖片解析失敗，請重試或更換照片格式');
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const base64 = canvas.toDataURL('image/jpeg', 0.88);
+
+        const nameParts = file.name.split('.');
+        nameParts[nameParts.length - 1] = 'jpg';
+        const newName = nameParts.join('.');
+
+        setProofFile({ base64, name: newName });
+      };
+      img.onerror = () => {
+        alert('無法讀取該圖片內容，請確認檔案格式是否正確');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      alert('讀取圖片檔案失敗，請稍後重試');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveProof = () => {
+    if (window.confirm(t('payment.form.confirmDeleteProof', '確定要移除此張匯款證明截圖嗎？'))) {
+      setProofFile(null);
+      if (proofInputRef.current) {
+        proofInputRef.current.value = '';
+      }
     }
   };
 
@@ -112,7 +193,7 @@ function Payment({ userId }: { userId: string }) {
     const fetchUnpaid = async () => {
       try {
         if (userId && userId !== 'TEST_USER_ID') {
-          // ⚡ 1. 優先嘗試從 Supabase 秒開讀取待繳費用清單 (< 50ms)
+          // 1. 優先嘗試從 Supabase 秒開讀取待繳費用清單 (< 50ms)
           let loadedFromSupabase = false;
           try {
             const sbUnpaid = await fetchUnpaidPaymentsFromSupabase(userId);
@@ -156,7 +237,7 @@ function Payment({ userId }: { userId: string }) {
             }
           }
 
-          // 🛡️ 社籍狀態主動校驗補底：若使用者非有效正式社員（未入社、已過期），自動補齊社費待繳選項
+          // 社籍狀態主動校驗補底：若使用者非有效正式社員（未入社、已過期），自動補齊社費待繳選項
           if (!ignore) {
             try {
               const dash = await fetchDashboardFromSupabase(userId);
@@ -389,6 +470,38 @@ function Payment({ userId }: { userId: string }) {
         return item.name;
       });
 
+      // 若有選取匯款證明截圖，先呼叫輕量 Helper 上傳至 Google Drive (folderType: 'payments')
+      let uploadedProofUrl = '';
+      if (proofFile) {
+        setIsUploadingProof(true);
+        try {
+          const uploadRes = await fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(withAuthPayload({
+              action: 'upload_drive_file',
+              userId: userId || 'TEST_USER_ID',
+              folderType: 'payments',
+              files: [proofFile]
+            }))
+          });
+          const uploadResult = await uploadRes.json();
+          if (uploadResult.status === 'success' && Array.isArray(uploadResult.urls) && uploadResult.urls.length > 0) {
+            uploadedProofUrl = uploadResult.urls[0];
+          } else {
+            throw new Error(uploadResult.message || uploadResult.error || 'Google Drive 照片上傳未回傳有效連結');
+          }
+        } catch (uploadErr: any) {
+          console.error('[Payment] 上傳匯款證明失敗:', uploadErr);
+          alert(`上傳匯款證明照失敗: ${uploadErr?.message || uploadErr}`);
+          setIsSubmitting(false);
+          setIsUploadingProof(false);
+          return;
+        } finally {
+          setIsUploadingProof(false);
+        }
+      }
+
       const detailsPayload = {
         selectedIds: uniqueSelectedIds,
         selectedNames: selectedNamesZh,
@@ -396,11 +509,12 @@ function Payment({ userId }: { userId: string }) {
         last5Digits: finalDigits,
         totalAmount,
         note: note.trim(),
+        proofImageUrl: uploadedProofUrl || undefined,
         membershipOption: hasMembership ? membershipOption : undefined,
         membershipExpiryDate: hasMembership ? membershipDetails.expiryDate : undefined
       };
 
-      // ⚡ 1. 100% 直連 Supabase 繳費申報 (< 50ms)
+      // 1. 直連 Supabase 繳費申報 (< 50ms)
       let sbResult: { success: boolean; paymentId?: string; verifyToken?: string; error?: string } = { success: false };
       if (userId && userId !== 'TEST_USER_ID') {
         try {
@@ -426,10 +540,12 @@ function Payment({ userId }: { userId: string }) {
               userId,
               paymentId: sbResult.paymentId,
               verifyToken: sbResult.verifyToken,
+              proofImageUrl: uploadedProofUrl || undefined,
               details: {
                 ...detailsPayload,
                 paymentId: sbResult.paymentId,
-                verifyToken: sbResult.verifyToken
+                verifyToken: sbResult.verifyToken,
+                proofImageUrl: uploadedProofUrl || undefined
               }
             }))
           });
@@ -445,6 +561,8 @@ function Payment({ userId }: { userId: string }) {
           equipments: prev.equipments.filter(eq => !uniqueSelectedIds.includes(eq.id))
         }));
         setSelectedIds([]);
+        setProofFile(null);
+        if (proofInputRef.current) proofInputRef.current.value = '';
 
         setSubmitted(true);
 
@@ -455,6 +573,7 @@ function Payment({ userId }: { userId: string }) {
             `• 申報金額：$${totalAmount}\n` +
             `• 帳號末5碼：${finalDigits}\n` +
             (note.trim() ? `• 備註：${note.trim()}\n` : '') +
+            (uploadedProofUrl ? `• 匯款證明：已成功上傳雲端憑證\n` : '') +
             `• 申報項目：\n` +
             selectedNamesZh.map(n => `  - ${n}`).join('\n') + `\n\n` +
             `幹部會於核對款項後自動更新您的狀態。謝謝！\n` +
@@ -463,6 +582,7 @@ function Payment({ userId }: { userId: string }) {
             `• Amount: $${totalAmount}\n` +
             `• Last 5 Digits: ${finalDigits}\n` +
             (note.trim() ? `• Note: ${note.trim()}\n` : '') +
+            (uploadedProofUrl ? `• Proof: Successfully uploaded\n` : '') +
             `• Items:\n` +
             selectedNamesEn.map(n => `  - ${n}`).join('\n') + `\n\n` +
             `Officers will update your status after verifying the transaction. Thank you!`;
@@ -476,7 +596,7 @@ function Payment({ userId }: { userId: string }) {
             console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
           }
 
-          alert('🎉 繳費申報已成功送出！申報收據已同步發送至您的 LINE 聊天室與幹部群組。');
+          alert('繳費申報已成功送出！申報收據已同步發送至您的 LINE 聊天室與幹部群組。');
           try {
             liff.closeWindow();
           } catch (e) {
@@ -486,14 +606,14 @@ function Payment({ userId }: { userId: string }) {
       } else {
         const fullErrMsg = sbResult.error || '未取得具體失敗原因，請檢查 Supabase RPC 狀態';
         console.error('[Payment] 申報失敗:', fullErrMsg);
-        alert(`❌ 申報失敗：${fullErrMsg}`);
+        alert(`申報失敗：${fullErrMsg}`);
       }
     } catch (err: any) {
       console.error('申報異常:', err);
       if (sbSubmitted) {
         setSubmitted(true);
       } else {
-        alert(`❌ 申報異常：${err?.message || String(err)}`);
+        alert(`申報異常：${err?.message || String(err)}`);
       }
     } finally {
       setIsSubmitting(false);
@@ -803,28 +923,192 @@ function Payment({ userId }: { userId: string }) {
               </p>
             </div>
 
+            {/* 匯款證明截圖 (選填，最多1張) */}
+            <div className="form-group" style={{ marginBottom: '20px', textAlign: 'left' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <ImageIcon size={15} color="var(--primary-color)" />
+                <span>{t('payment.form.proofLabel', '匯款證明 / 水單截圖 (選填)')}</span>
+              </label>
+
+              {/* 隱藏原生 File Input */}
+              <input
+                ref={proofInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleProofFileChange}
+                style={{ display: 'none' }}
+              />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {/* 1. 若已選取，顯示 84x84px 正方形縮圖與右上角 x 按鈕 */}
+                {proofFile && (
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: '84px',
+                      height: '84px',
+                      borderRadius: '10px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#f8fafc',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+                    }}
+                    onClick={() => setLightboxImageUrl(proofFile.base64)}
+                    title={t('payment.form.previewProof', '點擊預覽大圖')}
+                  >
+                    <img
+                      src={proofFile.base64}
+                      alt={proofFile.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveProof();
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '4px',
+                        width: '22px',
+                        height: '22px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                        border: 'none',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
+                      title={t('payment.form.removeProof', '移除照片')}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {/* 2. 虛線「+」新增方塊 (未選取照片時顯示，已選取則隱藏) */}
+                {!proofFile && (
+                  <button
+                    type="button"
+                    onClick={() => proofInputRef.current?.click()}
+                    style={{
+                      width: '84px',
+                      height: '84px',
+                      borderRadius: '10px',
+                      border: '2px dashed #94a3b8',
+                      backgroundColor: '#f8fafc',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: '#64748b',
+                      gap: '4px',
+                      padding: '4px',
+                      boxSizing: 'border-box',
+                      flexShrink: 0
+                    }}
+                    title={t('payment.form.addProof', '新增證明')}
+                  >
+                    <Plus size={24} color="#64748b" />
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>
+                      {t('payment.form.addProof', '新增證明')}
+                    </span>
+                  </button>
+                )}
+
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4, flex: 1 }}>
+                  {t('payment.form.proofTip', '支援上傳 1 張轉帳明細或水單截圖，點擊縮圖可放大預覽。')}
+                </p>
+              </div>
+            </div>
+
             <button 
               type="submit" 
               className="submit-btn" 
-              disabled={!isFormValid || isSubmitting}
+              disabled={!isFormValid || isSubmitting || isUploadingProof}
               style={{ 
                 width: '100%', 
-                backgroundColor: isFormValid ? 'var(--primary-color)' : '#cbd5e1', 
+                backgroundColor: isFormValid && !isSubmitting && !isUploadingProof ? 'var(--primary-color)' : '#cbd5e1', 
                 color: 'white', 
                 padding: '14px', 
                 borderRadius: '8px', 
                 fontWeight: 'bold',
                 fontSize: '15px',
                 border: 'none',
-                cursor: isFormValid ? 'pointer' : 'not-allowed',
+                cursor: isFormValid && !isSubmitting && !isUploadingProof ? 'pointer' : 'not-allowed',
                 transition: 'background-color 0.2s'
               }}
             >
-              {isSubmitting ? t('payment.form.submittingBtn') : t('payment.form.submitBtn')}
+              {isUploadingProof 
+                ? t('payment.form.uploadingProof', '正在上傳匯款截圖至雲端...') 
+                : isSubmitting 
+                  ? t('payment.form.submittingBtn') 
+                  : t('payment.form.submitBtn')}
             </button>
           </form>
         )}
       </main>
+
+      {/* 圖片大圖檢視燈箱 (Lightbox Modal) */}
+      {lightboxImageUrl && (
+        <div
+          onClick={() => setLightboxImageUrl(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxImageUrl(null)}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              border: 'none',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={lightboxImageUrl}
+            alt="預覽大圖"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '92vw',
+              maxHeight: '85vh',
+              objectFit: 'contain',
+              borderRadius: '8px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

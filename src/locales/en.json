@@ -54,7 +54,8 @@
     "menuAdminMembers": "Members",
     "menuAdminFinance": "Finance",
     "menuAdminLoans": "Loans",
-    "menuAdminInventory": "Inventory"
+    "menuAdminInventory": "Inventory",
+    "menuGuide": "User Guide"
   },
   "register": {
     "loading": "Loading profile, please wait...",
@@ -152,7 +153,7 @@
       "intendOfficialYes": "I want to become a member (50% off gear rental)",
       "intendOfficialNo": "I do not want to become a member at this moment",
       "feeInfoTitle": "Membership Fee Details",
-      "feeInfoBenefit": "Exclusive Member Benefit: 50% discount on gear rental",
+      "feeInfoBenefit": "Exclusive Member Benefit: 50% discount on gear rental. If there is someone having the same fitness and experience as you, you will be selected first.",
       "feeInfoSemester": "One Semester Scheme: $200",
       "feeInfoGraduation": "Until Graduation Scheme: Undergrad $800 / Master $400",
       "feeInfoNote": "After submitting your profile, you can visit the Payment page anytime to select a scheme and pay.",
@@ -368,8 +369,8 @@
       "photoSaveSuccess": "Gear photos updated successfully!",
       "photoSaveFailed": "Failed to update photos, please try again later.",
       "confirmDeletePhoto": "Are you sure you want to delete this photo?",
-      "confirmDeleteLastPhoto": "⚠️ This is the last photo for this gear. Deleting it will leave no photos displayed. Are you sure?",
-      "confirmSaveEmptyPhotos": "⚠️ No photos retained. Saving will remove all photos for this gear. Are you sure you want to proceed?"
+      "confirmDeleteLastPhoto": "This is the last photo for this gear. Deleting it will leave no photos displayed. Are you sure?",
+      "confirmSaveEmptyPhotos": "No photos retained. Saving will remove all photos for this gear. Are you sure you want to proceed?"
     }
   },
   "payment": {
@@ -432,7 +433,7 @@
       "qtyUnit": "pcs",
       "modifyTip": "Tip: If you need to modify your order, please go to your Profile to cancel it and rent again.",
       "discountBadge": "Member 50% OFF",
-      "discountTip": "💡 Select membership fee above to save ${{save}} (50% off) on this rental!",
+      "discountTip": "Select membership fee above to save ${{save}} (50% off) on this rental!",
       "discountApplied": "Member 50% discount applied"
     },
     "form": {
@@ -444,6 +445,13 @@
       "noteLabel": "Payment Note / Remark (Optional)",
       "notePlaceholder": "e.g., John Doe transfer, combined payment note",
       "noteTip": "This note will be forwarded to officers and recorded in payment history.",
+      "proofLabel": "Transfer Receipt / Proof (Optional)",
+      "proofTip": "Upload 1 transfer receipt or transaction screenshot (Tap thumbnail to enlarge).",
+      "addProof": "Add Proof",
+      "removeProof": "Remove Photo",
+      "previewProof": "Tap to enlarge preview",
+      "confirmDeleteProof": "Are you sure you want to remove this receipt photo?",
+      "uploadingProof": "Uploading transfer receipt to Google Drive...",
       "submittingBtn": "Submitting...",
       "submitBtn": "Confirm Payment"
     }
@@ -654,5 +662,33 @@
       "confirmSendNotifications": "Are you sure you want to send LINE push notifications to all unnotified confirmed and waitlisted applicants?",
       "error": "Operation failed: {{message}}"
     }
+  },
+  "guide": {
+    "title": "Member System Guide",
+    "subtitle": "Master the 4 core features and navigation tips",
+    "step1": {
+      "tag": "Step 1 / 4",
+      "title": "Profile & Safety Insurance",
+      "desc": "Completing your profile is the essential first step to participating in club events. We use your details to process mountaineering safety insurance, national park permits, and evaluate fitness/experience for safety.\nIf you do not sign up for events, filling in only the required basic fields is sufficient to rent gear and declare payments. However, if you wish to join events, please make sure to fill in all details!"
+    },
+    "step2": {
+      "tag": "Step 2 / 4",
+      "title": "Switch Pages via Avatar",
+      "desc": "Important tip: Tap your LINE Avatar at the top right anytime to open the quick navigation dropdown! Instantly jump between Dashboard, Profile, Events, Gear Loan, and Payment."
+    },
+    "step3": {
+      "tag": "Step 3 / 4",
+      "title": "Events & 50% Off Gear",
+      "desc": "Browse upcoming hiking events with one-click signup. Official members enjoy an exclusive 50% discount on gear rental (tents, sleeping bags, backpacks, etc.)!\nWhen fitness and experience screening scores are tied, registered club members receive priority admission."
+    },
+    "step4": {
+      "tag": "Step 4 / 4",
+      "title": "Payment & Quick Verification",
+      "desc": "Membership fees, event fees, and gear rental fees can all be reported together. Simply submit your account's last 5 digits in the \"Payment System\" after transfer for instant officer verification and transparent accounting."
+    },
+    "prev": "Previous",
+    "next": "Next",
+    "start": "Get Started",
+    "skip": "Skip Guide"
   }
 }

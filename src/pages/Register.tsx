@@ -7,6 +7,7 @@ import { getDirectImageUrl } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
 import { fetchMemberProfileFromSupabase, saveMemberProfileToSupabase } from '../utils/supabaseClient';
 import { NATIONALITY_LIST } from '../constants/nationalities';
+import { SystemGuideModal } from '../components/common/SystemGuideModal';
 import '../App.css';
 
 interface ProfileData {
@@ -83,6 +84,20 @@ function Register({ userId }: { userId: string }) {
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   // 隱藏的 input file ref
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 社員系統使用指南導覽燈箱狀態
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  // 首次進入填寫資料頁面時，若尚未看過系統導覽則自動彈出
+  useEffect(() => {
+    try {
+      const hasSeen = localStorage.getItem('has_seen_member_system_guide');
+      if (!hasSeen) {
+        setIsGuideOpen(true);
+      }
+    } catch (e) {
+      console.warn('[Register] 讀取導覽紀錄例外:', e);
+    }
+  }, []);
 
   // 解析歷史已儲存的體能證明照片 URL 清單
   const historicalProofUrls = useMemo(() => {
@@ -777,8 +792,9 @@ function Register({ userId }: { userId: string }) {
                   setFormData((prev) => ({
                     ...prev,
                     identityStatus: val,
-                    // 切換身分時，若非在校生可預填無
+                    // 切換身分時，若非在校生可預填無，且幹部意願限在校生勾選（非在校生自動清空）
                     studentId: val === '臺科大在校學生' ? prev.studentId : '無 N/A',
+                    intendOfficer: val === '臺科大在校學生' ? prev.intendOfficer : ''
                   }));
                 }}
                 required
@@ -1299,23 +1315,28 @@ function Register({ userId }: { userId: string }) {
                 </div>
               </div>
 
-              <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>
-                {t('register.step4.intendOfficerTitle')}
-              </p>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-secondary)' }}>
-                <input
-                  type="checkbox"
-                  name="intendOfficer"
-                  value="我有意願成為社團幹部"
-                  checked={formData.intendOfficer === '我有意願成為社團幹部'}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setFormData(prev => ({ ...prev, intendOfficer: checked ? '我有意願成為社團幹部' : '' }));
-                  }}
-                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                />
-                <span>{t('register.step4.intendOfficerCheckbox')}</span>
-              </label>
+              {/* 擔任幹部意願 (僅限臺科大在校學生顯示並可勾選，非在校生直接隱藏) */}
+              {formData.identityStatus === '臺科大在校學生' && (
+                <div>
+                  <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>
+                    {t('register.step4.intendOfficerTitle')}
+                  </p>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                    <input
+                      type="checkbox"
+                      name="intendOfficer"
+                      value="我有意願成為社團幹部"
+                      checked={formData.intendOfficer === '我有意願成為社團幹部'}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFormData(prev => ({ ...prev, intendOfficer: checked ? '我有意願成為社團幹部' : '' }));
+                      }}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <span>{t('register.step4.intendOfficerCheckbox')}</span>
+                  </label>
+                </div>
+              )}
 
               {/* 想說的話 I want to say... (非必填多行輸入框) */}
               <div style={{ marginTop: '20px', borderTop: '1px dashed var(--border-color)', paddingTop: '16px' }}>
@@ -1455,6 +1476,9 @@ function Register({ userId }: { userId: string }) {
           </div>
         </div>
       )}
+
+      {/* 社員系統使用指南導覽燈箱 */}
+      <SystemGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>
   );
 }

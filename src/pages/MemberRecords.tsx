@@ -10,7 +10,8 @@ import {
   Clock,
   User,
   ExternalLink,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
 import {
@@ -38,6 +39,7 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -631,9 +633,30 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
 
                         {/* 繳費證明截圖縮圖 */}
                         {r.details?.proofImageUrl && (
-                          <div style={{ marginTop: '6px' }}>
-                            <div style={{ fontWeight: 600, marginBottom: '4px', color: '#0f172a' }}>繳費證明圖片:</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ marginTop: '8px' }}>
+                            <div style={{ fontWeight: 600, marginBottom: '6px', color: '#0f172a', fontSize: '13px' }}>繳費證明截圖:</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div
+                                style={{
+                                  position: 'relative',
+                                  width: '60px',
+                                  height: '60px',
+                                  borderRadius: '8px',
+                                  overflow: 'hidden',
+                                  border: '1px solid #cbd5e1',
+                                  cursor: 'pointer',
+                                  backgroundColor: '#f8fafc',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                }}
+                                onClick={() => setLightboxImageUrl(r.details!.proofImageUrl!)}
+                                title="點擊預覽大圖"
+                              >
+                                <img
+                                  src={r.details.proofImageUrl}
+                                  alt="繳費證明截圖"
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              </div>
                               <a
                                 href={r.details.proofImageUrl}
                                 target="_blank"
@@ -649,7 +672,7 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
                                 }}
                               >
                                 <ExternalLink size={14} />
-                                <span>查看繳費憑證圖片</span>
+                                <span>開新分頁檢視</span>
                               </a>
                             </div>
                           </div>
@@ -661,6 +684,60 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 圖片大圖檢視燈箱 (Lightbox Modal) */}
+      {lightboxImageUrl && (
+        <div
+          onClick={() => setLightboxImageUrl(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxImageUrl(null)}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              border: 'none',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={lightboxImageUrl}
+            alt="預覽大圖"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '92vw',
+              maxHeight: '85vh',
+              objectFit: 'contain',
+              borderRadius: '8px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+            }}
+          />
         </div>
       )}
     </div>

@@ -698,10 +698,10 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             )}
           </div>
 
-          {/* Row 7: 與留守人關係 + 緊急聯絡人地址 */}
+          {/* Row 7: 關係 + 緊急聯絡人地址 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px' }}>
             {renderPermitField(
-              '與留守人關係',
+              '關係',
               emerRel,
               'permit-emer-rel',
               emerRel
@@ -785,7 +785,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
               {emerRel && (
-                <div><span style={{ color: '#64748b' }}>與留守人關係：</span><span style={{ color: '#0f172a', fontWeight: 600 }}>{emerRel}</span></div>
+                <div><span style={{ color: '#64748b' }}>關係：</span><span style={{ color: '#0f172a', fontWeight: 600 }}>{emerRel}</span></div>
               )}
               {emerAddr && (
                 <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '6px' }}>
