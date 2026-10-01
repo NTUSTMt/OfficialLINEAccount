@@ -38,6 +38,33 @@ const WebAdminMembers = lazy(() => import('./pages/web-admin/WebAdminMembers').t
 const WebAdminFinance = lazy(() => import('./pages/web-admin/WebAdminFinance').then(m => ({ default: m.WebAdminFinance })));
 const WebAdminInventory = lazy(() => import('./pages/web-admin/WebAdminInventory').then(m => ({ default: m.WebAdminInventory })));
 
+function ExternalBrowserBlockScreen() {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      minHeight: '100vh', backgroundColor: '#f8fafc', padding: '24px', textAlign: 'center'
+    }}>
+      <AlertCircle size={64} color="#ef4444" style={{ marginBottom: '16px' }} />
+      <h2 style={{ color: '#1e293b', marginBottom: '12px', fontSize: '20px', fontWeight: 'bold' }}>請使用 LINE 官方帳號開啟</h2>
+      <p style={{ color: '#64748b', marginBottom: '24px', fontSize: '15px', lineHeight: '1.6', maxWidth: '320px' }}>
+        本系統為台科登山社 LINE 官方帳號專用系統，為確保您的操作與資料安全，請由手機 LINE 官方帳號圖文選單開啟。
+      </p>
+      <a 
+        href="line://" 
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: '#06c755', color: '#fff', fontWeight: 'bold', padding: '12px 24px',
+          borderRadius: '8px', textDecoration: 'none', fontSize: '16px',
+          boxShadow: '0 4px 6px -1px rgba(6, 199, 85, 0.2)'
+        }}
+      >
+        開啟 LINE
+      </a>
+    </div>
+  );
+}
+
+
 // 解析 LIFF 傳入的初始路徑 (解決 liff.state 傳參導致重定向遺失的問題)
 const getInitialRedirectPath = () => {
   const searchParams = new URLSearchParams(window.location.search);
@@ -722,6 +749,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
 }
 
 function App() {
+  const [isBlocked, setIsBlocked] = useState(false);
   const [liffInit, setLiffInit] = useState<{
     loading: boolean;
     error: unknown;
@@ -768,6 +796,13 @@ function App() {
         }
 
         await liff.init({ liffId });
+
+        if (!liff.isInClient() && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          setIsBlocked(true);
+          setLiffInit({ loading: false, error: null, userId: '', displayName: '', pictureUrl: '' });
+          return;
+        }
+
         let userId = 'TEST_USER_ID';
         let displayName = '山友';
         let pictureUrl = '';
@@ -807,6 +842,10 @@ function App() {
 
     initializeLiff();
   }, []);
+
+  if (isBlocked) {
+    return <ExternalBrowserBlockScreen />;
+  }
 
   return (
     <BrowserRouter>

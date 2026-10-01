@@ -207,7 +207,7 @@ export const WebAdminMembers: React.FC = () => {
           >
             <option value="ALL">全部社籍狀態</option>
             <option value="OFFICIAL">僅正式社員</option>
-            <option value="NON_OFFICIAL">非正式社員</option>
+            <option value="NON_OFFICIAL">非社員</option>
           </select>
 
           <button

@@ -331,12 +331,12 @@
   5. **歷史代碼殘留大量無效試算表備援**：`_getEventName`、`sendOfficerMenu`、`sendSignupForm`、`handleSignup`、`checkOfficerInternal`、`_handleGetAdminEvents`、`_fetchOpenEventsContext` 等仍保留試算表備援，不僅掩蓋了真正的資料庫錯誤，更拖慢系統效能。
 - **架構設計與修復細節 (Architecture & Implementation)**：
   - **1. 前端社費補底安全改造 ([src/pages/Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx))**：
-    - 改以安全 RPC 封裝函式 `fetchDashboardFromSupabase(userId)` 取得身分與社籍狀態，非正式社員或過期社員自動於 `unpaidList.membership` 補入當學期社費項目，裝備租借即刻享有 5 折優惠。
+    - 改以安全 RPC 封裝函式 `fetchDashboardFromSupabase(userId)` 取得身分與社籍狀態，非社員或過期社員自動於 `unpaidList.membership` 補入當學期社費項目，裝備租借即刻享有 5 折優惠。
   - **2. 生日格式化標準化 ([src/components/admin/ApplicantModals.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/ApplicantModals.tsx))**：
     - 實作 `formatDateSlash` 工具函式，去除 ISO 時區、將 `-` 轉為 `/`，只截取前 10 碼為 `YYYY/MM/DD`，未填寫時顯示「未填」。
   - **3. ENUM 全域隱式轉型與資料庫整合腳本 ([supabase/fix_enum_typecast_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/fix_enum_typecast_rpc.sql))**：
     - 建立 PostgreSQL 全域隱式轉換 `CREATE CAST (text AS event_signup_status_enum)`，徹底根治任何字串指派至 enum 欄位的型別錯誤。
-    - 整合最新 `update_signup_status_rpc`、`get_unpaid_payments`（過期或非正式社員強制提供社費選項）與 `get_admin_event_signups_rpc`。
+    - 整合最新 `update_signup_status_rpc`、`get_unpaid_payments`（過期或非社員強制提供社費選項）與 `get_admin_event_signups_rpc`。
   - **4. 確認備取意願 100% 直連 Supabase ([gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js))**：
     - `handleConfirmWaitlist` 直查 Supabase `event_signups` 表，若已確認過則提示避免重複更新；若為備取則以 REST PATCH 更新狀態為 `備取（有意願）Waitlisted (Interested)`，並發送 LINE 訊息確認，出錯直接回報具體錯誤訊息。
   - **5. 全面掃除試算表備援，落實純 Supabase 直通 (SSOT)**：

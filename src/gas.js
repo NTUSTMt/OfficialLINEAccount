@@ -1142,61 +1142,17 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
       }
     }
 
-    // 3. 自動主動推播【🎉 繳費成功通知】至該社員個人 LINE
-    var targetUserId = payment.line_user_id;
     var targetUserName = payment.name || "社員";
     var totalAmount = payment.amount || payment.total_amount || 0;
-    var selectedItems = payment.type || (payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團活動/裝備費用"));
 
-    if (targetUserId && targetUserId.indexOf("U") === 0) {
-      var prefLang = _getUserPreferredLanguage(targetUserId);
-      var successMsgZh = "🎉 繳費成功通知\n\n" +
-        "親愛的 " + targetUserName + " 您好：\n" +
-        "幹部已確認收到您的款項囉！\n\n" +
-        "• 繳費單號：" + paymentId + "\n" +
-        "• 核銷金額：$" + totalAmount + " 元\n" +
-        "• 核銷項目：" + selectedItems + "\n\n" +
-        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨";
-
-      var successMsgEn = "🎉 Payment Confirmed\n\n" +
-        "Dear " + targetUserName + ",\n" +
-        "Your payment has been successfully confirmed by the officers!\n\n" +
-        "• Payment ID: " + paymentId + "\n" +
-        "• Amount: $" + totalAmount + " TWD\n" +
-        "• Items: " + selectedItems + "\n\n" +
-        "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
-
-      _pushMessage(targetUserId, _formatBilingualMessage(successMsgZh, successMsgEn, prefLang));
-    }
-
-    // 4. 若有 LINE replyToken，回覆幹部成功
+    // 3. 若有 LINE replyToken，回覆幹部成功
     if (sendOfficerReply && replyToken) {
       var replyText = "✅ 繳費單【" + paymentId + "】已成功核銷！\n" +
         "─────────────\n" +
         "• 繳費社員：" + targetUserName + "\n" +
         "• 金額：$" + totalAmount + " 元\n" +
-        "• 核銷狀態：已核銷 Confirmed\n" +
-        "• 系統已自動發送【繳費成功通知】至該社員個人 LINE！";
+        "• 核銷狀態：已核銷 Confirmed";
       _replyMessage(replyToken, replyText);
-    }
-
-    // 5. 發送推播訊息至幹部管理群組 (確保所有幹部即時掌握核銷動態)
-    var adminGroupId = (typeof PropertiesService !== "undefined" && PropertiesService.getScriptProperties)
-      ? (PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID') || (typeof ADMIN_GROUP_ID !== 'undefined' ? ADMIN_GROUP_ID : ""))
-      : (typeof ADMIN_GROUP_ID !== 'undefined' ? ADMIN_GROUP_ID : "");
-
-    if (adminGroupId) {
-      var groupNotifyMsg = "✅ 繳費單已完成核銷通知\n" +
-        "─────────────\n" +
-        "• 核銷人員：" + (officerName || "幹部團隊") + "\n" +
-        "• 繳費單號：" + paymentId + "\n" +
-        "• 繳費社員：" + targetUserName + "\n" +
-        "• 核銷金額：$" + totalAmount + " 元\n" +
-        "• 申報項目：" + selectedItems + "\n" +
-        "• 核銷狀態：已核銷 Confirmed\n" +
-        "• 系統已自動通知社員個人 LINE，並已同步更新資料庫各項狀態！";
-
-      _pushMessage(adminGroupId, groupNotifyMsg);
     }
 
     return { success: true, message: "已成功核銷繳費單 " + paymentId, payment: payment };
@@ -4082,22 +4038,7 @@ function dailyPatrol() {
         });
         expiredMembers.push("• " + (mem.name || "社員") + " (到期日: " + mem.membership_expires_at + ")");
 
-        // 推播期滿溫馨祝福至該社員個人 LINE
-        if (mem.line_user_id && mem.line_user_id.indexOf("U") === 0) {
-          var blessingMsg = "【社籍期滿溫馨祝福 / Club Membership Milestone】\n\n" +
-            "親愛的 " + (mem.name || "山友") + " 您好：\n\n" +
-            "您的登山社社員資格已於 " + mem.expire_date + " 圓滿告一段落。\n\n" +
-            "非常感謝您這段時間以來對登山社的陪伴與熱情參與，與大家一同在山林與步道間留下了許多珍貴美好的回憶！\n\n" +
-            "山一直在那裡，夥伴的情誼也始終常在。\n" +
-            "無論未來您走向哪一座山頭、開啟怎樣的新冒險，登山社都由衷祝福您平安順遂、每一步都有美麗的風景相伴！🏔️✨\n\n" +
-            "若想念山林或想再與大家聚聚，隨時都歡迎回到登山社這個溫暖大家庭！\n" +
-            "─────────────\n" +
-            "Dear " + (mem.name || "Member") + ",\n\n" +
-            "Your club membership period has concluded on " + mem.expire_date + ".\n\n" +
-            "Thank you so much for being an essential part of our mountaineering journey. You are always welcome back to our club family!";
-
-          _pushMessage(mem.line_user_id, blessingMsg);
-        }
+        // (期滿溫馨祝福已停用定時主動推播)
       }
     }
   } catch (errMem) {
@@ -4650,41 +4591,7 @@ function _handleNotifyOfficersLoan(json) {
     var loanSubject = "【台科登山社】新裝備租借申請 - " + loanId + " (" + borrowerName + ")";
     pushAdminMessage(msg, loanSubject);
 
-    // ⭐️ 2. 同步保底推播給使用者個人 LINE 聊天室 (預約成功憑證)
-    if (userId && userId !== "TEST_USER_ID") {
-      var prefLang = _getUserPreferredLanguage(userId);
-      var userLoanMsgZh = "【🎒 我的裝備租借預訂單】\n\n" +
-        "• 訂單編號：" + loanId + "\n" +
-        "• 借用人：" + borrowerName + " (" + identityDesc + ")\n" +
-        "• 預計領取：" + (details.pickupDate || "") + "\n" +
-        "• 預計歸還：" + (details.returnDate || "") + " (共 " + days + " 天)\n" +
-        "• 租借用途：" + purpose + "\n\n" +
-        "📦 預約裝備清單：\n" +
-        (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") + "\n\n" +
-        "💰 預估總租金：$" + totalRent + " 元\n\n" +
-        "📌 提醒事項：\n" +
-        "1. 幹部已收到您的預約申請，將為您備齊裝備。\n" +
-        "2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n" +
-        "3. 將有幹部主動聯繫你，確認領取時間以及地點。";
-
-      var userLoanMsgEn = "【🎒 Equipment Loan Reservation Confirmed】\n\n" +
-        "• Order ID: " + loanId + "\n" +
-        "• Borrower: " + borrowerName + " (" + identityDesc + ")\n" +
-        "• Pickup Date: " + (details.pickupDate || "") + "\n" +
-        "• Return Date: " + (details.returnDate || "") + " (" + days + " days)\n" +
-        "• Purpose: " + purpose + "\n\n" +
-        "📦 Items:\n" +
-        (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• None") + "\n\n" +
-        "💰 Estimated Total: $" + totalRent + " TWD\n\n" +
-        "📌 Notes:\n" +
-        "1. Officers have received your request and will prepare the gear.\n" +
-        "2. If fees apply, please complete payment in 'Payment Center' before pickup.\n" +
-        "3. An officer will contact you to confirm pickup time and location. Thank you!";
-
-      _pushMessage(userId, _formatBilingualMessage(userLoanMsgZh, userLoanMsgEn, prefLang));
-    }
-
-    return _successResponse({ message: "幹部推播與個人推播已成功送出" });
+    return _successResponse({ message: "幹部推播已成功送出" });
   } catch (err) {
     console.warn("裝備租借推播失敗:", err);
     return _errorResponse(err.toString());
@@ -4729,25 +4636,7 @@ function _handleNotifyLoanCancelled(json) {
 
     pushAdminMessage(adminBody, adminSubject);
 
-    // 2. 使用者個人 LINE 推播 (取消成功憑證)
-    if (userId && userId !== "TEST_USER_ID") {
-      var prefLang = _getUserPreferredLanguage(userId);
-      var userMsgZh = "【🎒 裝備租借取消成功憑證】\n\n" +
-        "• 訂單編號：" + loanId + "\n" +
-        "• 借用人：" + borrowerName + "\n" +
-        "• 取消裝備明細：\n" + itemsText + "\n\n" +
-        (isPaid ? "⚠️ 您已完成此訂單之繳費，社團幹部將主動與您聯繫辦理退款事宜！" : "您的裝備租借預約已成功取消，庫存已歸還系統。");
-
-      var userMsgEn = "【🎒 Equipment Loan Cancellation Confirmed】\n\n" +
-        "• Order ID: " + loanId + "\n" +
-        "• Borrower: " + borrowerName + "\n" +
-        "• Items:\n" + itemsText + "\n\n" +
-        (isPaid ? "⚠️ You have paid for this reservation. Officers will contact you regarding the refund process." : "Your equipment loan reservation has been successfully cancelled.");
-
-      _pushMessage(userId, _formatBilingualMessage(userMsgZh, userMsgEn, prefLang));
-    }
-
-    return _successResponse({ message: "裝備取消幹部與個人推播已成功送出" });
+    return _successResponse({ message: "裝備取消幹部推播已成功送出" });
   } catch (err) {
     console.warn("_handleNotifyLoanCancelled 失敗:", err);
     return _errorResponse(err.toString());
@@ -4898,31 +4787,7 @@ function _handleNotifyOfficersPayment(json) {
     var paymentSubject = "【台科登山社】新繳費申報 - $" + totalAmount + " (" + (userName || "未知社員") + "，末5碼 " + last5Digits + ")";
     pushAdminMessage(adminMsg, paymentSubject, { htmlBody: paymentHtml });
 
-    // 2. 同步保底推播給使用者個人 LINE 聊天室 (個人繳費收據)
-    if (userId && userId !== "TEST_USER_ID") {
-      var prefLang = _getUserPreferredLanguage(userId);
-      var userMsgZh = "【繳費申報已成功送出】\n\n" +
-        "您好" + (userName ? " " + userName : "") + "！系統已成功收到您的繳費申報資訊：\n\n" +
-        (paymentId ? "• 繳費單號：" + paymentId + "\n" : "") +
-        "• 申報金額：$" + totalAmount + " 元\n" +
-        "• 帳號末五碼：" + last5Digits + "\n" +
-        "• 申報項目：\n" + itemsZh +
-        noteZh + "\n\n" +
-        "幹部會於核對款項後自動更新您的繳費狀態。謝謝！";
-
-      var userMsgEn = "【💳 Payment Report Submitted】\n\n" +
-        "Hello" + (userName ? " " + userName : "") + "! Your payment report has been submitted:\n\n" +
-        (paymentId ? "• Payment ID: " + paymentId + "\n" : "") +
-        "• Amount: $" + totalAmount + " TWD\n" +
-        "• Last 5 Digits: " + last5Digits + "\n" +
-        "• Items:\n" + itemsEn +
-        noteEn + "\n\n" +
-        "Officers will verify your payment and update your status soon. Thank you!";
-
-      _pushMessage(userId, _formatBilingualMessage(userMsgZh, userMsgEn, prefLang));
-    }
-
-    return _successResponse({ message: "繳費申報幹部與個人推播已成功送出" });
+    return _successResponse({ message: "繳費申報幹部推播已成功送出" });
   } catch (err) {
     console.warn("繳費申報幹部推播失敗:", err);
     return _errorResponse(err.toString());
@@ -4941,29 +4806,7 @@ function _handleNotifyPaymentConfirmed(json) {
     var lineUserId = json.lineUserId || "";
     var confirmedBy = json.confirmedBy || "Email 單鍵核銷";
 
-    // 1. 推播給社員個人 LINE
-    if (lineUserId && lineUserId.indexOf("U") === 0) {
-      var prefLang = _getUserPreferredLanguage(lineUserId);
-      var successMsgZh = "🎉 繳費成功通知\n\n" +
-        "親愛的 " + userName + " 您好：\n" +
-        "幹部已確認收到您的款項囉！\n\n" +
-        "• 繳費單號：" + paymentId + "\n" +
-        "• 核銷金額：$" + amount + " 元\n" +
-        "• 核銷項目：" + items + "\n\n" +
-        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨";
-
-      var successMsgEn = "🎉 Payment Confirmed\n\n" +
-        "Dear " + userName + ",\n" +
-        "Your payment has been successfully confirmed by the officers!\n\n" +
-        "• Payment ID: " + paymentId + "\n" +
-        "• Amount: $" + amount + " TWD\n" +
-        "• Items: " + items + "\n\n" +
-        "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
-
-      _pushMessage(lineUserId, _formatBilingualMessage(successMsgZh, successMsgEn, prefLang));
-    }
-
-    // 2. 推播給幹部管理群組
+    // 1. 推播給幹部管理群組
     var adminMsg = "【💳 幹部通知：繳費單已完成核銷】\n" +
       "─────────────\n" +
       "• 繳費單號：" + paymentId + "\n" +
@@ -5360,7 +5203,7 @@ function _handleNotifyProfileSaved(json) {
       msg = titleZh + "\n\n" + zhBlock + "\n─────────────\n" + titleEn + "\n\n" + enBlock;
     }
 
-    _pushMessage(userId, msg);
+    // (個人推播已由 liff.sendMessages 於前端處理，減少 Push 額度消耗)
 
     // 2. 若隊員勾選「我有意願成為社團幹部」，且為新意願（由無變有或首次填寫），即時推播幹部管理群組
     var officerIntent = data.intendOfficer || data.officer_intent || "";
@@ -5445,26 +5288,7 @@ function _handleNotifyEventCancelled(json) {
       pushAdminMessage(adminBody, adminSubject);
     }
 
-    // 2. 使用者個人 LINE 推播 (取消報名確認)
-    if (userId && userId !== "TEST_USER_ID") {
-      var prefLang = _getUserPreferredLanguage(userId);
-      var userMsgZh = "【🏕️ 活動報名取消確認】\n\n" +
-        "親愛的 " + userName + " 您好：\n" +
-        "您所報名的活動【" + eventName + "】已成功取消！\n\n" +
-        "• 原審核狀態：" + (reviewStatus || "已報名") + "\n" +
-        (cancelReason ? "• 取消原因：" + cancelReason + "\n" : "") +
-        (isPaid ? "\n⚠️ 若您已繳交活動費用，社團幹部將依退費規範主動聯絡您安排退費！\n" : "\n期待未來在其他山林活動中與您同行！🏔️");
-
-      var userMsgEn = "【🏕️ Event Registration Cancellation Confirmed】\n\n" +
-        "Dear " + userName + ",\n" +
-        "Your registration for [" + eventName + "] has been successfully cancelled." +
-        (cancelReason ? "\n• Reason: " + cancelReason : "") +
-        (isPaid ? "\n⚠️ If you have already paid the activity fee, officers will contact you for refund arrangements." : "\nHope to see you on the trails in future events! 🏔️");
-
-      _pushMessage(userId, _formatBilingualMessage(userMsgZh, userMsgEn, prefLang));
-    }
-
-    // 3. ⚡ 同步標記該活動專屬獨立試算表 (報名名冊) 為已取消
+    // 2. ⚡ 同步標記該活動專屬獨立試算表 (報名名冊) 為已取消
     try {
       _syncCancelToEventSpreadsheet(eventId, userId, json.signupCode || "", cancelReason);
     } catch (sheetSyncErr) {

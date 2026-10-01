@@ -89,7 +89,7 @@ export default function AdminMembers({ userId }: { userId?: string }) {
       options: [
         { value: 'all', label: '全部社員' },
         { value: 'true', label: '正式社員' },
-        { value: 'false', label: '非正式社員' }
+        { value: 'false', label: '非社員' }
       ]
     },
     {

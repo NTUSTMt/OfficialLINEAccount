@@ -3241,12 +3241,12 @@ describe('49. 活動代碼自動遞增 SSOT、消除多餘 Signups 頁面、活�
     const insertedSheets = [];
     const mockSpreadsheet = {
       getSheetByName: (name) => {
-        if (name === 'event_signups') return { name: 'event_signups', appendRow: () => {}, getDataRange: () => ({ getValues: () => [['活動編號']] }) };
+        if (name === 'event_signups') return { name: 'event_signups', appendRow: () => { }, getDataRange: () => ({ getValues: () => [['活動編號']] }) };
         return null;
       },
       insertSheet: (name) => {
         insertedSheets.push(name);
-        return { name: name, appendRow: () => {} };
+        return { name: name, appendRow: () => { } };
       }
     };
 
@@ -3403,7 +3403,7 @@ describe('49. 活動代碼自動遞增 SSOT、消除多餘 Signups 頁面、活�
 });
 
 describe('50. 社團系統 5 大問題修復整合驗證 (社費過期、未來開放卡片、報名名冊個資對齊、一鍵審核推播、正備取更新保護)', () => {
-  it('1. 社籍過期繳費：非正式社員或過期社員進入繳費系統，主動提供社費選項，勾選後裝備立享 5 折', () => {
+  it('1. 社籍過期繳費：非社員或過期社員進入繳費系統，主動提供社費選項，勾選後裝備立享 5 折', () => {
     // 模擬後端 RPC get_unpaid_payments / get_unpaid_items_rpc
     function simulateGetUnpaidPayments(member) {
       const isExpired = member.membership_expires_at ? new Date(member.membership_expires_at) < new Date() : false;
@@ -3421,7 +3421,7 @@ describe('50. 社團系統 5 大問題修復整合驗證 (社費過期、未來�
       return { membership, activities: [], equipments: [] };
     }
 
-    // 測試情境：曾繳過費 (payment_status: 已繳費 Paid)，但社籍過期 (membership_expires_at: 2025-06-30)，目前非正式社員
+    // 測試情境：曾繳過費 (payment_status: 已繳費 Paid)，但社籍過期 (membership_expires_at: 2025-06-30)，目前非社員
     const expiredMember = {
       is_official_member: false,
       membership_expires_at: '2025-06-30',
@@ -4151,10 +4151,10 @@ describe('56. 繳費申報推播雙語英文化與幹部後台鑑權安全性測
       var itemsEn = (selectedNamesEn && selectedNamesEn.length > 0)
         ? selectedNamesEn.map(function (n) { return "  - " + n; }).join("\n")
         : (selectedNames.length > 0
-            ? selectedNames.map(function (n) {
-                return "  - " + n.replace(/含社員5折優惠/g, "Member 50% discount applied");
-              }).join("\n")
-            : "  - None");
+          ? selectedNames.map(function (n) {
+            return "  - " + n.replace(/含社員5折優惠/g, "Member 50% discount applied");
+          }).join("\n")
+          : "  - None");
 
       return { itemsZh, itemsEn };
     }

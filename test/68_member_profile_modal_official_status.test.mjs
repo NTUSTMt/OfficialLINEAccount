@@ -48,7 +48,7 @@ describe('MemberProfileModal and ApplicantModals Official Member Status Tests', 
       'is_official_member: true 必須判定為正式社員'
     );
 
-    // 2. 非正式社員 (is_official_member: false)
+    // 2. 非社員 (is_official_member: false)
     assert.strictEqual(
       computeIsOfficial({ is_official_member: false, name: '李小華' }),
       false,
