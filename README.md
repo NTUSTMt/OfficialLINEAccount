@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.248-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.249-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.248)](#7-最新版本異動紀錄-changelog-v01248)
+- [7. 最新版本異動紀錄 (Changelog v0.1.249)](#7-最新版本異動紀錄-changelog-v01249)
 
 ---
 
@@ -204,7 +204,18 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.248)
+## 7. 最新版本異動紀錄 (Changelog v0.1.249)
+
+### v0.1.249 (2026-10-02)
+- **個人資料異動 Diff Flex Message 英文雙語支援 ([src/pages/Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx))**:
+  - **自動識別偏好語系**: 依據使用者個人設定之 preferredLanguage 或 i18n 當前語系，動態生成全英文或中英對照之 Diff Flex Message 卡片。
+  - **全英文卡片標題與副標題**:
+    - 新註冊: New Member Registration, Welcome to NTUST Hiking Club
+    - 更新異動: Profile Update Record, Field Changes (Diff)
+    - 無變更提示: No changes detected. Your profile is up to date.
+    - 欄位溢位提示: ... and N more field change(s)
+  - **全英文欄位標籤與空值標示**: 英文環境下所有比對欄位均顯示清晰之英文名稱（如 Name, Phone, Dept & Student ID, Emergency Contact），空值標記為 (empty)。
+  - **中英雙語錯誤彈窗**: liff.sendMessages 發話失敗或非 LINE 內部環境之 alert 訊息同步升級為雙語對應顯示。
 
 ### v0.1.248 (2026-10-01)
 - **個人資料異動 Diff 風格綠色山林 Flex Message 卡片支援 ([src/pages/Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx))**:

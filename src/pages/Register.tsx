@@ -52,7 +52,8 @@ interface DiffFieldItem {
 function buildProfileDiffFlex(
   isNew: boolean,
   memberName: string,
-  items: DiffFieldItem[]
+  items: DiffFieldItem[],
+  isEn: boolean = false
 ) {
   const displayItems = items.slice(0, 12);
   const remainingCount = items.length - displayItems.length;
@@ -68,7 +69,7 @@ function buildProfileDiffFlex(
       contents: [
         {
           type: 'text',
-          text: '資料未有變更，與既有個人檔案完全相符',
+          text: isEn ? 'No changes detected. Your profile is up to date.' : '資料未有變更，與既有個人檔案完全相符',
           size: 'xs',
           color: '#6b7280',
           align: 'center'
@@ -149,7 +150,7 @@ function buildProfileDiffFlex(
     if (remainingCount > 0) {
       bodyContents.push({
         type: 'text',
-        text: `... 尚有其餘 ${remainingCount} 項欄位異動`,
+        text: isEn ? `... and ${remainingCount} more field change(s)` : `... 尚有其餘 ${remainingCount} 項欄位異動`,
         size: 'xxs',
         color: '#9ca3af',
         align: 'center',
@@ -157,6 +158,15 @@ function buildProfileDiffFlex(
       });
     }
   }
+
+  const headerTitle = isNew
+    ? (isEn ? 'New Member Registration' : '新社員基本資料登記')
+    : (isEn ? 'Profile Update Record' : '個人資料異動紀錄');
+
+  const memberDisplayName = memberName || (isEn ? 'Member' : '社員');
+  const headerSubtitle = isNew
+    ? `${memberDisplayName} • ${isEn ? 'Welcome to NTUST Mountaineering Club' : '歡迎加入台科登山社'}`
+    : `${memberDisplayName} • ${isEn ? 'Field Changes (Diff)' : '欄位變更比對 (Diff)'}`;
 
   return {
     type: 'bubble',
@@ -169,14 +179,14 @@ function buildProfileDiffFlex(
       contents: [
         {
           type: 'text',
-          text: isNew ? '新社員基本資料登記' : '個人資料異動紀錄',
+          text: headerTitle,
           weight: 'bold',
           color: '#ffffff',
           size: 'md'
         },
         {
           type: 'text',
-          text: `${memberName || '社員'} • ${isNew ? '歡迎加入台科登山社' : '欄位變更比對 (Diff)'}`,
+          text: headerSubtitle,
           color: '#a7f3d0',
           size: 'xs',
           margin: 'xs'
@@ -723,19 +733,20 @@ function Register({ userId }: { userId: string }) {
         saveRes = { success: true };
       }
 
+      const isEn = finalFormData.preferredLanguage === 'en' || i18n.language === 'en';
       const diffItems: DiffFieldItem[] = [];
       const maskId = (v: string) => (v.length > 5 ? v.substring(0, 3) + '****' + v.substring(v.length - 2) : '******');
 
       if (isNewUser) {
-        if (finalFormData.name) diffItems.push({ label: '姓名 / Name', newVal: finalFormData.name });
+        if (finalFormData.name) diffItems.push({ label: isEn ? 'Name' : '姓名 / Name', newVal: finalFormData.name });
         if (finalFormData.department || finalFormData.studentId) {
-          diffItems.push({ label: '系所學號 / Dept & ID', newVal: `${finalFormData.department || ''} (${finalFormData.studentId || ''})`.trim() });
+          diffItems.push({ label: isEn ? 'Dept & Student ID' : '系所學號 / Dept & ID', newVal: `${finalFormData.department || ''} (${finalFormData.studentId || ''})`.trim() });
         }
-        if (finalFormData.phone) diffItems.push({ label: '聯絡電話 / Phone', newVal: finalFormData.phone });
+        if (finalFormData.phone) diffItems.push({ label: isEn ? 'Phone' : '聯絡電話 / Phone', newVal: finalFormData.phone });
         if (finalFormData.emerName) {
-          diffItems.push({ label: '緊急聯絡人 / Contact', newVal: `${finalFormData.emerName} (${finalFormData.emerRel || ''})`.trim() });
+          diffItems.push({ label: isEn ? 'Emergency Contact' : '緊急聯絡人 / Contact', newVal: `${finalFormData.emerName} (${finalFormData.emerRel || ''})`.trim() });
         }
-        if (finalFormData.intendOfficial) diffItems.push({ label: '入社意願 / Intent', newVal: finalFormData.intendOfficial });
+        if (finalFormData.intendOfficial) diffItems.push({ label: isEn ? 'Official Member Intent' : '入社意願 / Intent', newVal: finalFormData.intendOfficial });
       } else if (originalFormData) {
         const norm = (v?: string) => (v || '').trim();
         const checkField = (key: keyof ProfileData, label: string, isMask: boolean = false) => {
@@ -744,34 +755,34 @@ function Register({ userId }: { userId: string }) {
           if (o !== n) {
             diffItems.push({
               label,
-              oldVal: isMask && o ? maskId(o) : (o || '(空值)'),
-              newVal: isMask && n ? maskId(n) : (n || '(空值)')
+              oldVal: isMask && o ? maskId(o) : (o || (isEn ? '(empty)' : '(空值)')),
+              newVal: isMask && n ? maskId(n) : (n || (isEn ? '(empty)' : '(空值)'))
             });
           }
         };
 
-        checkField('name', '姓名 / Name');
-        checkField('gender', '性別 / Gender');
-        checkField('nationality', '國籍 / Nationality');
-        checkField('birthday', '生日 / Birthday');
-        checkField('idNumber', '身分證護照 / ID Number', true);
-        checkField('department', '系所 / Department');
-        checkField('studentId', '學號 / Student ID');
-        checkField('phone', '聯絡電話 / Phone');
-        checkField('email', '電子郵件 / Email');
+        checkField('name', isEn ? 'Name' : '姓名 / Name');
+        checkField('gender', isEn ? 'Gender' : '性別 / Gender');
+        checkField('nationality', isEn ? 'Nationality' : '國籍 / Nationality');
+        checkField('birthday', isEn ? 'Birthday' : '生日 / Birthday');
+        checkField('idNumber', isEn ? 'ID / Passport' : '身分證護照 / ID Number', true);
+        checkField('department', isEn ? 'Department' : '系所 / Department');
+        checkField('studentId', isEn ? 'Student ID' : '學號 / Student ID');
+        checkField('phone', isEn ? 'Phone' : '聯絡電話 / Phone');
+        checkField('email', isEn ? 'Email' : '電子郵件 / Email');
         checkField('realLineId', 'LINE ID');
-        checkField('studentAddr', '現居地址 / Address');
-        checkField('emerName', '緊急聯絡人 / Emergency Contact');
-        checkField('emerRel', '聯絡人關係 / Relationship');
-        checkField('emerPhone', '緊急聯絡人電話 / Emer Phone');
-        checkField('emerAddr', '緊急聯絡人地址 / Emer Address');
-        checkField('medicalHistory', '特殊病史 / Medical History');
-        checkField('exp', '登山經歷 / Experience');
-        checkField('strength', '體能自評 / Fitness Level');
-        checkField('intendOfficial', '入社意願 / Member Intent');
-        checkField('intendOfficer', '幹部意願 / Officer Intent');
-        checkField('wantToSay', '備註留言 / Notes');
-        checkField('preferredLanguage', '偏好語言 / Language');
+        checkField('studentAddr', isEn ? 'Current Address' : '現居地址 / Address');
+        checkField('emerName', isEn ? 'Emergency Contact' : '緊急聯絡人 / Emergency Contact');
+        checkField('emerRel', isEn ? 'Relationship' : '聯絡人關係 / Relationship');
+        checkField('emerPhone', isEn ? 'Emer Contact Phone' : '緊急聯絡人電話 / Emer Phone');
+        checkField('emerAddr', isEn ? 'Emer Contact Address' : '緊急聯絡人地址 / Emer Address');
+        checkField('medicalHistory', isEn ? 'Medical History' : '特殊病史 / Medical History');
+        checkField('exp', isEn ? 'Hiking Experience' : '登山經歷 / Experience');
+        checkField('strength', isEn ? 'Fitness Level' : '體能自評 / Fitness Level');
+        checkField('intendOfficial', isEn ? 'Official Member Intent' : '入社意願 / Member Intent');
+        checkField('intendOfficer', isEn ? 'Officer Intent' : '幹部意願 / Officer Intent');
+        checkField('wantToSay', isEn ? 'Message to Officers' : '備註留言 / Notes');
+        checkField('preferredLanguage', isEn ? 'Preferred Language' : '偏好語言 / Language');
       }
 
       const changedFields: string[] = [];
@@ -818,8 +829,10 @@ function Register({ userId }: { userId: string }) {
 
       flexPayload = {
         type: 'flex',
-        altText: isNewUser ? '我已完成個人資料填寫' : '我已更新個人資料 (Diff)',
-        contents: buildProfileDiffFlex(isNewUser, finalFormData.name, diffItems)
+        altText: isEn
+          ? (isNewUser ? 'Profile Registration Completed (我已完成個人資料填寫)' : 'Profile Updated (Diff)')
+          : (isNewUser ? '我已完成個人資料填寫' : '我已更新個人資料 (Diff)'),
+        contents: buildProfileDiffFlex(isNewUser, finalFormData.name, diffItems, isEn)
       };
 
       if (sbSaved) {
@@ -883,14 +896,22 @@ function Register({ userId }: { userId: string }) {
         alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
           try {
-            await liff.sendMessages([flexPayload]);
+            if (flexPayload) {
+              await liff.sendMessages([flexPayload]);
+            }
           } catch (sendErr: any) {
             const errMsg = sendErr?.message || (typeof sendErr === 'object' ? JSON.stringify(sendErr) : String(sendErr));
-            alert(`LINE 訊息發送失敗: ${errMsg}\n若錯誤為權限問題 (403 / permission)，請確認 LINE Developers 後台該 LIFF ID 是否已勾選開啟 chat_message.write 權限。`);
+            alert(isEn
+              ? `Failed to send LINE message: ${errMsg}\nIf this is a permission error (403), please make sure 'chat_message.write' scope is enabled in LINE Developers Console.`
+              : `LINE 訊息發送失敗: ${errMsg}\n若錯誤為權限問題 (403 / permission)，請確認 LINE Developers 後台該 LIFF ID 是否已勾選開啟 chat_message.write 權限。`
+            );
           }
           liff.closeWindow();
         } else {
-          alert('提醒：目前非 LINE App 內部環境，無法自動於聊天室發送異動卡片。');
+          alert(isEn
+            ? 'Notice: Currently outside LINE App environment. Cannot send confirmation card to chat.'
+            : '提醒：目前非 LINE App 內部環境，無法自動於聊天室發送異動卡片。'
+          );
         }
       } else {
         alert(t('register.alert.saveFailed', { message: saveRes.message || '資料庫未回傳具體錯誤' }));
@@ -912,6 +933,7 @@ function Register({ userId }: { userId: string }) {
           console.warn('[Register] 切換介面語系例外:', langErr);
         }
 
+        const isEnCatch = formData.preferredLanguage === 'en' || i18n.language === 'en';
         alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
           try {
@@ -920,11 +942,17 @@ function Register({ userId }: { userId: string }) {
             }
           } catch (sendErr: any) {
             const errMsg = sendErr?.message || (typeof sendErr === 'object' ? JSON.stringify(sendErr) : String(sendErr));
-            alert(`LINE 訊息發送失敗: ${errMsg}\n若錯誤為權限問題 (403 / permission)，請確認 LINE Developers 後台該 LIFF ID 是否已勾選開啟 chat_message.write 權限。`);
+            alert(isEnCatch
+              ? `Failed to send LINE message: ${errMsg}\nIf this is a permission error (403), please make sure 'chat_message.write' scope is enabled in LINE Developers Console.`
+              : `LINE 訊息發送失敗: ${errMsg}\n若錯誤為權限問題 (403 / permission)，請確認 LINE Developers 後台該 LIFF ID 是否已勾選開啟 chat_message.write 權限。`
+            );
           }
           liff.closeWindow();
         } else {
-          alert('提醒：目前非 LINE App 內部環境，無法自動於聊天室發送異動卡片。');
+          alert(isEnCatch
+            ? 'Notice: Currently outside LINE App environment. Cannot send confirmation card to chat.'
+            : '提醒：目前非 LINE App 內部環境，無法自動於聊天室發送異動卡片。'
+          );
         }
       } else {
         const detailMsg = err?.message || String(err);
