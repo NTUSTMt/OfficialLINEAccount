@@ -43,6 +43,156 @@ interface UploadedFile {
   name: string;
 }
 
+interface DiffFieldItem {
+  label: string;
+  oldVal?: string;
+  newVal: string;
+}
+
+function buildProfileDiffFlex(
+  isNew: boolean,
+  memberName: string,
+  items: DiffFieldItem[]
+) {
+  const displayItems = items.slice(0, 12);
+  const remainingCount = items.length - displayItems.length;
+  const bodyContents: any[] = [];
+
+  if (displayItems.length === 0 && !isNew) {
+    bodyContents.push({
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#f3f4f6',
+      cornerRadius: '6px',
+      paddingAll: '12px',
+      contents: [
+        {
+          type: 'text',
+          text: '資料未有變更，與既有個人檔案完全相符',
+          size: 'xs',
+          color: '#6b7280',
+          align: 'center'
+        }
+      ]
+    });
+  } else {
+    displayItems.forEach((item) => {
+      const diffRows: any[] = [];
+      if (!isNew && item.oldVal !== undefined) {
+        diffRows.push({
+          type: 'box',
+          layout: 'horizontal',
+          backgroundColor: '#fee2e2',
+          cornerRadius: '4px',
+          paddingStart: '6px',
+          paddingEnd: '6px',
+          paddingTop: '3px',
+          paddingBottom: '3px',
+          contents: [
+            {
+              type: 'text',
+              text: `- ${item.oldVal}`,
+              size: 'xs',
+              color: '#b91c1c',
+              wrap: true
+            }
+          ]
+        });
+      }
+      diffRows.push({
+        type: 'box',
+        layout: 'horizontal',
+        backgroundColor: '#dcfce7',
+        cornerRadius: '4px',
+        paddingStart: '6px',
+        paddingEnd: '6px',
+        paddingTop: '3px',
+        paddingBottom: '3px',
+        margin: (!isNew && item.oldVal !== undefined) ? 'xs' : 'none',
+        contents: [
+          {
+            type: 'text',
+            text: `+ ${item.newVal}`,
+            size: 'xs',
+            color: '#15803d',
+            weight: 'bold',
+            wrap: true
+          }
+        ]
+      });
+
+      bodyContents.push({
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#f9fafb',
+        cornerRadius: '6px',
+        paddingAll: '8px',
+        margin: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: item.label,
+            size: 'xs',
+            color: '#4b5563',
+            weight: 'bold'
+          },
+          {
+            type: 'box',
+            layout: 'vertical',
+            margin: 'xs',
+            contents: diffRows
+          }
+        ]
+      });
+    });
+
+    if (remainingCount > 0) {
+      bodyContents.push({
+        type: 'text',
+        text: `... 尚有其餘 ${remainingCount} 項欄位異動`,
+        size: 'xxs',
+        color: '#9ca3af',
+        align: 'center',
+        margin: 'md'
+      });
+    }
+  }
+
+  return {
+    type: 'bubble',
+    size: 'mega',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#065f46',
+      paddingAll: '16px',
+      contents: [
+        {
+          type: 'text',
+          text: isNew ? '新社員基本資料登記' : '個人資料異動紀錄',
+          weight: 'bold',
+          color: '#ffffff',
+          size: 'md'
+        },
+        {
+          type: 'text',
+          text: `${memberName || '社員'} • ${isNew ? '歡迎加入台科登山社' : '欄位變更比對 (Diff)'}`,
+          color: '#a7f3d0',
+          size: 'xs',
+          margin: 'xs'
+        }
+      ]
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#ffffff',
+      paddingAll: '14px',
+      contents: bodyContents
+    }
+  };
+}
+
 function Register({ userId }: { userId: string }) {
   const { t, i18n } = useTranslation();
   const [step, setStep] = useState(1);
@@ -508,6 +658,7 @@ function Register({ userId }: { userId: string }) {
 
     setIsSubmitting(true);
     let sbSaved = false;
+    let flexPayload: any = null;
     try {
       let finalFormData = { ...formData };
 
@@ -572,6 +723,105 @@ function Register({ userId }: { userId: string }) {
         saveRes = { success: true };
       }
 
+      const diffItems: DiffFieldItem[] = [];
+      const maskId = (v: string) => (v.length > 5 ? v.substring(0, 3) + '****' + v.substring(v.length - 2) : '******');
+
+      if (isNewUser) {
+        if (finalFormData.name) diffItems.push({ label: '姓名 / Name', newVal: finalFormData.name });
+        if (finalFormData.department || finalFormData.studentId) {
+          diffItems.push({ label: '系所學號 / Dept & ID', newVal: `${finalFormData.department || ''} (${finalFormData.studentId || ''})`.trim() });
+        }
+        if (finalFormData.phone) diffItems.push({ label: '聯絡電話 / Phone', newVal: finalFormData.phone });
+        if (finalFormData.emerName) {
+          diffItems.push({ label: '緊急聯絡人 / Contact', newVal: `${finalFormData.emerName} (${finalFormData.emerRel || ''})`.trim() });
+        }
+        if (finalFormData.intendOfficial) diffItems.push({ label: '入社意願 / Intent', newVal: finalFormData.intendOfficial });
+      } else if (originalFormData) {
+        const norm = (v?: string) => (v || '').trim();
+        const checkField = (key: keyof ProfileData, label: string, isMask: boolean = false) => {
+          const o = norm(originalFormData[key] as string);
+          const n = norm(finalFormData[key] as string);
+          if (o !== n) {
+            diffItems.push({
+              label,
+              oldVal: isMask && o ? maskId(o) : (o || '(空值)'),
+              newVal: isMask && n ? maskId(n) : (n || '(空值)')
+            });
+          }
+        };
+
+        checkField('name', '姓名 / Name');
+        checkField('gender', '性別 / Gender');
+        checkField('nationality', '國籍 / Nationality');
+        checkField('birthday', '生日 / Birthday');
+        checkField('idNumber', '身分證護照 / ID Number', true);
+        checkField('department', '系所 / Department');
+        checkField('studentId', '學號 / Student ID');
+        checkField('phone', '聯絡電話 / Phone');
+        checkField('email', '電子郵件 / Email');
+        checkField('realLineId', 'LINE ID');
+        checkField('studentAddr', '現居地址 / Address');
+        checkField('emerName', '緊急聯絡人 / Emergency Contact');
+        checkField('emerRel', '聯絡人關係 / Relationship');
+        checkField('emerPhone', '緊急聯絡人電話 / Emer Phone');
+        checkField('emerAddr', '緊急聯絡人地址 / Emer Address');
+        checkField('medicalHistory', '特殊病史 / Medical History');
+        checkField('exp', '登山經歷 / Experience');
+        checkField('strength', '體能自評 / Fitness Level');
+        checkField('intendOfficial', '入社意願 / Member Intent');
+        checkField('intendOfficer', '幹部意願 / Officer Intent');
+        checkField('wantToSay', '備註留言 / Notes');
+        checkField('preferredLanguage', '偏好語言 / Language');
+      }
+
+      const changedFields: string[] = [];
+      if (!isNewUser && originalFormData) {
+        const norm = (v?: string) => (v || '').trim();
+        if (norm(finalFormData.name) !== norm(originalFormData.name)) changedFields.push('name');
+        if (norm(finalFormData.gender) !== norm(originalFormData.gender)) changedFields.push('gender');
+        if (norm(finalFormData.nationality) !== norm(originalFormData.nationality)) changedFields.push('nationality');
+        if (norm(finalFormData.birthday) !== norm(originalFormData.birthday)) changedFields.push('birthday');
+        if (norm(finalFormData.idNumber) !== norm(originalFormData.idNumber)) changedFields.push('idNumber');
+        if (
+          norm(finalFormData.department) !== norm(originalFormData.department) ||
+          norm(finalFormData.studentId) !== norm(originalFormData.studentId)
+        ) {
+          changedFields.push('department_studentId');
+        }
+        if (norm(finalFormData.identityStatus) !== norm(originalFormData.identityStatus)) changedFields.push('identityStatus');
+        if (norm(finalFormData.phone) !== norm(originalFormData.phone)) changedFields.push('phone');
+        if (norm(finalFormData.email) !== norm(originalFormData.email)) changedFields.push('email');
+        if (norm(finalFormData.realLineId) !== norm(originalFormData.realLineId)) changedFields.push('realLineId');
+        if (norm(finalFormData.studentAddr) !== norm(originalFormData.studentAddr)) changedFields.push('studentAddr');
+        if (
+          norm(finalFormData.emerName) !== norm(originalFormData.emerName) ||
+          norm(finalFormData.emerRel) !== norm(originalFormData.emerRel)
+        ) {
+          changedFields.push('emergency_contact');
+        }
+        if (norm(finalFormData.emerPhone) !== norm(originalFormData.emerPhone)) changedFields.push('emerPhone');
+        if (norm(finalFormData.emerAddr) !== norm(originalFormData.emerAddr)) changedFields.push('emerAddr');
+        if (norm(finalFormData.medicalHistory) !== norm(originalFormData.medicalHistory)) changedFields.push('medicalHistory');
+        if (norm(finalFormData.exp) !== norm(originalFormData.exp)) changedFields.push('exp');
+        if (
+          norm(finalFormData.strength) !== norm(originalFormData.strength) ||
+          norm(finalFormData.strengthProof) !== norm(originalFormData.strengthProof) ||
+          strengthProofFiles.length > 0
+        ) {
+          changedFields.push('strength');
+        }
+        if (norm(finalFormData.intendOfficial) !== norm(originalFormData.intendOfficial)) changedFields.push('intendOfficial');
+        if (norm(finalFormData.intendOfficer) !== norm(originalFormData.intendOfficer)) changedFields.push('intendOfficer');
+        if (norm(finalFormData.wantToSay) !== norm(originalFormData.wantToSay)) changedFields.push('wantToSay');
+        if (norm(finalFormData.preferredLanguage) !== norm(originalFormData.preferredLanguage)) changedFields.push('preferredLanguage');
+      }
+
+      flexPayload = {
+        type: 'flex',
+        altText: isNewUser ? '我已完成個人資料填寫' : '我已更新個人資料 (Diff)',
+        contents: buildProfileDiffFlex(isNewUser, finalFormData.name, diffItems)
+      };
+
       if (sbSaved) {
         // ⚡ 3. 非同步發送 LINE 基本資料更新/註冊完成推播通知 (純訊息，不碰試算表)
         if (userId && userId !== 'TEST_USER_ID') {
@@ -585,49 +835,6 @@ function Register({ userId }: { userId: string }) {
           const isOfficerIntentNew = isNewUser
             ? isNowWilling
             : ((!wasWilling && isNowWilling) || (isNowWilling && (finalFormData.intendOfficer || '').trim() !== (originalFormData?.intendOfficer || '').trim()));
-
-          // 比對實際異動欄位 (僅針對更新既有個人檔案之使用者，新註冊則顯示完整歡迎)
-          const changedFields: string[] = [];
-          if (!isNewUser && originalFormData) {
-            const norm = (v?: string) => (v || '').trim();
-            if (norm(finalFormData.name) !== norm(originalFormData.name)) changedFields.push('name');
-            if (norm(finalFormData.gender) !== norm(originalFormData.gender)) changedFields.push('gender');
-            if (norm(finalFormData.nationality) !== norm(originalFormData.nationality)) changedFields.push('nationality');
-            if (norm(finalFormData.birthday) !== norm(originalFormData.birthday)) changedFields.push('birthday');
-            if (norm(finalFormData.idNumber) !== norm(originalFormData.idNumber)) changedFields.push('idNumber');
-            if (
-              norm(finalFormData.department) !== norm(originalFormData.department) ||
-              norm(finalFormData.studentId) !== norm(originalFormData.studentId)
-            ) {
-              changedFields.push('department_studentId');
-            }
-            if (norm(finalFormData.identityStatus) !== norm(originalFormData.identityStatus)) changedFields.push('identityStatus');
-            if (norm(finalFormData.phone) !== norm(originalFormData.phone)) changedFields.push('phone');
-            if (norm(finalFormData.email) !== norm(originalFormData.email)) changedFields.push('email');
-            if (norm(finalFormData.realLineId) !== norm(originalFormData.realLineId)) changedFields.push('realLineId');
-            if (norm(finalFormData.studentAddr) !== norm(originalFormData.studentAddr)) changedFields.push('studentAddr');
-            if (
-              norm(finalFormData.emerName) !== norm(originalFormData.emerName) ||
-              norm(finalFormData.emerRel) !== norm(originalFormData.emerRel)
-            ) {
-              changedFields.push('emergency_contact');
-            }
-            if (norm(finalFormData.emerPhone) !== norm(originalFormData.emerPhone)) changedFields.push('emerPhone');
-            if (norm(finalFormData.emerAddr) !== norm(originalFormData.emerAddr)) changedFields.push('emerAddr');
-            if (norm(finalFormData.medicalHistory) !== norm(originalFormData.medicalHistory)) changedFields.push('medicalHistory');
-            if (norm(finalFormData.exp) !== norm(originalFormData.exp)) changedFields.push('exp');
-            if (
-              norm(finalFormData.strength) !== norm(originalFormData.strength) ||
-              norm(finalFormData.strengthProof) !== norm(originalFormData.strengthProof) ||
-              strengthProofFiles.length > 0
-            ) {
-              changedFields.push('strength');
-            }
-            if (norm(finalFormData.intendOfficial) !== norm(originalFormData.intendOfficial)) changedFields.push('intendOfficial');
-            if (norm(finalFormData.intendOfficer) !== norm(originalFormData.intendOfficer)) changedFields.push('intendOfficer');
-            if (norm(finalFormData.wantToSay) !== norm(originalFormData.wantToSay)) changedFields.push('wantToSay');
-            if (norm(finalFormData.preferredLanguage) !== norm(originalFormData.preferredLanguage)) changedFields.push('preferredLanguage');
-          }
 
           // 確實等待 GAS 推播請求完成，避免隨後 liff.closeWindow() 銷毀 WebKit 中斷連線
           try {
@@ -676,16 +883,14 @@ function Register({ userId }: { userId: string }) {
         alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
           try {
-            await liff.sendMessages([
-              {
-                type: 'text',
-                text: isNewUser ? '我已完成個人資料填寫' : '我已更新個人資料'
-              }
-            ]);
-          } catch (sendErr) {
-            console.warn('[Register] LIFF sendMessages 略過或無權限:', sendErr);
+            await liff.sendMessages([flexPayload]);
+          } catch (sendErr: any) {
+            const errMsg = sendErr?.message || (typeof sendErr === 'object' ? JSON.stringify(sendErr) : String(sendErr));
+            alert(`LINE 訊息發送失敗: ${errMsg}\n若錯誤為權限問題 (403 / permission)，請確認 LINE Developers 後台該 LIFF ID 是否已勾選開啟 chat_message.write 權限。`);
           }
           liff.closeWindow();
+        } else {
+          alert('提醒：目前非 LINE App 內部環境，無法自動於聊天室發送異動卡片。');
         }
       } else {
         alert(t('register.alert.saveFailed', { message: saveRes.message || '資料庫未回傳具體錯誤' }));
@@ -710,16 +915,16 @@ function Register({ userId }: { userId: string }) {
         alert(isNewUser ? t('register.alert.registerSuccess') : t('register.alert.updateSuccess'));
         if (liff.isInClient()) {
           try {
-            await liff.sendMessages([
-              {
-                type: 'text',
-                text: isNewUser ? '我已完成個人資料填寫' : '我已更新個人資料'
-              }
-            ]);
-          } catch (sendErr) {
-            console.warn('[Register] LIFF sendMessages 略過或無權限:', sendErr);
+            if (flexPayload) {
+              await liff.sendMessages([flexPayload]);
+            }
+          } catch (sendErr: any) {
+            const errMsg = sendErr?.message || (typeof sendErr === 'object' ? JSON.stringify(sendErr) : String(sendErr));
+            alert(`LINE 訊息發送失敗: ${errMsg}\n若錯誤為權限問題 (403 / permission)，請確認 LINE Developers 後台該 LIFF ID 是否已勾選開啟 chat_message.write 權限。`);
           }
           liff.closeWindow();
+        } else {
+          alert('提醒：目前非 LINE App 內部環境，無法自動於聊天室發送異動卡片。');
         }
       } else {
         const detailMsg = err?.message || String(err);

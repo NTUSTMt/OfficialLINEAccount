@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.245-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.248-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.245)](#7-最新版本異動紀錄-changelog-v01245)
+- [7. 最新版本異動紀錄 (Changelog v0.1.248)](#7-最新版本異動紀錄-changelog-v01248)
 
 ---
 
@@ -204,7 +204,20 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.137)
+## 7. 最新版本異動紀錄 (Changelog v0.1.248)
+
+### v0.1.248 (2026-10-01)
+- **個人資料異動 Diff 風格綠色山林 Flex Message 卡片支援 ([src/pages/Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx))**:
+  - **綠色山林視覺風格**: 頂部採用深綠山林色彩 (#065f46)，搭配薄荷綠字體 (#a7f3d0) 呈現標題與使用者姓名，貼近登山社品牌。
+  - **Git Diff 風格欄位變更比對**:
+    - 自動比對更新前與更新後資料：刪除舊值以淺紅底色 (#fee2e2) 與紅字 (- 舊值) 標記，新增/修改新值以淺綠底色 (#dcfce7) 與綠字粗體 (+ 新值) 標記。
+    - 身分證/護照等敏感資訊自動於卡片中執行星號遮罩，保障通訊個資安全。
+    - 若為新社員註冊，則呈現綠色新增項目清單；若無任何異動則呈現無異動提示。
+    - 依據需求精簡版面，省略底部 Footer 避免冗餘。
+- **落實錯誤透明度規範 ([src/pages/Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx))**:
+  - 徹底移除 liff.sendMessages 原先靜默忽略之 console.warn。
+  - 當發送發生異常時（如未開通 chat_message.write 權限或環境限制），直接以 alert 彈出完整具體錯誤訊息，明確指引至 LINE Developers Console 檢查設定。
+  - 若使用者在非 LINE 內部環境操作，主動彈出提示通知。
 
 ### v0.1.137 (2026-09-17)
 - **活動獨立試算表自動建立解耦與手動一鍵生成 ([gas_modules/06_Helper_Services.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/06_Helper_Services.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**:
