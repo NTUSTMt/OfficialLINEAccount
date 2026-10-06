@@ -548,6 +548,7 @@ export interface VerifyPaymentResult {
   paymentId?: string;
   userName?: string;
   userEmail?: string;
+  userLanguage?: string;
   amount?: number;
   items?: string;
   lineUserId?: string;

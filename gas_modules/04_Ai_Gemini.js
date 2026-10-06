@@ -244,4 +244,3 @@ function _fetchDocsKnowledgeBase() {
 
   return "社團裝備租借依社籍收費，出隊請遵守領隊指導。";
 }
-

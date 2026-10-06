@@ -1243,22 +1243,7 @@ function dailyPatrol() {
         });
         expiredMembers.push("• " + (mem.name || "社員") + " (到期日: " + mem.membership_expires_at + ")");
 
-        // 推播期滿溫馨祝福至該社員個人 LINE
-        if (mem.line_user_id && mem.line_user_id.indexOf("U") === 0) {
-          var blessingMsg = "【社籍期滿溫馨祝福 / Club Membership Milestone】\n\n" +
-            "親愛的 " + (mem.name || "山友") + " 您好：\n\n" +
-            "您的登山社社員資格已於 " + mem.expire_date + " 圓滿告一段落。\n\n" +
-            "非常感謝您這段時間以來對登山社的陪伴與熱情參與，與大家一同在山林與步道間留下了許多珍貴美好的回憶！\n\n" +
-            "山一直在那裡，夥伴的情誼也始終常在。\n" +
-            "無論未來您走向哪一座山頭、開啟怎樣的新冒險，登山社都由衷祝福您平安順遂、每一步都有美麗的風景相伴！🏔️✨\n\n" +
-            "若想念山林或想再與大家聚聚，隨時都歡迎回到登山社這個溫暖大家庭！\n" +
-            "─────────────\n" +
-            "Dear " + (mem.name || "Member") + ",\n\n" +
-            "Your club membership period has concluded on " + mem.expire_date + ".\n\n" +
-            "Thank you so much for being an essential part of our mountaineering journey. You are always welcome back to our club family!";
-
-          _pushMessage(mem.line_user_id, blessingMsg);
-        }
+        // (期滿溫馨祝福已停用定時主動推播)
       }
     }
   } catch (errMem) {
@@ -1515,4 +1500,3 @@ function setupSpreadsheetEditTrigger() {
     SpreadsheetApp.getUi().alert("安裝成功", "✅ 已成功安裝試算表即時編輯觸發器！\n未來在 Payments、Loans 或 Signups 分頁修改狀態，將自動即時同步 Supabase！", SpreadsheetApp.getUi().ButtonSet.OK);
   } catch (e) {}
 }
-

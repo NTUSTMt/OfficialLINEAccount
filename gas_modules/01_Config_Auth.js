@@ -358,8 +358,12 @@ function _getEventName(ss, eventId) {
 // 輕量呼叫 Supabase REST API (GET)
 function _supabaseGet(table, queryParams) {
   var props = PropertiesService.getScriptProperties();
-  var sbUrl = props.getProperty('SUPABASE_URL') || SUPABASE_URL;
-  var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+  var sbUrl = props.getProperty('SUPABASE_URL') || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
+  var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') ||
+              props.getProperty('SUPABASE_KEY') ||
+              props.getProperty('SUPABASE_ANON_KEY') ||
+              (typeof SUPABASE_SERVICE_ROLE_KEY !== 'undefined' ? SUPABASE_SERVICE_ROLE_KEY : '') ||
+              (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '');
 
   if (!sbUrl || !sbKey) {
     console.warn("⚠️ [Supabase] 缺少 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY");
@@ -421,6 +425,165 @@ function _supabaseGet(table, queryParams) {
   }
 }
 
+// 全域快取：當次執行期間快取使用者的偏好語言，減少 Supabase API 往返
+var _userLangCache = {};
+
+/**
+ * 輔助函式：取得 LINE 使用者個人公開資料 (displayName, language, pictureUrl 等)
+ * @param {string} userId - LINE User ID (U123456...)
+ * @returns {{ displayName?: string, language?: string, pictureUrl?: string, statusMessage?: string } | null}
+ */
+function _getLineUserProfile(userId) {
+  if (!userId || typeof userId !== "string" || userId.indexOf("U") !== 0) {
+    return null;
+  }
+  var token = MEMBER_BOT_TOKEN || ADMIN_BOT_TOKEN;
+  if (!token) {
+    try {
+      token = PropertiesService.getScriptProperties().getProperty('MEMBER_BOT_TOKEN') ||
+              PropertiesService.getScriptProperties().getProperty('ADMIN_BOT_TOKEN');
+    } catch (e) {
+      // 於部分本機單元測試 mock 環境容錯
+    }
+  }
+  if (!token) return null;
+
+  try {
+    var response = UrlFetchApp.fetch('https://api.line.me/v2/bot/profile/' + encodeURIComponent(userId), {
+      'headers': {
+        'Authorization': 'Bearer ' + token
+      },
+      'method': 'get',
+      'muteHttpExceptions': true
+    });
+    if (response && response.getResponseCode() === 200) {
+      var content = response.getContentText();
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.warn("⚠️ [_getLineUserProfile] 取得 LINE 個人資料失敗 (" + userId + "): " + err.toString());
+  }
+  return null;
+}
+
+/**
+ * 輔助函式：取得使用者的偏好語言 ('zh' | 'en' | null)
+ * 優先序：
+ * 1. 查詢 members 表的 preferred_language (若為 'en' 或 'zh' 則直接採用)
+ * 2. 若未填寫資料或查無社員，自動向 LINE Messaging API 請求 Profile：
+ *    - 依 profile.language 判斷（非 zh 語系如 en, ja, ko 等均視為英文 'en'）
+ *    - 若 language 未提供，依 profile.displayName 判定（純英文/拉丁姓名如 'Eric Muriithi' 且不含漢字，視為 'en'）
+ * 3. 取得結果後寫入執行階段快取 _userLangCache
+ * @param {string} userId - LINE User ID (U123456...)
+ * @returns {string|null}
+ */
+function _getUserPreferredLanguage(userId) {
+  if (!userId || typeof userId !== "string" || userId.indexOf("U") !== 0) {
+    return null;
+  }
+  if (_userLangCache[userId] !== undefined) {
+    return _userLangCache[userId];
+  }
+  try {
+    var list = _supabaseGet("members", {
+      select: "preferred_language",
+      line_user_id: "eq." + String(userId).trim(),
+      limit: "1"
+    });
+    if (list && Array.isArray(list) && list.length > 0 && list[0].preferred_language) {
+      var lang = String(list[0].preferred_language).trim().toLowerCase();
+      if (lang === "en" || lang.indexOf("en") === 0) {
+        _userLangCache[userId] = "en";
+        return "en";
+      }
+      if (lang === "zh" || lang.indexOf("zh") === 0) {
+        _userLangCache[userId] = "zh";
+        return "zh";
+      }
+    }
+  } catch (e) {
+    console.warn("⚠️ 取得使用者偏好語言失敗 (members 查詢):", userId, e);
+  }
+
+  // 2. 若 members 未填寫或未登記，向 LINE 查詢 User Profile
+  try {
+    var profile = _getLineUserProfile(userId);
+    if (profile) {
+      if (profile.language && typeof profile.language === "string") {
+        var pLang = profile.language.trim().toLowerCase();
+        if (pLang.indexOf("zh") === 0) {
+          _userLangCache[userId] = "zh";
+          return "zh";
+        } else {
+          // 非中文語系（如 en, ja, ko, id, vi, th 等），外籍人士一律採用英文
+          _userLangCache[userId] = "en";
+          return "en";
+        }
+      }
+      if (profile.displayName && typeof profile.displayName === "string") {
+        var name = profile.displayName.trim();
+        var hasChinese = /[\u4e00-\u9fa5]/.test(name);
+        var hasLatin = /[a-zA-Z]/.test(name);
+        // 若暱稱為純英文字母/無漢字 (如 "Eric Muriithi")，判定為英文
+        if (!hasChinese && hasLatin) {
+          _userLangCache[userId] = "en";
+          return "en";
+        } else if (hasChinese) {
+          _userLangCache[userId] = "zh";
+          return "zh";
+        }
+      }
+    }
+  } catch (errProfile) {
+    console.warn("⚠️ 取得 LINE 使用者個人語系失敗:", userId, errProfile);
+  }
+
+  _userLangCache[userId] = null;
+  return null;
+}
+
+/**
+ * 輔助函式：依偏好語言輸出中文、英文或中英雙語對照
+ * @param {string} zhText - 現有中文段落
+ * @param {string} enText - 現有英文段落
+ * @param {string|null} prefLang - 'zh' | 'en' | null
+ * @returns {string}
+ */
+function _formatBilingualMessage(zhText, enText, prefLang) {
+  var zh = (zhText || "").trim();
+  var en = (enText || "").trim();
+  if (prefLang === "en") {
+    return en || zh;
+  }
+  if (prefLang === "zh") {
+    return zh || en;
+  }
+  if (zh && en) {
+    return zh + "\n─────────────\n" + en;
+  }
+  return zh || en;
+}
+
+/**
+ * 輔助函式：從現有中英雙語訊息中依分隔線精準拆分
+ * @param {string} fullBilingualMsg - 包含 ───────────── 的現有雙語訊息
+ * @param {string|null} prefLang - 'zh' | 'en' | null
+ * @returns {string}
+ */
+function _splitBilingualMessage(fullBilingualMsg, prefLang) {
+  if (!fullBilingualMsg || !prefLang) return fullBilingualMsg;
+  var str = String(fullBilingualMsg);
+  var divider = "\n─────────────\n";
+  var idx = str.indexOf(divider);
+  if (idx > -1) {
+    var zhPart = str.substring(0, idx).trim();
+    var enPart = str.substring(idx + divider.length).trim();
+    if (prefLang === "zh") return zhPart;
+    if (prefLang === "en") return enPart;
+  }
+  return fullBilingualMsg;
+}
+
 // 輕量呼叫 Supabase REST API (PATCH)
 function _supabasePatch(table, queryParams, payload) {
   var props = PropertiesService.getScriptProperties();
@@ -465,4 +628,3 @@ function _supabasePatch(table, queryParams, payload) {
     return false;
   }
 }
-

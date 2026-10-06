@@ -98,6 +98,57 @@ export const WebAdminMembers: React.FC = () => {
     setErrorMsg(null);
   };
 
+  // 5. 一鍵複製社員名單 (學校社團系統格式)
+  const handleCopySchoolRoster = () => {
+    if (members.length === 0) {
+      setErrorMsg('目前尚無社員資料可供複製');
+      setTimeout(() => setErrorMsg(null), 3000);
+      return;
+    }
+
+    const validRows: string[] = [];
+
+    for (const m of members) {
+      const ident = (m.identity_status || '').trim();
+      // 排除非臺科在校生（排除校友、校外人士）
+      const isNtust =
+        ident === '臺科在校生' ||
+        ident === '臺科大在校學生' ||
+        ident === '在校生' ||
+        ident.includes('在校') ||
+        ident.includes('臺科');
+      const isAlumniOrExternal = ident === '畢業校友' || ident === '校外人士';
+
+      if (!isNtust || isAlumniOrExternal) {
+        continue;
+      }
+
+      const name = (m.name || '').trim();
+      const studentId = (m.student_id || '').trim();
+      if (!name || !studentId) continue;
+
+      if (m.is_officer) {
+        const role = (m.officer_role || '').trim() || '幹部';
+        validRows.push(`${name},${studentId},幹部,${role}`);
+      } else if (m.is_official_member) {
+        validRows.push(`${name},${studentId},社員`);
+      }
+    }
+
+    if (validRows.length === 0) {
+      setErrorMsg('未找到符合條件的臺科在校生社員或幹部資料');
+      setTimeout(() => setErrorMsg(null), 3500);
+      return;
+    }
+
+    const textToCopy = validRows.join('\n');
+    navigator.clipboard.writeText(textToCopy);
+    setSuccessMsg(`已複製 ${validRows.length} 筆社員資料，請至學校社團系統直接貼上！`);
+    setTimeout(() => {
+      setSuccessMsg((curr) => (curr && curr.includes('已複製') ? null : curr));
+    }, 4000);
+  };
+
   // 6. 匯出社員名冊 CSV
   const handleExportCSV = () => {
     if (filteredMembers.length === 0) return;
@@ -226,6 +277,16 @@ export const WebAdminMembers: React.FC = () => {
           <div style={{ fontSize: '0.85rem', color: 'var(--wa-text-muted)' }}>
             篩選：<strong>{filteredMembers.length}</strong> / 總數：<strong>{members.length}</strong> 人
           </div>
+
+          <button
+            type="button"
+            className="web-admin-btn web-admin-btn-secondary"
+            onClick={handleCopySchoolRoster}
+            title="一鍵複製社員名冊 (學校社團系統格式)"
+          >
+            <Copy size={14} />
+            <span>一鍵複製社員</span>
+          </button>
 
           <button
             type="button"

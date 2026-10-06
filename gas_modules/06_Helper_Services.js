@@ -79,6 +79,16 @@ function handleLiffHelperApi(json) {
     return _handleCreateEventSheet(json);
   }
 
+  // 14. 裝備租借狀態更新推播 Helper (純發訊息通知借用人)
+  if (action === "notify_loan_status_updated") {
+    return _handleNotifyLoanStatusUpdated(json);
+  }
+
+  // 15. 活動新增/更新推播至幹部群組 Helper
+  if (action === "notify_officer_event") {
+    return _handleNotifyOfficerEvent(json);
+  }
+
   return _errorResponse("未支援的 Helper Action: " + action);
 }
 
@@ -279,44 +289,7 @@ function _handleNotifyOfficersLoan(json) {
     var loanSubject = "【台科登山社】新裝備租借申請 - " + loanId + " (" + borrowerName + ")";
     pushAdminMessage(msg, loanSubject);
 
-    // ⭐️ 2. 同步保底推播給使用者個人 LINE 聊天室 (預約成功憑證)
-    if (userId && userId !== "TEST_USER_ID") {
-      var userLoanMsg = "【🎒 我的裝備租借預訂單】\n" +
-        "\n" +
-        "• 訂單編號：" + loanId + "\n" +
-        "• 借用人：" + borrowerName + " (" + identityDesc + ")\n" +
-        "• 預計領取：" + (details.pickupDate || "") + "\n" +
-        "• 預計歸還：" + (details.returnDate || "") + " (共 " + days + " 天)\n" +
-        "• 租借用途：" + purpose + "\n\n" +
-        "📦 預約裝備清單：\n" +
-        (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") + "\n\n" +
-        "💰 預估總租金：$" + totalRent + " 元\n" +
-        "\n" +
-        "📌 提醒事項：\n" +
-        "1. 幹部已收到您的預約申請，將為您備齊裝備。\n" +
-        "2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n" +
-        "3. 將有幹部主動聯繫你，確認領取時間以及地點。\n" +
-        "─────────────\n" +
-        "【🎒 Equipment Loan Reservation Confirmed】\n" +
-        "\n" +
-        "• Order ID: " + loanId + "\n" +
-        "• Borrower: " + borrowerName + " (" + identityDesc + ")\n" +
-        "• Pickup Date: " + (details.pickupDate || "") + "\n" +
-        "• Return Date: " + (details.returnDate || "") + " (" + days + " days)\n" +
-        "• Purpose: " + purpose + "\n\n" +
-        "📦 Items:\n" +
-        (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• None") + "\n\n" +
-        "💰 Estimated Total: $" + totalRent + " TWD\n" +
-        "\n" +
-        "📌 Notes:\n" +
-        "1. Officers have received your request and will prepare the gear.\n" +
-        "2. If fees apply, please complete payment in 'Payment Center' before pickup.\n" +
-        "3. An officer will contact you to confirm pickup time and location. Thank you!";
-
-      _pushMessage(userId, userLoanMsg);
-    }
-
-    return _successResponse({ message: "幹部推播與個人推播已成功送出" });
+    return _successResponse({ message: "幹部推播已成功送出" });
   } catch (err) {
     console.warn("裝備租借推播失敗:", err);
     return _errorResponse(err.toString());
@@ -361,24 +334,7 @@ function _handleNotifyLoanCancelled(json) {
 
     pushAdminMessage(adminBody, adminSubject);
 
-    // 2. 使用者個人 LINE 推播 (取消成功憑證)
-    if (userId && userId !== "TEST_USER_ID") {
-      var userMsg = "【🎒 裝備租借取消成功憑證】\n\n" +
-        "• 訂單編號：" + loanId + "\n" +
-        "• 借用人：" + borrowerName + "\n" +
-        "• 取消裝備明細：\n" + itemsText + "\n\n" +
-        (isPaid ? "⚠️ 您已完成此訂單之繳費，社團幹部將主動與您聯繫辦理退款事宜！\n\n" : "您的裝備租借預約已成功取消，庫存已歸還系統。\n\n") +
-        "─────────────\n" +
-        "【🎒 Equipment Loan Cancellation Confirmed】\n\n" +
-        "• Order ID: " + loanId + "\n" +
-        "• Borrower: " + borrowerName + "\n" +
-        "• Items:\n" + itemsText + "\n\n" +
-        (isPaid ? "⚠️ You have paid for this reservation. Officers will contact you regarding the refund process.\n" : "Your equipment loan reservation has been successfully cancelled.");
-
-      _pushMessage(userId, userMsg);
-    }
-
-    return _successResponse({ message: "裝備取消幹部與個人推播已成功送出" });
+    return _successResponse({ message: "裝備取消幹部推播已成功送出" });
   } catch (err) {
     console.warn("_handleNotifyLoanCancelled 失敗:", err);
     return _errorResponse(err.toString());
@@ -583,52 +539,87 @@ function _handleNotifyPaymentConfirmed(json) {
     var paymentId = json.paymentId || "";
     var userName = json.userName || "社員";
     var userEmail = json.userEmail || "";
+    var userLanguage = json.userLanguage || json.lang || json.preferredLanguage || "";
     var amount = json.amount || 0;
     var items = json.items || json.type || "社團活動/裝備費用";
     var lineUserId = json.lineUserId || "";
     var confirmedBy = json.confirmedBy || "單鍵快速核銷";
 
-    // 0. 若未帶入 userEmail 但有 lineUserId，自 Supabase members 表唯讀查詢 Email
-    if (!userEmail && lineUserId && typeof _supabaseGet === "function") {
+    // 0. 若未帶入 userEmail 或 userLanguage 但有 lineUserId，自 Supabase members 表唯讀查詢
+    if ((!userEmail || !userLanguage) && lineUserId && typeof _supabaseGet === "function") {
       try {
-        var mRecs = _supabaseGet("members", { line_user_id: "eq." + lineUserId, select: "email" });
-        if (mRecs && mRecs.length > 0 && mRecs[0].email) {
-          userEmail = mRecs[0].email;
+        var mRecs = _supabaseGet("members", { line_user_id: "eq." + lineUserId, select: "email,preferred_language" });
+        if (mRecs && mRecs.length > 0) {
+          if (!userEmail && mRecs[0].email) userEmail = mRecs[0].email;
+          if (!userLanguage && mRecs[0].preferred_language) userLanguage = mRecs[0].preferred_language;
         }
       } catch (eEmail) {
-        console.warn("查詢社員 Email 失敗:", eEmail);
+        console.warn("查詢社員 Email/語系失敗:", eEmail);
       }
     }
 
-    // 1. 寄送「繳費成功確認通知信」至社員 Email
+    var isEn = (userLanguage === "en" || userLanguage === "en-US");
+
+    // 1. 寄送「繳費成功確認通知信」至社員 Email (依語系發送英文或中文)
     if (userEmail && (typeof MailApp !== 'undefined' || typeof GmailApp !== 'undefined')) {
       try {
-        var emailSubject = "【台科登山社】繳費成功確認通知 - " + paymentId;
-        var emailBody = "親愛的 " + userName + " 您好：\n\n" +
-          "社團幹部已確認收到您的款項並完成核銷！\n\n" +
-          "• 繳費單號：" + paymentId + "\n" +
-          "• 核銷金額：$" + amount + " 元\n" +
-          "• 核銷項目：" + items + "\n" +
-          "• 核銷狀態：已核銷 Confirmed\n\n" +
-          "相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁查看最新狀態。感謝您的配合與支持！\n\n" +
-          "台科登山社 • 自動發送系統";
+        var emailSubject = isEn
+          ? "Payment Confirmation - " + paymentId + " (NTUST Mountaineering Club)"
+          : "【台科登山社】繳費成功確認通知 - " + paymentId;
 
-        var emailHtml = '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
-          '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
-          '<h2 style="color: #065f46; margin: 0; font-size: 20px;">台科登山社 • 繳費成功確認通知</h2>' +
-          '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">親愛的 ' + userName + ' 您好，社團幹部已確認收到您的款項並完成核銷！</p>' +
-          '</div>' +
-          '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
-          '<table style="width: 100%; border-collapse: collapse;">' +
-          '<tr><td style="padding: 6px 0; color: #64748b; width: 100px;">繳費單號：</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
-          '<tr><td style="padding: 6px 0; color: #64748b;">核銷金額：</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' 元</td></tr>' +
-          '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">核銷項目：</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
-          '<tr><td style="padding: 6px 0; color: #64748b;">核銷狀態：</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">已核銷 Confirmed</td></tr>' +
-          '</table>' +
-          '</div>' +
-          '<p style="color: #64748b; font-size: 13px; margin: 0;">相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁 (Dashboard) 查看最新狀態。感謝您的配合與支持！</p>' +
-          '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">台科登山社 • 自動發送系統</p>' +
-          '</div>';
+        var emailBody = isEn
+          ? "Dear " + userName + ",\n\n" +
+            "Your payment has been successfully verified and confirmed by the club officers!\n\n" +
+            "• Payment ID: " + paymentId + "\n" +
+            "• Amount: $" + amount + " TWD\n" +
+            "• Items: " + items + "\n" +
+            "• Status: Confirmed\n\n" +
+            "Your event registration and gear rental status have been updated. You can check your status anytime on your LINE Dashboard. Thank you for your support!\n\n" +
+            "NTUST Mountaineering Club • Automated Notification System"
+          : "親愛的 " + userName + " 您好：\n\n" +
+            "社團幹部已確認收到您的款項並完成核銷！\n\n" +
+            "• 繳費單號：" + paymentId + "\n" +
+            "• 核銷金額：$" + amount + " 元\n" +
+            "• 核銷項目：" + items + "\n" +
+            "• 核銷狀態：已核銷 Confirmed\n\n" +
+            "相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁查看最新狀態。感謝您的配合與支持！\n\n" +
+            "台科登山社 • 自動發送系統";
+
+        var emailHtml = isEn
+          ? '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
+            '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
+            '<h2 style="color: #065f46; margin: 0; font-size: 20px;">NTUST Mountaineering Club • Payment Confirmation</h2>' +
+            '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Dear ' + userName + ', your payment has been verified by the club officers!</p>' +
+            '</div>' +
+            '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
+            '<table style="width: 100%; border-collapse: collapse;">' +
+            '<tr><td style="padding: 6px 0; color: #64748b; width: 120px;">Payment ID:</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b;">Amount:</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' TWD</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">Items:</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b;">Status:</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">Confirmed</td></tr>' +
+            '</table>' +
+            '</div>' +
+            '<p style="color: #64748b; font-size: 13px; margin: 0;">Your event registration and gear rental status have been updated. You can check your status anytime on your LINE Dashboard. Thank you for your support!</p>' +
+            '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">NTUST Mountaineering Club • Automated Notification System</p>' +
+            '</div>'
+          : '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
+            '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
+            '<h2 style="color: #065f46; margin: 0; font-size: 20px;">台科登山社 • 繳費成功確認通知</h2>' +
+            '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">親愛的 ' + userName + ' 您好，社團幹部已確認收到您的款項並完成核銷！</p>' +
+            '</div>' +
+            '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
+            '<table style="width: 100%; border-collapse: collapse;">' +
+            '<tr><td style="padding: 6px 0; color: #64748b; width: 100px;">繳費單號：</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b;">核銷金額：</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' 元</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">核銷項目：</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b;">核銷狀態：</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">已核銷 Confirmed</td></tr>' +
+            '</table>' +
+            '</div>' +
+            '<p style="color: #64748b; font-size: 13px; margin: 0;">相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁 (Dashboard) 查看最新狀態。感謝您的配合與支持！</p>' +
+            '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">台科登山社 • 自動發送系統</p>' +
+            '</div>';
+
+        var senderName = isEn ? "NTUST Mountaineering Club" : "台科登山社小岳助理";
 
         if (typeof MailApp !== 'undefined' && MailApp.sendEmail) {
           MailApp.sendEmail({
@@ -636,58 +627,68 @@ function _handleNotifyPaymentConfirmed(json) {
             subject: emailSubject,
             body: emailBody,
             htmlBody: emailHtml,
-            name: "台科登山社小岳助理"
+            name: senderName
           });
-          console.log("成功發送繳費確認信至社員 Email: " + userEmail);
+          console.log("成功發送繳費確認信至社員 Email: " + userEmail + " (語系: " + (isEn ? "en" : "zh") + ")");
         } else if (typeof GmailApp !== 'undefined' && GmailApp.sendEmail) {
           GmailApp.sendEmail(userEmail, emailSubject, emailBody, {
-            name: "台科登山社小岳助理",
+            name: senderName,
             htmlBody: emailHtml
           });
-          console.log("GmailApp 成功發送繳費確認信至社員 Email: " + userEmail);
+          console.log("GmailApp 成功發送繳費確認信至社員 Email: " + userEmail + " (語系: " + (isEn ? "en" : "zh") + ")");
         }
       } catch (errEmail) {
         console.warn("發送社員繳費確認通知信例外:", errEmail);
       }
     }
 
-    // 2. 推播給社員個人 LINE (支援 Flex 卡片)
+    // 2. 推播給社員個人 LINE (支援 Flex 卡片，依語系發送英文或中文)
     if (lineUserId && lineUserId.indexOf("U") === 0) {
       if (typeof _buildPaymentConfirmedFlex === 'function' && typeof _replyFlexMessage === 'function') {
         var userConfirmedFlex = _buildPaymentConfirmedFlex({
           userName: userName,
           paymentId: paymentId,
           amount: amount,
-          items: items
+          items: items,
+          lang: isEn ? "en" : "zh"
         });
         _lineAPI('push', MEMBER_BOT_TOKEN, {
           to: lineUserId,
           messages: [{
             type: 'flex',
-            altText: "🎉 繳費成功確認通知 (" + paymentId + ")",
+            altText: isEn ? ("🎉 Payment Confirmed (" + paymentId + ")") : ("🎉 繳費成功確認通知 (" + paymentId + ")"),
             contents: userConfirmedFlex
           }]
         });
       } else {
-        var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
-          "親愛的 " + userName + " 您好：\n" +
-          "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
-          "• 繳費單號：" + paymentId + "\n" +
-          "• 核銷金額：$" + amount + " 元\n" +
-          "• 核銷項目：" + items + "\n\n" +
-          "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
-          "─────────────\n" +
-          "Dear " + userName + ",\n" +
-          "Your payment has been successfully confirmed by the officers!\n\n" +
-          "• Payment ID: " + paymentId + "\n" +
-          "• Amount: $" + amount + " TWD\n" +
-          "• Items: " + items + "\n\n" +
-          "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
+        var successMsg = isEn
+          ? "🎉 Payment Confirmed\n\n" +
+            "Dear " + userName + ",\n" +
+            "Officers have confirmed your payment!\n\n" +
+            "• Payment ID: " + paymentId + "\n" +
+            "• Amount: $" + amount + " TWD\n" +
+            "• Items: " + items + "\n" +
+            "• Status: Confirmed\n\n" +
+            "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!"
+          : "🎉 繳費成功通知 / Payment Confirmed\n\n" +
+            "親愛的 " + userName + " 您好：\n" +
+            "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
+            "• 繳費單號：" + paymentId + "\n" +
+            "• 核銷金額：$" + amount + " 元\n" +
+            "• 核銷項目：" + items + "\n\n" +
+            "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
+            "─────────────\n" +
+            "Dear " + userName + ",\n" +
+            "Your payment has been successfully confirmed by the officers!\n\n" +
+            "• Payment ID: " + paymentId + "\n" +
+            "• Amount: $" + amount + " TWD\n" +
+            "• Items: " + items + "\n\n" +
+            "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
         _pushMessage(lineUserId, successMsg);
       }
     }
 
-    // 3. 推播給幹部管理群組
+    // 3. 推播給幹部管理群組 (使用專屬 Flex 卡片，維持繁體中文)
     var adminMsg = "【💳 幹部通知：繳費單已完成核銷】\n" +
       "─────────────\n" +
       "• 繳費單號：" + paymentId + "\n" +
@@ -697,12 +698,121 @@ function _handleNotifyPaymentConfirmed(json) {
       "• 核銷途徑：" + confirmedBy + "\n" +
       "• 系統狀態：已成功更新 Supabase 資料庫";
     var adminSubject = "【台科登山社】繳費單已完成核銷 - " + paymentId + " (" + userName + ")";
-    pushAdminMessage(adminMsg, adminSubject);
+
+    var officerConfirmedFlex = null;
+    if (typeof _buildOfficerPaymentConfirmedFlex === 'function') {
+      officerConfirmedFlex = _buildOfficerPaymentConfirmedFlex({
+        paymentId: paymentId,
+        userName: userName,
+        amount: amount,
+        items: items,
+        confirmedBy: confirmedBy
+      });
+    }
+
+    if (officerConfirmedFlex) {
+      pushAdminMessage(adminMsg, adminSubject, {
+        flexContents: officerConfirmedFlex,
+        altText: "💳 繳費單已完成核銷 (" + paymentId + ")"
+      });
+    } else {
+      pushAdminMessage(adminMsg, adminSubject);
+    }
 
     return _successResponse({ message: "核銷通知推播與確認信已成功送出" });
   } catch (err) {
     console.warn("_handleNotifyPaymentConfirmed 異常:", err);
     return _errorResponse(err.toString());
+  }
+}
+
+/**
+ * 裝備租借狀態更新推播 Helper (純推播通知借用人)
+ */
+function _handleNotifyLoanStatusUpdated(json) {
+  try {
+    var loanId = json.loanId || "";
+    var userId = json.userId || "";
+    var borrowerName = json.borrowerName || "社員";
+    var newStatus = json.newStatus || "";
+    var pickupDate = json.pickupDate || "";
+    var returnDate = json.returnDate || "";
+    var itemsSummary = json.itemsSummary || [];
+    var itemsText = Array.isArray(itemsSummary)
+      ? (itemsSummary.map(function (it) { return (it.name || it.equipment_id || "裝備") + " x " + (it.quantity || 1); }).join("\n• "))
+      : String(itemsSummary || "無品項細項");
+
+    if (userId && userId.indexOf("U") === 0) {
+      var prefLang = _getUserPreferredLanguage(userId);
+      var userMsgZh = "【裝備租借狀態更新通知】\n\n" +
+        "親愛的 " + borrowerName + " 您好：\n" +
+        "您的裝備租借申請單狀態已更新！\n\n" +
+        "• 訂單編號：" + loanId + "\n" +
+        "• 最新租借狀態：【" + newStatus + "】\n" +
+        "• 租借期間：" + pickupDate + " ~ " + returnDate + "\n" +
+        (itemsText ? ("• 租借裝備品項：\n• " + itemsText + "\n\n") : "\n") +
+        "如有任何疑問或需確認領取/歸還時間，請隨時與社團裝備幹部聯絡，謝謝！";
+
+      var userMsgEn = "【Equipment Loan Status Update】\n\n" +
+        "Dear " + borrowerName + ",\n" +
+        "Your equipment loan application status has been updated!\n\n" +
+        "• Order ID: " + loanId + "\n" +
+        "• Status: [" + newStatus + "]\n" +
+        "• Period: " + pickupDate + " ~ " + returnDate + "\n" +
+        (itemsText ? ("• Items:\n• " + itemsText + "\n\n") : "\n") +
+        "If you have any questions or need to confirm pickup/return times, please contact equipment officers. Thank you!";
+
+      _pushMessage(userId, _formatBilingualMessage(userMsgZh, userMsgEn, prefLang));
+    }
+
+    return _successResponse({ message: "裝備狀態推播通知已成功送出" });
+  } catch (err) {
+    console.warn("_handleNotifyLoanStatusUpdated 異常:", err);
+    return _errorResponse(err.toString());
+  }
+}
+
+/**
+ * ⚡ 活動新增/更新推播至幹部群組核心 (純發訊息至 ADMIN_GROUP_ID)
+ */
+function _handleNotifyOfficerEvent(json) {
+  try {
+    var userId = json.userId || "";
+    var eventId = json.eventId || "";
+    var name = json.name || "未命名活動";
+    var startDate = json.startDate || "";
+    var endDate = json.endDate || "";
+    var deadline = json.deadline || "";
+    var cost = json.cost || "0";
+    var status = json.status || "開放";
+    var isUpdate = !!json.isUpdate;
+
+    var officer = checkOfficerInternal(null, userId);
+    if (!officer || !officer.isOfficer) {
+      return _errorResponse("權限不足：僅限幹部可發送活動推播");
+    }
+
+    var titleTag = isUpdate ? "【幹部通知：活動資訊更新】" : "【幹部通知：新活動發布】";
+    var dateRange = startDate ? (startDate + (endDate && endDate !== startDate ? " ~ " + endDate : "")) : "未定";
+    var groupMsg = titleTag + "\n\n" +
+      "• 活動名稱：" + name + "\n" +
+      "• 活動代號：" + eventId + "\n" +
+      "• 出隊日期：" + dateRange + "\n" +
+      "• 報名截止：" + (deadline || "無") + "\n" +
+      "• 預計費用：NT$ " + cost + "\n" +
+      "• 目前狀態：【" + status + "】\n\n" +
+      (isUpdate ? "活動資訊已同步更新完成！" : "已上架完成，社員可在「最新活動」瀏覽與報名！");
+
+    pushAdminMessage(groupMsg);
+
+    return _jsonResponse({
+      status: "success",
+      message: "成功推播活動資訊至幹部群組",
+      eventId: eventId
+    });
+  } catch (err) {
+    console.error("推播至幹部群組失敗:", err);
+    return _errorResponse("推播至幹部群組失敗: " + (err.message || err.toString()));
   }
 }
 
@@ -829,6 +939,11 @@ function _handleNotifyProfileSaved(json) {
         detailsZh.push("• 國籍：" + data.nationality);
         detailsEn.push("• Nationality: " + data.nationality);
       }
+      if (data.preferredLanguage || data.preferred_language) {
+        var isLangEn = (data.preferredLanguage === "en" || data.preferred_language === "en");
+        detailsZh.push("• 偏好語言：" + (isLangEn ? "English" : "中文"));
+        detailsEn.push("• Preferred Language: " + (isLangEn ? "English" : "中文 (Traditional Chinese)"));
+      }
       if (data.exp) {
         detailsZh.push("• 爬山經歷：已更新");
         detailsEn.push("• Hiking Experience: Updated");
@@ -928,6 +1043,11 @@ function _handleNotifyProfileSaved(json) {
           detailsZh.push("• 想說的話：已更新");
           detailsEn.push("• I want to say...: Updated");
         }
+        if (cFields.indexOf("preferredLanguage") > -1 || cFields.indexOf("preferred_language") > -1) {
+          var isLangEn = (data.preferredLanguage === "en" || data.preferred_language === "en");
+          detailsZh.push("• 偏好語言：" + (isLangEn ? "English" : "中文"));
+          detailsEn.push("• Preferred Language: " + (isLangEn ? "English" : "中文 (Traditional Chinese)"));
+        }
       }
     } else {
       // 3. 既有使用者且未傳入 changedFields 之向下相容 fallback
@@ -946,6 +1066,11 @@ function _handleNotifyProfileSaved(json) {
       if (data.nationality) {
         detailsZh.push("• 國籍：" + data.nationality);
         detailsEn.push("• Nationality: " + data.nationality);
+      }
+      if (data.preferredLanguage || data.preferred_language) {
+        var isLangEn = (data.preferredLanguage === "en" || data.preferred_language === "en");
+        detailsZh.push("• 偏好語言：" + (isLangEn ? "English" : "中文"));
+        detailsEn.push("• Preferred Language: " + (isLangEn ? "English" : "中文 (Traditional Chinese)"));
       }
       if (data.exp) {
         detailsZh.push("• 爬山經歷：已更新");
@@ -969,9 +1094,17 @@ function _handleNotifyProfileSaved(json) {
     }
     enBlock += "\n\n" + footerEn;
 
-    var msg = titleZh + "\n\n" + zhBlock + "\n─────────────\n" + titleEn + "\n\n" + enBlock;
+    var prefLang = (data.preferredLanguage || data.preferred_language || "").toLowerCase();
+    var msg = "";
+    if (prefLang === "en") {
+      msg = titleEn + "\n\n" + enBlock;
+    } else if (prefLang === "zh") {
+      msg = titleZh + "\n\n" + zhBlock;
+    } else {
+      msg = titleZh + "\n\n" + zhBlock + "\n─────────────\n" + titleEn + "\n\n" + enBlock;
+    }
 
-    _pushMessage(userId, msg);
+    // (個人推播已由 liff.sendMessages 於前端處理，減少 Push 額度消耗)
 
     // 2. 若隊員勾選「我有意願成為社團幹部」，且為新意願（由無變有或首次填寫），即時推播幹部管理群組
     var officerIntent = data.intendOfficer || data.officer_intent || "";
@@ -1056,24 +1189,7 @@ function _handleNotifyEventCancelled(json) {
       pushAdminMessage(adminBody, adminSubject);
     }
 
-    // 2. 使用者個人 LINE 推播 (取消報名確認)
-    if (userId && userId !== "TEST_USER_ID") {
-      var userMsg = "【🏕️ 活動報名取消確認】\n\n" +
-        "親愛的 " + userName + " 您好：\n" +
-        "您所報名的活動【" + eventName + "】已成功取消！\n\n" +
-        "• 原審核狀態：" + (reviewStatus || "已報名") + "\n" +
-        (cancelReason ? "• 取消原因：" + cancelReason + "\n" : "") +
-        (isPaid ? "\n⚠️ 若您已繳交活動費用，社團幹部將依退費規範主動聯絡您安排退費！\n" : "\n期待未來在其他山林活動中與您同行！🏔️\n") +
-        "─────────────\n" +
-        "【🏕️ Event Registration Cancellation Confirmed】\n\n" +
-        "Dear " + userName + ",\n" +
-        "Your registration for [" + eventName + "] has been successfully cancelled." +
-        (isPaid ? "\n⚠️ If you have already paid the activity fee, officers will contact you for refund arrangements." : "\nHope to see you on the trails in future events! 🏔️");
-
-      _pushMessage(userId, userMsg);
-    }
-
-    // 3. ⚡ 同步標記該活動專屬獨立試算表 (報名名冊) 為已取消
+    // 2. ⚡ 同步標記該活動專屬獨立試算表 (報名名冊) 為已取消
     try {
       _syncCancelToEventSpreadsheet(eventId, userId, json.signupCode || "", cancelReason);
     } catch (sheetSyncErr) {
@@ -1188,7 +1304,13 @@ function doGet(e) {
     return _handleWebConfirmPayment(webPayId);
   }
 
-  // 1. 幹部身分初檢 (GET 備援)
+  // 1. 建立或同步活動專屬試算表 (GET 支援以避開 iOS WebKit 對 302 POST 重導向之 Load failed 阻斷)
+  if (action === "create_event_sheet") {
+    var sheetEventId = (e && e.parameter && e.parameter.eventId) ? e.parameter.eventId : "";
+    return _handleCreateEventSheet({ userId: userId, eventId: sheetEventId });
+  }
+
+  // 2. 幹部身分初檢 (GET 備援)
   if (action === "check_officer_status") {
     return _handleCheckOfficerStatus({ userId: userId });
   }
@@ -1196,7 +1318,24 @@ function doGet(e) {
   // 2. 審核結果推播通知 (GET 端點支援)
   if (action === "send_event_notifications") {
     var eventId = (e && e.parameter && e.parameter.eventId) ? e.parameter.eventId : "";
-    return _handleSendEventNotifications({ userId: userId, eventId: eventId });
+    var signupIds = (e && e.parameter && e.parameter.signupIds) ? e.parameter.signupIds : "";
+    return _handleSendEventNotifications({ userId: userId, eventId: eventId, signupIds: signupIds });
+  }
+
+  // 3. 活動新增/更新推播至幹部群組 (GET 端點支援)
+  if (action === "notify_officer_event") {
+    var p = e && e.parameter ? e.parameter : {};
+    return _handleNotifyOfficerEvent({
+      userId: userId,
+      eventId: p.eventId || "",
+      name: p.name || "",
+      startDate: p.startDate || "",
+      endDate: p.endDate || "",
+      deadline: p.deadline || "",
+      cost: p.cost || "",
+      status: p.status || "",
+      isUpdate: p.isUpdate === "true" || p.isUpdate === true
+    });
   }
 
   // 3. 活動清單唯讀備援
@@ -1563,7 +1702,7 @@ function _setOrUpdateConfigRow(configSheet, key, value) {
 }
 
 /**
- * 安全取得 _CONFIG 工作表中的鍵值
+ * 安全取得 _CONFIG 工作表中的指定鍵值
  */
 function _getConfigRow(configSheet, key) {
   if (!configSheet || !key) return "";
@@ -1943,6 +2082,98 @@ function _syncReviewToEventSpreadsheet(eventId, signupCode, reviewStatus) {
   }
 }
 
+/**
+ * ⚡ 追加報名者至活動專屬獨立試算表 (05_Sync_Worker 與即時報名共用)
+ */
+function _appendToEventSpreadsheet(eventId, signupData, eventTitle) {
+  if (!eventId || !signupData) return;
+  try {
+    var ssId = "";
+    var evts = (typeof _supabaseGet === "function")
+      ? _supabaseGet("events", { id: "eq." + eventId, select: "spreadsheet_id,spreadsheet_url" })
+      : [];
+    if (evts && evts.length > 0) {
+      if (evts[0].spreadsheet_id) ssId = _extractSpreadsheetId(evts[0].spreadsheet_id);
+      if (!ssId && evts[0].spreadsheet_url) ssId = _extractSpreadsheetId(evts[0].spreadsheet_url);
+    }
+    if (!ssId) return;
+
+    var eventSS = SpreadsheetApp.openById(ssId);
+    var sheet = eventSS.getSheetByName("報名名冊") || eventSS.getSheets()[0];
+    if (!sheet) return;
+
+    var sData = sheet.getDataRange().getValues();
+    var sHeaders = sData[0] || [];
+    if (sHeaders.length === 0) return;
+
+    var codeIdx = _findHeaderCol(sHeaders, "id", ["專屬碼", "報名編號"]);
+    var uidIdx = _findHeaderCol(sHeaders, "line_user_id", ["系統識別碼", "userId"]);
+
+    // 防重複檢查
+    for (var r = 1; r < sData.length; r++) {
+      var rCode = codeIdx > -1 ? String(sData[r][codeIdx]).trim() : "";
+      var rUid = uidIdx > -1 ? String(sData[r][uidIdx]).trim() : "";
+      if ((signupData.signupCode && rCode === String(signupData.signupCode).trim()) ||
+          (signupData.userId && rUid === String(signupData.userId).trim())) {
+        return; // 已存在於獨立試算表中
+      }
+    }
+
+    var proofUrlsStr = "";
+    if (Array.isArray(signupData.strengthProof)) {
+      proofUrlsStr = signupData.strengthProof.join(", ");
+    } else if (signupData.strengthProof) {
+      proofUrlsStr = String(signupData.strengthProof);
+    }
+
+    var newRow = new Array(sHeaders.length).fill("");
+    function setColVal(keywords, val) {
+      var idx = _findHeaderCol(sHeaders, keywords[0], keywords);
+      if (idx > -1 && val !== undefined && val !== null) newRow[idx] = val;
+    }
+
+    setColVal(["系統識別碼", "line_user_id", "userId"], signupData.userId || "");
+    setColVal(["專屬碼", "signup_code", "id"], signupData.signupCode || "");
+    setColVal(["姓名", "name"], signupData.name || "");
+    setColVal(["性別", "gender"], signupData.gender || "");
+    setColVal(["LINE ID", "line_id", "realLineId"], signupData.realLineId || signupData.lineId || "");
+    setColVal(["聯絡信箱", "email", "Email"], signupData.email || "");
+    setColVal(["聯絡電話", "phone"], signupData.phone ? "'" + String(signupData.phone) : "");
+    setColVal(["聯絡地址", "address"], signupData.studentAddr || signupData.address || "");
+    setColVal(["生日", "birthday"], signupData.birthday ? String(signupData.birthday).replace(/-/g, "/").slice(0, 10) : "");
+    setColVal(["證件號碼", "id_card", "idNumber"], signupData.idNumber ? "'" + String(signupData.idNumber) : (signupData.id_card ? "'" + String(signupData.id_card) : ""));
+    setColVal(["緊急聯絡人姓名", "emer_contact_name"], signupData.emerName || signupData.emergency_contact_name || "");
+    setColVal(["緊急聯絡人電話", "emer_contact_phone"], (signupData.emerPhone || signupData.emergency_contact_phone) ? "'" + String(signupData.emerPhone || signupData.emergency_contact_phone) : "");
+    setColVal(["緊急聯絡人聯絡地址", "emer_contact_address"], signupData.emerAddr || signupData.emergency_contact_address || "");
+    setColVal(["緊急聯絡人關係", "emer_contact_relationship"], signupData.emerRel || signupData.emergency_contact_rel || "");
+    setColVal(["爬山經驗", "experience"], signupData.exp || signupData.outdoor_experience || "");
+    setColVal(["體能測驗", "fitness_test"], signupData.strength || signupData.fitness_desc || "");
+    setColVal(["體能證明", "fitness_proof"], proofUrlsStr || "");
+    setColVal(["是否為社員", "is_member"], signupData.isMember ? "是" : "否");
+    setColVal(["審核結果", "review_status"], signupData.reviewStatus || "審核中 Checking");
+    setColVal(["通知狀態", "notify_status"], signupData.notificationStatus || "未通知");
+    setColVal(["繳費狀態", "payment_status"], signupData.paymentStatus || "未繳費 Unpaid");
+    setColVal(["備註", "notes"], signupData.notes || "");
+    setColVal(["想說的話", "want_to_say"], signupData.wantToSay || signupData.want_to_say || "");
+    var aOfIntent = signupData.officerIntent || signupData.officer_intent;
+    var aIsOfIntent = aOfIntent && (String(aOfIntent).indexOf("意願") > -1 || aOfIntent === "我有意願成為社團幹部" || aOfIntent === "是" || aOfIntent === true);
+    setColVal(["擔任幹部意願", "officer_intent"], aIsOfIntent ? "是" : "否");
+    setColVal(["系所", "department"], signupData.department || "");
+    setColVal(["學號", "student_id"], (signupData.studentId || signupData.student_id) ? "'" + String(signupData.studentId || signupData.student_id) : "");
+    setColVal(["個人特殊病史", "medical_history"], signupData.medicalHistory || signupData.medical_history || "");
+    setColVal(["身分", "identity_status"], signupData.identityStatus || signupData.identity_status || "");
+    var aJmIntent = signupData.joinMembershipIntent || signupData.join_membership_intent;
+    var aIsJmIntent = aJmIntent && (String(aJmIntent).indexOf("意願") > -1 || aJmIntent === "我有意願成為社員" || aJmIntent === "是" || aJmIntent === true);
+    setColVal(["加入社員意願", "join_membership_intent"], aIsJmIntent ? "是" : "否");
+
+    sheet.appendRow(newRow);
+    console.log("⚡ [EventSheet] 成功追加新報名紀錄至獨立試算表 " + ssId + ": " + (signupData.signupCode || signupData.userId));
+  } catch (err) {
+    console.warn("追加報名至專屬試算表例外:", err);
+  }
+}
+
+
 
 /**
  * 將活動完整資料同步/Upsert 至 Supabase events 表
@@ -1988,7 +2219,10 @@ function _syncEventToSupabase(eventData) {
       deadline: deadlineIso,
       status: eventData.status || "開放",
       summary: eventData.shortDesc || "",
+      summary_en: eventData.shortDescEn || eventData.summary_en || null,
       itinerary: eventData.fullDesc || "",
+      itinerary_en: eventData.fullDescEn || eventData.itinerary_en || null,
+      title_en: eventData.nameEn || eventData.title_en || null,
       cover_image_url: eventData.imageUrl || "",
       drive_folder_url: eventData.driveFolderUrl || null,
       spreadsheet_url: eventData.spreadsheetUrl || null,
@@ -2060,7 +2294,10 @@ function _handleSaveEvent(json) {
           cost: getOrCreateColIdx(eventSheet, headers, "預計費用"),
           status: getOrCreateColIdx(eventSheet, headers, "報名狀態"),
           shortDesc: getOrCreateColIdx(eventSheet, headers, "簡介"),
+          shortDescEn: getOrCreateColIdx(eventSheet, headers, "英文簡介"),
           fullDesc: getOrCreateColIdx(eventSheet, headers, "詳細行程"),
+          fullDescEn: getOrCreateColIdx(eventSheet, headers, "英文行程"),
+          nameEn: getOrCreateColIdx(eventSheet, headers, "英文名稱"),
           img: getOrCreateColIdx(eventSheet, headers, "封面圖網址"),
           driveFolder: getOrCreateColIdx(eventSheet, headers, "雲端資料夾網址"),
           sheetUrl: getOrCreateColIdx(eventSheet, headers, "報名名冊網址"),
@@ -2158,7 +2395,10 @@ function _handleSaveEvent(json) {
       rowValues[hIdx.cost] = json.cost || "";
       rowValues[hIdx.status] = json.status || "開放";
       rowValues[hIdx.shortDesc] = json.shortDesc || "";
+      if (hIdx.shortDescEn > -1) rowValues[hIdx.shortDescEn] = json.shortDescEn || "";
       rowValues[hIdx.fullDesc] = json.fullDesc || "";
+      if (hIdx.fullDescEn > -1) rowValues[hIdx.fullDescEn] = json.fullDescEn || "";
+      if (hIdx.nameEn > -1) rowValues[hIdx.nameEn] = json.nameEn || "";
       if (imageUrl) rowValues[hIdx.img] = imageUrl;
       if (driveFolderUrl) rowValues[hIdx.driveFolder] = driveFolderUrl;
       if (spreadsheetUrl) rowValues[hIdx.sheetUrl] = spreadsheetUrl;
@@ -2176,13 +2416,16 @@ function _handleSaveEvent(json) {
       _syncEventToSupabase({
         id: eventId,
         name: json.name,
+        nameEn: json.nameEn,
         startDate: json.startDate,
         endDate: json.endDate,
         deadline: json.deadline,
         cost: json.cost,
         status: json.status,
         shortDesc: json.shortDesc,
+        shortDescEn: json.shortDescEn,
         fullDesc: json.fullDesc,
+        fullDescEn: json.fullDescEn,
         imageUrl: imageUrl,
         driveFolderUrl: driveFolderUrl,
         spreadsheetUrl: spreadsheetUrl,
@@ -2272,6 +2515,16 @@ function _handleSendEventNotifications(json) {
         if (res.getResponseCode() >= 200 && res.getResponseCode() < 300) {
           var sbSignups = JSON.parse(res.getContentText());
           if (Array.isArray(sbSignups) && sbSignups.length > 0) {
+            // 若傳入指定名冊清單 (signupIds)，僅針對指定對象發送
+            if (json.signupIds) {
+              var allowedIdList = String(json.signupIds).split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+              if (allowedIdList.length > 0) {
+                sbSignups = sbSignups.filter(function (it) {
+                  return allowedIdList.indexOf(String(it.id)) > -1;
+                });
+              }
+            }
+
             // 防呆檢驗：若有正取人員待推播通知，但活動未設定群組連結，立即阻擋
             var hasPendingAccepted = sbSignups.some(function (item) {
               var st = String(item.status || "");
@@ -2294,21 +2547,40 @@ function _handleSendEventNotifications(json) {
 
               var isAcceptedOrWaitlisted = (statusStr.indexOf("正取") > -1 || statusStr.indexOf("備取") > -1);
               if (isAcceptedOrWaitlisted && notifyStr !== "已通知" && statusStr.indexOf("取消") === -1 && targetUid.startsWith("U")) {
+                var prefLang = _getUserPreferredLanguage(targetUid);
                 if (statusStr.indexOf("正取") > -1) {
+                  var resTag = (prefLang === "en") ? "Review Result Released" : ((prefLang === "zh") ? "審核結果出爐" : "審核結果出爐 Result");
+                  var resTitle = (prefLang === "en") ? "Admission Confirmed" : "活動正取通知";
+                  var greetText = (prefLang === "en")
+                    ? ("Hello " + applicantName + "! For the event:")
+                    : ((prefLang === "zh")
+                        ? ("哈囉 " + applicantName + "！您報名的活動：")
+                        : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
+                  var resPrompt = (prefLang === "en") ? "Review Result:" : ((prefLang === "zh") ? "審核結果為：" : "審核結果為 Result：");
+                  var displayBadge = (prefLang === "en") ? "【 Confirmed 】" : ((prefLang === "zh") ? "【 正取 】" : "【 " + statusStr + " 】");
+                  var noticeText = (prefLang === "en")
+                    ? "Congratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!"
+                    : ((prefLang === "zh")
+                        ? "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！"
+                        : "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!");
+                  var joinBtn = (prefLang === "en") ? "Join Group" : ((prefLang === "zh") ? "加入活動群組" : "加入活動群組 Join Group");
+                  var payBtn = (prefLang === "en") ? "Pay Now" : ((prefLang === "zh") ? "前往繳費系統" : "前往繳費系統 Pay");
+                  var altPushText = (prefLang === "en") ? "【Activity Admission Notice】" : ((prefLang === "zh") ? "【活動正取通知】" : "【活動正取通知 Confirmed】");
+
                   var acceptedFlex = {
                     type: "bubble",
                     body: {
                       type: "box",
                       layout: "vertical",
                       contents: [
-                        { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#1DB446", size: "sm" },
-                        { type: "text", text: "活動正取通知", weight: "bold", size: "xl", margin: "md" },
-                        { type: "text", text: "哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:", margin: "md", size: "sm", wrap: true },
+                        { type: "text", text: resTag, weight: "bold", color: "#1DB446", size: "sm" },
+                        { type: "text", text: resTitle, weight: "bold", size: "xl", margin: "md" },
+                        { type: "text", text: greetText, margin: "md", size: "sm", wrap: true },
                         { type: "text", text: targetEventTitle, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
-                        { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
-                        { type: "text", text: "【 " + statusStr + " 】", weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
+                        { type: "text", text: resPrompt, margin: "md", size: "sm" },
+                        { type: "text", text: displayBadge, weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
                         { type: "separator", margin: "md" },
-                        { type: "text", text: "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                        { type: "text", text: noticeText, wrap: true, margin: "md", size: "xs", color: "#666666" }
                       ]
                     },
                     footer: {
@@ -2322,7 +2594,7 @@ function _handleSendEventNotifications(json) {
                           color: "#1DB446",
                           action: {
                             type: "uri",
-                            label: "加入活動群組 Join Group",
+                            label: joinBtn,
                             uri: targetGroupUrl
                           }
                         },
@@ -2332,29 +2604,46 @@ function _handleSendEventNotifications(json) {
                           color: "#475569",
                           action: {
                             type: "uri",
-                            label: "前往繳費系統 Pay",
+                            label: payBtn,
                             uri: "https://liff.line.me/" + (LIFF_CHANNEL_ID || "2009217429") + "-u7OCkmQO"
                           }
                         }
                       ]
                     }
                   };
-                  pushFlexMessage(targetUid, "【活動正取通知 Confirmed】", acceptedFlex);
+                  pushFlexMessage(targetUid, altPushText, acceptedFlex);
                 } else {
+                  var resTagW = (prefLang === "en") ? "Review Result Released" : ((prefLang === "zh") ? "審核結果出爐" : "審核結果出爐 Result");
+                  var resTitleW = (prefLang === "en") ? "Activity Waitlist Notice" : "活動備取通知";
+                  var greetTextW = (prefLang === "en")
+                    ? ("Hello " + applicantName + "! For the event:")
+                    : ((prefLang === "zh")
+                        ? ("哈囉 " + applicantName + "！您報名的活動：")
+                        : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
+                  var resPromptW = (prefLang === "en") ? "Review Result:" : ((prefLang === "zh") ? "審核結果為：" : "審核結果為 Result：");
+                  var displayBadgeW = (prefLang === "en") ? "【 Waitlisted 】" : ((prefLang === "zh") ? "【 備取 】" : "【 " + statusStr + " 】");
+                  var noticeTextW = (prefLang === "en")
+                    ? "You are currently on the waitlist. We will contact you if a spot opens up!"
+                    : ((prefLang === "zh")
+                        ? "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！"
+                        : "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!");
+                  var confirmBtn = (prefLang === "en") ? "Confirm Waitlist" : ((prefLang === "zh") ? "確認備取意願" : "確認備取意願 Confirm Waitlist");
+                  var altPushTextW = (prefLang === "en") ? "【Activity Waitlist Notice】" : ((prefLang === "zh") ? "【活動備取通知】" : "【活動備取通知 Waitlist】");
+
                   var waitlistFlex = {
                     type: "bubble",
                     body: {
                       type: "box",
                       layout: "vertical",
                       contents: [
-                        { type: "text", text: "審核結果出爐 Result", weight: "bold", color: "#FF9800", size: "sm" },
-                        { type: "text", text: "活動備取通知", weight: "bold", size: "xl", margin: "md" },
-                        { type: "text", text: "哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:", margin: "md", size: "sm", wrap: true },
+                        { type: "text", text: resTagW, weight: "bold", color: "#FF9800", size: "sm" },
+                        { type: "text", text: resTitleW, weight: "bold", size: "xl", margin: "md" },
+                        { type: "text", text: greetTextW, margin: "md", size: "sm", wrap: true },
                         { type: "text", text: targetEventTitle, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
-                        { type: "text", text: "審核結果為 Result：", margin: "md", size: "sm" },
-                        { type: "text", text: "【 " + statusStr + " 】", weight: "bold", color: "#FF9800", size: "lg", align: "center", margin: "md" },
+                        { type: "text", text: resPromptW, margin: "md", size: "sm" },
+                        { type: "text", text: displayBadgeW, weight: "bold", color: "#FF9800", size: "lg", align: "center", margin: "md" },
                         { type: "separator", margin: "md" },
-                        { type: "text", text: "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!", wrap: true, margin: "md", size: "xs", color: "#666666" }
+                        { type: "text", text: noticeTextW, wrap: true, margin: "md", size: "xs", color: "#666666" }
                       ]
                     },
                     footer: {
@@ -2366,13 +2655,13 @@ function _handleSendEventNotifications(json) {
                         color: "#FF9800",
                         action: {
                           type: "postback",
-                          label: "確認備取意願 Confirm Waitlist",
+                          label: confirmBtn,
                           data: "action=confirm_waitlist&eventId=" + encodeURIComponent(targetEventId) + "&userId=" + encodeURIComponent(targetUid)
                         }
                       }]
                     }
                   };
-                  pushFlexMessage(targetUid, "【活動備取通知 Waitlist】", waitlistFlex);
+                  pushFlexMessage(targetUid, altPushTextW, waitlistFlex);
                 }
 
                 // 立即以 PATCH 更新 Supabase event_signups 表的 notification_status 為已通知
@@ -2482,7 +2771,7 @@ function _handleGetAdminEvents(userId) {
     }
 
     if (SUPABASE_URL && SUPABASE_KEY) {
-      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,start_date,end_date,deadline,fee,status,summary,itinerary,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id&order=start_date.desc";
+      var url = SUPABASE_URL + "/rest/v1/events?select=id,title,title_en,start_date,end_date,deadline,fee,status,summary,summary_en,itinerary,itinerary_en,cover_image_url,image_url,drive_folder_url,spreadsheet_url,spreadsheet_id,line_group_url&order=start_date.desc";
       var res = UrlFetchApp.fetch(url, {
         method: "get",
         headers: _getSupabaseHeaders(),
@@ -2495,17 +2784,21 @@ function _handleGetAdminEvents(userId) {
           return {
             id: e.id || "",
             name: e.title || "",
+            nameEn: e.title_en || "",
             startDate: e.start_date || "",
             endDate: e.end_date || "",
             deadline: e.deadline || "",
             cost: e.fee !== undefined ? String(e.fee) : "0",
             status: e.status || "開放",
             shortDesc: e.summary || "",
+            shortDescEn: e.summary_en || "",
             fullDesc: e.itinerary || "",
-            imageUrl: e.image_url || "",
+            fullDescEn: e.itinerary_en || "",
+            imageUrl: e.cover_image_url || e.image_url || "",
             driveFolderUrl: e.drive_folder_url || "",
             spreadsheetUrl: e.spreadsheet_url || "",
-            spreadsheetId: e.spreadsheet_id || ""
+            spreadsheetId: e.spreadsheet_id || "",
+            lineGroupUrl: e.line_group_url || ""
           };
         });
         return _jsonResponse({ status: "success", events: events });
@@ -2706,7 +2999,7 @@ function _handleCreateEventSheet(json) {
       if (backfillResult.appendedCount > 0) {
         syncMsg = "試算表同步成功！已為您追加 " + backfillResult.appendedCount + " 筆新報名者，名冊目前共 " + backfillResult.sheetTotal + " 人。";
       } else if (backfillResult.backfilledCount > 0) {
-        syncMsg = "試算表同步成功！已更新 " + backfillResult.backfilledCount + " 筆隊員個資，名冊目前共 " + backfillResult.sheetTotal + " 人。";
+        syncMsg = "試算表同步成功！已補齊 " + backfillResult.backfilledCount + " 筆隊員缺漏個資，名冊目前共 " + backfillResult.sheetTotal + " 人。";
       } else {
         syncMsg = "試算表名冊已是最新狀態，目前共有 " + backfillResult.totalSignups + " 筆報名。";
       }
@@ -2750,7 +3043,7 @@ function _handleCreateEventSheet(json) {
         var memberMap = {};
         if (userIds.length > 0) {
           var members = _supabaseGet("members", {
-            line_user_id: "in.(" + userIds.join(",") + ")",
+            line_user_id: "in.(" + userIds.map(encodeURIComponent).join(",") + ")",
             select: "*"
           });
           if (Array.isArray(members)) {
@@ -2834,7 +3127,29 @@ function _handleCreateEventSheet(json) {
 }
 
 /**
- * ⚡ 巡檢並補齊活動獨立試算表中缺漏的名冊個資，支援智慧雙重同步比對 (LAST_SYNCED_AT vs updated_at)
+ * ⚡ 智慧定位活動專屬試算表中的報名名冊工作表 (排除 _CONFIG，相容多種常見命名別名)
+ */
+function _findEventSignupSheet(eventSS) {
+  if (!eventSS) return null;
+  var candidateNames = ["報名名冊", "名冊", "Signups", "活動名冊", "報名名單", "名單", "報名表", "活動報名名冊"];
+  for (var i = 0; i < candidateNames.length; i++) {
+    var s = eventSS.getSheetByName(candidateNames[i]);
+    if (s) return s;
+  }
+  var allSheets = eventSS.getSheets();
+  for (var j = 0; j < allSheets.length; j++) {
+    var name = allSheets[j].getName();
+    if (name !== "_CONFIG" && !name.startsWith("_")) {
+      return allSheets[j];
+    }
+  }
+  return allSheets.length > 0 ? allSheets[0] : null;
+}
+
+/**
+ * ⚡ 巡檢並補齊活動獨立試算表中缺漏的名冊個資 (如證件號碼、緊急聯絡人關係、爬山經驗、體能測驗、體能證明等)
+ * 同時自動追加尚未寫入試算表的新報名者，達成每次點擊皆 100% 完整雙向對齊
+ * 回傳結構化同步狀態物件 { success, appendedCount, backfilledCount, totalSignups, sheetTotal, error }
  */
 function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
   if (!ssId || !eventId) {
@@ -3185,4 +3500,3 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     };
   }
 }
-

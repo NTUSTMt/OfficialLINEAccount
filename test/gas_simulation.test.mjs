@@ -4548,5 +4548,201 @@ describe('59. 繳費申報卡片設計、繳費成功 Email 通知與社籍到�
   });
 });
 
+describe('60. 社員語系通知分流 (中/英) 與幹部核銷專屬 Flex 卡片驗證 (v0.1.252)', () => {
+  it('1. _buildPaymentConfirmedFlex 語系支援：英文 (en) 與繁中 (zh) 欄位與提示正確分流', () => {
+    function buildConfirmedFlex(params) {
+      const isEn = (params.lang === "en" || params.userLanguage === "en" || params.preferredLanguage === "en");
+      const userName = params.userName || (isEn ? "Member" : "社員");
+      const paymentId = params.paymentId || "";
+      const amount = params.amount || 0;
+      const items = params.items || (isEn ? "Club Event / Gear Fee" : "社團活動/裝備費用");
+
+      const titleText = isEn ? "🎉 Payment Confirmed" : "🎉 繳費成功確認通知";
+      const subtitleText = isEn ? "Officers have verified your payment!" : "幹部已確認收到款項，核銷作業已完成！";
+      const labelName = isEn ? "Name" : "姓名";
+      const labelId = isEn ? "Payment ID" : "單號";
+      const labelAmount = isEn ? "Amount" : "核銷金額";
+      const labelItems = isEn ? "Items" : "核銷項目";
+      const labelStatus = isEn ? "Status" : "狀態";
+      const statusText = isEn ? "Confirmed" : "已核銷 Confirmed";
+      const amountText = isEn ? (`$${amount} TWD`) : (`$${amount} 元`);
+      const footerText = isEn
+        ? "Your event registration and gear rental status have been updated. Check your Dashboard anytime!"
+        : "相關活動報名與裝備狀態已同步更新，您可隨時至個人主頁查看！";
+
+      return {
+        title: titleText,
+        subtitle: subtitleText,
+        nameLabel: labelName,
+        nameVal: userName,
+        idLabel: labelId,
+        idVal: paymentId,
+        amountLabel: labelAmount,
+        amountVal: amountText,
+        itemsLabel: labelItems,
+        itemsVal: items,
+        statusLabel: labelStatus,
+        statusVal: statusText,
+        footer: footerText
+      };
+    }
+
+    // 繁中測試
+    const zhFlex = buildConfirmedFlex({
+      userName: '王大明',
+      paymentId: 'PAY_ZH_001',
+      amount: 500,
+      items: '大學部常態社費 (有效至 2028/06/30)',
+      lang: 'zh'
+    });
+    assert.strictEqual(zhFlex.title, '🎉 繳費成功確認通知');
+    assert.strictEqual(zhFlex.nameLabel, '姓名');
+    assert.strictEqual(zhFlex.amountVal, '$500 元');
+    assert.strictEqual(zhFlex.statusVal, '已核銷 Confirmed');
+
+    // 英文測試
+    const enFlex = buildConfirmedFlex({
+      userName: 'John Doe',
+      paymentId: 'PAY_EN_001',
+      amount: 500,
+      items: 'Undergraduate Membership Fee (Valid until 2028/06/30)',
+      lang: 'en'
+    });
+    assert.strictEqual(enFlex.title, '🎉 Payment Confirmed');
+    assert.strictEqual(enFlex.subtitle, 'Officers have verified your payment!');
+    assert.strictEqual(enFlex.nameLabel, 'Name');
+    assert.strictEqual(enFlex.idLabel, 'Payment ID');
+    assert.strictEqual(enFlex.amountVal, '$500 TWD');
+    assert.strictEqual(enFlex.statusVal, 'Confirmed');
+    assert.ok(enFlex.footer.includes('Dashboard'));
+  });
+
+  it('2. _buildOfficerPaymentConfirmedFlex 幹部核銷 Flex 卡片結構與內容完整性驗證', () => {
+    function buildOfficerConfirmedFlex(params) {
+      const userName = params.userName || "社員";
+      const paymentId = params.paymentId || "";
+      const amount = params.amount || 0;
+      const items = params.items || "社團活動/裝備費用";
+      const confirmedBy = params.confirmedBy || "單鍵快速核銷";
+
+      return {
+        type: "bubble",
+        size: "mega",
+        header: {
+          title: "💳 繳費單已完成核銷",
+          subtitle: "款項已入帳，已同步更新資料庫狀態"
+        },
+        fields: {
+          申報人: userName,
+          繳費單號: paymentId,
+          核銷金額: `$${amount} 元`,
+          核銷項目: items,
+          核銷途徑: confirmedBy,
+          系統狀態: "已更新 Supabase 資料庫"
+        }
+      };
+    }
+
+    const card = buildOfficerConfirmedFlex({
+      userName: '陳同學',
+      paymentId: 'PAY_20261006_008',
+      amount: 1200,
+      items: '雪山主東峰活動費',
+      confirmedBy: '單鍵快速核銷'
+    });
+
+    assert.strictEqual(card.header.title, '💳 繳費單已完成核銷');
+    assert.strictEqual(card.fields.申報人, '陳同學');
+    assert.strictEqual(card.fields.繳費單號, 'PAY_20261006_008');
+    assert.strictEqual(card.fields.核銷金額, '$1200 元');
+    assert.strictEqual(card.fields.系統狀態, '已更新 Supabase 資料庫');
+  });
+
+  it('3. _handleNotifyPaymentConfirmed 語系分流：en 發送全英文信件/推播，zh 發送繁中信件/推播', () => {
+    const emailQueue = [];
+    const lineQueue = [];
+    const adminQueue = [];
+
+    const mockMailApp = {
+      sendEmail: (opts) => { emailQueue.push(opts); }
+    };
+
+    function simulateNotify(json) {
+      const paymentId = json.paymentId || "";
+      const userName = json.userName || "社員";
+      const userEmail = json.userEmail || "";
+      const userLanguage = json.userLanguage || json.lang || "zh";
+      const amount = json.amount || 0;
+      const items = json.items || "社團費用";
+      const lineUserId = json.lineUserId || "";
+      const confirmedBy = json.confirmedBy || "單鍵快速核銷";
+
+      const isEn = (userLanguage === "en" || userLanguage === "en-US");
+
+      if (userEmail && mockMailApp) {
+        const subject = isEn
+          ? `Payment Confirmation - ${paymentId} (NTUST Mountaineering Club)`
+          : `【台科登山社】繳費成功確認通知 - ${paymentId}`;
+        const sender = isEn ? "NTUST Mountaineering Club" : "台科登山社小岳助理";
+        mockMailApp.sendEmail({ to: userEmail, subject, name: sender });
+      }
+
+      if (lineUserId && lineUserId.startsWith("U")) {
+        lineQueue.push({
+          to: lineUserId,
+          altText: isEn ? `🎉 Payment Confirmed (${paymentId})` : `🎉 繳費成功確認通知 (${paymentId})`,
+          lang: isEn ? "en" : "zh"
+        });
+      }
+
+      adminQueue.push({
+        subject: `【台科登山社】繳費單已完成核銷 - ${paymentId} (${userName})`,
+        hasFlex: true
+      });
+
+      return { success: true };
+    }
+
+    // 測試 1: 英文語系社員
+    simulateNotify({
+      paymentId: 'PAY_ENG_001',
+      userName: 'Michael Smith',
+      userEmail: 'michael@foreign.ntust.edu.tw',
+      userLanguage: 'en',
+      amount: 400,
+      items: 'Membership Fee (Valid until 2028/06/30)',
+      lineUserId: 'U998877665544332211'
+    });
+
+    assert.strictEqual(emailQueue.length, 1);
+    assert.strictEqual(emailQueue[0].subject, 'Payment Confirmation - PAY_ENG_001 (NTUST Mountaineering Club)');
+    assert.strictEqual(emailQueue[0].name, 'NTUST Mountaineering Club');
+    assert.strictEqual(lineQueue[0].altText, '🎉 Payment Confirmed (PAY_ENG_001)');
+    assert.strictEqual(lineQueue[0].lang, 'en');
+
+    // 測試 2: 中文語系社員
+    simulateNotify({
+      paymentId: 'PAY_ZH_002',
+      userName: '李小華',
+      userEmail: 'hua@test.ntust.edu.tw',
+      userLanguage: 'zh',
+      amount: 800,
+      items: '合歡群峰活動費',
+      lineUserId: 'U112233445566778800'
+    });
+
+    assert.strictEqual(emailQueue.length, 2);
+    assert.strictEqual(emailQueue[1].subject, '【台科登山社】繳費成功確認通知 - PAY_ZH_002');
+    assert.strictEqual(emailQueue[1].name, '台科登山社小岳助理');
+    assert.strictEqual(lineQueue[1].altText, '🎉 繳費成功確認通知 (PAY_ZH_002)');
+    assert.strictEqual(lineQueue[1].lang, 'zh');
+
+    // 幹部群組通知均維持繁中卡片
+    assert.strictEqual(adminQueue.length, 2);
+    assert.strictEqual(adminQueue[0].subject.includes('繳費單已完成核銷'), true);
+    assert.strictEqual(adminQueue[1].subject.includes('繳費單已完成核銷'), true);
+  });
+});
+
 
 

@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.251-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.255-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.251)](#7-最新版本異動紀錄-changelog-v01251)
+- [7. 最新版本異動紀錄 (Changelog v0.1.255)](#7-最新版本異動紀錄-changelog-v01255)
 
 ---
 
@@ -2064,3 +2064,59 @@ pnpm test
   - 單元測試與型別檢查驗證：
     - 新增 test/gas_simulation.test.mjs Suite 59，完整涵蓋申報 Flex 卡片結構、核銷通知信/推播、社籍到期日正則解析與純文字核銷指令移除測試。
     - 全專案 81 個測試套件、449 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.252 (2026-10-06)
+- 社員語系通知分流 (中/英) 與幹部核銷專屬 Flex 卡片推播設計：
+  - 社員繳費核銷通知語系分流 (純看 preferred_language)：
+    - 資料庫層：升級 Supabase RPC verify_payment_by_token (supabase/verify_payment_rpc.sql 與 supabase/payment_rpc.sql)，自 members 資料表查詢 preferred_language 偏好語系，並於核銷結果中透過 userLanguage 回傳（'en' 或 'zh'）。
+    - 前端介面層：VerifyPaymentResult 介面 (src/utils/supabaseClient.ts) 與 ConfirmPayment.tsx 於核銷成功呼叫後端時傳入 userLanguage 參數。
+    - 後端通知層 (src/gas.js 與 gas_modules/06_Helper_Services.js)：
+      - _handleNotifyPaymentConfirmed 依據 userLanguage 判定：
+        - 英文版 (en)：發送全英文 Email「Payment Confirmation - [單號] (NTUST Mountaineering Club)」至社員信箱，發送者標註為 NTUST Mountaineering Club；個人 LINE 推播英文版 Flex 卡片。
+        - 中文版 (zh)：維持繁體中文 Email「【臺科登山社】繳費成功確認通知」與繁體中文 Flex 卡片。
+  - 個人繳費成功 Flex 卡片多語系支援 (_buildPaymentConfirmedFlex)：
+    - 範本依據 lang/userLanguage 參數自動切換標題、副標題、欄位名稱（Name, Payment ID, Amount, Items, Status）與底部儀表板引導文字。
+  - 幹部核銷通知專屬 Flex 卡片設計 (_buildOfficerPaymentConfirmedFlex)：
+    - 專為幹部管理群組設計綠/青色標頭之核銷確認 Flex 卡片，結構化呈現申報人、繳費單號、核銷金額、核銷項目、核銷途徑與資料庫更新狀態。
+    - 幹部通知維持全繁體中文（無須英文版），透過 Push Message 推播至幹部群組，並同步發送 Gmail 雙軌備援信件。
+  - 單元測試與建置驗證：
+    - 新增 test/gas_simulation.test.mjs Suite 60，驗證中英雙語 Flex 卡片分流、英文/中文 Email 寄送、幹部核銷 Flex 卡片結構與 pushAdminMessage 推播。
+    - 全專案 82 個測試套件、452 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.253 (2026-10-06)
+- Web 管理後台社員名冊「一鍵複製社員」（學校社團系統格式）功能新增：
+  - 一鍵複製社員功能實作 (src/pages/web-admin/WebAdminMembers.tsx)：
+    - 於工具列右側新增「一鍵複製社員」按鈕，點擊時依據全名冊中所有會員資料進行精準篩選與格式化輸出。
+    - 格式規範：
+      - 幹部：{姓名},{學號},幹部,{角色}（若無具體角色職稱，自動補上「幹部」）。
+      - 正式社員：{姓名},{學號},社員。
+    - 篩選規則：
+      - 僅納入「臺科在校生」（排除「畢業校友」與「校外人士」），且姓名與學號欄位非空。
+      - 排除非社員且非幹部之在校生。
+    - 提示回饋：
+      - 成功寫入剪貼簿後，顯示綠色 Toast 提示「已複製 X 筆社員資料，請至學校社團系統直接貼上！」，並於 4 秒後自動關閉。
+  - 單元測試與驗證：
+    - 新增 test/web_admin_members_copy_roster.test.mjs 單元測試，驗證按鈕宣告、在校生過濾、幹部角色預設值、正式社員格式與校友/校外排除邏輯。
+    - 全專案 83 個測試套件、454 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.254 (2026-10-06)
+- 英文報名成功確認通知活動名稱英文化修復：
+  - 活動報名處理邏輯升級 (src/gas.js 與 gas_modules/03_Flex_Templates.js)：
+    - 在 handleSignup 查詢 Supabase events 資料表時，補上 title_en 欄位選取 (select: "id,title,title_en,status,deadline")。
+    - 取得活動英文名稱 evNameEn，並於英文版報名送出確認收據 (successReceiptEn) 的 Event: 欄位優先顯示英文活動名稱 (evNameEn || evName)。
+    - 同步於活動截止與重複報名的英文提示訊息中全面採用英文活動名稱。
+  - 單元測試與驗證：
+    - 更新 test/73_preferred_language_messaging.test.mjs 單元測試，驗證 handleSignup 於 Supabase 查詢與英文收據產生時正確選取並使用 title_en。
+    - 全專案 83 個測試套件、455 項單元測試 100% 通過，TypeScript 型別檢查零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.255 (2026-10-06)
+- GAS 單一整合檔語法錯誤修復與樣板函式完整還原：
+  - src/gas.js 語法修復與代碼還原：
+    - 修復第 2041 行因誤貼造成字串斷裂 (color: #5555) 與語法錯誤 (':' expected)。
+    - 移除誤貼之 handleSignup 不完整重複片段。
+    - 完整還原 sendEventDetail 尾端結構，以及 sendOfficerMenu (幹部名冊卡片)、_buildMoreServicesFlex、sendMoreOptionsMenu 與 sendFeedbackLink (意見回饋表單) 等 LINE Bot 必要服務函式。
+  - 驗證：
+    - 通過 Node.js 語法檢驗 (node --check src/gas.js)。
+    - 全專案 83 個測試套件、455 項單元測試 100% 通過，全篇嚴格零 Emoji。
+
+

@@ -236,6 +236,7 @@ DECLARE
     v_extracted_expiry TEXT;
     v_calculated_expiry DATE;
     v_user_email TEXT;
+    v_user_language TEXT;
 BEGIN
     -- 參數基本防禦
     IF p_payment_id IS NULL OR trim(p_payment_id) = '' THEN
@@ -252,9 +253,9 @@ BEGIN
         RETURN jsonb_build_object('success', FALSE, 'error', '找不到繳費單號：' || p_payment_id);
     END IF;
 
-    -- 查詢繳費社員的 Email
+    -- 查詢繳費社員的 Email 與 偏好語系
     IF v_payment.line_user_id IS NOT NULL THEN
-        SELECT email INTO v_user_email FROM members WHERE line_user_id = v_payment.line_user_id;
+        SELECT email, COALESCE(preferred_language, 'zh') INTO v_user_email, v_user_language FROM members WHERE line_user_id = v_payment.line_user_id;
     END IF;
 
     -- 比對安全金鑰 (若該紀錄存在 verify_token 則必須相符)
@@ -272,6 +273,7 @@ BEGIN
             'paymentId', v_payment.id,
             'userName', COALESCE(v_payment.name, '社員'),
             'userEmail', v_user_email,
+            'userLanguage', COALESCE(v_user_language, 'zh'),
             'amount', v_payment.amount,
             'items', COALESCE(NULLIF(v_payment.type, ''), '社團活動/裝備費用'),
             'lineUserId', v_payment.line_user_id,
@@ -346,6 +348,7 @@ BEGIN
         'paymentId', v_payment.id,
         'userName', COALESCE(v_payment.name, '社員'),
         'userEmail', v_user_email,
+        'userLanguage', COALESCE(v_user_language, 'zh'),
         'amount', v_payment.amount,
         'items', COALESCE(NULLIF(v_payment.type, ''), '社團活動/裝備費用'),
         'lineUserId', v_payment.line_user_id,

@@ -1365,6 +1365,93 @@ function pushAdminMessage(text, customSubject, optionsOrHtml) {
   }
 }
 
+/**
+ * 處理個人資料填寫/更新之 Webhook 回覆 (使用 replyToken 免費發送，0 額度消耗)
+ */
+function _handleMemberProfileNoticeReply(replyToken, userId, text) {
+  try {
+    if (!replyToken || !userId) return;
+    var isNew = (text.indexOf("完成") > -1 || text.indexOf("completed") > -1);
+    var sbMembers = _supabaseGet("members", { line_user_id: "eq." + userId });
+    var m = (sbMembers && sbMembers.length > 0) ? sbMembers[0] : null;
+    if (!m) {
+      _replyMessage(replyToken, "【個人資料填寫完成】\n感謝您的填寫！系統已收到您的個人資料。");
+      return;
+    }
+
+    var name = m.name || "社員";
+    var dept = m.department || "未填寫";
+    var studentId = m.student_id ? _maskString(m.student_id, 2, 2) : "未填寫";
+    var phone = m.phone ? _maskString(m.phone, 4, 3) : "未填寫";
+    var nationality = m.nationality || "未填寫";
+    var emerName = m.emergency_contact_name || "未填寫";
+    var emerRel = m.emergency_contact_rel || "未填寫";
+    var offIntent = m.join_membership_intent || "未填寫";
+    var prefLang = (m.preferred_language || "zh").toLowerCase();
+
+    var titleZh = isNew ? "【歡迎加入！基本資料註冊成功】" : "【基本資料已成功更新】";
+    var titleEn = isNew ? "【Welcome! Registration Success】" : "【Profile Updated Successfully】";
+
+    var introZh = isNew ? ("您好 " + name + "！感謝您完成台科登山社社團系統個人資料註冊：") : ("您好 " + name + "！您已於系統中成功更新個人檔案：");
+    var introEn = isNew ? ("Hello " + name + "! Thank you for registering your profile with the NTUST Mountaineering Club:") : ("Hello " + name + "! You have successfully updated your profile:");
+
+    var detailsZh = [
+      "• 姓名：" + name,
+      "• 國籍：" + nationality,
+      "• 系所 / 學號：" + dept + " (" + studentId + ")",
+      "• 聯絡電話：" + phone,
+      "• 緊急聯絡人：" + emerName + " (" + emerRel + ")",
+      "• 加入社員意願：" + offIntent
+    ];
+
+    var detailsEn = [
+      "• Name: " + name,
+      "• Nationality: " + nationality,
+      "• Dept / Student ID: " + dept + " (" + studentId + ")",
+      "• Phone Number: " + phone,
+      "• Emergency Contact: " + emerName + " (" + emerRel + ")",
+      "• Club Membership Intent: " + offIntent
+    ];
+
+    // 檢查活動出隊保險與審核必備之 13 項資料完整度
+    var activityMissing = [];
+    if (!String(m.name || "").trim()) activityMissing.push("姓名");
+    if (!String(m.gender || "").trim()) activityMissing.push("性別");
+    if (!String(m.phone || "").trim()) activityMissing.push("聯絡電話");
+    if (!String(m.birthday || "").trim()) activityMissing.push("生日");
+    if (!String(m.id_card || "").trim()) activityMissing.push("身分證/護照");
+    if (!String(m.address || "").trim()) activityMissing.push("通訊地址");
+    if (!String(m.emergency_contact_name || "").trim()) activityMissing.push("緊急聯絡人姓名");
+    if (!String(m.emergency_contact_rel || "").trim()) activityMissing.push("與緊急聯絡人關係");
+    if (!String(m.emergency_contact_address || "").trim()) activityMissing.push("緊急聯絡人地址");
+    if (!String(m.emergency_contact_phone || "").trim()) activityMissing.push("緊急聯絡人電話");
+    if (!String(m.fitness_desc || "").trim()) activityMissing.push("體能自評");
+    if (!String(m.proof_urls || "").trim()) activityMissing.push("體能證明");
+    if (!String(m.outdoor_experience || "").trim()) activityMissing.push("爬山經驗");
+    var isActivityReady = (activityMissing.length === 0);
+
+    var footerZh = "";
+    var footerEn = "";
+    if (isActivityReady) {
+      footerZh = "[提示] 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！";
+      footerEn = "[Notice] Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via \"Activities\", or reserve gear via \"Equipment Loan\" anytime!";
+    } else {
+      var missingText = activityMissing.slice(0, 4).join("、") + (activityMissing.length > 4 ? " 等 " + activityMissing.length + " 項" : "");
+      footerZh = "[提示] 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n[提醒] 出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！";
+      footerEn = "[Notice] You can reserve outdoor gear anytime via \"Equipment Loan\"!\n\n[Trip Notice] Participating in hiking events requires safety insurance. Please update your profile via \"Register\" in the menu to enable one-click signup!";
+    }
+
+    var zhBlock = introZh + "\n\n" + detailsZh.join("\n") + "\n\n" + footerZh;
+    var enBlock = introEn + "\n\n" + detailsEn.join("\n") + "\n\n" + footerEn;
+
+    var fullMsg = (prefLang === "en") ? (titleEn + "\n\n" + enBlock) : (titleZh + "\n\n" + zhBlock);
+    _replyMessage(replyToken, fullMsg);
+  } catch (err) {
+    console.error("_handleMemberProfileNoticeReply 處理失敗:", err);
+    _replyMessage(replyToken, "【個人資料填寫完成】\n您的個人資料已成功儲存！");
+  }
+}
+
 
 
 // ===== 03_Flex_Templates.js =====
@@ -2295,13 +2382,15 @@ function handleSignup(replyToken, userId, eventId, ss) {
 
     // 1. 檢查活動是否存在與是否已截止/已關閉 (優先查 Supabase events 表)
     var evName = _getEventName(ss, eventId);
-    var sbEvents = _supabaseGet("events", { id: "eq." + eventId, select: "id,title,status,deadline" });
+    var evNameEn = "";
+    var sbEvents = _supabaseGet("events", { id: "eq." + eventId, select: "id,title,title_en,status,deadline" });
     if (sbEvents && sbEvents.length > 0) {
       var ev = sbEvents[0];
       if (ev.title) evName = ev.title;
+      if (ev.title_en) evNameEn = ev.title_en;
       var isEvExpired = _isEventExpired(ev.deadline);
       if (isEvExpired || ev.status === "關閉" || ev.status === "已截止") {
-        var closedReply = "⚠️ 報名失敗：【" + evName + "】已於 " + (ev.deadline || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration is closed.";
+        var closedReply = "⚠️ 報名失敗：【" + evName + "】已於 " + (ev.deadline || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + (evNameEn || evName) + "] registration is closed.";
         _replyMessage(replyToken, _splitBilingualMessage(closedReply, prefLang));
         return;
       }
@@ -2418,7 +2507,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
         return st.indexOf("取消") === -1 && st.toLowerCase().indexOf("cancelled") === -1;
       });
       if (hasActiveSignup) {
-        var dupMsg = "⚠️ 您已經報名過【" + evName + "】囉！\n請耐心等候幹部審核，或是至個人主頁查詢進度。\n─────────────\n⚠️ You have already registered for [" + evName + "]!\nPlease wait for officer review.";
+        var dupMsg = "⚠️ 您已經報名過【" + evName + "】囉！\n請耐心等候幹部審核，或是至個人主頁查詢進度。\n─────────────\n⚠️ You have already registered for [" + (evNameEn || evName) + "]!\nPlease wait for officer review.";
         _replyMessage(replyToken, _splitBilingualMessage(dupMsg, prefLang));
         return;
       }
@@ -2460,7 +2549,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
       "社團出團會依據爬山經驗與體能進行評估，若有最新的登山紀錄或更佳體能證明，記得隨時至個人主頁更新資料，增加自己的錄取機會喔！";
 
     var successReceiptEn = "✅ Registration Submitted!\n\n" +
-      "Event: " + evName + "\n" +
+      "Event: " + (evNameEn || evName) + "\n" +
       "Event ID: " + eventId + "\n" +
       "Signup Code: " + signupCode + "\n\n" +
       "Dear " + p.name + ", we have received your application.\n\n" +
@@ -2713,13 +2802,27 @@ function _buildPaymentDeclarationFlex(params) {
 }
 
 /**
- * 建立個人個人繳費成功確認 Flex Message 卡片
+ * 建立個人繳費成功確認 Flex Message 卡片 (支援繁中/英文)
  */
 function _buildPaymentConfirmedFlex(params) {
-  var userName = params.userName || "社員";
+  var isEn = (params.lang === "en" || params.userLanguage === "en" || params.preferredLanguage === "en");
+  var userName = params.userName || (isEn ? "Member" : "社員");
   var paymentId = params.paymentId || "";
   var amount = params.amount || 0;
-  var items = params.items || "社團活動/裝備費用";
+  var items = params.items || (isEn ? "Club Event / Gear Fee" : "社團活動/裝備費用");
+
+  var titleText = isEn ? "🎉 Payment Confirmed" : "🎉 繳費成功確認通知";
+  var subtitleText = isEn ? "Officers have verified your payment!" : "幹部已確認收到款項，核銷作業已完成！";
+  var labelName = isEn ? "Name" : "姓名";
+  var labelId = isEn ? "Payment ID" : "單號";
+  var labelAmount = isEn ? "Amount" : "核銷金額";
+  var labelItems = isEn ? "Items" : "核銷項目";
+  var labelStatus = isEn ? "Status" : "狀態";
+  var statusText = isEn ? "Confirmed" : "已核銷 Confirmed";
+  var amountText = isEn ? ("$" + amount + " TWD") : ("$" + amount + " 元");
+  var footerText = isEn
+    ? "Your event registration and gear rental status have been updated. Check your Dashboard anytime!"
+    : "相關活動報名與裝備狀態已同步更新，您可隨時至個人主頁查看！";
 
   return {
     type: "bubble",
@@ -2735,14 +2838,14 @@ function _buildPaymentConfirmedFlex(params) {
       contents: [
         {
           type: "text",
-          text: "🎉 繳費成功確認通知",
+          text: titleText,
           color: "#ffffff",
           weight: "bold",
           size: "md"
         },
         {
           type: "text",
-          text: "幹部已確認收到款項，核銷作業已完成！",
+          text: subtitleText,
           color: "#d1fae5",
           size: "xxs",
           margin: "xs"
@@ -2764,7 +2867,7 @@ function _buildPaymentConfirmedFlex(params) {
               layout: "baseline",
               spacing: "sm",
               contents: [
-                { type: "text", text: "姓名", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: labelName, color: "#64748b", size: "sm", flex: 2 },
                 { type: "text", text: userName, weight: "bold", color: "#0f172a", size: "sm", flex: 5 }
               ]
             },
@@ -2773,7 +2876,116 @@ function _buildPaymentConfirmedFlex(params) {
               layout: "baseline",
               spacing: "sm",
               contents: [
-                { type: "text", text: "單號", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: labelId, color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: labelAmount, color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: amountText, weight: "bold", color: "#059669", size: "md", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: labelItems, color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: items, color: "#334155", size: "sm", flex: 5, wrap: true }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: labelStatus, color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: statusText, weight: "bold", color: "#059669", size: "sm", flex: 5 }
+              ]
+            }
+          ]
+        },
+        { type: "separator", margin: "lg", color: "#e2e8f0" },
+        {
+          type: "text",
+          text: footerText,
+          color: "#64748b",
+          size: "xs",
+          wrap: true,
+          margin: "md"
+        }
+      ]
+    }
+  };
+}
+
+/**
+ * 建立幹部群組專用「繳費單已完成核銷」Flex Message 卡片 (純繁體中文)
+ */
+function _buildOfficerPaymentConfirmedFlex(params) {
+  var userName = params.userName || "社員";
+  var paymentId = params.paymentId || "";
+  var amount = params.amount || 0;
+  var items = params.items || "社團活動/裝備費用";
+  var confirmedBy = params.confirmedBy || "單鍵快速核銷";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#065f46",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "💳 繳費單已完成核銷",
+          color: "#ffffff",
+          weight: "bold",
+          size: "md"
+        },
+        {
+          type: "text",
+          text: "款項已入帳，已同步更新資料庫狀態",
+          color: "#a7f3d0",
+          size: "xxs",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "申報人", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: userName, weight: "bold", color: "#0f172a", size: "sm", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "繳費單號", color: "#64748b", size: "sm", flex: 2 },
                 { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" }
               ]
             },
@@ -2800,20 +3012,20 @@ function _buildPaymentConfirmedFlex(params) {
               layout: "baseline",
               spacing: "sm",
               contents: [
-                { type: "text", text: "狀態", color: "#64748b", size: "sm", flex: 2 },
-                { type: "text", text: "已核銷 Confirmed", weight: "bold", color: "#059669", size: "sm", flex: 5 }
+                { type: "text", text: "核銷途徑", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: confirmedBy, color: "#475569", size: "sm", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "系統狀態", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: "已更新 Supabase 資料庫", weight: "bold", color: "#059669", size: "sm", flex: 5 }
               ]
             }
           ]
-        },
-        { type: "separator", margin: "lg", color: "#e2e8f0" },
-        {
-          type: "text",
-          text: "相關活動報名與裝備狀態已同步更新，您可隨時至個人主頁查看！",
-          color: "#64748b",
-          size: "xs",
-          wrap: true,
-          margin: "md"
         }
       ]
     }
@@ -5122,52 +5334,87 @@ function _handleNotifyPaymentConfirmed(json) {
     var paymentId = json.paymentId || "";
     var userName = json.userName || "社員";
     var userEmail = json.userEmail || "";
+    var userLanguage = json.userLanguage || json.lang || json.preferredLanguage || "";
     var amount = json.amount || 0;
     var items = json.items || json.type || "社團活動/裝備費用";
     var lineUserId = json.lineUserId || "";
     var confirmedBy = json.confirmedBy || "單鍵快速核銷";
 
-    // 0. 若未帶入 userEmail 但有 lineUserId，自 Supabase members 表唯讀查詢 Email
-    if (!userEmail && lineUserId && typeof _supabaseGet === "function") {
+    // 0. 若未帶入 userEmail 或 userLanguage 但有 lineUserId，自 Supabase members 表唯讀查詢
+    if ((!userEmail || !userLanguage) && lineUserId && typeof _supabaseGet === "function") {
       try {
-        var mRecs = _supabaseGet("members", { line_user_id: "eq." + lineUserId, select: "email" });
-        if (mRecs && mRecs.length > 0 && mRecs[0].email) {
-          userEmail = mRecs[0].email;
+        var mRecs = _supabaseGet("members", { line_user_id: "eq." + lineUserId, select: "email,preferred_language" });
+        if (mRecs && mRecs.length > 0) {
+          if (!userEmail && mRecs[0].email) userEmail = mRecs[0].email;
+          if (!userLanguage && mRecs[0].preferred_language) userLanguage = mRecs[0].preferred_language;
         }
       } catch (eEmail) {
-        console.warn("查詢社員 Email 失敗:", eEmail);
+        console.warn("查詢社員 Email/語系失敗:", eEmail);
       }
     }
 
-    // 1. 寄送「繳費成功確認通知信」至社員 Email
+    var isEn = (userLanguage === "en" || userLanguage === "en-US");
+
+    // 1. 寄送「繳費成功確認通知信」至社員 Email (依語系發送英文或中文)
     if (userEmail && (typeof MailApp !== 'undefined' || typeof GmailApp !== 'undefined')) {
       try {
-        var emailSubject = "【台科登山社】繳費成功確認通知 - " + paymentId;
-        var emailBody = "親愛的 " + userName + " 您好：\n\n" +
-          "社團幹部已確認收到您的款項並完成核銷！\n\n" +
-          "• 繳費單號：" + paymentId + "\n" +
-          "• 核銷金額：$" + amount + " 元\n" +
-          "• 核銷項目：" + items + "\n" +
-          "• 核銷狀態：已核銷 Confirmed\n\n" +
-          "相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁查看最新狀態。感謝您的配合與支持！\n\n" +
-          "台科登山社 • 自動發送系統";
+        var emailSubject = isEn
+          ? "Payment Confirmation - " + paymentId + " (NTUST Mountaineering Club)"
+          : "【台科登山社】繳費成功確認通知 - " + paymentId;
 
-        var emailHtml = '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
-          '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
-          '<h2 style="color: #065f46; margin: 0; font-size: 20px;">台科登山社 • 繳費成功確認通知</h2>' +
-          '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">親愛的 ' + userName + ' 您好，社團幹部已確認收到您的款項並完成核銷！</p>' +
-          '</div>' +
-          '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
-          '<table style="width: 100%; border-collapse: collapse;">' +
-          '<tr><td style="padding: 6px 0; color: #64748b; width: 100px;">繳費單號：</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
-          '<tr><td style="padding: 6px 0; color: #64748b;">核銷金額：</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' 元</td></tr>' +
-          '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">核銷項目：</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
-          '<tr><td style="padding: 6px 0; color: #64748b;">核銷狀態：</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">已核銷 Confirmed</td></tr>' +
-          '</table>' +
-          '</div>' +
-          '<p style="color: #64748b; font-size: 13px; margin: 0;">相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁 (Dashboard) 查看最新狀態。感謝您的配合與支持！</p>' +
-          '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">台科登山社 • 自動發送系統</p>' +
-          '</div>';
+        var emailBody = isEn
+          ? "Dear " + userName + ",\n\n" +
+            "Your payment has been successfully verified and confirmed by the club officers!\n\n" +
+            "• Payment ID: " + paymentId + "\n" +
+            "• Amount: $" + amount + " TWD\n" +
+            "• Items: " + items + "\n" +
+            "• Status: Confirmed\n\n" +
+            "Your event registration and gear rental status have been updated. You can check your status anytime on your LINE Dashboard. Thank you for your support!\n\n" +
+            "NTUST Mountaineering Club • Automated Notification System"
+          : "親愛的 " + userName + " 您好：\n\n" +
+            "社團幹部已確認收到您的款項並完成核銷！\n\n" +
+            "• 繳費單號：" + paymentId + "\n" +
+            "• 核銷金額：$" + amount + " 元\n" +
+            "• 核銷項目：" + items + "\n" +
+            "• 核銷狀態：已核銷 Confirmed\n\n" +
+            "相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁查看最新狀態。感謝您的配合與支持！\n\n" +
+            "台科登山社 • 自動發送系統";
+
+        var emailHtml = isEn
+          ? '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
+            '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
+            '<h2 style="color: #065f46; margin: 0; font-size: 20px;">NTUST Mountaineering Club • Payment Confirmation</h2>' +
+            '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Dear ' + userName + ', your payment has been verified by the club officers!</p>' +
+            '</div>' +
+            '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
+            '<table style="width: 100%; border-collapse: collapse;">' +
+            '<tr><td style="padding: 6px 0; color: #64748b; width: 120px;">Payment ID:</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b;">Amount:</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' TWD</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">Items:</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b;">Status:</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">Confirmed</td></tr>' +
+            '</table>' +
+            '</div>' +
+            '<p style="color: #64748b; font-size: 13px; margin: 0;">Your event registration and gear rental status have been updated. You can check your status anytime on your LINE Dashboard. Thank you for your support!</p>' +
+            '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">NTUST Mountaineering Club • Automated Notification System</p>' +
+            '</div>'
+          : '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
+            '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
+            '<h2 style="color: #065f46; margin: 0; font-size: 20px;">台科登山社 • 繳費成功確認通知</h2>' +
+            '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">親愛的 ' + userName + ' 您好，社團幹部已確認收到您的款項並完成核銷！</p>' +
+            '</div>' +
+            '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
+            '<table style="width: 100%; border-collapse: collapse;">' +
+            '<tr><td style="padding: 6px 0; color: #64748b; width: 100px;">繳費單號：</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b;">核銷金額：</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' 元</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">核銷項目：</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
+            '<tr><td style="padding: 6px 0; color: #64748b;">核銷狀態：</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">已核銷 Confirmed</td></tr>' +
+            '</table>' +
+            '</div>' +
+            '<p style="color: #64748b; font-size: 13px; margin: 0;">相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁 (Dashboard) 查看最新狀態。感謝您的配合與支持！</p>' +
+            '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">台科登山社 • 自動發送系統</p>' +
+            '</div>';
+
+        var senderName = isEn ? "NTUST Mountaineering Club" : "台科登山社小岳助理";
 
         if (typeof MailApp !== 'undefined' && MailApp.sendEmail) {
           MailApp.sendEmail({
@@ -5175,58 +5422,68 @@ function _handleNotifyPaymentConfirmed(json) {
             subject: emailSubject,
             body: emailBody,
             htmlBody: emailHtml,
-            name: "台科登山社小岳助理"
+            name: senderName
           });
-          console.log("成功發送繳費確認信至社員 Email: " + userEmail);
+          console.log("成功發送繳費確認信至社員 Email: " + userEmail + " (語系: " + (isEn ? "en" : "zh") + ")");
         } else if (typeof GmailApp !== 'undefined' && GmailApp.sendEmail) {
           GmailApp.sendEmail(userEmail, emailSubject, emailBody, {
-            name: "台科登山社小岳助理",
+            name: senderName,
             htmlBody: emailHtml
           });
-          console.log("GmailApp 成功發送繳費確認信至社員 Email: " + userEmail);
+          console.log("GmailApp 成功發送繳費確認信至社員 Email: " + userEmail + " (語系: " + (isEn ? "en" : "zh") + ")");
         }
       } catch (errEmail) {
         console.warn("發送社員繳費確認通知信例外:", errEmail);
       }
     }
 
-    // 2. 推播給社員個人 LINE (支援 Flex 卡片)
+    // 2. 推播給社員個人 LINE (支援 Flex 卡片，依語系發送英文或中文)
     if (lineUserId && lineUserId.indexOf("U") === 0) {
       if (typeof _buildPaymentConfirmedFlex === 'function' && typeof _replyFlexMessage === 'function') {
         var userConfirmedFlex = _buildPaymentConfirmedFlex({
           userName: userName,
           paymentId: paymentId,
           amount: amount,
-          items: items
+          items: items,
+          lang: isEn ? "en" : "zh"
         });
         _lineAPI('push', MEMBER_BOT_TOKEN, {
           to: lineUserId,
           messages: [{
             type: 'flex',
-            altText: "🎉 繳費成功確認通知 (" + paymentId + ")",
+            altText: isEn ? ("🎉 Payment Confirmed (" + paymentId + ")") : ("🎉 繳費成功確認通知 (" + paymentId + ")"),
             contents: userConfirmedFlex
           }]
         });
       } else {
-        var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
-          "親愛的 " + userName + " 您好：\n" +
-          "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
-          "• 繳費單號：" + paymentId + "\n" +
-          "• 核銷金額：$" + amount + " 元\n" +
-          "• 核銷項目：" + items + "\n\n" +
-          "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
-          "─────────────\n" +
-          "Dear " + userName + ",\n" +
-          "Your payment has been successfully confirmed by the officers!\n\n" +
-          "• Payment ID: " + paymentId + "\n" +
-          "• Amount: $" + amount + " TWD\n" +
-          "• Items: " + items + "\n\n" +
-          "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
+        var successMsg = isEn
+          ? "🎉 Payment Confirmed\n\n" +
+            "Dear " + userName + ",\n" +
+            "Officers have confirmed your payment!\n\n" +
+            "• Payment ID: " + paymentId + "\n" +
+            "• Amount: $" + amount + " TWD\n" +
+            "• Items: " + items + "\n" +
+            "• Status: Confirmed\n\n" +
+            "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!"
+          : "🎉 繳費成功通知 / Payment Confirmed\n\n" +
+            "親愛的 " + userName + " 您好：\n" +
+            "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
+            "• 繳費單號：" + paymentId + "\n" +
+            "• 核銷金額：$" + amount + " 元\n" +
+            "• 核銷項目：" + items + "\n\n" +
+            "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
+            "─────────────\n" +
+            "Dear " + userName + ",\n" +
+            "Your payment has been successfully confirmed by the officers!\n\n" +
+            "• Payment ID: " + paymentId + "\n" +
+            "• Amount: $" + amount + " TWD\n" +
+            "• Items: " + items + "\n\n" +
+            "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
         _pushMessage(lineUserId, successMsg);
       }
     }
 
-    // 3. 推播給幹部管理群組
+    // 3. 推播給幹部管理群組 (使用專屬 Flex 卡片，維持繁體中文)
     var adminMsg = "【💳 幹部通知：繳費單已完成核銷】\n" +
       "─────────────\n" +
       "• 繳費單號：" + paymentId + "\n" +
@@ -5236,7 +5493,26 @@ function _handleNotifyPaymentConfirmed(json) {
       "• 核銷途徑：" + confirmedBy + "\n" +
       "• 系統狀態：已成功更新 Supabase 資料庫";
     var adminSubject = "【台科登山社】繳費單已完成核銷 - " + paymentId + " (" + userName + ")";
-    pushAdminMessage(adminMsg, adminSubject);
+
+    var officerConfirmedFlex = null;
+    if (typeof _buildOfficerPaymentConfirmedFlex === 'function') {
+      officerConfirmedFlex = _buildOfficerPaymentConfirmedFlex({
+        paymentId: paymentId,
+        userName: userName,
+        amount: amount,
+        items: items,
+        confirmedBy: confirmedBy
+      });
+    }
+
+    if (officerConfirmedFlex) {
+      pushAdminMessage(adminMsg, adminSubject, {
+        flexContents: officerConfirmedFlex,
+        altText: "💳 繳費單已完成核銷 (" + paymentId + ")"
+      });
+    } else {
+      pushAdminMessage(adminMsg, adminSubject);
+    }
 
     return _successResponse({ message: "核銷通知推播與確認信已成功送出" });
   } catch (err) {
@@ -8020,89 +8296,3 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
   }
 }
 
-/**
- * 處理個人資料填寫/更新之 Webhook 回覆 (使用 replyToken 免費發送，0 額度消耗)
- */
-function _handleMemberProfileNoticeReply(replyToken, userId, text) {
-  try {
-    if (!replyToken || !userId) return;
-    var isNew = (text.indexOf("完成") > -1 || text.indexOf("completed") > -1);
-    var sbMembers = _supabaseGet("members", { line_user_id: "eq." + userId });
-    var m = (sbMembers && sbMembers.length > 0) ? sbMembers[0] : null;
-    if (!m) {
-      _replyMessage(replyToken, "【個人資料填寫完成】\n感謝您的填寫！系統已收到您的個人資料。");
-      return;
-    }
-
-    var name = m.name || "社員";
-    var dept = m.department || "未填寫";
-    var studentId = m.student_id ? _maskString(m.student_id, 2, 2) : "未填寫";
-    var phone = m.phone ? _maskString(m.phone, 4, 3) : "未填寫";
-    var nationality = m.nationality || "未填寫";
-    var emerName = m.emergency_contact_name || "未填寫";
-    var emerRel = m.emergency_contact_rel || "未填寫";
-    var offIntent = m.join_membership_intent || "未填寫";
-    var prefLang = (m.preferred_language || "zh").toLowerCase();
-
-    var titleZh = isNew ? "【歡迎加入！基本資料註冊成功】" : "【基本資料已成功更新】";
-    var titleEn = isNew ? "【Welcome! Registration Success】" : "【Profile Updated Successfully】";
-
-    var introZh = isNew ? ("您好 " + name + "！感謝您完成台科登山社社團系統個人資料註冊：") : ("您好 " + name + "！您已於系統中成功更新個人檔案：");
-    var introEn = isNew ? ("Hello " + name + "! Thank you for registering your profile with the NTUST Mountaineering Club:") : ("Hello " + name + "! You have successfully updated your profile:");
-
-    var detailsZh = [
-      "• 姓名：" + name,
-      "• 國籍：" + nationality,
-      "• 系所 / 學號：" + dept + " (" + studentId + ")",
-      "• 聯絡電話：" + phone,
-      "• 緊急聯絡人：" + emerName + " (" + emerRel + ")",
-      "• 加入社員意願：" + offIntent
-    ];
-
-    var detailsEn = [
-      "• Name: " + name,
-      "• Nationality: " + nationality,
-      "• Dept / Student ID: " + dept + " (" + studentId + ")",
-      "• Phone Number: " + phone,
-      "• Emergency Contact: " + emerName + " (" + emerRel + ")",
-      "• Club Membership Intent: " + offIntent
-    ];
-
-    // 檢查活動出隊保險與審核必備之 13 項資料完整度
-    var activityMissing = [];
-    if (!String(m.name || "").trim()) activityMissing.push("姓名");
-    if (!String(m.gender || "").trim()) activityMissing.push("性別");
-    if (!String(m.phone || "").trim()) activityMissing.push("聯絡電話");
-    if (!String(m.birthday || "").trim()) activityMissing.push("生日");
-    if (!String(m.id_card || "").trim()) activityMissing.push("身分證/護照");
-    if (!String(m.address || "").trim()) activityMissing.push("通訊地址");
-    if (!String(m.emergency_contact_name || "").trim()) activityMissing.push("緊急聯絡人姓名");
-    if (!String(m.emergency_contact_rel || "").trim()) activityMissing.push("與緊急聯絡人關係");
-    if (!String(m.emergency_contact_address || "").trim()) activityMissing.push("緊急聯絡人地址");
-    if (!String(m.emergency_contact_phone || "").trim()) activityMissing.push("緊急聯絡人電話");
-    if (!String(m.fitness_desc || "").trim()) activityMissing.push("體能自評");
-    if (!String(m.proof_urls || "").trim()) activityMissing.push("體能證明");
-    if (!String(m.outdoor_experience || "").trim()) activityMissing.push("爬山經驗");
-    var isActivityReady = (activityMissing.length === 0);
-
-    var footerZh = "";
-    var footerEn = "";
-    if (isActivityReady) {
-      footerZh = "[提示] 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！";
-      footerEn = "[Notice] Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via \"Activities\", or reserve gear via \"Equipment Loan\" anytime!";
-    } else {
-      var missingText = activityMissing.slice(0, 4).join("、") + (activityMissing.length > 4 ? " 等 " + activityMissing.length + " 項" : "");
-      footerZh = "[提示] 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n[提醒] 出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（" + missingText + "），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！";
-      footerEn = "[Notice] You can reserve outdoor gear anytime via \"Equipment Loan\"!\n\n[Trip Notice] Participating in hiking events requires safety insurance. Please update your profile via \"Register\" in the menu to enable one-click signup!";
-    }
-
-    var zhBlock = introZh + "\n\n" + detailsZh.join("\n") + "\n\n" + footerZh;
-    var enBlock = introEn + "\n\n" + detailsEn.join("\n") + "\n\n" + footerEn;
-
-    var fullMsg = (prefLang === "en") ? (titleEn + "\n\n" + enBlock) : (titleZh + "\n\n" + zhBlock);
-    _replyMessage(replyToken, fullMsg);
-  } catch (err) {
-    console.error("_handleMemberProfileNoticeReply 處理失敗:", err);
-    _replyMessage(replyToken, "【個人資料填寫完成】\n您的個人資料已成功儲存！");
-  }
-}

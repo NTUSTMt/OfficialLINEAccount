@@ -242,6 +242,20 @@ describe('Preferred Language Personalized Messaging Tests', () => {
       'sendEventDetail must provide bilingual itinerary tag when prefLang is null and English info exists'
     );
   });
+
+  it('should verify handleSignup queries title_en and displays English event name in English registration receipt', () => {
+    // 檢查 handleSignup 查詢 Supabase events 表時包含 title_en
+    assert.ok(
+      gasContent.includes('select: "id,title,title_en,status,deadline"') || gasContent.includes('"id,title,title_en,status,deadline"'),
+      'handleSignup must query title_en from events table'
+    );
+    // 檢查 successReceiptEn 中 Event 欄位使用 evNameEn || evName
+    assert.ok(
+      gasContent.includes('"Event: " + (evNameEn || evName)'),
+      'handleSignup successReceiptEn must use English event name evNameEn with fallback to evName'
+    );
+  });
 });
+
 
 

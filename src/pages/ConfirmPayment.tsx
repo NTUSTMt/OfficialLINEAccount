@@ -68,6 +68,7 @@ export default function ConfirmPayment() {
                 paymentId: res.paymentId,
                 userName: res.userName,
                 userEmail: res.userEmail,
+                userLanguage: res.userLanguage,
                 amount: res.amount,
                 items: res.items,
                 lineUserId: res.lineUserId,

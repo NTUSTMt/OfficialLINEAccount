@@ -231,8 +231,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
       "📖 Member Guide (Quick Summary):\n" +
       "• Navigation: Use the Rich Menu at the bottom or the top-right Avatar dropdown on any web page.\n" +
       "• 6 Key Features: Events, Gear Loan (50% member discount), Dashboard, Payment, Footprints/Reflections, and AI Assistant.\n" +
-      "• Required: Complete your Profile (6 mandatory fields) before booking gear or joining hikes!\n\n" +
-      "💡 更多詳細圖文指南與流程說明，可參閱社團專屬手冊 MEMBER_GUIDE.md！";
+      "• Required: Complete your Profile (6 mandatory fields) before booking gear or joining hikes!";
     _replyMessage(replyToken, memberGuideMsg);
     return;
   }
@@ -243,8 +242,8 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     text === "我已更新個人資料" ||
     text.indexOf("我已完成個人資料填寫") > -1 ||
     text.indexOf("我已更新個人資料") > -1 ||
-    lowerText === "i have completed my registration" ||
-    lowerText === "i have updated my profile"
+    lowerText === "I have completed my registration" ||
+    lowerText === "I have updated my profile"
   ) {
     _handleMemberProfileNoticeReply(replyToken, userId, text);
     return;
@@ -494,59 +493,17 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
       }
     }
 
-    // 3. 自動主動推播【🎉 繳費成功通知】至該社員個人 LINE
-    var targetUserId = payment.line_user_id;
     var targetUserName = payment.name || "社員";
     var totalAmount = payment.amount || payment.total_amount || 0;
-    var selectedItems = payment.type || (payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團活動/裝備費用"));
 
-    if (targetUserId && targetUserId.indexOf("U") === 0) {
-      var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
-        "親愛的 " + targetUserName + " 您好：\n" +
-        "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
-        "• 繳費單號：" + paymentId + "\n" +
-        "• 核銷金額：$" + totalAmount + " 元\n" +
-        "• 核銷項目：" + selectedItems + "\n\n" +
-        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
-        "─────────────\n" +
-        "Dear " + targetUserName + ",\n" +
-        "Your payment has been successfully confirmed by the officers!\n\n" +
-        "• Payment ID: " + paymentId + "\n" +
-        "• Amount: $" + totalAmount + " TWD\n" +
-        "• Items: " + selectedItems + "\n\n" +
-        "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
-
-      _pushMessage(targetUserId, successMsg);
-    }
-
-    // 4. 若有 LINE replyToken，回覆幹部成功
+    // 3. 若有 LINE replyToken，回覆幹部成功
     if (sendOfficerReply && replyToken) {
       var replyText = "✅ 繳費單【" + paymentId + "】已成功核銷！\n" +
         "─────────────\n" +
         "• 繳費社員：" + targetUserName + "\n" +
         "• 金額：$" + totalAmount + " 元\n" +
-        "• 核銷狀態：已核銷 Confirmed\n" +
-        "• 系統已自動發送【繳費成功通知】至該社員個人 LINE！";
+        "• 核銷狀態：已核銷 Confirmed";
       _replyMessage(replyToken, replyText);
-    }
-
-    // 5. 發送推播訊息至幹部管理群組 (確保所有幹部即時掌握核銷動態)
-    var adminGroupId = (typeof PropertiesService !== "undefined" && PropertiesService.getScriptProperties)
-      ? (PropertiesService.getScriptProperties().getProperty('ADMIN_GROUP_ID') || (typeof ADMIN_GROUP_ID !== 'undefined' ? ADMIN_GROUP_ID : ""))
-      : (typeof ADMIN_GROUP_ID !== 'undefined' ? ADMIN_GROUP_ID : "");
-
-    if (adminGroupId) {
-      var groupNotifyMsg = "✅ 繳費單已完成核銷通知\n" +
-        "─────────────\n" +
-        "• 核銷人員：" + (officerName || "幹部團隊") + "\n" +
-        "• 繳費單號：" + paymentId + "\n" +
-        "• 繳費社員：" + targetUserName + "\n" +
-        "• 核銷金額：$" + totalAmount + " 元\n" +
-        "• 申報項目：" + selectedItems + "\n" +
-        "• 核銷狀態：已核銷 Confirmed\n" +
-        "• 系統已自動通知社員個人 LINE，並已同步更新資料庫各項狀態！";
-
-      _pushMessage(adminGroupId, groupNotifyMsg);
     }
 
     return { success: true, message: "已成功核銷繳費單 " + paymentId, payment: payment };
@@ -857,5 +814,3 @@ function _handleMemberProfileNoticeReply(replyToken, userId, text) {
     _replyMessage(replyToken, "【個人資料填寫完成】\n您的個人資料已成功儲存！");
   }
 }
-
-

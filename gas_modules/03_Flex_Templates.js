@@ -53,6 +53,57 @@ function _isEventExpired(deadlineVal) {
 }
 
 /**
+ * 輔助函式：解析活動日期字串或 Date 物件
+ * @param {string|Date} dateVal - 日期字串或 Date 物件
+ * @param {boolean} endOfDay - 若為 true，設定為當日 23:59:59.999
+ * @returns {Date|null}
+ */
+function _parseEventDate(dateVal, endOfDay) {
+  if (!dateVal) return null;
+  try {
+    if (dateVal instanceof Date) {
+      var d = new Date(dateVal.getTime());
+      if (endOfDay) d.setHours(23, 59, 59, 999);
+      return d;
+    }
+    var str = String(dateVal).trim();
+    if (!str) return null;
+
+    // 容錯歷史舊資料 23:59:59Z (原意為台北時間 23:59:59)
+    if (str.indexOf("23:59:59Z") > -1) {
+      var datePartOld = str.split("T")[0];
+      var pOld = datePartOld.split("-");
+      if (pOld.length >= 3) {
+        return new Date(parseInt(pOld[0], 10), parseInt(pOld[1], 10) - 1, parseInt(pOld[2], 10), 23, 59, 59, 999);
+      }
+    }
+
+    var cleanStr = str.replace(/[\/\.]/g, "-");
+    var datePart = cleanStr.split("T")[0].split(" ")[0];
+    var parts = datePart.split("-");
+    if (parts.length >= 3) {
+      var year = parseInt(parts[0], 10);
+      var month = parseInt(parts[1], 10) - 1;
+      var day = parseInt(parts[2], 10);
+      if (endOfDay) {
+        return new Date(year, month, day, 23, 59, 59, 999);
+      } else {
+        return new Date(year, month, day, 0, 0, 0, 0);
+      }
+    }
+
+    var isoDate = new Date(str);
+    if (!isNaN(isoDate.getTime())) {
+      if (endOfDay) isoDate.setHours(23, 59, 59, 999);
+      return isoDate;
+    }
+  } catch (e) {
+    console.error("解析活動日期失敗:", dateVal, e);
+  }
+  return null;
+}
+
+/**
  * 輔助函式：日期字串格式化 (依台灣時區轉換為 YYYY/MM/DD)
  */
 function _formatEventDate(dateVal) {
@@ -85,13 +136,16 @@ function _formatEventDate(dateVal) {
  * 產生最新活動卡片輪播 (100% 直連 Supabase events 表，絕不讀取主試算表)
  */
 function sendEventList(replyToken, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
   var sbEvents = _supabaseGet("events", {
-    select: "id,title,fee,start_date,end_date,deadline,status,summary,cover_image_url",
+    select: "id,title,title_en,fee,start_date,end_date,deadline,status,summary,summary_en,cover_image_url",
     order: "start_date.desc"
   });
 
   if (!sbEvents || !Array.isArray(sbEvents) || sbEvents.length === 0) {
-    _replyMessage(replyToken, "目前這學期還沒有排定的活動喔！\n─────────────\nThere are no scheduled activities for this semester yet!");
+    var emptyMsgZh = "目前這學期還沒有排定的活動喔！";
+    var emptyMsgEn = "There are no scheduled activities for this semester yet!";
+    _replyMessage(replyToken, _formatBilingualMessage(emptyMsgZh, emptyMsgEn, prefLang));
     return;
   }
 
@@ -122,165 +176,208 @@ function sendEventList(replyToken, userId) {
   }
 
   var bubbles = [];
+  var now = new Date();
 
   for (var i = 0; i < sbEvents.length; i++) {
     var ev = sbEvents[i];
-    var status = String(ev.status || "").trim();
+    var rawStatus = String(ev.status || "").trim().toLowerCase();
+
+    // 1. 關閉或草稿的活動不需要顯示出來 (排除「關閉」、「closed」、「draft」、「草稿」)
+    var isClosed = rawStatus.indexOf("關閉") > -1 || rawStatus.indexOf("closed") > -1 || rawStatus.indexOf("draft") > -1 || rawStatus.indexOf("草稿") > -1;
+    if (isClosed) {
+      continue;
+    }
+
+    // 2. 活動結束2週以上 (超過 14 天) 的活動不需要出現 (以 end_date || start_date 判定)
+    var targetEndDate = _parseEventDate(ev.end_date || ev.start_date, true);
+    if (targetEndDate && (now.getTime() - targetEndDate.getTime()) > 14 * 24 * 60 * 60 * 1000) {
+      continue;
+    }
+
     var deadlineStr = ev.deadline || "";
     var isExpired = _isEventExpired(deadlineStr);
 
-    // 判斷是否為未來開放或已過期
-    var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
-    if (isExpired) {
-      status = "關閉";
+    // 3. 判斷是否為未來開放或開放
+    var isFuture = rawStatus.indexOf("未來") > -1 || rawStatus.indexOf("coming") > -1 || rawStatus.indexOf("future") > -1;
+    var isOpen = !isFuture && !isExpired && (rawStatus.indexOf("開放") > -1 || rawStatus.indexOf("open") > -1);
+
+    var eventId = ev.id || "";
+    var eventNameZh = ev.title || "未命名活動";
+    var eventNameEn = ev.title_en || ev.name_en || eventNameZh;
+    var hasEnglish = Boolean(ev.title_en || ev.summary_en || ev.name_en);
+    var eventName = (prefLang === "en") ? eventNameEn : (prefLang === "zh" ? eventNameZh : (hasEnglish ? (eventNameZh + " " + eventNameEn) : eventNameZh));
+
+    var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
+    var displayStatusZh = isFuture ? "未來開放" : (isOpen ? "開放" : "報名截止");
+    var displayStatusEn = isFuture ? "Coming Soon" : (isOpen ? "Open" : "Reg. Closed");
+    var displayStatus = (prefLang === "en") ? displayStatusEn : (prefLang === "zh" ? displayStatusZh : (displayStatusZh + " " + displayStatusEn));
+
+    var regCount = signupCounts[eventId] || 0;
+    var regCountStrZh = "已報名：" + regCount + " 人";
+    var regCountStrEn = "Registered: " + regCount;
+    var regCountDisplay = (prefLang === "en")
+      ? regCountStrEn
+      : (prefLang === "zh"
+          ? regCountStrZh
+          : (regCountStrZh + " / " + regCountStrEn));
+
+    var costStrZh = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費";
+    var costStrEn = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "Free";
+    var costStr = (prefLang === "en") ? costStrEn : (prefLang === "zh" ? costStrZh : ((ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free"));
+
+    var costLabel = (prefLang === "en") ? "Cost: " : (prefLang === "zh" ? "費用: " : "費用 Cost: ");
+    var dateLabel = (prefLang === "en") ? "Event Date:" : (prefLang === "zh" ? "活動時間:" : "活動時間 Event Date:");
+    var deadlineLabel = (prefLang === "en") ? "Sign Up Deadline:" : (prefLang === "zh" ? "報名截止:" : "報名截止 Sign Up Deadline:");
+    var viewBtnLabel = (prefLang === "en") ? "View Details" : (prefLang === "zh" ? "查看詳情" : "查看詳情 View");
+    var viewDisplayText = (prefLang === "en")
+      ? ("I want to view details for " + eventNameEn)
+      : (prefLang === "zh"
+          ? ("我想查看 " + eventNameZh + " 的資訊")
+          : ("我想查看 " + (hasEnglish ? (eventNameZh + " / " + eventNameEn) : eventNameZh) + " 的資訊 / I want to view details"));
+
+    var summaryText = (prefLang === "en")
+      ? (ev.summary_en || ev.short_desc_en || ev.summary || "")
+      : (prefLang === "zh"
+          ? (ev.summary || "")
+          : (hasEnglish ? _formatBilingualMessage(ev.summary, ev.summary_en, null) : (ev.summary || "")));
+
+    var startFormatted = _formatEventDate(ev.start_date);
+    var endFormatted = _formatEventDate(ev.end_date);
+    var deadlineFormatted = _formatEventDate(ev.deadline);
+
+    var dateDisplay = startFormatted;
+    if (endFormatted && endFormatted !== startFormatted) {
+      dateDisplay += " ~ " + endFormatted;
     }
 
-    // 僅顯示「開放」或「未來開放」之活動
-    if (isFuture || status === "開放" || status.indexOf("開放") > -1 || status.toLowerCase().indexOf("open") > -1 || isExpired) {
-      var eventId = ev.id || "";
-      var eventName = ev.title || "未命名活動";
-      var isOpen = !isFuture && !isExpired && (status === "開放" || status.indexOf("開放") > -1);
-      var tagColor = isFuture ? "#FF9800" : (isOpen ? "#1DB446" : "#999999");
-      var displayStatus = isFuture ? "未來開放 Coming Soon" : (isOpen ? "開放 Open" : "已截止 Closed");
-      var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
-      var startFormatted = _formatEventDate(ev.start_date);
-      var endFormatted = _formatEventDate(ev.end_date);
-      var deadlineFormatted = _formatEventDate(ev.deadline);
-
-      var regCount = signupCounts[eventId] || 0;
-      var regCountDisplay = "已報名：" + regCount + " 人 / Registered: " + regCount;
-
-      var dateDisplay = startFormatted;
-      if (endFormatted && endFormatted !== startFormatted) {
-        dateDisplay += " ~ " + endFormatted;
-      }
-
-      var bubble = {
-        "type": "bubble",
-        "body": {
+    var bubble = {
+      "type": "bubble",
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [{
           "type": "box",
-          "layout": "vertical",
+          "layout": "horizontal",
+          "justifyContent": "space-between",
+          "alignItems": "center",
           "contents": [{
+            "type": "text",
+            "text": displayStatus,
+            "weight": "bold",
+            "color": tagColor,
+            "size": "sm",
+            "flex": 0
+          }, {
             "type": "box",
             "layout": "horizontal",
-            "justifyContent": "space-between",
-            "alignItems": "center",
+            "backgroundColor": "#f0f9ff",
+            "cornerRadius": "md",
+            "paddingStart": "sm",
+            "paddingEnd": "sm",
+            "paddingTop": "xs",
+            "paddingBottom": "xs",
+            "flex": 0,
             "contents": [{
               "type": "text",
-              "text": displayStatus,
+              "text": regCountDisplay,
+              "size": "xs",
+              "color": "#0284c7",
               "weight": "bold",
-              "color": tagColor,
-              "size": "sm",
               "flex": 0
-            }, {
-              "type": "box",
-              "layout": "horizontal",
-              "backgroundColor": "#f0f9ff",
-              "cornerRadius": "md",
-              "paddingStart": "sm",
-              "paddingEnd": "sm",
-              "paddingTop": "xs",
-              "paddingBottom": "xs",
-              "flex": 0,
-              "contents": [{
-                "type": "text",
-                "text": regCountDisplay,
-                "size": "xs",
-                "color": "#0284c7",
-                "weight": "bold",
-                "flex": 0
-              }]
             }]
-          }, {
-            "type": "text",
-            "text": eventName,
-            "weight": "bold",
-            "size": "xl",
-            "margin": "sm",
-            "wrap": true
-          }, {
-            "type": "box",
-            "layout": "vertical",
-            "margin": "md",
-            "spacing": "xs",
-            "contents": [{
-              "type": "text",
-              "text": "費用 Cost: " + costStr,
-              "size": "sm",
-              "color": "#666666",
-              "weight": "bold"
-            }, {
-              "type": "text",
-              "text": "活動時間 Event Date:",
-              "size": "sm",
-              "color": "#666666",
-              "margin": "sm"
-            }, {
-              "type": "text",
-              "text": dateDisplay,
-              "size": "sm",
-              "color": "#1DB446",
-              "weight": "bold"
-            }, {
-              "type": "text",
-              "text": "報名截止 Sign Up Deadline:",
-              "size": "sm",
-              "color": "#666666",
-              "margin": "sm"
-            }, {
-              "type": "text",
-              "text": deadlineFormatted,
-              "size": "sm",
-              "color": "#E53935",
-              "weight": "bold"
-            }]
-          }, {
-            "type": "separator",
-            "margin": "md"
-          }, {
-            "type": "text",
-            "text": ev.summary || "",
-            "size": "sm",
-            "color": "#999999",
-            "margin": "md",
-            "wrap": true,
-            "maxLines": 3
           }]
-        },
-        "footer": {
+        }, {
+          "type": "text",
+          "text": eventName,
+          "weight": "bold",
+          "size": "xl",
+          "margin": "sm",
+          "wrap": true
+        }, {
           "type": "box",
           "layout": "vertical",
+          "margin": "md",
+          "spacing": "xs",
           "contents": [{
-            "type": "button",
-            "style": "secondary",
-            "action": {
-              "type": "postback",
-              "label": "查看詳情 View",
-              "data": "action=view&eventId=" + eventId,
-              "displayText": "我想查看 " + eventName + " 的資訊 / I want to view details"
-            }
+            "type": "text",
+            "text": costLabel + costStr,
+            "size": "sm",
+            "color": "#666666",
+            "weight": "bold"
+          }, {
+            "type": "text",
+            "text": dateLabel,
+            "size": "sm",
+            "color": "#666666",
+            "margin": "sm"
+          }, {
+            "type": "text",
+            "text": dateDisplay,
+            "size": "sm",
+            "color": "#1DB446",
+            "weight": "bold"
+          }, {
+            "type": "text",
+            "text": deadlineLabel,
+            "size": "sm",
+            "color": "#666666",
+            "margin": "sm"
+          }, {
+            "type": "text",
+            "text": deadlineFormatted,
+            "size": "sm",
+            "color": "#E53935",
+            "weight": "bold"
           }]
-        }
-      };
-
-      var imageUrl = String(ev.cover_image_url || "").trim();
-      if (imageUrl && imageUrl.startsWith("http") && !imageUrl.includes("drive.google.com")) {
-        bubble.hero = {
-          "type": "image",
-          "url": imageUrl,
-          "size": "full",
-          "aspectRatio": "20:13",
-          "aspectMode": "cover"
-        };
+        }, {
+          "type": "separator",
+          "margin": "md"
+        }, {
+          "type": "text",
+          "text": summaryText,
+          "size": "sm",
+          "color": "#999999",
+          "margin": "md",
+          "wrap": true,
+          "maxLines": 3
+        }]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [{
+          "type": "button",
+          "style": "secondary",
+          "action": {
+            "type": "postback",
+            "label": viewBtnLabel,
+            "data": "action=view&eventId=" + eventId,
+            "displayText": viewDisplayText
+          }
+        }]
       }
-      bubbles.push(bubble);
+    };
+
+    var imageUrl = String(ev.cover_image_url || "").trim();
+    if (imageUrl && imageUrl.startsWith("http") && !imageUrl.includes("drive.google.com")) {
+      bubble.hero = {
+        "type": "image",
+        "url": imageUrl,
+        "size": "full",
+        "aspectRatio": "20:13",
+        "aspectMode": "cover"
+      };
     }
+    bubbles.push(bubble);
   }
 
   if (bubbles.length === 0) {
-    _replyMessage(replyToken, "目前這學期還沒有排定的活動喔！\n─────────────\nThere are no scheduled activities for this semester yet!");
+    var noEventsZh = "目前這學期還沒有排定的活動喔！";
+    var noEventsEn = "There are no scheduled activities for this semester yet!";
+    _replyMessage(replyToken, _formatBilingualMessage(noEventsZh, noEventsEn, prefLang));
   } else {
-    _replyFlexMessage(replyToken, "請查看本學期活動列表 / Event List", {
+    var flexTitle = (prefLang === "en") ? "Event List" : (prefLang === "zh" ? "請查看本學期活動列表" : "請查看本學期活動列表 / Event List");
+    _replyFlexMessage(replyToken, flexTitle, {
       "type": "carousel",
       "contents": bubbles
     });
@@ -290,28 +387,60 @@ function sendEventList(replyToken, userId) {
 /**
  * 產生單一活動詳細資訊卡片 (100% 直連 Supabase events 表，絕不讀取主試算表)
  */
-function sendEventDetail(replyToken, eventId) {
+function sendEventDetail(replyToken, eventId, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
   if (!eventId) {
-    _replyMessage(replyToken, "找不到該活動的詳細資訊！\n─────────────\nEvent details not found!");
+    var notFoundZh = "找不到該活動的詳細資訊！";
+    var notFoundEn = "Event details not found!";
+    _replyMessage(replyToken, _formatBilingualMessage(notFoundZh, notFoundEn, prefLang));
     return;
   }
 
   var sbList = _supabaseGet("events", { id: "eq." + String(eventId).trim() });
   if (!sbList || !Array.isArray(sbList) || sbList.length === 0) {
-    _replyMessage(replyToken, "找不到該活動的詳細資訊！\n─────────────\nEvent details not found!");
+    var notFoundZh2 = "找不到該活動的詳細資訊！";
+    var notFoundEn2 = "Event details not found!";
+    _replyMessage(replyToken, _formatBilingualMessage(notFoundZh2, notFoundEn2, prefLang));
     return;
   }
 
   var ev = sbList[0];
-  var eventName = ev.title || "未命名活動 (Untitled Event)";
-  var status = String(ev.status || "").trim();
+  var eventNameZh = ev.title || "未命名活動";
+  var eventNameEn = ev.title_en || ev.name_en || eventNameZh;
+  var hasEnglish = Boolean(ev.title_en || ev.summary_en || ev.itinerary_en || ev.name_en);
+
+  var eventName = (prefLang === "en")
+    ? eventNameEn
+    : (prefLang === "zh"
+        ? eventNameZh
+        : (hasEnglish ? (eventNameZh + "\n" + eventNameEn) : (ev.title || "未命名活動 (Untitled Event)")));
+
+  var rawStatus = String(ev.status || "").trim().toLowerCase();
   var deadlineStr = ev.deadline || "";
   var isExpired = _isEventExpired(deadlineStr);
 
-  var isFuture = status.indexOf("未來") > -1 || status.toLowerCase().indexOf("coming") > -1 || status.toLowerCase().indexOf("future") > -1;
-  if (isExpired) {
-    status = "關閉";
+  var isFuture = rawStatus.indexOf("未來") > -1 || rawStatus.indexOf("coming") > -1 || rawStatus.indexOf("future") > -1;
+  var isOpen = !isFuture && !isExpired && (rawStatus.indexOf("開放") > -1 || rawStatus.indexOf("open") > -1);
+
+  var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0)
+    ? "$" + ev.fee
+    : ((prefLang === "en") ? "Free" : (prefLang === "zh" ? "免費" : "免費 Free"));
+  var startFormatted = _formatEventDate(ev.start_date);
+  var endFormatted = _formatEventDate(ev.end_date);
+  var deadlineFormatted = _formatEventDate(ev.deadline);
+
+  var dateDisplay = startFormatted;
+  if (endFormatted && endFormatted !== startFormatted) {
+    dateDisplay += " ~ " + endFormatted;
   }
+
+  var costLabel = (prefLang === "en") ? "Cost: " : (prefLang === "zh" ? "費用: " : "費用 Cost: ");
+  var dateLabel = (prefLang === "en") ? "Event Date: " : (prefLang === "zh" ? "活動時間: " : "活動時間 Event Date: ");
+  var deadlineLabel = (prefLang === "en") ? "Sign Up Deadline: " : (prefLang === "zh" ? "報名截止: " : "報名截止 Deadline: ");
+
+  var titleTag = (prefLang === "en") ? "【Title】" : (prefLang === "zh" ? "【名稱】" : (hasEnglish ? "【名稱 Title】" : "【名稱】"));
+  var summaryTag = (prefLang === "en") ? "【Summary】" : (prefLang === "zh" ? "【簡介】" : (hasEnglish ? "【簡介 Summary】" : "【簡介】"));
+  var itineraryTag = (prefLang === "en") ? "【Detailed Itinerary】" : (prefLang === "zh" ? "【詳細行程】" : (hasEnglish ? "【詳細行程 Detailed Itinerary】" : "【詳細行程】"));
 
   // 查詢該活動有效報名人數 (排除已取消者)
   var regCount = 0;
@@ -328,33 +457,54 @@ function sendEventDetail(replyToken, eventId) {
     }
   }
 
-  var regCountDisplay = "已報名：" + regCount + " 人 / Registered: " + regCount;
+  var regCountStrZh = "已報名：" + regCount + " 人";
+  var regCountStrEn = "Registered: " + regCount;
+  var regCountDisplay = (prefLang === "en")
+    ? regCountStrEn
+    : (prefLang === "zh"
+        ? regCountStrZh
+        : (regCountStrZh + " / " + regCountStrEn));
 
-  var costStr = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費 Free";
-  var startFormatted = _formatEventDate(ev.start_date);
-  var endFormatted = _formatEventDate(ev.end_date);
-  var deadlineFormatted = _formatEventDate(ev.deadline);
+  var summaryZh = ev.summary || "尚無簡介";
+  var summaryEn = ev.summary_en || ev.short_desc_en || ev.summary || "No summary";
+  var summaryContent = (prefLang === "en")
+    ? summaryEn
+    : (prefLang === "zh"
+        ? summaryZh
+        : (hasEnglish ? _formatBilingualMessage(summaryZh, summaryEn, null) : summaryZh));
 
-  var dateDisplay = startFormatted;
-  if (endFormatted && endFormatted !== startFormatted) {
-    dateDisplay += " ~ " + endFormatted;
-  }
+  var fullDescZh = ev.itinerary || ev.full_desc || "尚無詳細行程";
+  var fullDescEn = ev.itinerary_en || ev.full_desc_en || ev.itinerary || ev.full_desc || "No detailed itinerary";
+  var fullDescContent = (prefLang === "en")
+    ? fullDescEn
+    : (prefLang === "zh"
+        ? fullDescZh
+        : (hasEnglish ? _formatBilingualMessage(fullDescZh, fullDescEn, null) : fullDescZh));
 
   var buttonBox;
-  if (!isFuture && !isExpired && (status === "開放" || status.indexOf("開放") > -1)) {
+  if (isOpen) {
+    var signupBtnLabel = (prefLang === "en") ? "Sign Up" : (prefLang === "zh" ? "一鍵報名" : "一鍵報名 Sign Up");
+    var signupDisplayText = (prefLang === "en")
+      ? ("Sign up for: " + eventNameEn)
+      : (prefLang === "zh"
+          ? ("我要報名：" + eventNameZh)
+          : ("我要報名 Sign up for: " + (hasEnglish ? eventNameEn : eventNameZh)));
+
     buttonBox = {
       "type": "button",
       "style": "primary",
       "color": "#1DB446",
       "action": {
         "type": "postback",
-        "label": "一鍵報名 Sign Up",
+        "label": signupBtnLabel,
         "data": "action=signup&eventId=" + eventId,
-        "displayText": "我要報名 Sign up for: " + eventName
+        "displayText": signupDisplayText
       }
     };
   } else {
-    var closedLabel = isFuture ? "即將開放 Coming Soon" : (isExpired ? "報名已截止 Closed" : "尚未開放 Not Open");
+    var closedLabelZh = isFuture ? "即將開放" : (isExpired ? "報名已截止" : "尚未開放");
+    var closedLabelEn = isFuture ? "Coming Soon" : (isExpired ? "Closed" : "Not Open");
+    var closedLabel = (prefLang === "en") ? closedLabelEn : (prefLang === "zh" ? closedLabelZh : (isFuture ? "即將開放 Coming Soon" : (isExpired ? "報名已截止 Closed" : "尚未開放 Not Open")));
     buttonBox = {
       "type": "button",
       "style": "secondary",
@@ -362,7 +512,7 @@ function sendEventDetail(replyToken, eventId) {
       "action": {
         "type": "message",
         "label": closedLabel,
-        "text": eventName + " " + closedLabel
+        "text": ((prefLang === "en") ? eventNameEn : eventNameZh) + " " + closedLabel
       }
     };
   }
@@ -381,7 +531,7 @@ function sendEventDetail(replyToken, eventId) {
           "contents": [
             {
               "type": "text",
-              "text": "【名稱】",
+              "text": titleTag,
               "weight": "bold",
               "size": "sm",
               "color": "#1DB446",
@@ -420,7 +570,7 @@ function sendEventDetail(replyToken, eventId) {
         },
         {
           "type": "text",
-          "text": "【簡介】",
+          "text": summaryTag,
           "weight": "bold",
           "size": "sm",
           "color": "#1DB446",
@@ -428,7 +578,7 @@ function sendEventDetail(replyToken, eventId) {
         },
         {
           "type": "text",
-          "text": ev.summary || "尚無簡介",
+          "text": summaryContent,
           "size": "sm",
           "color": "#555555",
           "wrap": true,
@@ -436,7 +586,7 @@ function sendEventDetail(replyToken, eventId) {
         },
         {
           "type": "text",
-          "text": "【詳細行程】",
+          "text": itineraryTag,
           "weight": "bold",
           "size": "sm",
           "color": "#1DB446",
@@ -444,7 +594,7 @@ function sendEventDetail(replyToken, eventId) {
         },
         {
           "type": "text",
-          "text": ev.itinerary || "尚無詳細行程",
+          "text": fullDescContent,
           "size": "sm",
           "color": "#555555",
           "wrap": true,
@@ -458,21 +608,21 @@ function sendEventDetail(replyToken, eventId) {
           "contents": [
             {
               "type": "text",
-              "text": "費用 Cost: " + costStr,
+              "text": costLabel + costStr,
               "size": "sm",
               "color": "#666666",
               "weight": "bold"
             },
             {
               "type": "text",
-              "text": "活動時間 Event Date: " + dateDisplay,
+              "text": dateLabel + dateDisplay,
               "size": "sm",
               "color": "#1DB446",
               "weight": "bold"
             },
             {
               "type": "text",
-              "text": "報名截止 Deadline: " + deadlineFormatted,
+              "text": deadlineLabel + deadlineFormatted,
               "size": "sm",
               "color": "#E53935",
               "weight": "bold"
@@ -499,7 +649,8 @@ function sendEventDetail(replyToken, eventId) {
     };
   }
 
-  _replyFlexMessage(replyToken, "活動詳情: " + eventName, bubble);
+  var flexReplyTitle = (prefLang === "en") ? ("Event: " + eventNameEn) : ("活動詳情: " + eventNameZh);
+  _replyFlexMessage(replyToken, flexReplyTitle, bubble);
 }
 
 /**
@@ -766,23 +917,28 @@ function _checkProfileComplete(userId, ss, type) {
 function handleSignup(replyToken, userId, eventId, ss) {
   if (!ss) ss = _getSpreadsheet();
 
+  var prefLang = _getUserPreferredLanguage(userId);
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
 
     // 1. 檢查活動是否存在與是否已截止/已關閉 (優先查 Supabase events 表)
     var evName = _getEventName(ss, eventId);
-    var sbEvents = _supabaseGet("events", { id: "eq." + eventId, select: "id,title,status,deadline" });
+    var evNameEn = "";
+    var sbEvents = _supabaseGet("events", { id: "eq." + eventId, select: "id,title,title_en,status,deadline" });
     if (sbEvents && sbEvents.length > 0) {
       var ev = sbEvents[0];
       if (ev.title) evName = ev.title;
+      if (ev.title_en) evNameEn = ev.title_en;
       var isEvExpired = _isEventExpired(ev.deadline);
       if (isEvExpired || ev.status === "關閉" || ev.status === "已截止") {
-        _replyMessage(replyToken, "⚠️ 報名失敗：【" + evName + "】已於 " + (ev.deadline || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + evName + "] registration is closed.");
+        var closedReply = "⚠️ 報名失敗：【" + evName + "】已於 " + (ev.deadline || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + (evNameEn || evName) + "] registration is closed.";
+        _replyMessage(replyToken, _splitBilingualMessage(closedReply, prefLang));
         return;
       }
     } else {
-      _replyMessage(replyToken, "⚠️ 報名失敗：查無活動代號【" + eventId + "】，請確認活動代號是否正確！\n─────────────\n⚠️ Event not found for code: " + eventId);
+      var notFoundReply = "⚠️ 報名失敗：查無活動代號【" + eventId + "】，請確認活動代號是否正確！\n─────────────\n⚠️ Event not found for code: " + eventId;
+      _replyMessage(replyToken, _splitBilingualMessage(notFoundReply, prefLang));
       return;
     }
 
@@ -790,7 +946,8 @@ function handleSignup(replyToken, userId, eventId, ss) {
     var profileCheck = _checkProfileComplete(userId, ss, "signup");
 
     if (profileCheck.missingFields.indexOf("NOT_FOUND") > -1) {
-      _replyMessage(replyToken, "⚠️ 報名失敗：系統找不到您的社員資料！\n請先點選單中的「填寫資料」完成註冊後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first.");
+      var noProfileReply = "⚠️ 報名失敗：系統找不到您的社員資料！\n請先點選單中的「填寫資料」完成註冊後再報名。\n─────────────\n⚠️ Registration Failed: Member profile not found!\nPlease click 'Register' in the menu to complete your profile first.";
+      _replyMessage(replyToken, _splitBilingualMessage(noProfileReply, prefLang));
       return;
     }
 
@@ -823,8 +980,7 @@ function handleSignup(replyToken, userId, eventId, ss) {
         return "👉 " + (fieldEnMap[f] || f);
       }).join("\n");
 
-      _replyMessage(replyToken, 
-        "⚠️ 報名失敗：您的個人資料尚不完整！\n\n" +
+      var missingProfileMsg = "⚠️ 報名失敗：您的個人資料尚不完整！\n\n" +
         "為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n" +
         missingFormattedZh + "\n\n" +
         "完成資料更新後，再回來點擊一鍵報名喔！🏕️\n" +
@@ -832,8 +988,9 @@ function handleSignup(replyToken, userId, eventId, ss) {
         "⚠️ Registration Failed: Incomplete member profile!\n\n" +
         "For insurance coverage and outdoor activity safety, please click 'Register' in the menu to complete the following required fields:\n\n" +
         missingFormattedEn + "\n\n" +
-        "Once your profile is updated, return here to sign up with one click! 🏕️"
-      );
+        "Once your profile is updated, return here to sign up with one click! 🏕️";
+
+      _replyMessage(replyToken, _splitBilingualMessage(missingProfileMsg, prefLang));
       return;
     }
 
@@ -868,18 +1025,18 @@ function handleSignup(replyToken, userId, eventId, ss) {
         ? "Your profile and fitness records have an unverified update time or no recent records found"
         : "Your profile and fitness records have not been updated for over 6 months";
 
-      var expireNoticeMsg = "⚠️ 報名提醒：" + reasonZh + "！\n\n" +
+      var expireNoticeZh = "⚠️ 報名提醒：" + reasonZh + "！\n\n" +
         "社團出團活動將依據您的「爬山經歷」與「體能狀況」進行審查與篩選。為了維護出隊安全並增加您的錄取機會，若近期有更豐富的登山紀錄或更佳的體能表現，請先前往更新個人資料後，再回到此處報名活動喔！\n\n" +
         "👉 立即前往更新個人資料：\n" +
         "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard\n" +
-        "(或於選單點擊「填寫資料 / 個人主頁」)\n" +
-        "─────────────\n" +
-        "⚠️ Registration Notice: " + reasonEn + "!\n\n" +
+        "(或於選單點擊「填寫資料 / 個人主頁」)";
+
+      var expireNoticeEn = "⚠️ Registration Notice: " + reasonEn + "!\n\n" +
         "Club outings evaluate applications based on your hiking experience and fitness status. To ensure safety and boost your admission chances, please update your profile with your latest records before signing up!\n\n" +
         "👉 Update Your Profile Now:\n" +
         "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard";
 
-      _replyMessage(replyToken, expireNoticeMsg);
+      _replyMessage(replyToken, _formatBilingualMessage(expireNoticeZh, expireNoticeEn, prefLang));
       return;
     }
 
@@ -892,7 +1049,8 @@ function handleSignup(replyToken, userId, eventId, ss) {
         return st.indexOf("取消") === -1 && st.toLowerCase().indexOf("cancelled") === -1;
       });
       if (hasActiveSignup) {
-        _replyMessage(replyToken, "⚠️ 您已經報名過【" + evName + "】囉！\n請耐心等候幹部審核，或是至個人主頁查詢進度。\n─────────────\n⚠️ You have already registered for [" + evName + "]!\nPlease wait for officer review.");
+        var dupMsg = "⚠️ 您已經報名過【" + evName + "】囉！\n請耐心等候幹部審核，或是至個人主頁查詢進度。\n─────────────\n⚠️ You have already registered for [" + (evNameEn || evName) + "]!\nPlease wait for officer review.";
+        _replyMessage(replyToken, _splitBilingualMessage(dupMsg, prefLang));
         return;
       }
     }
@@ -921,26 +1079,33 @@ function handleSignup(replyToken, userId, eventId, ss) {
       console.warn("同步至活動專屬試算表例外:", evSSErr);
     }
 
-
-
-    // 6. 回傳確認收據 (中英完整雙語)
-    _replyMessage(replyToken, "✅ 報名登記已送出！ / Registration Submitted!\n\n" +
-      "活動 (Event)：\n" + evName + "\n" +
-      "活動代號 (Event ID)：" + eventId + "\n" +
-      "報名專屬碼 (Signup Code)：" + signupCode + "\n\n" +
-      p.name + "，我們已收到您的報名資料。\n" +
-      "Dear " + p.name + ", we have received your application.\n\n" +
-      "⚠️ 【重要提醒 / Important Reminder】\n" +
+    // 6. 回傳確認收據 (依偏好語言精準拆分)
+    var successReceiptZh = "✅ 報名登記已送出！\n\n" +
+      "活動：" + evName + "\n" +
+      "活動代號：" + eventId + "\n" +
+      "報名專屬碼：" + signupCode + "\n\n" +
+      p.name + "，我們收到您的報名資料囉～\n\n" +
+      "【重要提醒】\n" +
       "此階段為「報名登記與資格審核」，幹部將進行體能評估與篩選，最終錄取名單（正取/備取）將透過本帳號推播通知您！\n\n" +
-      "💡 【體能與經歷更新說明 / Fitness & Experience Reminder】\n" +
-      "社團出團會依據爬山經驗與體能進行評估，若有最新的登山紀錄或更佳體能證明，記得隨時至個人主頁更新資料，增加自己的錄取機會喔！\n" +
-      "─────────────\n" +
+      "【體能與經歷更新說明】\n" +
+      "社團出團會依據爬山經驗與體能進行評估，若有最新的登山紀錄或更佳體能證明，記得隨時至個人主頁更新資料，增加自己的錄取機會喔！";
+
+    var successReceiptEn = "✅ Registration Submitted!\n\n" +
+      "Event: " + (evNameEn || evName) + "\n" +
+      "Event ID: " + eventId + "\n" +
+      "Signup Code: " + signupCode + "\n\n" +
+      "Dear " + p.name + ", we have received your application.\n\n" +
+      "【Important Reminder】\n" +
       "This stage is registration & review. Officers will evaluate qualifications, and admission status (Confirmed/Waitlisted) will be notified to you via this LINE account!\n\n" +
-      "Admission is evaluated based on hiking experience and fitness. If you have newer hiking records or fitness proofs, remember to update them anytime on your Dashboard to boost your admission chances!");
+      "【Fitness & Experience Reminder】\n" +
+      "Admission is evaluated based on hiking experience and fitness. If you have newer hiking records or fitness proofs, remember to update them anytime on your Dashboard to boost your admission chances!";
+
+    _replyMessage(replyToken, _formatBilingualMessage(successReceiptZh, successReceiptEn, prefLang));
 
   } catch (err) {
     console.error("活動報名失敗:", err);
-    _replyMessage(replyToken, "⚠️ 系統目前忙碌中，請稍後再試！\n─────────────\n⚠️ System is currently busy, please try again later!");
+    var busyMsg = "⚠️ 系統目前忙碌中，請稍後再試！\n─────────────\n⚠️ System is currently busy, please try again later!";
+    _replyMessage(replyToken, _splitBilingualMessage(busyMsg, prefLang));
   } finally {
     _safeReleaseLock(lock);
   }
@@ -950,12 +1115,14 @@ function handleSignup(replyToken, userId, eventId, ss) {
  * 處理備取意願確認 (Postback) - 100% 直連 Supabase (SSOT)，杜絕試算表錯誤
  */
 function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
+  var prefLang = _getUserPreferredLanguage(userId);
   var eventId = paramsMap["eventId"] || "";
   var targetUid = paramsMap["userId"] || userId;
   var targetCode = paramsMap["signupCode"] || paramsMap["targetId"] || "";
 
   if (!targetUid) {
-    _replyMessage(replyToken, "系統錯誤：缺少使用者識別碼。\n─────────────\nSystem Error: Missing user identifier.");
+    var missingUidMsg = "系統錯誤：缺少使用者識別碼。\n─────────────\nSystem Error: Missing user identifier.";
+    _replyMessage(replyToken, _splitBilingualMessage(missingUidMsg, prefLang));
     return;
   }
 
@@ -973,7 +1140,8 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
 
     var signups = _supabaseGet("event_signups", queryParams);
     if (!signups || signups.length === 0) {
-      _replyMessage(replyToken, "找不到該筆報名資料，請洽詢社團幹部！\n─────────────\nRegistration record not found, please contact club officers!");
+      var notFoundRecordMsg = "找不到該筆報名資料，請洽詢社團幹部！\n─────────────\nRegistration record not found, please contact club officers!";
+      _replyMessage(replyToken, _splitBilingualMessage(notFoundRecordMsg, prefLang));
       return;
     }
 
@@ -981,7 +1149,8 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
     var currentStatus = String(signup.status || "");
 
     if (currentStatus.indexOf("備取（有意願）") > -1 || currentStatus.indexOf("有意願") > -1) {
-      _replyMessage(replyToken, "您先前已確認過備取意願！若有名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist preference! Officers will contact you if a spot opens up!");
+      var alreadyConfirmedMsg = "您先前已確認過備取意願！若有名額釋出，幹部將主動與您聯絡！\n─────────────\nYou have already confirmed your waitlist preference! Officers will contact you if a spot opens up!";
+      _replyMessage(replyToken, _splitBilingualMessage(alreadyConfirmedMsg, prefLang));
       return;
     }
 
@@ -992,13 +1161,16 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
     });
 
     if (patchSuccess) {
-      _replyMessage(replyToken, "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nSuccessfully confirmed waitlist preference! Status updated to: [Waitlisted (Interested)]. We will contact you if a spot opens up!");
+      var confirmedSuccessMsg = "已成功確認您的備取意願！審核狀態已更新為：【備取（有意願）】。若有正取名額釋出，幹部將主動與您聯絡！\n─────────────\nSuccessfully confirmed waitlist preference! Status updated to: [Waitlisted (Interested)]. We will contact you if a spot opens up!";
+      _replyMessage(replyToken, _splitBilingualMessage(confirmedSuccessMsg, prefLang));
     } else {
-      _replyMessage(replyToken, "⚠️ 更新備取意願失敗，請稍後再試或洽詢幹部！\n─────────────\n⚠️ Failed to update waitlist preference, please try again later or contact officers!");
+      var updateFailMsg = "⚠️ 更新備取意願失敗，請稍後再試或洽詢幹部！\n─────────────\n⚠️ Failed to update waitlist preference, please try again later or contact officers!";
+      _replyMessage(replyToken, _splitBilingualMessage(updateFailMsg, prefLang));
     }
   } catch (err) {
     console.error("[handleConfirmWaitlist] 例外:", err);
-    _replyMessage(replyToken, "系統發生錯誤：" + (err.message || err) + "\n─────────────\nSystem error: " + (err.message || err));
+    var exMsg = "系統發生錯誤：" + (err.message || err) + "\n─────────────\nSystem error: " + (err.message || err);
+    _replyMessage(replyToken, _splitBilingualMessage(exMsg, prefLang));
   }
 }
 
@@ -1172,13 +1344,27 @@ function _buildPaymentDeclarationFlex(params) {
 }
 
 /**
- * 建立個人個人繳費成功確認 Flex Message 卡片
+ * 建立個人繳費成功確認 Flex Message 卡片 (支援繁中/英文)
  */
 function _buildPaymentConfirmedFlex(params) {
-  var userName = params.userName || "社員";
+  var isEn = (params.lang === "en" || params.userLanguage === "en" || params.preferredLanguage === "en");
+  var userName = params.userName || (isEn ? "Member" : "社員");
   var paymentId = params.paymentId || "";
   var amount = params.amount || 0;
-  var items = params.items || "社團活動/裝備費用";
+  var items = params.items || (isEn ? "Club Event / Gear Fee" : "社團活動/裝備費用");
+
+  var titleText = isEn ? "🎉 Payment Confirmed" : "🎉 繳費成功確認通知";
+  var subtitleText = isEn ? "Officers have verified your payment!" : "幹部已確認收到款項，核銷作業已完成！";
+  var labelName = isEn ? "Name" : "姓名";
+  var labelId = isEn ? "Payment ID" : "單號";
+  var labelAmount = isEn ? "Amount" : "核銷金額";
+  var labelItems = isEn ? "Items" : "核銷項目";
+  var labelStatus = isEn ? "Status" : "狀態";
+  var statusText = isEn ? "Confirmed" : "已核銷 Confirmed";
+  var amountText = isEn ? ("$" + amount + " TWD") : ("$" + amount + " 元");
+  var footerText = isEn
+    ? "Your event registration and gear rental status have been updated. Check your Dashboard anytime!"
+    : "相關活動報名與裝備狀態已同步更新，您可隨時至個人主頁查看！";
 
   return {
     type: "bubble",
@@ -1194,14 +1380,14 @@ function _buildPaymentConfirmedFlex(params) {
       contents: [
         {
           type: "text",
-          text: "🎉 繳費成功確認通知",
+          text: titleText,
           color: "#ffffff",
           weight: "bold",
           size: "md"
         },
         {
           type: "text",
-          text: "幹部已確認收到款項，核銷作業已完成！",
+          text: subtitleText,
           color: "#d1fae5",
           size: "xxs",
           margin: "xs"
@@ -1223,7 +1409,7 @@ function _buildPaymentConfirmedFlex(params) {
               layout: "baseline",
               spacing: "sm",
               contents: [
-                { type: "text", text: "姓名", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: labelName, color: "#64748b", size: "sm", flex: 2 },
                 { type: "text", text: userName, weight: "bold", color: "#0f172a", size: "sm", flex: 5 }
               ]
             },
@@ -1232,7 +1418,116 @@ function _buildPaymentConfirmedFlex(params) {
               layout: "baseline",
               spacing: "sm",
               contents: [
-                { type: "text", text: "單號", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: labelId, color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: labelAmount, color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: amountText, weight: "bold", color: "#059669", size: "md", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: labelItems, color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: items, color: "#334155", size: "sm", flex: 5, wrap: true }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: labelStatus, color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: statusText, weight: "bold", color: "#059669", size: "sm", flex: 5 }
+              ]
+            }
+          ]
+        },
+        { type: "separator", margin: "lg", color: "#e2e8f0" },
+        {
+          type: "text",
+          text: footerText,
+          color: "#64748b",
+          size: "xs",
+          wrap: true,
+          margin: "md"
+        }
+      ]
+    }
+  };
+}
+
+/**
+ * 建立幹部群組專用「繳費單已完成核銷」Flex Message 卡片 (純繁體中文)
+ */
+function _buildOfficerPaymentConfirmedFlex(params) {
+  var userName = params.userName || "社員";
+  var paymentId = params.paymentId || "";
+  var amount = params.amount || 0;
+  var items = params.items || "社團活動/裝備費用";
+  var confirmedBy = params.confirmedBy || "單鍵快速核銷";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#065f46",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "💳 繳費單已完成核銷",
+          color: "#ffffff",
+          weight: "bold",
+          size: "md"
+        },
+        {
+          type: "text",
+          text: "款項已入帳，已同步更新資料庫狀態",
+          color: "#a7f3d0",
+          size: "xxs",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "申報人", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: userName, weight: "bold", color: "#0f172a", size: "sm", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "繳費單號", color: "#64748b", size: "sm", flex: 2 },
                 { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" }
               ]
             },
@@ -1259,20 +1554,20 @@ function _buildPaymentConfirmedFlex(params) {
               layout: "baseline",
               spacing: "sm",
               contents: [
-                { type: "text", text: "狀態", color: "#64748b", size: "sm", flex: 2 },
-                { type: "text", text: "已核銷 Confirmed", weight: "bold", color: "#059669", size: "sm", flex: 5 }
+                { type: "text", text: "核銷途徑", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: confirmedBy, color: "#475569", size: "sm", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "系統狀態", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: "已更新 Supabase 資料庫", weight: "bold", color: "#059669", size: "sm", flex: 5 }
               ]
             }
           ]
-        },
-        { type: "separator", margin: "lg", color: "#e2e8f0" },
-        {
-          type: "text",
-          text: "相關活動報名與裝備狀態已同步更新，您可隨時至個人主頁查看！",
-          color: "#64748b",
-          size: "xs",
-          wrap: true,
-          margin: "md"
         }
       ]
     }
