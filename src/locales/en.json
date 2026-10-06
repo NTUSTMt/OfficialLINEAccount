@@ -92,9 +92,10 @@
       "updateSuccess": "Profile updated successfully! Remember to keep your hiking records and fitness proofs updated anytime to boost your outing admission chances!",
       "saveFailed": "Save failed: {{message}}",
       "fillStep1Required": "Please complete the required basic info fields first!",
-      "fillStep2Required": "Please complete the required identity & insurance fields first!",
+      "fillStep2Required": "Please complete the required identity, insurance & medical history fields first!",
       "fillStep3Required": "Please complete the required emergency contact fields first!",
-      "fillStep4Required": "Please complete the required fitness & willingness fields first!",
+      "fillStep4Required": "Please complete the required hiking fitness, fitness proof photo & willingness fields first!",
+      "uploadProofRequired": "Please upload at least one fitness proof photo for hiking events!",
       "agreePrivacy": "Please agree to the privacy policy!",
       "contactAdmin": "Please contact the club administrator",
       "networkError": "Network connection failed, please check your network status!"
@@ -140,7 +141,7 @@
       "addressLabel": "Correspondence Address",
       "addressPlaceholder": "Please enter your contact or current address",
       "medicalHistoryLabel": "Medical History / Allergies",
-      "medicalHistoryPlaceholder": "e.g., asthma, severe altitude sickness, allergies. Confidential & only for leader to ensure safety."
+      "medicalHistoryPlaceholder": "e.g., asthma, severe altitude sickness, allergies (enter 'None' if none). Confidential & only for leader to ensure safety."
     },
     "step3": {
       "title": "Safety & Emergency Info (Optional)",

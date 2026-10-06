@@ -4,8 +4,9 @@
 -- 說明：請至 Supabase 控制台 > SQL Editor 貼上執行此腳本即可一鍵完成部署
 -- ==============================================================================
 
--- 1. 確保 payments 表具備 verify_token 欄位
+-- 1. 確保 payments 表具備 verify_token 與 selected_ids 欄位
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS verify_token TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS selected_ids JSONB;
 CREATE INDEX IF NOT EXISTS idx_payments_verify_token ON payments(verify_token);
 
 -- 1.1 確保 payment_status_enum 列舉型別與隱式轉換 (徹底防禦 text 轉型失敗)
@@ -196,7 +197,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 寫入 payments 資料表 (包含 verify_token 與 proof_image_url，申報備註寫入 notes 欄位)
+    -- 寫入 payments 資料表 (包含 verify_token 與 proof_image_url，申報備註寫入 notes 欄位，精確品項寫入 selected_ids)
     INSERT INTO payments (
         id,
         line_user_id,
@@ -207,6 +208,7 @@ BEGIN
         proof_image_url,
         status,
         verify_token,
+        selected_ids,
         notes,
         officer_notes,
         notification_status,
@@ -222,6 +224,7 @@ BEGIN
         v_proof_url,
         v_target_payment_status,
         v_verify_token,
+        v_selected_ids,
         v_note,
         v_officer_notes,
         v_notification_status,
@@ -265,6 +268,12 @@ DECLARE
     v_calculated_expiry DATE;
     v_user_email TEXT;
     v_user_language TEXT;
+    v_selected_ids JSONB;
+    v_event_ids TEXT[] := ARRAY[]::TEXT[];
+    v_loan_ids TEXT[] := ARRAY[]::TEXT[];
+    v_has_membership BOOLEAN := FALSE;
+    v_item_id TEXT;
+    i INTEGER;
 BEGIN
     -- 參數基本防禦
     IF p_payment_id IS NULL OR trim(p_payment_id) = '' THEN
@@ -318,29 +327,84 @@ BEGIN
         updated_at = v_now
     WHERE id = p_payment_id;
 
-    -- 2. 連動更新活動報名表 (event_signups)
-    IF v_payment.line_user_id IS NOT NULL THEN
-        FOR v_signup IN 
-            SELECT id, status 
-            FROM event_signups 
-            WHERE line_user_id = v_payment.line_user_id 
-              AND payment_status != '已繳費 Paid'
-        LOOP
-            v_new_signup_status := v_signup.status;
-            -- 若為正取，升級為正取（已繳費）
-            IF v_signup.status::text LIKE '%正取%' AND v_signup.status::text NOT LIKE '%已繳費%' THEN
-                v_new_signup_status := '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+    -- 解析該筆繳費單所屬之精確品項清單
+    v_selected_ids := COALESCE(v_payment.selected_ids, '[]'::jsonb);
+    IF jsonb_typeof(v_selected_ids) = 'array' AND jsonb_array_length(v_selected_ids) > 0 THEN
+        FOR i IN 0 .. (jsonb_array_length(v_selected_ids) - 1) LOOP
+            v_item_id := v_selected_ids->>i;
+            IF v_item_id LIKE 'act_%' THEN
+                v_event_ids := array_append(v_event_ids, substring(v_item_id from 5));
+            ELSIF v_item_id LIKE 'eq_%' THEN
+                v_loan_ids := array_append(v_loan_ids, substring(v_item_id from 4));
+            ELSIF v_item_id = 'fee_membership' THEN
+                v_has_membership := TRUE;
             END IF;
-
-            UPDATE event_signups
-            SET payment_status = '已繳費 Paid',
-                status = v_new_signup_status,
-                updated_at = v_now
-            WHERE id = v_signup.id;
         END LOOP;
+    END IF;
+
+    -- 2. 連動更新活動報名表 (event_signups)：精準限定本次繳費單所勾選的活動
+    IF v_payment.line_user_id IS NOT NULL THEN
+        IF array_length(v_event_ids, 1) > 0 THEN
+            FOR v_signup IN 
+                SELECT id, status 
+                FROM event_signups 
+                WHERE line_user_id = v_payment.line_user_id 
+                  AND event_id = ANY(v_event_ids)
+                  AND payment_status != '已繳費 Paid'
+            LOOP
+                v_new_signup_status := v_signup.status;
+                IF v_signup.status::text LIKE '%正取%' AND v_signup.status::text NOT LIKE '%已繳費%' THEN
+                    v_new_signup_status := '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+                END IF;
+
+                UPDATE event_signups
+                SET payment_status = '已繳費 Paid',
+                    status = v_new_signup_status,
+                    updated_at = v_now
+                WHERE id = v_signup.id;
+            END LOOP;
+        ELSIF v_payment.target_id IS NOT NULL AND v_payment.target_type = 'event' THEN
+            FOR v_signup IN 
+                SELECT id, status 
+                FROM event_signups 
+                WHERE line_user_id = v_payment.line_user_id 
+                  AND event_id = v_payment.target_id
+                  AND payment_status != '已繳費 Paid'
+            LOOP
+                v_new_signup_status := v_signup.status;
+                IF v_signup.status::text LIKE '%正取%' AND v_signup.status::text NOT LIKE '%已繳費%' THEN
+                    v_new_signup_status := '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+                END IF;
+
+                UPDATE event_signups
+                SET payment_status = '已繳費 Paid',
+                    status = v_new_signup_status,
+                    updated_at = v_now
+                WHERE id = v_signup.id;
+            END LOOP;
+        ELSIF v_payment.type LIKE '%活動%' THEN
+            -- 舊版無 selected_ids 繳費單 fallback：只更新處於「待確認 Checking」的活動報名紀錄，絕不波及未繳費活動
+            FOR v_signup IN 
+                SELECT id, status 
+                FROM event_signups 
+                WHERE line_user_id = v_payment.line_user_id 
+                  AND payment_status = '待確認 Checking'
+            LOOP
+                v_new_signup_status := v_signup.status;
+                IF v_signup.status::text LIKE '%正取%' AND v_signup.status::text NOT LIKE '%已繳費%' THEN
+                    v_new_signup_status := '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+                END IF;
+
+                UPDATE event_signups
+                SET payment_status = '已繳費 Paid',
+                    status = v_new_signup_status,
+                    updated_at = v_now
+                WHERE id = v_signup.id;
+            END LOOP;
+        END IF;
 
         -- 3. 連動更新社員社費 (members)
-        IF v_payment.type LIKE '%社費%' OR v_payment.type LIKE '%Membership%' OR v_payment.target_type = 'membership' THEN
+        IF v_has_membership OR v_payment.type LIKE '%社費%' OR v_payment.type LIKE '%Membership%' OR v_payment.target_type = 'membership' THEN
             v_extracted_expiry := substring(v_payment.type from '(\d{4}[-/]\d{2}[-/]\d{2})');
             IF v_extracted_expiry IS NOT NULL THEN
                 BEGIN
@@ -360,13 +424,28 @@ BEGIN
             WHERE line_user_id = v_payment.line_user_id;
         END IF;
 
-        -- 4. 連動更新裝備租借 (loans)
-        IF v_payment.type LIKE '%裝備%' OR v_payment.type LIKE '%租借%' THEN
+        -- 4. 連動更新裝備租借 (loans)：精準限定本次繳費單所勾選的訂單 ID
+        IF array_length(v_loan_ids, 1) > 0 THEN
             UPDATE loans
             SET payment_status = '已繳費 Paid',
                 updated_at = v_now
             WHERE line_user_id = v_payment.line_user_id
+              AND id = ANY(v_loan_ids)
               AND payment_status != '已繳費 Paid';
+        ELSIF v_payment.target_id IS NOT NULL AND (v_payment.target_type = 'loan' OR v_payment.target_type = 'equipment') THEN
+            UPDATE loans
+            SET payment_status = '已繳費 Paid',
+                updated_at = v_now
+            WHERE line_user_id = v_payment.line_user_id
+              AND id = v_payment.target_id
+              AND payment_status != '已繳費 Paid';
+        ELSIF v_payment.type LIKE '%裝備%' OR v_payment.type LIKE '%租借%' THEN
+            -- 舊版 fallback：只更新處於「待確認 Checking」的租借紀錄
+            UPDATE loans
+            SET payment_status = '已繳費 Paid',
+                updated_at = v_now
+            WHERE line_user_id = v_payment.line_user_id
+              AND payment_status = '待確認 Checking';
         END IF;
     END IF;
 

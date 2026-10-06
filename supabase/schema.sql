@@ -271,6 +271,7 @@ CREATE TABLE IF NOT EXISTS payments (
     bank_last5 TEXT,
     proof_image_url TEXT, -- Google Drive 匯款證明相片連結
     status TEXT NOT NULL DEFAULT '待確認 Checking', -- 待確認 Checking / 已核銷 Confirmed / 退件 Rejected
+    selected_ids JSONB DEFAULT '[]'::jsonb, -- 精確品項 ID 清單 (如 ["act_E01", "act_E02"])
     officer_notes TEXT,
     confirmed_by TEXT,
     confirmed_at TIMESTAMPTZ,
@@ -283,6 +284,7 @@ CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
 
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS name TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS selected_ids JSONB;
 
 DROP TRIGGER IF EXISTS trg_payments_updated_at ON payments;
 CREATE TRIGGER trg_payments_updated_at

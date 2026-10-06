@@ -1,6 +1,6 @@
-# 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
+# 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.257-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.259-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.257)](#7-最新版本異動紀錄-changelog-v01257)
+- [7. 最新版本異動紀錄 (Changelog v0.1.259)](#7-最新版本異動紀錄-changelog-v01259)
 
 ---
 
@@ -2152,6 +2152,23 @@ pnpm test
   - 單元測試與建置驗證：
     - 新增 test/101_profile_intent_driven_registration.test.mjs 單元測試。
     - 全專案 85 個測試套件、464 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.259 (2026-10-07)
+- 活動出隊必填欄位強化 (特殊病史、體能證明照片) 與隱私權同意書位置調整：
+  - 特殊病史與過敏 (Medical History / Allergies) 必填強化：
+    - 前端介面 (src/pages/Register.tsx)：當使用者目的包含「活動出隊 (activity)」時，標籤附加 required class 呈現紅色星號 (*)。
+    - 輸入框提示 (src/locales/zh.json 與 src/locales/en.json)：更新 placeholder 提示文字為「如氣喘、嚴重高山症病史、過敏藥物等（若無特殊病史請填『無』）」與英文「(enter 'None' if none)」。
+    - 送出檢核：於 isStep2Complete 中嚴格驗證 formData.medicalHistory 非空，若未填寫自動跳轉 Step 2 並提示補齊身分、保險與特殊病史必填欄位。
+  - 上傳體能證明 (Upload Fitness Proof) 必填強化：
+    - 前端介面 (src/pages/Register.tsx)：當使用者目的包含「活動出隊 (activity)」時，標籤附加 required class 呈現紅色星號 (*)。
+    - 送出檢核：於 isStep4Complete 中檢查 totalProofsCount > 0（歷史上傳證明與本次新選取照片合計至少 1 張），若未上傳自動跳轉 Step 4 並彈出「活動出隊請至少上傳一張體能證明照片！」專屬提示。
+  - 隱私權同意書位置調整：
+    - 將 Step 4 中的「隱私權同意書 (privacy-consent-box)」區塊自頂部移至最下方（位於「想說的話 (wantToSay)」下方，緊鄰底部送出按鈕上方），使整體填寫流程符合由上而下之閱讀與確認體驗。
+  - 單元測試與建置驗證：
+    - 更新 test/101_profile_intent_driven_registration.test.mjs 單元測試，驗證特殊病史、體能照片必填驗證與隱私權同意書區塊排序。
+    - 全專案 86 個測試套件、470 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+
+
 
 
 

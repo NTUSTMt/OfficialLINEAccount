@@ -662,13 +662,14 @@ function Register({ userId }: { userId: string }) {
           formData.gender.trim() !== '' &&
           formData.birthday.trim() !== '' &&
           formData.idNumber.trim() !== '' &&
-          formData.studentAddr.trim() !== ''
+          formData.studentAddr.trim() !== '' &&
+          formData.medicalHistory.trim() !== ''
         )
       : true;
 
     if (!isStep2Complete) {
       setStep(2);
-      alert(t('register.alert.fillStep2Required', '請先補齊身分與保險必填欄位！'));
+      alert(t('register.alert.fillStep2Required', '請先補齊身分、保險與特殊病史必填欄位！'));
       return;
     }
 
@@ -691,13 +692,18 @@ function Register({ userId }: { userId: string }) {
       ? Boolean(
           formData.exp.trim() !== '' &&
           formData.strength.trim() !== '' &&
+          totalProofsCount > 0 &&
           formData.intendOfficial.trim() !== ''
         )
       : true;
 
     if (!isStep4Complete) {
       setStep(4);
-      alert(t('register.alert.fillStep4Required', '請先補齊登山體能與意願必填欄位！'));
+      if (isActivity && totalProofsCount === 0 && formData.exp.trim() !== '' && formData.strength.trim() !== '' && formData.intendOfficial.trim() !== '') {
+        alert(t('register.alert.uploadProofRequired', '活動出隊請至少上傳一張體能證明照片！'));
+      } else {
+        alert(t('register.alert.fillStep4Required', '請先補齊登山體能、體能證明照片與意願必填欄位！'));
+      }
       return;
     }
 
@@ -1425,7 +1431,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step2.medicalHistoryLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step2.medicalHistoryLabel')}</label>
               <textarea
                 name="medicalHistory"
                 value={formData.medicalHistory}
@@ -1527,7 +1533,7 @@ function Register({ userId }: { userId: string }) {
 
             {/* 上傳體能證明 */}
             <div className="form-group" style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+              <label className={isActivity ? "required" : ""} style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
                 {t('register.step4.uploadProofLabel')}
               </label>
               <p style={{ fontSize: '12px', color: '#64748b', marginTop: '0', marginBottom: '12px', lineHeight: 1.5 }}>
@@ -1698,22 +1704,6 @@ function Register({ userId }: { userId: string }) {
               </div>
             </div>
 
-            {/* 隱私權同意書 */}
-            <div className="privacy-consent-box" style={{ marginTop: '24px' }}>
-              <label className="checkbox-container">
-                <input
-                  type="checkbox"
-                  checked={privacyAgreed}
-                  onChange={(e) => setPrivacyAgreed(e.target.checked)}
-                />
-                <span className="checkmark"></span>
-                <span className="consent-text" style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                  {t('register.step4.privacyConsent')}
-                  {!isBrowse && <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>*</span>}
-                </span>
-              </label>
-            </div>
-
             {/* 意願調查 */}
             <div className="willingness-box" style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', textAlign: 'left' }}>
               <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>
@@ -1819,6 +1809,22 @@ function Register({ userId }: { userId: string }) {
                   }}
                 />
               </div>
+            </div>
+
+            {/* 隱私權同意書（移至最下方） */}
+            <div className="privacy-consent-box" style={{ marginTop: '24px' }}>
+              <label className="checkbox-container">
+                <input
+                  type="checkbox"
+                  checked={privacyAgreed}
+                  onChange={(e) => setPrivacyAgreed(e.target.checked)}
+                />
+                <span className="checkmark"></span>
+                <span className="consent-text" style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                  {t('register.step4.privacyConsent')}
+                  {!isBrowse && <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>*</span>}
+                </span>
+              </label>
             </div>
           </div>
         )}

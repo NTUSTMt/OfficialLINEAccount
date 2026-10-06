@@ -34,9 +34,13 @@ describe('Profile Intent-Driven Registration & Dynamic Required Validation', () 
     assert.ok(registerContent.includes('const isBrowse = selectedIntents.includes(\'browse\');'));
     assert.ok(registerContent.includes('className={!isBrowse ? "required" : ""}'));
     assert.ok(registerContent.includes('className={isActivity ? "required" : ""}'));
+    assert.ok(registerContent.includes('className={isActivity ? "required" : ""}>{t(\'register.step2.medicalHistoryLabel\')}'));
+    assert.ok(registerContent.includes('className={isActivity ? "required" : ""} style={{ display: \'block\', marginBottom: \'4px\', fontWeight: 600 }}>\n                {t(\'register.step4.uploadProofLabel\')}'));
   });
 
-  it('Submit validation auto-jumps to the missing step', () => {
+  it('Submit validation enforces medicalHistory and totalProofsCount for activity intent', () => {
+    assert.ok(registerContent.includes('formData.medicalHistory.trim() !== \'\''));
+    assert.ok(registerContent.includes('totalProofsCount > 0'));
     assert.ok(registerContent.includes('setStep(1);'));
     assert.ok(registerContent.includes('register.alert.fillStep1Required'));
     assert.ok(registerContent.includes('setStep(2);'));
@@ -45,7 +49,16 @@ describe('Profile Intent-Driven Registration & Dynamic Required Validation', () 
     assert.ok(registerContent.includes('register.alert.fillStep3Required'));
     assert.ok(registerContent.includes('setStep(4);'));
     assert.ok(registerContent.includes('register.alert.fillStep4Required'));
+    assert.ok(registerContent.includes('register.alert.uploadProofRequired'));
     assert.ok(registerContent.includes('register.alert.agreePrivacy'));
+  });
+
+  it('Privacy consent box should be placed after willingness and wantToSay in Step 4', () => {
+    const wantToSayIndex = registerContent.indexOf('name="wantToSay"');
+    const privacyIndex = registerContent.indexOf('className="privacy-consent-box"');
+    assert.ok(wantToSayIndex > 0, 'wantToSay field must exist');
+    assert.ok(privacyIndex > 0, 'privacy-consent-box must exist');
+    assert.ok(privacyIndex > wantToSayIndex, 'privacy-consent-box must be placed after wantToSay in Step 4');
   });
 
   it('Localization files should include purpose step and intent translations', () => {
@@ -64,6 +77,9 @@ describe('Profile Intent-Driven Registration & Dynamic Required Validation', () 
     assert.ok(en.register.intent.gear);
     assert.ok(en.register.intent.payment);
     assert.ok(en.register.intent.browse);
+
+    assert.ok(zh.register.alert.uploadProofRequired);
+    assert.ok(en.register.alert.uploadProofRequired);
   });
 
   it('No emojis should be present in Register.tsx or test files', () => {

@@ -59,9 +59,10 @@
       "updateSuccess": "資料已成功更新！若有新的登山經歷或體能證明，記得隨時保持更新以增加出隊錄取機會喔！",
       "saveFailed": "儲存失敗: {{message}}",
       "fillStep1Required": "請先補齊基本資料必填欄位！",
-      "fillStep2Required": "請先補齊身分與保險必填欄位！",
+      "fillStep2Required": "請先補齊身分、保險與特殊病史必填欄位！",
       "fillStep3Required": "請先補齊緊急聯絡人必填欄位！",
-      "fillStep4Required": "請先補齊登山體能與意願必填欄位！",
+      "fillStep4Required": "請先補齊登山體能、體能證明照片與意願必填欄位！",
+      "uploadProofRequired": "活動出隊請至少上傳一張體能證明照片！",
       "agreePrivacy": "請勾選同意隱私權條款！",
       "contactAdmin": "請聯絡社團管理員",
       "networkError": "網路連線失敗，請檢查您的網路狀態！"
@@ -107,7 +108,7 @@
       "addressLabel": "聯絡地址",
       "addressPlaceholder": "請輸入聯絡或現居地址",
       "medicalHistoryLabel": "個人特殊病史或過敏",
-      "medicalHistoryPlaceholder": "如氣喘、嚴重高山症病史、過敏藥物等。此資訊僅供嚮導掌握隊員安全狀況，完全保密。"
+      "medicalHistoryPlaceholder": "如氣喘、嚴重高山症病史、過敏藥物等（若無特殊病史請填『無』）。此資訊僅供嚮導掌握隊員安全狀況，完全保密。"
     },
     "step3": {
       "title": "緊急聯絡人資訊",

@@ -10,6 +10,7 @@
 -- ------------------------------------------------------------------------------
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS selected_ids JSONB;
 
 -- 自 members 自動回填姓名
 UPDATE payments p 
@@ -290,7 +291,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- 寫入 payments 資料表
+    -- 寫入 payments 資料表 (包含 selected_ids)
     INSERT INTO payments (
         id,
         line_user_id,
@@ -299,6 +300,7 @@ BEGIN
         amount,
         bank_last5,
         status,
+        selected_ids,
         notes,
         officer_notes,
         notification_status,
@@ -312,6 +314,7 @@ BEGIN
         v_total_amount,
         v_last5,
         v_target_payment_status,
+        v_selected_ids,
         v_note,
         v_officer_notes,
         v_notification_status,

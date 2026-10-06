@@ -426,30 +426,69 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
     var selectedItems = payment.type || (payment.selected_names ? (Array.isArray(payment.selected_names) ? payment.selected_names.join(", ") : String(payment.selected_names)) : (payment.items || "社團活動/裝備費用"));
 
     // 2.5 連動更新 Supabase 對應子項目繳費狀態 (活動報名、社費、裝備租借)
+    var selIds = payment.selected_ids || [];
+    if (typeof selIds === 'string') {
+      try { selIds = JSON.parse(selIds); } catch (e) { selIds = []; }
+    }
+    var eventIds = [];
+    var loanIds = [];
+    var hasMembership = false;
+    if (Array.isArray(selIds)) {
+      for (var i = 0; i < selIds.length; i++) {
+        var idStr = String(selIds[i]);
+        if (idStr.indexOf("act_") === 0) {
+          eventIds.push(idStr.substring(4));
+        } else if (idStr.indexOf("eq_") === 0) {
+          loanIds.push(idStr.substring(3));
+        } else if (idStr === "fee_membership") {
+          hasMembership = true;
+        }
+      }
+    }
+
     var selTypes = payment.selected_types || [];
     if (typeof selTypes === 'string') {
       try { selTypes = JSON.parse(selTypes); } catch (e) { selTypes = [selTypes]; }
     }
     var itemsStr = String(payment.type || "") + " " + String(payment.items || "") + " " + String(payment.selected_names || "");
 
-    // A. 活動報名連動 (若含有活動 ID 或申報項目包含活動)
+    // A. 活動報名連動 (精確限定本次繳費單所勾選之活動 ID，杜絕誤更動其他未繳費活動)
     var targetEvtId = payment.target_event_id || payment.event_id;
-    if (targetUserId) {
-      var signupQuery = { line_user_id: "eq." + targetUserId };
-      if (targetEvtId) {
-        signupQuery.event_id = "eq." + targetEvtId;
-      }
-      var signups = (typeof _supabaseGet === "function") ? _supabaseGet("event_signups", signupQuery) : [];
-      if (signups && signups.length > 0) {
-        for (var s = 0; s < signups.length; s++) {
-          var curStatus = signups[s].status || "";
-          var newStatus = curStatus;
-          // 若原本為正取，繳費核銷後同步升級為「正取（已繳費）Confirmed (Paid)」
-          if (curStatus.indexOf("正取") > -1 && curStatus.indexOf("已繳費") === -1) {
-            newStatus = "正取（已繳費）Confirmed (Paid)";
+    if (targetEvtId && eventIds.indexOf(targetEvtId) === -1) {
+      eventIds.push(targetEvtId);
+    }
+
+    if (targetUserId && typeof _supabaseGet === "function" && typeof _supabasePatch === "function") {
+      if (eventIds.length > 0) {
+        for (var eIdx = 0; eIdx < eventIds.length; eIdx++) {
+          var sEvtId = eventIds[eIdx];
+          var signups = _supabaseGet("event_signups", { line_user_id: "eq." + targetUserId, event_id: "eq." + sEvtId });
+          if (signups && signups.length > 0) {
+            for (var s = 0; s < signups.length; s++) {
+              var curStatus = signups[s].status || "";
+              var newStatus = curStatus;
+              if (curStatus.indexOf("正取") > -1 && curStatus.indexOf("已繳費") === -1) {
+                newStatus = "正取（已繳費）Confirmed (Paid)";
+              }
+              _supabasePatch("event_signups", { id: "eq." + signups[s].id }, {
+                payment_status: "已繳費 Paid",
+                status: newStatus,
+                updated_at: nowIso
+              });
+            }
           }
-          if (typeof _supabasePatch === "function") {
-            _supabasePatch("event_signups", { id: "eq." + signups[s].id }, {
+        }
+      } else if (itemsStr.indexOf("活動") > -1) {
+        // 舊版 fallback：僅更新處於「待確認 Checking」的活動報名紀錄，絕不波及未申報的活動
+        var checkingSignups = _supabaseGet("event_signups", { line_user_id: "eq." + targetUserId, payment_status: "eq.待確認 Checking" });
+        if (checkingSignups && checkingSignups.length > 0) {
+          for (var cs = 0; cs < checkingSignups.length; cs++) {
+            var curStatus = checkingSignups[cs].status || "";
+            var newStatus = curStatus;
+            if (curStatus.indexOf("正取") > -1 && curStatus.indexOf("已繳費") === -1) {
+              newStatus = "正取（已繳費）Confirmed (Paid)";
+            }
+            _supabasePatch("event_signups", { id: "eq." + checkingSignups[cs].id }, {
               payment_status: "已繳費 Paid",
               status: newStatus,
               updated_at: nowIso
@@ -459,8 +498,8 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
       }
     }
 
-    // B. 社費連動 (若 selected_types 包含 membership，或申報包含社費)
-    var isMembership = (Array.isArray(selTypes) && selTypes.indexOf("membership") > -1) ||
+    // B. 社費連動
+    var isMembership = hasMembership || (Array.isArray(selTypes) && selTypes.indexOf("membership") > -1) ||
       itemsStr.indexOf("社費") > -1 || itemsStr.indexOf("Membership") > -1;
     if (isMembership && targetUserId && typeof _supabasePatch === "function") {
       var memberPatch = {
@@ -475,18 +514,25 @@ function _processPaymentVerification(paymentId, officerName, sendOfficerReply, r
       _supabasePatch("members", { line_user_id: "eq." + targetUserId }, memberPatch);
     }
 
-    // C. 裝備租借連動 (若含有 loan_id 或申報包含租借/裝備)
+    // C. 裝備租借連動 (精確限定本次繳費單所勾選之訂單 ID)
     var targetLoanId = payment.target_loan_id || payment.loan_id;
-    var isLoan = (Array.isArray(selTypes) && (selTypes.indexOf("equipment") > -1 || selTypes.indexOf("loan") > -1)) ||
-      itemsStr.indexOf("租借") > -1 || itemsStr.indexOf("裝備") > -1 || !!targetLoanId;
+    if (targetLoanId && loanIds.indexOf(targetLoanId) === -1) {
+      loanIds.push(targetLoanId);
+    }
+    var isLoan = loanIds.length > 0 || (Array.isArray(selTypes) && (selTypes.indexOf("equipment") > -1 || selTypes.indexOf("loan") > -1)) ||
+      itemsStr.indexOf("租借") > -1 || itemsStr.indexOf("裝備") > -1;
+
     if (isLoan && targetUserId && typeof _supabasePatch === "function") {
-      if (targetLoanId) {
-        _supabasePatch("loans", { id: "eq." + targetLoanId }, {
-          payment_status: "已繳費 Paid",
-          updated_at: nowIso
-        });
+      if (loanIds.length > 0) {
+        for (var lIdx = 0; lIdx < loanIds.length; lIdx++) {
+          _supabasePatch("loans", { id: "eq." + loanIds[lIdx] }, {
+            payment_status: "已繳費 Paid",
+            updated_at: nowIso
+          });
+        }
       } else {
-        _supabasePatch("loans", { line_user_id: "eq." + targetUserId, payment_status: "neq.已繳費 Paid" }, {
+        // 舊版 fallback：僅更新處於「待確認 Checking」的租借紀錄
+        _supabasePatch("loans", { line_user_id: "eq." + targetUserId, payment_status: "eq.待確認 Checking" }, {
           payment_status: "已繳費 Paid",
           updated_at: nowIso
         });
