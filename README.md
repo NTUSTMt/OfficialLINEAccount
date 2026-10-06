@@ -1,11 +1,11 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.255-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.257-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E.svg)](https://supabase.com/)
-[![LINE LIFF](https://img.shields.io/badge/LINE-LIFF%20v2.29-00C300.svg)](https://developers.line.biz/en/docs/liff/)
+[![LINE LIFF](https://img.shields.io/badge/LINE-LINE%20LIFF%20v2.29-00C300.svg)](https://developers.line.biz/en/docs/liff/)
 
 本系統為**國立臺灣科技大學登山社**打造之現代化官方 LINE 數位生態系，整合 **LINE Front-end Framework (LIFF)**、**Supabase PostgreSQL (單一信任源)** 與 **Google Apps Script (GAS 模組化後端)**，提供社員活動報名、裝備租借、繳費申報、心得登頂紀錄與幹部即時審核自動化。
 
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.255)](#7-最新版本異動紀錄-changelog-v01255)
+- [7. 最新版本異動紀錄 (Changelog v0.1.257)](#7-最新版本異動紀錄-changelog-v01257)
 
 ---
 
@@ -2118,5 +2118,40 @@ pnpm test
   - 驗證：
     - 通過 Node.js 語法檢驗 (node --check src/gas.js)。
     - 全專案 83 個測試套件、455 項單元測試 100% 通過，全篇嚴格零 Emoji。
+
+### v0.1.256 (2026-10-06)
+- 活動正取通知按鈕色彩優化與 0 元申報自動核銷功能升級：
+  - 活動正取通知卡片樣式升級 (src/gas.js 與 gas_modules/06_Helper_Services.js)：
+    - 在 processSendEventNotifications 中，將活動正取推播卡片之「前往繳費系統 (Pay Now)」按鈕升級為 Primary 樣式且採用經典深藍色彩 (#0367D3)，突顯主要繳費動作並與綠色「加入活動群組」形成清晰視覺分流。
+  - 資料庫 0 元原子性自動核銷 (supabase/verify_payment_rpc.sql 與 supabase/payment_rpc.sql)：
+    - 於 submit_payment_rpc 函式中新增 0 元申報自動核銷邏輯：當 totalAmount 為 0 元時，原子性將關聯項目 (event_signups / loans / members) 之繳費狀態更新為「已繳費 Paid」，並在 payments 表中直接記錄 status = '已核銷 Confirmed'、officer_notes = '0元免費項目系統自動核銷'、notification_status = '免通知'。
+  - 前端 0 元免推播與中英分流 Flex 卡片發送 (src/pages/Payment.tsx)：
+    - 當 totalAmount 為 0 元時，完全略過呼叫後端 GAS notify_officers_payment，徹底避免傳送幹部 LINE 群組推播與 Email。
+    - 於 liff.isInClient() 環境下，透過 liff.sendMessages 發送中英文分流之「0元項目核銷確認 Flex 卡片」（採用與幹部核銷同款之綠色頂部 #059669 主題卡片），由客戶端直接於聊天室發送，0 額度消耗、杜絕使用任何 Push Message。
+  - 單元測試與建置驗證：
+    - 新增 test/100_zero_dollar_payment_and_pay_button.test.mjs 單元測試，驗證按鈕宣告、RPC 0 元直接核銷狀態與 Payment.tsx Flex 卡片發送邏輯。
+    - 全專案 84 個測試套件、458 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.257 (2026-10-06)
+- 個人資料填寫動態目的引導 (Step 0 Purpose Selection) 與必選填動態標示：
+  - 目的選擇步驟 (Step 0) 新增與進度條擴充 (src/pages/Register.tsx):
+    - 頂部 Stepper 擴充為 5 步驟 (0: 目的, 1: 基本, 2: 身分, 3: 緊急, 4: 體能)。
+    - 新增 Step 0「目的選擇」卡片：
+      1. 活動出隊 (activity)：全欄位 (步驟 1, 2, 3, 4) 皆為必填。
+      2. 裝備租借 (gear)：步驟 1 基本資料 + 步驟 4 隱私條款同意為必填，其餘步驟 2, 3, 4 為選填。
+      3. 繳費申報 (payment)：步驟 1 基本資料 + 步驟 4 隱私條款同意為必填，其餘步驟 2, 3, 4 為選填。
+      4. 只是看看 (browse)：全欄位皆為選填（與前三項互斥）。
+  - 動態必填標示與乾淨介面規範：
+    - 依據目的選項動態為 label 附加 required class 渲染紅色星號 (*)。
+    - 選填欄位嚴格不顯示任何「(選填)」字樣，維持畫面極簡整潔。
+  - 自由導覽與提交時智慧自動跳轉校驗：
+    - 移除步驟間「下一步」按鈕之 disabled 阻擋，允許使用者隨時點擊「上一步 / 下一步」或 Stepper 進度點自由查看與填寫各步驟。
+    - 於 Step 4 點擊「送出 / 提交」時，依據所選目的自動校驗未填寫之必填項目，並自動 setStep 跳轉至首個未填寫齊全的步驟，彈出明確中文/英文警告提示。
+  - 雙語系多語支援 (src/locales/zh.json 與 src/locales/en.json):
+    - 補齊 step0 purpose, intent 選項中英文翻譯與步驟自動跳轉警告文字。
+  - 單元測試與建置驗證：
+    - 新增 test/101_profile_intent_driven_registration.test.mjs 單元測試。
+    - 全專案 85 個測試套件、464 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+
 
 

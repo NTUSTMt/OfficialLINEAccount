@@ -7395,8 +7395,8 @@ function _handleSendEventNotifications(json) {
                         },
                         {
                           type: "button",
-                          style: "secondary",
-                          color: "#475569",
+                          style: "primary",
+                          color: "#0367D3",
                           action: {
                             type: "uri",
                             label: payBtn,

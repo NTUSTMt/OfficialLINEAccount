@@ -509,7 +509,7 @@ export const fetchUnpaidPaymentsFromSupabase = async (userId: string): Promise<S
 export const submitPaymentToSupabase = async (
   userId: string,
   details: PaymentSubmitDetails
-): Promise<{ success: boolean; paymentId?: string; verifyToken?: string; error?: string }> => {
+): Promise<{ success: boolean; paymentId?: string; verifyToken?: string; isZeroAmount?: boolean; status?: string; error?: string }> => {
   if (!supabase) return { success: false, error: '未初始化 Supabase Client' };
   if (!userId) return { success: false, error: '缺少使用者 LINE ID (userId 為空)' };
 
@@ -534,7 +534,9 @@ export const submitPaymentToSupabase = async (
     return {
       success: true,
       paymentId: data?.payment_id,
-      verifyToken: data?.verify_token
+      verifyToken: data?.verify_token,
+      isZeroAmount: data?.is_zero_amount ?? (details.totalAmount === 0),
+      status: data?.status
     };
   } catch (err: any) {
     console.error('[Supabase] 提交繳費對帳例外:', err);

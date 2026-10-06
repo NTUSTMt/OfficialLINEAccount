@@ -25,7 +25,7 @@ interface UploadedProofFile {
 }
 
 function Payment({ userId }: { userId: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unpaidList, setUnpaidList] = useState<{ membership: UnpaidItem[], activities: UnpaidItem[], equipments: UnpaidItem[] }>({
@@ -44,6 +44,7 @@ function Payment({ userId }: { userId: string }) {
   const proofInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
   const [membershipOption, setMembershipOption] = useState<'thisSem' | 'undergrad' | 'master'>('thisSem');
+  const [userName, setUserName] = useState<string>('');
 
   const handleCopyAccount = async () => {
     try {
@@ -243,6 +244,9 @@ function Payment({ userId }: { userId: string }) {
               const dash = await fetchDashboardFromSupabase(userId);
               let isOfficialActive = false;
               if (dash && dash.profile) {
+                if (dash.profile.name) {
+                  setUserName(dash.profile.name);
+                }
                 const isExp = dash.profile.expireDate ? (new Date(dash.profile.expireDate) < new Date()) : false;
                 isOfficialActive = !!dash.profile.isOfficial && !isExp;
               }
@@ -503,6 +507,7 @@ function Payment({ userId }: { userId: string }) {
       }
 
       const detailsPayload = {
+        userName: userName || undefined,
         selectedIds: uniqueSelectedIds,
         selectedNames: selectedNamesZh,
         selectedNamesEn: selectedNamesEn,
@@ -515,7 +520,7 @@ function Payment({ userId }: { userId: string }) {
       };
 
       // 1. 直連 Supabase 繳費申報 (< 50ms)
-      let sbResult: { success: boolean; paymentId?: string; verifyToken?: string; error?: string } = { success: false };
+      let sbResult: { success: boolean; paymentId?: string; verifyToken?: string; isZeroAmount?: boolean; status?: string; error?: string } = { success: false };
       if (userId && userId !== 'TEST_USER_ID') {
         try {
           sbResult = await submitPaymentToSupabase(userId, detailsPayload);
@@ -526,32 +531,43 @@ function Payment({ userId }: { userId: string }) {
         }
       } else {
         sbSubmitted = true;
-        sbResult = { success: true, paymentId: 'PAY_TEST_001', verifyToken: 'test_token_123' };
+        sbResult = {
+          success: true,
+          paymentId: 'PAY_TEST_001',
+          verifyToken: 'test_token_123',
+          isZeroAmount: (totalAmount === 0),
+          status: totalAmount === 0 ? '已核銷 Confirmed' : '待確認 Checking'
+        };
       }
 
       if (sbSubmitted) {
-        // 2. 發送 LINE 幹部審核推播與個人保底推播 (包含 verifyToken，供 Email 單鍵安全核銷)
-        try {
-          const response = await fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(withAuthPayload({
-              action: 'notify_officers_payment',
-              userId,
-              paymentId: sbResult.paymentId,
-              verifyToken: sbResult.verifyToken,
-              proofImageUrl: uploadedProofUrl || undefined,
-              details: {
-                ...detailsPayload,
+        const isZeroAmount = (totalAmount === 0) || !!sbResult.isZeroAmount;
+        const isEn = i18n.language === 'en';
+
+        // 2. 發送 LINE 幹部審核推播 (若非 0 元且有費用需對帳才發送；0 元申報完全略過，不推播幹部群組、不消耗 Push 額度)
+        if (!isZeroAmount) {
+          try {
+            const response = await fetch(GAS_API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify(withAuthPayload({
+                action: 'notify_officers_payment',
+                userId,
                 paymentId: sbResult.paymentId,
                 verifyToken: sbResult.verifyToken,
-                proofImageUrl: uploadedProofUrl || undefined
-              }
-            }))
-          });
-          await response.json().catch(() => ({}));
-        } catch (err) {
-          console.warn('[Payment] 幹部推播通知發送例外:', err);
+                proofImageUrl: uploadedProofUrl || undefined,
+                details: {
+                  ...detailsPayload,
+                  paymentId: sbResult.paymentId,
+                  verifyToken: sbResult.verifyToken,
+                  proofImageUrl: uploadedProofUrl || undefined
+                }
+              }))
+            });
+            await response.json().catch(() => ({}));
+          } catch (err) {
+            console.warn('[Payment] 幹部推播通知發送例外:', err);
+          }
         }
 
         // 本地立即將已申報項目自待繳清單中排除，杜絕重複勾選申報
@@ -566,37 +582,174 @@ function Payment({ userId }: { userId: string }) {
 
         setSubmitted(true);
 
-        // 發送 LINE 明細訊息並關閉 LIFF
+        // 發送 LINE 明細訊息並關閉 LIFF (透過 liff.sendMessages 由使用者端發出，0 額度消耗、非 Push Message)
         if (liff.isInClient()) {
-          const msgText = `【繳費申報完成 / Payment Submitted】\n\n` +
-            `您好！已成功收到您的繳費申報資訊：\n` +
-            `• 申報金額：$${totalAmount}\n` +
-            `• 帳號末5碼：${finalDigits}\n` +
-            (note.trim() ? `• 備註：${note.trim()}\n` : '') +
-            (uploadedProofUrl ? `• 匯款證明：已成功上傳雲端憑證\n` : '') +
-            `• 申報項目：\n` +
-            selectedNamesZh.map(n => `  - ${n}`).join('\n') + `\n\n` +
-            `幹部會於核對款項後自動更新您的狀態。謝謝！\n` +
-            `─────────────\n` +
-            `Hello! Your payment submission has been received successfully:\n` +
-            `• Amount: $${totalAmount}\n` +
-            `• Last 5 Digits: ${finalDigits}\n` +
-            (note.trim() ? `• Note: ${note.trim()}\n` : '') +
-            (uploadedProofUrl ? `• Proof: Successfully uploaded\n` : '') +
-            `• Items:\n` +
-            selectedNamesEn.map(n => `  - ${n}`).join('\n') + `\n\n` +
-            `Officers will update your status after verifying the transaction. Thank you!`;
+          if (isZeroAmount) {
+            // 0 元免收費項目：發送與幹部核銷同款之綠色核銷確認 Flex 卡片 (中英分流)
+            const displayName = userName || (isEn ? 'Member' : '社員');
+            const displayPaymentId = sbResult.paymentId || 'PAY_FREE_001';
+            const titleText = isEn ? '🎉 Free Item Confirmed' : '🎉 0元項目核銷確認通知';
+            const subtitleText = isEn ? 'System has automatically confirmed your $0 item(s)!' : '系統已自動完成核銷作業！';
+            const labelName = isEn ? 'Name' : '姓名';
+            const labelId = isEn ? 'Payment ID' : '單號';
+            const labelAmount = isEn ? 'Amount' : '核銷金額';
+            const labelItems = isEn ? 'Items' : '核銷項目';
+            const labelStatus = isEn ? 'Status' : '狀態';
+            const statusText = isEn ? 'Confirmed' : '已核銷 Confirmed';
+            const amountText = isEn ? '$0 TWD (Free)' : '$0 元 (免收費)';
+            const itemsText = isEn ? selectedNamesEn.join(', ') : selectedNamesZh.join('、');
+            const footerText = isEn
+              ? 'Your event registration and gear rental status have been updated. Check your Dashboard anytime!'
+              : '相關活動報名與裝備狀態已同步更新，您可隨時至個人主頁查看！';
 
-          try {
-            await liff.sendMessages([{
-              type: 'text',
-              text: msgText
-            }]);
-          } catch (liffErr) {
-            console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
+            const zeroFlexMessage = {
+              type: 'flex',
+              altText: isEn ? `【Free Item Confirmed】${displayPaymentId}` : `【0元核銷確認】${displayPaymentId}`,
+              contents: {
+                type: 'bubble',
+                size: 'mega',
+                header: {
+                  type: 'box',
+                  layout: 'vertical',
+                  backgroundColor: '#059669',
+                  paddingTop: '14px',
+                  paddingBottom: '14px',
+                  paddingStart: '16px',
+                  paddingEnd: '16px',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: titleText,
+                      color: '#ffffff',
+                      weight: 'bold',
+                      size: 'md'
+                    },
+                    {
+                      type: 'text',
+                      text: subtitleText,
+                      color: '#d1fae5',
+                      size: 'xxs',
+                      margin: 'xs'
+                    }
+                  ]
+                },
+                body: {
+                  type: 'box',
+                  layout: 'vertical',
+                  paddingAll: '16px',
+                  contents: [
+                    {
+                      type: 'box',
+                      layout: 'vertical',
+                      spacing: 'sm',
+                      contents: [
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelName, color: '#64748b', size: 'sm', flex: 2 },
+                            { type: 'text', text: displayName, weight: 'bold', color: '#0f172a', size: 'sm', flex: 5 }
+                          ]
+                        },
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelId, color: '#64748b', size: 'sm', flex: 2 },
+                            { type: 'text', text: displayPaymentId, color: '#2563eb', size: 'xs', flex: 5, wrap: true, weight: 'bold' }
+                          ]
+                        },
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelAmount, color: '#64748b', size: 'sm', flex: 2 },
+                            { type: 'text', text: amountText, weight: 'bold', color: '#059669', size: 'md', flex: 5 }
+                          ]
+                        },
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelItems, color: '#64748b', size: 'sm', flex: 2 },
+                            { type: 'text', text: itemsText, color: '#334155', size: 'sm', flex: 5, wrap: true }
+                          ]
+                        },
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelStatus, color: '#64748b', size: 'sm', flex: 2 },
+                            { type: 'text', text: statusText, weight: 'bold', color: '#059669', size: 'sm', flex: 5 }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      type: 'separator',
+                      margin: 'lg'
+                    },
+                    {
+                      type: 'text',
+                      text: footerText,
+                      size: 'xxs',
+                      color: '#64748b',
+                      wrap: true,
+                      margin: 'md'
+                    }
+                  ]
+                }
+              }
+            };
+
+            try {
+              await liff.sendMessages([zeroFlexMessage as any]);
+            } catch (liffErr) {
+              console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
+            }
+
+            alert(isEn ? 'Free item(s) registration completed! Confirmation card sent to your LINE chat.' : '0元免費項目已成功登記並自動核銷！核銷確認卡片已同步發送至您的 LINE 聊天室。');
+          } else {
+            // 有金額之繳費申報：發送文字明細收據
+            const msgTextZh = `【繳費申報完成】\n\n` +
+              `您好！已成功收到您的繳費申報資訊：\n` +
+              `• 申報金額：$${totalAmount}\n` +
+              `• 帳號末5碼：${finalDigits}\n` +
+              (note.trim() ? `• 備註：${note.trim()}\n` : '') +
+              (uploadedProofUrl ? `• 匯款證明：已成功上傳雲端憑證\n` : '') +
+              `• 申報項目：\n` +
+              selectedNamesZh.map(n => `  - ${n}`).join('\n') + `\n\n` +
+              `幹部會於核對款項後自動更新您的狀態。謝謝！`;
+
+            const msgTextEn = `【Payment Submitted】\n\n` +
+              `Hello! Your payment submission has been received successfully:\n` +
+              `• Amount: $${totalAmount}\n` +
+              `• Last 5 Digits: ${finalDigits}\n` +
+              (note.trim() ? `• Note: ${note.trim()}\n` : '') +
+              (uploadedProofUrl ? `• Proof: Successfully uploaded\n` : '') +
+              `• Items:\n` +
+              selectedNamesEn.map(n => `  - ${n}`).join('\n') + `\n\n` +
+              `Officers will update your status after verifying the transaction. Thank you!`;
+
+            const msgText = isEn ? msgTextEn : msgTextZh;
+
+            try {
+              await liff.sendMessages([{
+                type: 'text',
+                text: msgText
+              }]);
+            } catch (liffErr) {
+              console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
+            }
+
+            alert(isEn ? 'Payment submission sent! Receipt sent to your LINE chat.' : '繳費申報已成功送出！申報收據已同步發送至您的 LINE 聊天室與幹部群組。');
           }
 
-          alert('繳費申報已成功送出！申報收據已同步發送至您的 LINE 聊天室與幹部群組。');
           try {
             liff.closeWindow();
           } catch (e) {

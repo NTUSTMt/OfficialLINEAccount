@@ -183,6 +183,10 @@ DECLARE
     v_calc_fee INTEGER;
     v_calc_rent INTEGER;
     v_member_name TEXT;
+    v_target_item_status payment_status_enum;
+    v_target_payment_status TEXT;
+    v_officer_notes TEXT;
+    v_notification_status TEXT;
     i INTEGER;
 BEGIN
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
@@ -194,6 +198,19 @@ BEGIN
     v_last5 := COALESCE(p_details->>'last5Digits', '00000');
     v_note := COALESCE(p_details->>'note', '');
     v_expiry := p_details->>'membershipExpiryDate';
+
+    -- 判斷是否為 0 元申報（若為 0 元則直接原子性核銷為「已繳費 Paid / 已核銷 Confirmed」）
+    IF v_total_amount = 0 THEN
+        v_target_item_status := text_to_payment_status_enum('已繳費 Paid');
+        v_target_payment_status := '已核銷 Confirmed';
+        v_officer_notes := '0元免費項目系統自動核銷';
+        v_notification_status := '免通知';
+    ELSE
+        v_target_item_status := text_to_payment_status_enum('待確認 Checking');
+        v_target_payment_status := '待確認 Checking';
+        v_officer_notes := NULL;
+        v_notification_status := '未通知';
+    END IF;
 
     -- 取得社員姓名 (優先從 details 讀取，若無則查詢 members 表)
     v_member_name := COALESCE(p_details->>'userName', '');
@@ -218,10 +235,19 @@ BEGIN
 
         -- A. 社費
         IF v_item_id = 'fee_membership' THEN
-            UPDATE members 
-            SET payment_status = '待確認 Checking',
-                updated_at = NOW()
-            WHERE line_user_id = p_line_user_id;
+            IF v_total_amount = 0 AND v_expiry IS NOT NULL AND v_expiry != '' THEN
+                UPDATE members 
+                SET payment_status = v_target_item_status,
+                    is_official_member = TRUE,
+                    membership_expires_at = to_date(replace(v_expiry, '-', '/'), 'YYYY/MM/DD'),
+                    updated_at = NOW()
+                WHERE line_user_id = p_line_user_id;
+            ELSE
+                UPDATE members 
+                SET payment_status = v_target_item_status,
+                    updated_at = NOW()
+                WHERE line_user_id = p_line_user_id;
+            END IF;
 
             IF v_expiry IS NOT NULL AND v_expiry != '' THEN
                 v_item_labels := array_append(v_item_labels, '社籍與社費 (Membership Fee) (有效至 ' || replace(v_expiry, '-', '/') || ')');
@@ -234,7 +260,7 @@ BEGIN
             v_event_id := substring(v_item_id from 5);
 
             UPDATE event_signups 
-            SET payment_status = '待確認 Checking',
+            SET payment_status = v_target_item_status,
                 updated_at = NOW()
             WHERE line_user_id = p_line_user_id AND event_id = v_event_id;
 
@@ -246,7 +272,7 @@ BEGIN
             v_loan_id := substring(v_item_id from 4);
 
             UPDATE loans 
-            SET payment_status = '待確認 Checking',
+            SET payment_status = v_target_item_status,
                 updated_at = NOW()
             WHERE line_user_id = p_line_user_id AND id = v_loan_id;
 
@@ -285,10 +311,10 @@ BEGIN
         array_to_string(v_item_labels, ', '),
         v_total_amount,
         v_last5,
-        '待確認 Checking',
+        v_target_payment_status,
         v_note,
-        NULL,
-        '未通知',
+        v_officer_notes,
+        v_notification_status,
         NOW(),
         NOW()
     );
@@ -296,7 +322,9 @@ BEGIN
     RETURN jsonb_build_object(
         'success', TRUE,
         'payment_id', v_payment_id,
-        'items', array_to_string(v_item_labels, ', ')
+        'items', array_to_string(v_item_labels, ', '),
+        'is_zero_amount', (v_total_amount = 0),
+        'status', v_target_payment_status
     );
 END;
 $$;

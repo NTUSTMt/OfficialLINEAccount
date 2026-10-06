@@ -203,9 +203,12 @@ function buildProfileDiffFlex(
   };
 }
 
+type ProfileIntent = 'activity' | 'gear' | 'payment' | 'browse';
+
 function Register({ userId }: { userId: string }) {
   const { t, i18n } = useTranslation();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
+  const [selectedIntents, setSelectedIntents] = useState<ProfileIntent[]>(['activity']);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNewUser, setIsNewUser] = useState(true);
@@ -285,6 +288,26 @@ function Register({ userId }: { userId: string }) {
   const [initialOfficerIntent, setInitialOfficerIntent] = useState<string>('');
   // 記錄初始表單資料，用於精確比對本次更新異動欄位 (避免推播顯示未修改項目)
   const [originalFormData, setOriginalFormData] = useState<ProfileData | null>(null);
+
+  // 切換目的勾選狀態（只是看看與其他互斥）
+  const toggleIntent = (intent: ProfileIntent) => {
+    if (intent === 'browse') {
+      setSelectedIntents(['browse']);
+      return;
+    }
+    setSelectedIntents((prev) => {
+      const filtered = prev.filter((i) => i !== 'browse');
+      if (filtered.includes(intent)) {
+        const next = filtered.filter((i) => i !== intent);
+        return next.length === 0 ? ['activity'] : next;
+      } else {
+        return [...filtered, intent];
+      }
+    });
+  };
+
+  const isActivity = selectedIntents.includes('activity');
+  const isBrowse = selectedIntents.includes('browse');
 
   // 載入 LINE Profile 與 Supabase/GAS 社員資料
   useEffect(() => {
@@ -605,12 +628,17 @@ function Register({ userId }: { userId: string }) {
     setStrengthProofFiles((prev) => prev.filter((_, idx) => idx !== idxToRemove));
   };
 
-  // 驗證各步驟欄位
-  const isStepValid = useMemo(() => {
-    switch (step) {
-      case 1:
-        // 姓名 (name)、國籍 (nationality)、身分狀態 (identityStatus)、系所 (department)、學號 (studentId)、手機 (phone)、Email (email)、LINE ID (realLineId)、偏好語言 (preferredLanguage) 均為必填
-        return (
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // 防呆：若在 0~3 步按下鍵盤的 Enter/Go 鍵，引導至下一步，而非直接送出表單
+    if (step < 4) {
+      setStep(step + 1);
+      return;
+    }
+
+    const isStep1Complete = !isBrowse
+      ? Boolean(
           formData.name.trim() !== '' &&
           Boolean(formData.nationality && formData.nationality.trim() !== '') &&
           formData.identityStatus.trim() !== '' &&
@@ -620,51 +648,66 @@ function Register({ userId }: { userId: string }) {
           formData.email.trim() !== '' &&
           formData.realLineId.trim() !== '' &&
           Boolean(formData.preferredLanguage && formData.preferredLanguage.trim() !== '')
-        );
-      case 2:
-        // 步驟 2 皆為選填欄位
-        return true;
-      case 3:
-        // 緊急聯絡人資訊為選填
-        return true;
-      case 4:
-        // 隱私權同意書與加入社員意願均為必填
-        return privacyAgreed && formData.intendOfficial.trim() !== '';
-      default:
-        return false;
-    }
-  }, [step, formData, privacyAgreed]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // 防呆：若在 1~3 步按下鍵盤的 Enter/Go 鍵，應引導至下一步，而非直接送出表單
-    if (step < 4) {
-      if (isStepValid) {
-        setStep(step + 1);
-      }
-      return;
-    }
-
-    const isStep1Complete = Boolean(
-      formData.name.trim() !== '' &&
-      Boolean(formData.nationality && formData.nationality.trim() !== '') &&
-      formData.identityStatus.trim() !== '' &&
-      formData.department.trim() !== '' &&
-      formData.studentId.trim() !== '' &&
-      formData.phone.trim() !== '' &&
-      formData.email.trim() !== '' &&
-      formData.realLineId.trim() !== '' &&
-      Boolean(formData.preferredLanguage && formData.preferredLanguage.trim() !== '')
-    );
+        )
+      : true;
 
     if (!isStep1Complete) {
       setStep(1);
-      alert(t('register.alert.fillRequiredFields', '請先完成第一步驟的必填欄位！'));
+      alert(t('register.alert.fillStep1Required', '請先補齊基本資料必填欄位！'));
       return;
     }
 
-    if (!isStepValid) return;
+    const isStep2Complete = isActivity
+      ? Boolean(
+          formData.gender.trim() !== '' &&
+          formData.birthday.trim() !== '' &&
+          formData.idNumber.trim() !== '' &&
+          formData.studentAddr.trim() !== ''
+        )
+      : true;
+
+    if (!isStep2Complete) {
+      setStep(2);
+      alert(t('register.alert.fillStep2Required', '請先補齊身分與保險必填欄位！'));
+      return;
+    }
+
+    const isStep3Complete = isActivity
+      ? Boolean(
+          formData.emerName.trim() !== '' &&
+          formData.emerRel.trim() !== '' &&
+          formData.emerPhone.trim() !== '' &&
+          formData.emerAddr.trim() !== ''
+        )
+      : true;
+
+    if (!isStep3Complete) {
+      setStep(3);
+      alert(t('register.alert.fillStep3Required', '請先補齊緊急聯絡人必填欄位！'));
+      return;
+    }
+
+    const isStep4Complete = isActivity
+      ? Boolean(
+          formData.exp.trim() !== '' &&
+          formData.strength.trim() !== '' &&
+          formData.intendOfficial.trim() !== ''
+        )
+      : true;
+
+    if (!isStep4Complete) {
+      setStep(4);
+      alert(t('register.alert.fillStep4Required', '請先補齊登山體能與意願必填欄位！'));
+      return;
+    }
+
+    const isPrivacyComplete = !isBrowse ? privacyAgreed : true;
+
+    if (!isPrivacyComplete) {
+      setStep(4);
+      alert(t('register.alert.agreePrivacy', '請勾選同意隱私權條款！'));
+      return;
+    }
 
     setIsSubmitting(true);
     let sbSaved = false;
@@ -723,7 +766,7 @@ function Register({ userId }: { userId: string }) {
         });
       }
 
-      // 2. ⚡ 100% 直寫 Supabase (< 50ms，以安全 RPC 限制本人存取，DB Triggers 自動排入 sync_queue)
+      // 2. 100% 直寫 Supabase (< 50ms，以安全 RPC 限制本人存取，DB Triggers 自動排入 sync_queue)
       let saveRes: { success: boolean; message?: string } = { success: false };
       if (userId && userId !== 'TEST_USER_ID') {
         saveRes = await saveMemberProfileToSupabase(userId, finalFormData);
@@ -836,7 +879,7 @@ function Register({ userId }: { userId: string }) {
       };
 
       if (sbSaved) {
-        // ⚡ 3. 非同步發送 LINE 基本資料更新/註冊完成推播通知 (純訊息，不碰試算表)
+        // 3. 非同步發送 LINE 基本資料更新/註冊完成推播通知 (純訊息，不碰試算表)
         if (userId && userId !== 'TEST_USER_ID') {
           const isWilling = (val?: string) => {
             if (!val) return false;
@@ -977,29 +1020,39 @@ function Register({ userId }: { userId: string }) {
 
       {/* 步驟進度條 */}
       <div className="step-progress-bar">
-        {[1, 2, 3, 4].map((s) => (
-          <div
-            key={s}
-            className={`step-dot-wrapper ${step >= s ? 'active' : ''} ${step === s ? 'current' : ''}`}
-            onClick={() => setStep(s)}
-            role="button"
-            tabIndex={0}
-            title={s === 1 ? t('register.steps.required') : s === 2 ? t('register.steps.basic') : s === 3 ? t('register.steps.safety') : t('register.steps.experience')}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setStep(s);
-              }
-            }}
-          >
-            <div className="step-dot">{s}</div>
-            <span className="step-label">
-              {s === 1 ? t('register.steps.required') : s === 2 ? t('register.steps.basic') : s === 3 ? t('register.steps.safety') : t('register.steps.experience')}
-            </span>
-          </div>
-        ))}
+        {[0, 1, 2, 3, 4].map((s) => {
+          const stepTitle =
+            s === 0
+              ? t('register.steps.purpose', '目的')
+              : s === 1
+              ? t('register.steps.required', '基本')
+              : s === 2
+              ? t('register.steps.basic', '身分')
+              : s === 3
+              ? t('register.steps.safety', '緊急')
+              : t('register.steps.experience', '體能');
+          return (
+            <div
+              key={s}
+              className={`step-dot-wrapper ${step >= s ? 'active' : ''} ${step === s ? 'current' : ''}`}
+              onClick={() => setStep(s)}
+              role="button"
+              tabIndex={0}
+              title={stepTitle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setStep(s);
+                }
+              }}
+            >
+              <div className="step-dot">{s}</div>
+              <span className="step-label">{stepTitle}</span>
+            </div>
+          );
+        })}
         <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${((step - 1) / 3) * 100}%` }}></div>
+          <div className="progress-fill" style={{ width: `${(step / 4) * 100}%` }}></div>
         </div>
       </div>
 
@@ -1037,25 +1090,160 @@ function Register({ userId }: { userId: string }) {
           </div>
         )}
 
-        {/* 步驟 1: 主要必填資料 */}
+        {/* 步驟 0: 目的選擇 */}
+        {step === 0 && (
+          <div className="form-step-content animate-fade-in">
+            <h2 className="step-title">{t('register.intent.title', '請選擇您預計使用的社團功能')}</h2>
+            <p style={{ fontSize: '13px', color: '#64748b', marginTop: '-12px', marginBottom: '20px', lineHeight: 1.5 }}>
+              {t('register.intent.subtitle', '系統將根據您的選擇自動調整必填項目')}
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
+              {/* 1. 活動出隊 */}
+              <div
+                onClick={() => toggleIntent('activity')}
+                style={{
+                  padding: '16px',
+                  borderRadius: '10px',
+                  border: selectedIntents.includes('activity') ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                  backgroundColor: selectedIntents.includes('activity') ? '#eff6ff' : '#ffffff',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIntents.includes('activity')}
+                  onChange={() => {}}
+                  style={{ marginTop: '4px', cursor: 'pointer', width: '18px', height: '18px' }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b', marginBottom: '4px' }}>
+                    {t('register.intent.activity', '活動出隊')}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.4 }}>
+                    {t('register.intent.activityDesc', '報名社團出隊活動（需要保險、緊急聯絡人與體能證明）')}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. 裝備租借 */}
+              <div
+                onClick={() => toggleIntent('gear')}
+                style={{
+                  padding: '16px',
+                  borderRadius: '10px',
+                  border: selectedIntents.includes('gear') ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                  backgroundColor: selectedIntents.includes('gear') ? '#eff6ff' : '#ffffff',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIntents.includes('gear')}
+                  onChange={() => {}}
+                  style={{ marginTop: '4px', cursor: 'pointer', width: '18px', height: '18px' }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b', marginBottom: '4px' }}>
+                    {t('register.intent.gear', '裝備租借')}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.4 }}>
+                    {t('register.intent.gearDesc', '租借社團高山帳篷、睡袋等裝備器材')}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. 繳費申報 */}
+              <div
+                onClick={() => toggleIntent('payment')}
+                style={{
+                  padding: '16px',
+                  borderRadius: '10px',
+                  border: selectedIntents.includes('payment') ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                  backgroundColor: selectedIntents.includes('payment') ? '#eff6ff' : '#ffffff',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIntents.includes('payment')}
+                  onChange={() => {}}
+                  style={{ marginTop: '4px', cursor: 'pointer', width: '18px', height: '18px' }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b', marginBottom: '4px' }}>
+                    {t('register.intent.payment', '繳費申報')}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.4 }}>
+                    {t('register.intent.paymentDesc', '繳納社費或申報各項款項')}
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. 只是看看 */}
+              <div
+                onClick={() => toggleIntent('browse')}
+                style={{
+                  padding: '16px',
+                  borderRadius: '10px',
+                  border: selectedIntents.includes('browse') ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                  backgroundColor: selectedIntents.includes('browse') ? '#eff6ff' : '#ffffff',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIntents.includes('browse')}
+                  onChange={() => {}}
+                  style={{ marginTop: '4px', cursor: 'pointer', width: '18px', height: '18px' }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b', marginBottom: '4px' }}>
+                    {t('register.intent.browse', '只是看看')}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.4 }}>
+                    {t('register.intent.browseDesc', '隨意瀏覽功能，所有欄位皆可選填')}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 步驟 1: 主要基本資料 */}
         {step === 1 && (
           <div className="form-step-content animate-fade-in">
             <h2 className="step-title">{t('register.step1.title')}</h2>
             
             <div className="form-group">
-              <label className="required">{t('register.step1.nameLabel')}</label>
+              <label className={!isBrowse ? "required" : ""}>{t('register.step1.nameLabel')}</label>
               <input
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
                 placeholder={t('register.step1.namePlaceholder')}
-                required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">{t('register.step1.identityStatusLabel')}</label>
+              <label className={!isBrowse ? "required" : ""}>{t('register.step1.identityStatusLabel')}</label>
               <select
                 name="identityStatus"
                 value={formData.identityStatus}
@@ -1069,7 +1257,6 @@ function Register({ userId }: { userId: string }) {
                     intendOfficer: val === '臺科大在校學生' ? prev.intendOfficer : ''
                   }));
                 }}
-                required
               >
                 <option value="">{t('register.step1.identityStatusDefault')}</option>
                 <option value="臺科大在校學生">{t('register.step1.identityStudent')}</option>
@@ -1079,72 +1266,66 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label className="required">{t('register.step1.departmentLabel')}</label>
+              <label className={!isBrowse ? "required" : ""}>{t('register.step1.departmentLabel')}</label>
               <input
                 type="text"
                 name="department"
                 value={formData.department}
                 onChange={handleChange}
                 placeholder={t('register.step1.departmentPlaceholder')}
-                required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">{t('register.step1.studentIdLabel')}</label>
+              <label className={!isBrowse ? "required" : ""}>{t('register.step1.studentIdLabel')}</label>
               <input
                 type="text"
                 name="studentId"
                 value={formData.studentId}
                 onChange={handleChange}
                 placeholder={t('register.step1.studentIdPlaceholder')}
-                required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">{t('register.step1.phoneLabel')}</label>
+              <label className={!isBrowse ? "required" : ""}>{t('register.step1.phoneLabel')}</label>
               <input
                 type="tel"
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
                 placeholder={t('register.step1.phonePlaceholder')}
-                required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">{t('register.step1.emailLabel')}</label>
+              <label className={!isBrowse ? "required" : ""}>{t('register.step1.emailLabel')}</label>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
                 placeholder={t('register.step1.emailPlaceholder')}
-                required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">{t('register.step1.lineIdLabel')}</label>
+              <label className={!isBrowse ? "required" : ""}>{t('register.step1.lineIdLabel')}</label>
               <input
                 type="text"
                 name="realLineId"
                 value={formData.realLineId}
                 onChange={handleChange}
                 placeholder={t('register.step1.lineIdPlaceholder')}
-                required
               />
             </div>
 
             <div className="form-group">
-              <label className="required">{t('register.step1.preferredLanguageLabel')}</label>
+              <label className={!isBrowse ? "required" : ""}>{t('register.step1.preferredLanguageLabel')}</label>
               <select
                 name="preferredLanguage"
                 value={formData.preferredLanguage || 'zh'}
                 onChange={handleChange}
-                required
               >
                 <option value="zh">{t('register.step1.preferredLanguageZh')}</option>
                 <option value="en">{t('register.step1.preferredLanguageEn')}</option>
@@ -1152,7 +1333,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label className="required">{t('register.step1.nationalityLabel', '國籍')}</label>
+              <label className={!isBrowse ? "required" : ""}>{t('register.step1.nationalityLabel', '國籍')}</label>
               <select
                 name="nationality"
                 value={isCustomNationality ? 'Other' : (formData.nationality || '')}
@@ -1166,7 +1347,6 @@ function Register({ userId }: { userId: string }) {
                     setFormData((prev) => ({ ...prev, nationality: val }));
                   }
                 }}
-                required
               >
                 <option value="" disabled>
                   {t('register.step1.nationalityDefault', '請選擇')}
@@ -1186,7 +1366,6 @@ function Register({ userId }: { userId: string }) {
                   placeholder={t('register.step1.nationalityPlaceholder', '請輸入國籍國家名稱')}
                   value={formData.nationality || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))}
-                  required
                   style={{ marginTop: '8px' }}
                 />
               )}
@@ -1205,7 +1384,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step2.genderLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step2.genderLabel')}</label>
               <select name="gender" value={formData.gender} onChange={handleChange}>
                 <option value="">{t('register.step2.genderPlaceholder')}</option>
                 <option value="男">{t('register.step2.genderMale')}</option>
@@ -1214,7 +1393,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step2.birthdayLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step2.birthdayLabel')}</label>
               <input
                 type="date"
                 name="birthday"
@@ -1224,7 +1403,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step2.idNumberLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step2.idNumberLabel')}</label>
               <input
                 type="text"
                 name="idNumber"
@@ -1235,7 +1414,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step2.addressLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step2.addressLabel')}</label>
               <input
                 type="text"
                 name="studentAddr"
@@ -1269,7 +1448,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step3.emerNameLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step3.emerNameLabel')}</label>
               <input
                 type="text"
                 name="emerName"
@@ -1280,7 +1459,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step3.emerRelLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step3.emerRelLabel')}</label>
               <input
                 type="text"
                 name="emerRel"
@@ -1291,7 +1470,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step3.emerPhoneLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step3.emerPhoneLabel')}</label>
               <input
                 type="tel"
                 name="emerPhone"
@@ -1302,7 +1481,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step3.emerAddrLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step3.emerAddrLabel')}</label>
               <input
                 type="text"
                 name="emerAddr"
@@ -1325,7 +1504,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step4.expLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step4.expLabel')}</label>
               <textarea
                 name="exp"
                 value={formData.exp}
@@ -1336,7 +1515,7 @@ function Register({ userId }: { userId: string }) {
             </div>
 
             <div className="form-group">
-              <label>{t('register.step4.strengthLabel')}</label>
+              <label className={isActivity ? "required" : ""}>{t('register.step4.strengthLabel')}</label>
               <input
                 type="text"
                 name="strength"
@@ -1530,7 +1709,7 @@ function Register({ userId }: { userId: string }) {
                 <span className="checkmark"></span>
                 <span className="consent-text" style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
                   {t('register.step4.privacyConsent')}
-                  <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>*</span>
+                  {!isBrowse && <span style={{ color: '#ef4444', marginLeft: '4px', fontWeight: 'bold' }}>*</span>}
                 </span>
               </label>
             </div>
@@ -1538,7 +1717,7 @@ function Register({ userId }: { userId: string }) {
             {/* 意願調查 */}
             <div className="willingness-box" style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', textAlign: 'left' }}>
               <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>
-                {t('register.step4.intendOfficialTitle')} <span style={{ color: '#ef4444' }}>*</span>
+                {t('register.step4.intendOfficialTitle')} {isActivity && <span style={{ color: '#ef4444' }}>*</span>}
               </p>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
@@ -1646,7 +1825,7 @@ function Register({ userId }: { userId: string }) {
 
         {/* 按鈕導覽區 */}
         <div className="step-navigation-buttons" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px' }}>
-          {step > 1 ? (
+          {step > 0 ? (
             <button
               type="button"
               className="btn btn-secondary"
@@ -1665,10 +1844,9 @@ function Register({ userId }: { userId: string }) {
               type="button"
               className="btn btn-primary"
               onClick={() => setStep(step + 1)}
-              disabled={!isStepValid}
               style={{ width: '45%' }}
             >
-              {t('register.nav.next')}
+              {step === 0 ? t('register.intent.startBtn', '開始填寫資料') : t('register.nav.next')}
             </button>
           )}
           {step === 4 && (
@@ -1676,7 +1854,7 @@ function Register({ userId }: { userId: string }) {
               key="btn-submit"
               type="submit"
               className="btn btn-primary"
-              disabled={!isStepValid || isSubmitting}
+              disabled={isSubmitting}
               style={{ width: '45%', backgroundColor: '#10b981' }}
             >
               {isSubmitting ? t('register.nav.saving') : t('register.nav.submit')}

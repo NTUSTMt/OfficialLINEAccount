@@ -28,10 +28,24 @@
     "loading": "載入個人資料中，請稍候...",
     "submitting": "正在上傳檔案與儲存資料，請稍候...",
     "steps": {
-      "required": "必填",
-      "basic": "基本",
-      "safety": "安全",
-      "experience": "經驗"
+      "purpose": "目的",
+      "required": "基本",
+      "basic": "身分",
+      "safety": "緊急",
+      "experience": "體能"
+    },
+    "intent": {
+      "title": "請選擇您預計使用的社團功能",
+      "subtitle": "系統將根據您的選擇自動調整必填項目",
+      "activity": "活動出隊",
+      "activityDesc": "報名社團出隊活動（需要保險、緊急聯絡人與體能證明）",
+      "gear": "裝備租借",
+      "gearDesc": "租借社團高山帳篷、睡袋等裝備器材",
+      "payment": "繳費申報",
+      "paymentDesc": "繳納社費或申報各項款項",
+      "browse": "只是看看",
+      "browseDesc": "隨意瀏覽功能，所有欄位皆可選填",
+      "startBtn": "開始填寫資料"
     },
     "draftRestored": "已為您自動還原上次填寫的草稿",
     "clearDraft": "清除草稿",
@@ -44,6 +58,11 @@
       "registerSuccess": "註冊成功！資料已寫入社團資料庫。",
       "updateSuccess": "資料已成功更新！若有新的登山經歷或體能證明，記得隨時保持更新以增加出隊錄取機會喔！",
       "saveFailed": "儲存失敗: {{message}}",
+      "fillStep1Required": "請先補齊基本資料必填欄位！",
+      "fillStep2Required": "請先補齊身分與保險必填欄位！",
+      "fillStep3Required": "請先補齊緊急聯絡人必填欄位！",
+      "fillStep4Required": "請先補齊登山體能與意願必填欄位！",
+      "agreePrivacy": "請勾選同意隱私權條款！",
       "contactAdmin": "請聯絡社團管理員",
       "networkError": "網路連線失敗，請檢查您的網路狀態！"
     },
