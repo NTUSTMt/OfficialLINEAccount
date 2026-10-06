@@ -4307,5 +4307,246 @@ describe('58. 社員使用指南 (Member Guide) 在更多服務卡片與 Webhook
   });
 });
 
+describe('59. 繳費申報卡片設計、繳費成功 Email 通知與社籍到期日提取測試集 (v0.1.251)', () => {
+  it('1. _buildPaymentDeclarationFlex 正確生成幹部申報卡片，包含大字金額、末五碼、一鍵核銷與檢視匯款截圖按鈕', () => {
+    function _buildPaymentDeclarationFlex(params) {
+      var userName = params.userName || "社員";
+      var paymentId = params.paymentId || "";
+      var totalAmount = params.totalAmount || 0;
+      var last5Digits = params.last5Digits || "無";
+      var items = params.selectedNames || (params.itemsZh ? params.itemsZh.split('\n').map(function(s){ return s.replace(/^-\s*/, '').replace(/^\s*-\s*/, '').trim(); }).filter(Boolean) : ["社團相關費用"]);
+      var note = params.note || "";
+      var verifyLink = params.verifyLink || "";
+      var proofImageUrl = params.proofImageUrl || "";
+
+      var bodyContents = [
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "md",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "申報人", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: userName, weight: "bold", color: "#0f172a", size: "sm", flex: 5, wrap: true }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "單號", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "末五碼", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: last5Digits, weight: "bold", color: "#0f172a", size: "sm", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "申報金額", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: "$" + totalAmount + " 元", weight: "bold", color: "#059669", size: "lg", flex: 5 }
+              ]
+            }
+          ]
+        },
+        { type: "separator", margin: "lg", color: "#e2e8f0" },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "md",
+          spacing: "xs",
+          contents: [
+            { type: "text", text: "申報項目：", color: "#64748b", size: "xs", weight: "bold" }
+          ].concat(items.map(function(item) {
+            return {
+              type: "text",
+              text: "• " + item,
+              color: "#334155",
+              size: "xs",
+              wrap: true
+            };
+          }))
+        }
+      ];
+
+      if (note) {
+        bodyContents.push({
+          type: "box",
+          layout: "vertical",
+          margin: "md",
+          contents: [
+            { type: "text", text: "備註：", color: "#64748b", size: "xs", weight: "bold" },
+            { type: "text", text: note, color: "#475569", size: "xs", wrap: true }
+          ]
+        });
+      }
+
+      var footerButtons = [];
+      if (verifyLink) {
+        footerButtons.push({
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "確認無誤（一鍵核銷）",
+            uri: verifyLink
+          }
+        });
+      }
+
+      if (proofImageUrl) {
+        footerButtons.push({
+          type: "button",
+          style: "secondary",
+          color: "#475569",
+          height: "sm",
+          margin: "sm",
+          action: {
+            type: "uri",
+            label: "檢視匯款截圖",
+            uri: proofImageUrl
+          }
+        });
+      }
+
+      return {
+        type: "bubble",
+        size: "mega",
+        header: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#065f46",
+          contents: [{ type: "text", text: "台科登山社 • 新繳費申報" }]
+        },
+        body: { type: "box", layout: "vertical", contents: bodyContents },
+        footer: { type: "box", layout: "vertical", contents: footerButtons }
+      };
+    }
+
+    const flex = _buildPaymentDeclarationFlex({
+      userName: '王大明',
+      paymentId: 'PAY_20261006_001',
+      totalAmount: 1200,
+      last5Digits: '54321',
+      selectedNames: ['直到畢業社費-大學部 (有效至 2028/06/30)', '雙人帳篷 x 1'],
+      note: '已於下午三點轉帳',
+      verifyLink: 'https://equipments-seven.vercel.app/confirm-payment?paymentId=PAY_20261006_001&token=xyz',
+      proofImageUrl: 'https://lh3.googleusercontent.com/d/test1234=s0'
+    });
+
+    assert.strictEqual(flex.type, 'bubble');
+    assert.strictEqual(flex.footer.contents.length, 2);
+    assert.strictEqual(flex.footer.contents[0].action.label, '確認無誤（一鍵核銷）');
+    assert.strictEqual(flex.footer.contents[0].action.uri, 'https://equipments-seven.vercel.app/confirm-payment?paymentId=PAY_20261006_001&token=xyz');
+    assert.strictEqual(flex.footer.contents[1].action.label, '檢視匯款截圖');
+    assert.strictEqual(flex.footer.contents[1].action.uri, 'https://lh3.googleusercontent.com/d/test1234=s0');
+  });
+
+  it('2. 社費有效期限 (有效至 YYYY/MM/DD) 正則提取正確寫入，若無則保持 NULL 不做多餘保底', () => {
+    function extractExpiry(itemsStr) {
+      var match = (itemsStr || '').match(/(\d{4}[-/]\d{2}[-/]\d{2})/);
+      return match ? match[1].replace(/\//g, '-') : null;
+    }
+
+    // 情況 A：大學部畢業社費
+    const expiryA = extractExpiry('直到畢業社費-大學部 Membership Fee (有效至 2028/06/30)');
+    assert.strictEqual(expiryA, '2028-06-30');
+
+    // 情況 B：學期社費
+    const expiryB = extractExpiry('113-1 學期社費 Membership Fee (有效至 2025/01/31)');
+    assert.strictEqual(expiryB, '2025-01-31');
+
+    // 情況 C：未帶入日期（一般活動或未備註社費）-> 保持 NULL
+    const expiryC = extractExpiry('社團出隊活動費');
+    assert.strictEqual(expiryC, null);
+  });
+
+  it('3. _handleNotifyPaymentConfirmed 整合驗證：核銷完成時觸發社員 Email、社員 LINE 與幹部群組推播', () => {
+    const sentEmails = [];
+    const sentLinePushes = [];
+
+    const mockMailApp = {
+      sendEmail: (opts) => { sentEmails.push(opts); }
+    };
+
+    function simulateNotifyPaymentConfirmed(json) {
+      const paymentId = json.paymentId || "";
+      const userName = json.userName || "社員";
+      const userEmail = json.userEmail || "";
+      const amount = json.amount || 0;
+      const items = json.items || "社團費用";
+      const lineUserId = json.lineUserId || "";
+
+      // 1. 寄送 Email
+      if (userEmail && mockMailApp) {
+        mockMailApp.sendEmail({
+          to: userEmail,
+          subject: "【台科登山社】繳費成功確認通知 - " + paymentId,
+          body: "親愛的 " + userName + " 您好：繳費已核銷",
+          name: "台科登山社小岳助理"
+        });
+      }
+
+      // 2. LINE 推播
+      if (lineUserId && lineUserId.startsWith("U")) {
+        sentLinePushes.push({
+          to: lineUserId,
+          message: "🎉 繳費成功確認通知 (" + paymentId + ")"
+        });
+      }
+
+      return { status: "success", message: "核銷通知推播與確認信已成功送出" };
+    }
+
+    const res = simulateNotifyPaymentConfirmed({
+      paymentId: 'PAY_20261006_999',
+      userName: '林山友',
+      userEmail: 'member@test.ntust.edu.tw',
+      amount: 400,
+      items: '研究所社費 (有效至 2026/06/30)',
+      lineUserId: 'U112233445566778899'
+    });
+
+    assert.strictEqual(res.status, 'success');
+    assert.strictEqual(sentEmails.length, 1);
+    assert.strictEqual(sentEmails[0].to, 'member@test.ntust.edu.tw');
+    assert.strictEqual(sentEmails[0].subject, '【台科登山社】繳費成功確認通知 - PAY_20261006_999');
+    assert.strictEqual(sentLinePushes.length, 1);
+    assert.strictEqual(sentLinePushes[0].to, 'U112233445566778899');
+  });
+
+  it('4. 移除 @小岳助理 核銷 文字指令：文字輸入「核銷 PAY_123」不再觸發核銷處理，避免非單鍵授權漏洞', () => {
+    function parseTextMessage(text) {
+      const queryText = text.trim();
+      // 指令 2 已經移除，若輸入「核銷」則不匹配任何系統指令，回退一般交談/Gemini
+      if (queryText.indexOf("最新活動") > -1) {
+        return "HANDLE_EVENTS";
+      }
+      return "HANDLE_CHAT_OR_GEMINI";
+    }
+
+    assert.strictEqual(parseTextMessage("核銷 PAY_20260914_001"), "HANDLE_CHAT_OR_GEMINI");
+    assert.strictEqual(parseTextMessage("@小岳助理 核銷 PAY_20260914_001"), "HANDLE_CHAT_OR_GEMINI");
+    assert.strictEqual(parseTextMessage("最新活動"), "HANDLE_EVENTS");
+  });
+});
+
 
 

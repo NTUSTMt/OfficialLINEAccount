@@ -119,7 +119,7 @@ BEGIN
             WHERE line_user_id = p_line_user_id;
 
             IF v_expiry IS NOT NULL AND v_expiry != '' THEN
-                v_item_labels := array_append(v_item_labels, '社籍與社費 (Membership Fee) (有效至 ' || v_expiry || ')');
+                v_item_labels := array_append(v_item_labels, '社籍與社費 (Membership Fee) (有效至 ' || replace(v_expiry, '-', '/') || ')');
             ELSE
                 v_item_labels := array_append(v_item_labels, '社籍與社費 (Membership Fee)');
             END IF;
@@ -235,6 +235,7 @@ DECLARE
     v_new_signup_status event_signup_status_enum;
     v_extracted_expiry TEXT;
     v_calculated_expiry DATE;
+    v_user_email TEXT;
 BEGIN
     -- 參數基本防禦
     IF p_payment_id IS NULL OR trim(p_payment_id) = '' THEN
@@ -251,6 +252,11 @@ BEGIN
         RETURN jsonb_build_object('success', FALSE, 'error', '找不到繳費單號：' || p_payment_id);
     END IF;
 
+    -- 查詢繳費社員的 Email
+    IF v_payment.line_user_id IS NOT NULL THEN
+        SELECT email INTO v_user_email FROM members WHERE line_user_id = v_payment.line_user_id;
+    END IF;
+
     -- 比對安全金鑰 (若該紀錄存在 verify_token 則必須相符)
     IF v_payment.verify_token IS NOT NULL AND v_payment.verify_token != '' THEN
         IF v_payment.verify_token != trim(p_verify_token) THEN
@@ -265,6 +271,7 @@ BEGIN
             'alreadyConfirmed', TRUE,
             'paymentId', v_payment.id,
             'userName', COALESCE(v_payment.name, '社員'),
+            'userEmail', v_user_email,
             'amount', v_payment.amount,
             'items', COALESCE(NULLIF(v_payment.type, ''), '社團活動/裝備費用'),
             'lineUserId', v_payment.line_user_id,
@@ -338,6 +345,7 @@ BEGIN
         'alreadyConfirmed', FALSE,
         'paymentId', v_payment.id,
         'userName', COALESCE(v_payment.name, '社員'),
+        'userEmail', v_user_email,
         'amount', v_payment.amount,
         'items', COALESCE(NULLIF(v_payment.type, ''), '社團活動/裝備費用'),
         'lineUserId', v_payment.line_user_id,

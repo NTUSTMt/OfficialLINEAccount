@@ -782,19 +782,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // 2. 幹部核銷指令（支援「核銷 PAY_xxx」或「@小岳助理 核銷 PAY_xxx」）
-  if (queryText.indexOf("核銷") === 0 || queryText.indexOf("確認核銷") === 0) {
-    var paymentId = queryText.replace(/^(確認核銷|核銷)\s*/, "").trim();
-    if (paymentId) {
-      _processPaymentVerification(paymentId, "幹部指令核銷", true, replyToken);
-      return;
-    } else {
-      _replyMessageSmart(replyToken, "請輸入欲核銷的繳費單號，例如：\n@小岳助理 核銷 PAY_20260914_001", true);
-      return;
-    }
-  }
-
-  // 3. 最新活動查詢 (支援圖文選單「最新活動 Activities」、「最新活動」、「Activities」、「Activiies」、「報名活動」、「Events」)
+  // 2. 最新活動查詢 (支援圖文選單「最新活動 Activities」、「最新活動」、「Activities」、「Activiies」、「報名活動」、「Events」)
   if (
     text.indexOf("最新活動") > -1 ||
     lowerText.indexOf("activi") > -1 ||
@@ -1340,10 +1328,24 @@ function pushAdminMessage(text, customSubject, optionsOrHtml) {
     console.warn("pushAdminMessage LINE 略過: ADMIN_BOT_TOKEN 與 MEMBER_BOT_TOKEN 皆未設定");
     return;
   }
+
+  var lineMessages = [];
+  if (optionsOrHtml && typeof optionsOrHtml === 'object' && optionsOrHtml.flexMessage) {
+    lineMessages = [optionsOrHtml.flexMessage];
+  } else if (optionsOrHtml && typeof optionsOrHtml === 'object' && optionsOrHtml.flexContents) {
+    lineMessages = [{
+      type: 'flex',
+      altText: optionsOrHtml.altText || subject || (text ? text.slice(0, 400) : "新申報通知"),
+      contents: optionsOrHtml.flexContents
+    }];
+  } else {
+    lineMessages = [{ type: 'text', text: text }];
+  }
+
   try {
     var res = _lineAPI('push', token, {
       to: adminGroupId,
-      messages: [{ type: 'text', text: text }]
+      messages: lineMessages
     });
     var code = res ? res.getResponseCode() : 0;
     var content = res ? res.getContentText() : "";
@@ -1354,7 +1356,7 @@ function pushAdminMessage(text, customSubject, optionsOrHtml) {
       console.warn("主要 Token 推播失敗，切換 MEMBER_BOT_TOKEN 備援重試...");
       var fbRes = _lineAPI('push', MEMBER_BOT_TOKEN, {
         to: adminGroupId,
-        messages: [{ type: 'text', text: text }]
+        messages: lineMessages
       });
       console.log("MEMBER_BOT_TOKEN 備援推播結果: (HTTP " + (fbRes ? fbRes.getResponseCode() : 0) + "): " + (fbRes ? fbRes.getContentText() : ""));
     }
@@ -1635,7 +1637,7 @@ function sendEventList(replyToken, userId) {
             "weight": "bold",
             "color": tagColor,
             "size": "sm",
-            "flex": 1
+            "flex": 0
           }, {
             "type": "box",
             "layout": "horizontal",
@@ -1651,7 +1653,8 @@ function sendEventList(replyToken, userId) {
               "text": regCountDisplay,
               "size": "xs",
               "color": "#0284c7",
-              "weight": "bold"
+              "weight": "bold",
+              "flex": 0
             }]
           }]
         }, {
@@ -1903,7 +1906,7 @@ function sendEventDetail(replyToken, eventId, userId) {
               "weight": "bold",
               "size": "sm",
               "color": "#1DB446",
-              "flex": 1
+              "flex": 0
             },
             {
               "type": "box",
@@ -1921,7 +1924,8 @@ function sendEventDetail(replyToken, eventId, userId) {
                   "text": regCountDisplay,
                   "size": "xs",
                   "color": "#0284c7",
-                  "weight": "bold"
+                  "weight": "bold",
+                  "flex": 0
                 }
               ]
             }
@@ -2537,6 +2541,283 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
     var exMsg = "系統發生錯誤：" + (err.message || err) + "\n─────────────\nSystem error: " + (err.message || err);
     _replyMessage(replyToken, _splitBilingualMessage(exMsg, prefLang));
   }
+}
+
+/**
+ * 建立幹部群組新繳費申報 Flex Message 卡片
+ */
+function _buildPaymentDeclarationFlex(params) {
+  var userName = params.userName || "社員";
+  var paymentId = params.paymentId || "";
+  var totalAmount = params.totalAmount || 0;
+  var last5Digits = params.last5Digits || "無";
+  var items = params.selectedNames || (params.itemsZh ? params.itemsZh.split('\n').map(function(s){ return s.replace(/^-\s*/, '').replace(/^\s*-\s*/, '').trim(); }).filter(Boolean) : ["社團相關費用"]);
+  var note = params.note || "";
+  var verifyLink = params.verifyLink || "";
+  var proofImageUrl = params.proofImageUrl || "";
+
+  var bodyContents = [
+    {
+      type: "box",
+      layout: "vertical",
+      margin: "md",
+      spacing: "sm",
+      contents: [
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "申報人", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: userName, weight: "bold", color: "#0f172a", size: "sm", flex: 5, wrap: true }
+          ]
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "單號", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" }
+          ]
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "末五碼", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: last5Digits, weight: "bold", color: "#0f172a", size: "sm", flex: 5 }
+          ]
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "申報金額", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: "$" + totalAmount + " 元", weight: "bold", color: "#059669", size: "lg", flex: 5 }
+          ]
+        }
+      ]
+    },
+    { type: "separator", margin: "lg", color: "#e2e8f0" },
+    {
+      type: "box",
+      layout: "vertical",
+      margin: "md",
+      spacing: "xs",
+      contents: [
+        { type: "text", text: "申報項目：", color: "#64748b", size: "xs", weight: "bold" }
+      ].concat(items.map(function(item) {
+        return {
+          type: "text",
+          text: "• " + item,
+          color: "#334155",
+          size: "xs",
+          wrap: true
+        };
+      }))
+    }
+  ];
+
+  if (note) {
+    bodyContents.push({
+      type: "box",
+      layout: "vertical",
+      margin: "md",
+      contents: [
+        { type: "text", text: "備註：", color: "#64748b", size: "xs", weight: "bold" },
+        { type: "text", text: note, color: "#475569", size: "xs", wrap: true }
+      ]
+    });
+  }
+
+  var footerButtons = [];
+  if (verifyLink) {
+    footerButtons.push({
+      type: "button",
+      style: "primary",
+      color: "#059669",
+      height: "sm",
+      action: {
+        type: "uri",
+        label: "確認無誤（一鍵核銷）",
+        uri: verifyLink
+      }
+    });
+  }
+
+  if (proofImageUrl) {
+    footerButtons.push({
+      type: "button",
+      style: "secondary",
+      color: "#475569",
+      height: "sm",
+      margin: "sm",
+      action: {
+        type: "uri",
+        label: "檢視匯款截圖",
+        uri: proofImageUrl
+      }
+    });
+  }
+
+  var flexContents = {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#065f46",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "台科登山社 • 新繳費申報",
+          color: "#ffffff",
+          weight: "bold",
+          size: "md"
+        },
+        {
+          type: "text",
+          text: "請核對帳目後點擊下方按鈕進行核銷",
+          color: "#a7f3d0",
+          size: "xxs",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      contents: bodyContents
+    }
+  };
+
+  if (footerButtons.length > 0) {
+    flexContents.footer = {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "14px",
+      contents: footerButtons
+    };
+  }
+
+  return flexContents;
+}
+
+/**
+ * 建立個人個人繳費成功確認 Flex Message 卡片
+ */
+function _buildPaymentConfirmedFlex(params) {
+  var userName = params.userName || "社員";
+  var paymentId = params.paymentId || "";
+  var amount = params.amount || 0;
+  var items = params.items || "社團活動/裝備費用";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "🎉 繳費成功確認通知",
+          color: "#ffffff",
+          weight: "bold",
+          size: "md"
+        },
+        {
+          type: "text",
+          text: "幹部已確認收到款項，核銷作業已完成！",
+          color: "#d1fae5",
+          size: "xxs",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "姓名", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: userName, weight: "bold", color: "#0f172a", size: "sm", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "單號", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "核銷金額", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: "$" + amount + " 元", weight: "bold", color: "#059669", size: "md", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "核銷項目", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: items, color: "#334155", size: "sm", flex: 5, wrap: true }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "狀態", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: "已核銷 Confirmed", weight: "bold", color: "#059669", size: "sm", flex: 5 }
+              ]
+            }
+          ]
+        },
+        { type: "separator", margin: "lg", color: "#e2e8f0" },
+        {
+          type: "text",
+          text: "相關活動報名與裝備狀態已同步更新，您可隨時至個人主頁查看！",
+          color: "#64748b",
+          size: "xs",
+          wrap: true,
+          margin: "md"
+        }
+      ]
+    }
+  };
 }
 
 
@@ -4730,7 +5011,7 @@ function _handleNotifyOfficersPayment(json) {
 
     var verifyLink = webVerifyLink || liffVerifyLink || gasVerifyLink;
 
-    // 1. 推播給幹部管理群組
+    // 1. 推播給幹部管理群組 (使用 LINE Flex Message 卡片排版)
     var adminMsg = "【幹部通知：新繳費申報】\n\n" +
       (userName ? "申報人：" + userName + "\n" : "") +
       "申報人 ID：" + userId + "\n" +
@@ -4740,10 +5021,23 @@ function _handleNotifyOfficersPayment(json) {
       "申報項目：\n" + itemsZh +
       (proofImageUrl ? "\n• 匯款證明圖片：" + proofImageUrl : "") +
       noteZh + "\n\n" +
-      "幹部核銷方式（任選一種）：\n" +
-      (paymentId ? "1. LINE 群組輸入：@小岳助理 核銷 " + paymentId + "\n" : "") +
-      (verifyLink ? "2. 點擊單鍵核銷連結：" + verifyLink + "\n" : "2. 至管理後台更新對帳狀態\n") +
+      (verifyLink ? "點擊單鍵核銷連結完成核銷：" + verifyLink + "\n" : "請至管理後台更新對帳狀態\n") +
       "\n資料已安全記錄於 Supabase，請幹部核對網銀後核銷！";
+
+    var flexCard = (typeof _buildPaymentDeclarationFlex === 'function')
+      ? _buildPaymentDeclarationFlex({
+          userName: userName,
+          userId: userId,
+          paymentId: paymentId,
+          totalAmount: totalAmount,
+          last5Digits: last5Digits,
+          selectedNames: selectedNames,
+          itemsZh: itemsZh,
+          note: details.note,
+          verifyLink: verifyLink,
+          proofImageUrl: proofImageUrl
+        })
+      : null;
 
     // 精緻 HTML Email 樣板 (內建 100% 保證可見的翡翠綠單鍵核銷大按鈕，免 Google 登入)
     var paymentHtml = "";
@@ -4777,17 +5071,43 @@ function _handleNotifyOfficersPayment(json) {
         '<p style="color: #64748b; font-size: 12px; margin-top: 10px;">點擊後系統將自動更新 Supabase 狀態為【已核銷 Confirmed】，並推播通知該社員與幹部群組！</p>' +
         '</div>' +
         '<div style="border-top: 1px dashed #cbd5e1; padding-top: 16px; font-size: 13px; color: #64748b;">' +
-        '<strong>備用核銷方式：</strong><br>' +
-        '1. LINE 幹部群組輸入：<code>@小岳助理 核銷 ' + paymentId + '</code><br>' +
-        '2. 直接複製核銷網址：<a href="' + verifyLink + '" style="color: #2563eb; word-break: break-all;">' + verifyLink + '</a>' +
+        '<strong>單鍵核銷網址：</strong><br>' +
+        '<a href="' + verifyLink + '" style="color: #2563eb; word-break: break-all;">' + verifyLink + '</a>' +
         '</div>' +
         '</div>';
     }
 
     var paymentSubject = "【台科登山社】新繳費申報 - $" + totalAmount + " (" + (userName || "未知社員") + "，末5碼 " + last5Digits + ")";
-    pushAdminMessage(adminMsg, paymentSubject, { htmlBody: paymentHtml });
+    pushAdminMessage(adminMsg, paymentSubject, {
+      htmlBody: paymentHtml,
+      flexContents: flexCard,
+      altText: "【新繳費申報】" + (userName || "社員") + " - $" + totalAmount + " 元 (" + last5Digits + ")"
+    });
 
-    return _successResponse({ message: "繳費申報幹部推播已成功送出" });
+    // 2. 同步保底推播給使用者個人 LINE 聊天室 (個人繳費收據)
+    if (userId && userId !== "TEST_USER_ID") {
+      var userMsg = "【繳費申報已成功送出】\n\n" +
+        "您好" + (userName ? " " + userName : "") + "！系統已成功收到您的繳費申報資訊：\n\n" +
+        (paymentId ? "• 繳費單號：" + paymentId + "\n" : "") +
+        "• 申報金額：$" + totalAmount + " 元\n" +
+        "• 帳號末五碼：" + last5Digits + "\n" +
+        "• 申報項目：\n" + itemsZh +
+        noteZh + "\n\n" +
+        "幹部會於核對款項後自動更新您的繳費狀態。謝謝！\n" +
+        "─────────────\n" +
+        "【💳 Payment Report Submitted】\n\n" +
+        "Hello" + (userName ? " " + userName : "") + "! Your payment report has been submitted:\n\n" +
+        (paymentId ? "• Payment ID: " + paymentId + "\n" : "") +
+        "• Amount: $" + totalAmount + " TWD\n" +
+        "• Last 5 Digits: " + last5Digits + "\n" +
+        "• Items:\n" + itemsEn +
+        noteEn + "\n\n" +
+        "Officers will verify your payment and update your status soon. Thank you!";
+
+      _pushMessage(userId, userMsg);
+    }
+
+    return _successResponse({ message: "繳費申報幹部與個人推播已成功送出" });
   } catch (err) {
     console.warn("繳費申報幹部推播失敗:", err);
     return _errorResponse(err.toString());
@@ -4801,12 +5121,112 @@ function _handleNotifyPaymentConfirmed(json) {
   try {
     var paymentId = json.paymentId || "";
     var userName = json.userName || "社員";
+    var userEmail = json.userEmail || "";
     var amount = json.amount || 0;
     var items = json.items || json.type || "社團活動/裝備費用";
     var lineUserId = json.lineUserId || "";
-    var confirmedBy = json.confirmedBy || "Email 單鍵核銷";
+    var confirmedBy = json.confirmedBy || "單鍵快速核銷";
 
-    // 1. 推播給幹部管理群組
+    // 0. 若未帶入 userEmail 但有 lineUserId，自 Supabase members 表唯讀查詢 Email
+    if (!userEmail && lineUserId && typeof _supabaseGet === "function") {
+      try {
+        var mRecs = _supabaseGet("members", { line_user_id: "eq." + lineUserId, select: "email" });
+        if (mRecs && mRecs.length > 0 && mRecs[0].email) {
+          userEmail = mRecs[0].email;
+        }
+      } catch (eEmail) {
+        console.warn("查詢社員 Email 失敗:", eEmail);
+      }
+    }
+
+    // 1. 寄送「繳費成功確認通知信」至社員 Email
+    if (userEmail && (typeof MailApp !== 'undefined' || typeof GmailApp !== 'undefined')) {
+      try {
+        var emailSubject = "【台科登山社】繳費成功確認通知 - " + paymentId;
+        var emailBody = "親愛的 " + userName + " 您好：\n\n" +
+          "社團幹部已確認收到您的款項並完成核銷！\n\n" +
+          "• 繳費單號：" + paymentId + "\n" +
+          "• 核銷金額：$" + amount + " 元\n" +
+          "• 核銷項目：" + items + "\n" +
+          "• 核銷狀態：已核銷 Confirmed\n\n" +
+          "相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁查看最新狀態。感謝您的配合與支持！\n\n" +
+          "台科登山社 • 自動發送系統";
+
+        var emailHtml = '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
+          '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
+          '<h2 style="color: #065f46; margin: 0; font-size: 20px;">台科登山社 • 繳費成功確認通知</h2>' +
+          '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">親愛的 ' + userName + ' 您好，社團幹部已確認收到您的款項並完成核銷！</p>' +
+          '</div>' +
+          '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
+          '<table style="width: 100%; border-collapse: collapse;">' +
+          '<tr><td style="padding: 6px 0; color: #64748b; width: 100px;">繳費單號：</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
+          '<tr><td style="padding: 6px 0; color: #64748b;">核銷金額：</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' 元</td></tr>' +
+          '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">核銷項目：</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
+          '<tr><td style="padding: 6px 0; color: #64748b;">核銷狀態：</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">已核銷 Confirmed</td></tr>' +
+          '</table>' +
+          '</div>' +
+          '<p style="color: #64748b; font-size: 13px; margin: 0;">相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁 (Dashboard) 查看最新狀態。感謝您的配合與支持！</p>' +
+          '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">台科登山社 • 自動發送系統</p>' +
+          '</div>';
+
+        if (typeof MailApp !== 'undefined' && MailApp.sendEmail) {
+          MailApp.sendEmail({
+            to: userEmail,
+            subject: emailSubject,
+            body: emailBody,
+            htmlBody: emailHtml,
+            name: "台科登山社小岳助理"
+          });
+          console.log("成功發送繳費確認信至社員 Email: " + userEmail);
+        } else if (typeof GmailApp !== 'undefined' && GmailApp.sendEmail) {
+          GmailApp.sendEmail(userEmail, emailSubject, emailBody, {
+            name: "台科登山社小岳助理",
+            htmlBody: emailHtml
+          });
+          console.log("GmailApp 成功發送繳費確認信至社員 Email: " + userEmail);
+        }
+      } catch (errEmail) {
+        console.warn("發送社員繳費確認通知信例外:", errEmail);
+      }
+    }
+
+    // 2. 推播給社員個人 LINE (支援 Flex 卡片)
+    if (lineUserId && lineUserId.indexOf("U") === 0) {
+      if (typeof _buildPaymentConfirmedFlex === 'function' && typeof _replyFlexMessage === 'function') {
+        var userConfirmedFlex = _buildPaymentConfirmedFlex({
+          userName: userName,
+          paymentId: paymentId,
+          amount: amount,
+          items: items
+        });
+        _lineAPI('push', MEMBER_BOT_TOKEN, {
+          to: lineUserId,
+          messages: [{
+            type: 'flex',
+            altText: "🎉 繳費成功確認通知 (" + paymentId + ")",
+            contents: userConfirmedFlex
+          }]
+        });
+      } else {
+        var successMsg = "🎉 繳費成功通知 / Payment Confirmed\n\n" +
+          "親愛的 " + userName + " 您好：\n" +
+          "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
+          "• 繳費單號：" + paymentId + "\n" +
+          "• 核銷金額：$" + amount + " 元\n" +
+          "• 核銷項目：" + items + "\n\n" +
+          "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
+          "─────────────\n" +
+          "Dear " + userName + ",\n" +
+          "Your payment has been successfully confirmed by the officers!\n\n" +
+          "• Payment ID: " + paymentId + "\n" +
+          "• Amount: $" + amount + " TWD\n" +
+          "• Items: " + items + "\n\n" +
+          "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
+        _pushMessage(lineUserId, successMsg);
+      }
+    }
+
+    // 3. 推播給幹部管理群組
     var adminMsg = "【💳 幹部通知：繳費單已完成核銷】\n" +
       "─────────────\n" +
       "• 繳費單號：" + paymentId + "\n" +
@@ -4818,7 +5238,7 @@ function _handleNotifyPaymentConfirmed(json) {
     var adminSubject = "【台科登山社】繳費單已完成核銷 - " + paymentId + " (" + userName + ")";
     pushAdminMessage(adminMsg, adminSubject);
 
-    return _successResponse({ message: "核銷通知推播已成功送出" });
+    return _successResponse({ message: "核銷通知推播與確認信已成功送出" });
   } catch (err) {
     console.warn("_handleNotifyPaymentConfirmed 異常:", err);
     return _errorResponse(err.toString());

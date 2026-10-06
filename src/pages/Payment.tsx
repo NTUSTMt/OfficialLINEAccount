@@ -167,20 +167,20 @@ function Payment({ userId }: { userId: string }) {
       case 'undergrad':
         return {
           amount: 800,
-          name: `直到畢業社費-大學部 (Membership Fee - Until Graduation)`,
+          name: `直到畢業社費-大學部 Membership Fee (有效至 ${semesterInfo.undergradGradDate.replace(/-/g, '/')})`,
           expiryDate: semesterInfo.undergradGradDate
         };
       case 'master':
         return {
           amount: 400,
-          name: `直到畢業社費-研究所 (Membership Fee - Until Graduation)`,
+          name: `直到畢業社費-研究所 Membership Fee (有效至 ${semesterInfo.masterGradDate.replace(/-/g, '/')})`,
           expiryDate: semesterInfo.masterGradDate
         };
       case 'thisSem':
       default:
         return {
           amount: 200,
-          name: `${semesterInfo.thisSemStr} 學期社費 (Membership Fee - Current Semester)`,
+          name: `${semesterInfo.thisSemStr} 學期社費 Membership Fee (有效至 ${semesterInfo.thisSemEndDate.replace(/-/g, '/')})`,
           expiryDate: semesterInfo.thisSemEndDate
         };
     }

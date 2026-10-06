@@ -224,9 +224,9 @@ BEGIN
             WHERE line_user_id = p_line_user_id;
 
             IF v_expiry IS NOT NULL AND v_expiry != '' THEN
-                v_item_labels := array_append(v_item_labels, '🔸 社籍與社費 (Membership Fee) (有效至 ' || v_expiry || ')');
+                v_item_labels := array_append(v_item_labels, '社籍與社費 (Membership Fee) (有效至 ' || replace(v_expiry, '-', '/') || ')');
             ELSE
-                v_item_labels := array_append(v_item_labels, '🔸 社籍與社費 (Membership Fee)');
+                v_item_labels := array_append(v_item_labels, '社籍與社費 (Membership Fee)');
             END IF;
 
         -- B. 活動

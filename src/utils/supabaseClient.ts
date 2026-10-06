@@ -547,6 +547,7 @@ export interface VerifyPaymentResult {
   alreadyConfirmed?: boolean;
   paymentId?: string;
   userName?: string;
+  userEmail?: string;
   amount?: number;
   items?: string;
   lineUserId?: string;

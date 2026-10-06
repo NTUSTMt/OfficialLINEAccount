@@ -84,7 +84,7 @@ function _formatEventDate(dateVal) {
 /**
  * 產生最新活動卡片輪播 (100% 直連 Supabase events 表，絕不讀取主試算表)
  */
-function sendEventList(replyToken) {
+function sendEventList(replyToken, userId) {
   var sbEvents = _supabaseGet("events", {
     select: "id,title,fee,start_date,end_date,deadline,status,summary,cover_image_url",
     order: "start_date.desc"
@@ -171,7 +171,7 @@ function sendEventList(replyToken) {
               "weight": "bold",
               "color": tagColor,
               "size": "sm",
-              "flex": 1
+              "flex": 0
             }, {
               "type": "box",
               "layout": "horizontal",
@@ -187,7 +187,8 @@ function sendEventList(replyToken) {
                 "text": regCountDisplay,
                 "size": "xs",
                 "color": "#0284c7",
-                "weight": "bold"
+                "weight": "bold",
+                "flex": 0
               }]
             }]
           }, {
@@ -384,7 +385,7 @@ function sendEventDetail(replyToken, eventId) {
               "weight": "bold",
               "size": "sm",
               "color": "#1DB446",
-              "flex": 1
+              "flex": 0
             },
             {
               "type": "box",
@@ -402,7 +403,8 @@ function sendEventDetail(replyToken, eventId) {
                   "text": regCountDisplay,
                   "size": "xs",
                   "color": "#0284c7",
-                  "weight": "bold"
+                  "weight": "bold",
+                  "flex": 0
                 }
               ]
             }
@@ -998,4 +1000,281 @@ function handleConfirmWaitlist(replyToken, userId, paramsMap, ss) {
     console.error("[handleConfirmWaitlist] 例外:", err);
     _replyMessage(replyToken, "系統發生錯誤：" + (err.message || err) + "\n─────────────\nSystem error: " + (err.message || err));
   }
+}
+
+/**
+ * 建立幹部群組新繳費申報 Flex Message 卡片
+ */
+function _buildPaymentDeclarationFlex(params) {
+  var userName = params.userName || "社員";
+  var paymentId = params.paymentId || "";
+  var totalAmount = params.totalAmount || 0;
+  var last5Digits = params.last5Digits || "無";
+  var items = params.selectedNames || (params.itemsZh ? params.itemsZh.split('\n').map(function(s){ return s.replace(/^-\s*/, '').replace(/^\s*-\s*/, '').trim(); }).filter(Boolean) : ["社團相關費用"]);
+  var note = params.note || "";
+  var verifyLink = params.verifyLink || "";
+  var proofImageUrl = params.proofImageUrl || "";
+
+  var bodyContents = [
+    {
+      type: "box",
+      layout: "vertical",
+      margin: "md",
+      spacing: "sm",
+      contents: [
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "申報人", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: userName, weight: "bold", color: "#0f172a", size: "sm", flex: 5, wrap: true }
+          ]
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "單號", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" }
+          ]
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "末五碼", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: last5Digits, weight: "bold", color: "#0f172a", size: "sm", flex: 5 }
+          ]
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "申報金額", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: "$" + totalAmount + " 元", weight: "bold", color: "#059669", size: "lg", flex: 5 }
+          ]
+        }
+      ]
+    },
+    { type: "separator", margin: "lg", color: "#e2e8f0" },
+    {
+      type: "box",
+      layout: "vertical",
+      margin: "md",
+      spacing: "xs",
+      contents: [
+        { type: "text", text: "申報項目：", color: "#64748b", size: "xs", weight: "bold" }
+      ].concat(items.map(function(item) {
+        return {
+          type: "text",
+          text: "• " + item,
+          color: "#334155",
+          size: "xs",
+          wrap: true
+        };
+      }))
+    }
+  ];
+
+  if (note) {
+    bodyContents.push({
+      type: "box",
+      layout: "vertical",
+      margin: "md",
+      contents: [
+        { type: "text", text: "備註：", color: "#64748b", size: "xs", weight: "bold" },
+        { type: "text", text: note, color: "#475569", size: "xs", wrap: true }
+      ]
+    });
+  }
+
+  var footerButtons = [];
+  if (verifyLink) {
+    footerButtons.push({
+      type: "button",
+      style: "primary",
+      color: "#059669",
+      height: "sm",
+      action: {
+        type: "uri",
+        label: "確認無誤（一鍵核銷）",
+        uri: verifyLink
+      }
+    });
+  }
+
+  if (proofImageUrl) {
+    footerButtons.push({
+      type: "button",
+      style: "secondary",
+      color: "#475569",
+      height: "sm",
+      margin: "sm",
+      action: {
+        type: "uri",
+        label: "檢視匯款截圖",
+        uri: proofImageUrl
+      }
+    });
+  }
+
+  var flexContents = {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#065f46",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "台科登山社 • 新繳費申報",
+          color: "#ffffff",
+          weight: "bold",
+          size: "md"
+        },
+        {
+          type: "text",
+          text: "請核對帳目後點擊下方按鈕進行核銷",
+          color: "#a7f3d0",
+          size: "xxs",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      contents: bodyContents
+    }
+  };
+
+  if (footerButtons.length > 0) {
+    flexContents.footer = {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "14px",
+      contents: footerButtons
+    };
+  }
+
+  return flexContents;
+}
+
+/**
+ * 建立個人個人繳費成功確認 Flex Message 卡片
+ */
+function _buildPaymentConfirmedFlex(params) {
+  var userName = params.userName || "社員";
+  var paymentId = params.paymentId || "";
+  var amount = params.amount || 0;
+  var items = params.items || "社團活動/裝備費用";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "🎉 繳費成功確認通知",
+          color: "#ffffff",
+          weight: "bold",
+          size: "md"
+        },
+        {
+          type: "text",
+          text: "幹部已確認收到款項，核銷作業已完成！",
+          color: "#d1fae5",
+          size: "xxs",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "姓名", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: userName, weight: "bold", color: "#0f172a", size: "sm", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "單號", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "核銷金額", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: "$" + amount + " 元", weight: "bold", color: "#059669", size: "md", flex: 5 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "核銷項目", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: items, color: "#334155", size: "sm", flex: 5, wrap: true }
+              ]
+            },
+            {
+              type: "box",
+              layout: "baseline",
+              spacing: "sm",
+              contents: [
+                { type: "text", text: "狀態", color: "#64748b", size: "sm", flex: 2 },
+                { type: "text", text: "已核銷 Confirmed", weight: "bold", color: "#059669", size: "sm", flex: 5 }
+              ]
+            }
+          ]
+        },
+        { type: "separator", margin: "lg", color: "#e2e8f0" },
+        {
+          type: "text",
+          text: "相關活動報名與裝備狀態已同步更新，您可隨時至個人主頁查看！",
+          color: "#64748b",
+          size: "xs",
+          wrap: true,
+          margin: "md"
+        }
+      ]
+    }
+  };
 }

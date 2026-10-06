@@ -1,6 +1,6 @@
 # 🏔️ 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.249-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.251-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.249)](#7-最新版本異動紀錄-changelog-v01249)
+- [7. 最新版本異動紀錄 (Changelog v0.1.251)](#7-最新版本異動紀錄-changelog-v01251)
 
 ---
 
@@ -204,7 +204,17 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.249)
+## 7. 最新版本異動紀錄 (Changelog v0.1.250)
+
+### v0.1.250 (2026-10-02)
+- **活動卡片已報名人數膠囊徽章修復 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js), [gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js), [gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js))**:
+  - **根本原因排查**: LINE Flex Message 採用 Yoga 佈局引擎。活動卡片頂部水平容器中，狀態標籤預設 flex: 1 擴展佔滿剩餘寬度，而膠囊外框設為 flex: 0，內部文字組件未宣告 flex（預設 flex: 1）。外層 shrink-to-fit 與內層 expand-to-fill 形成循環依賴，導致 Yoga 引擎計算內部文字寬度為 0px，僅渲染左右 padding (16px) 的空白淺天藍色微小色塊。
+  - **佈局屬性修正**:
+    - 將狀態標籤文字設為 flex: 0，膠囊外框容器設為 flex: 0，內部人數文字明確宣告 flex: 0。
+    - 結合容器之 justifyContent: space-between，兩端元件各自依內文自適應寬度，徹底杜絕寬度塌陷問題。
+  - **使用者語系精確傳遞**:
+    - 在 02_LineBot_Webhook.js 關鍵字觸發處，將 userId 正確傳入 sendEventList(replyToken, userId)。
+    - 後端能正確依據 members.preferred_language 識別繁體中文或英文，避免回退雙語超長字串造成水平溢位壓縮。
 
 ### v0.1.249 (2026-10-02)
 - **個人資料異動 Diff Flex Message 英文雙語支援 ([src/pages/Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx))**:
@@ -2030,11 +2040,27 @@ pnpm test
     - 擴充 test/100_web_admin_table_resizing_and_overflow.test.mjs，新增 v0.1.245 驗證測試。
     - 全專案 80 個測試套件、445 項單元測試 100% 通過，TypeScript 與 Vite 打包無錯誤，全篇嚴格零 Emoji。
 
-
-
-
-
-
-
-
-
+### v0.1.251 (2026-10-06)
+- 繳費確認通知信修復、社籍到期日連動修復、幹部申報 Flex 卡片設計與文字核銷指令移除：
+  - 繳費確認通知信修復 (Email + LINE + 幹部群組三向通知)：
+    - 原因定位：先前幹部點選確認繳費連結 (ConfirmPayment.tsx) 呼叫 verify_payment_by_token 時未回傳 userEmail，且 GAS 後端 _handleNotifyPaymentConfirmed 僅有幹部群組推播，未向繳費社員發送 Email 通知信。
+    - 修復實作：
+      - 資料庫 RPC verify_payment_by_token (supabase/verify_payment_rpc.sql 與 supabase/payment_rpc.sql) 查詢繳費者之 members.email 並於結果中回傳 userEmail 欄位。
+      - src/utils/supabaseClient.ts 之 VerifyPaymentResult 新增 userEmail 欄位。
+      - src/pages/ConfirmPayment.tsx 呼叫 notify_payment_confirmed 動作時傳入 userEmail 參數。
+      - GAS 後端 (gas_modules/06_Helper_Services.js 與 src/gas.js) 之 _handleNotifyPaymentConfirmed 增加 MailApp.sendEmail 發送「【臺科登山社】繳費成功確認通知信」，同時透過 Flex 卡片推播至社員個人 LINE，並推播至幹部管理群組。
+  - 社員繳社費社籍到期日帶入修復：
+    - 原因定位：繳費申報頁面原先傳遞之項目名稱為「直到畢業社費-大學部」，不包含標準 (有效至 YYYY/MM/DD) 標籤，導致核銷預存程序之正則匹配失敗，使 members.membership_expires_at 未被正確帶入。
+    - 修復實作：
+      - 前端 src/pages/Payment.tsx：繳費項目定義中所有社費項目統一附加 (有效至 YYYY/MM/DD) 規格文字，例如「大學部常態社費 (有效至 2028/06/30)」。
+      - 資料庫 RPC submit_payment_rpc 與 verify_payment_by_token：更新正則表達式相容 / 與 - 分隔格式，在幹部核銷社費項目時自動提取到期日期並寫入 members.membership_expires_at；若品項未標記到期日或非社費項目則嚴格保持為 NULL，不進行任何臆測或保底計算。
+  - 幹部群組申報訊息全面卡片化 (Flex Message) 與文字指令移除：
+    - 新增 _buildPaymentDeclarationFlex 範本 (gas_modules/03_Flex_Templates.js 與 src/gas.js)：
+      - 卡片頂部清楚展示「新繳費申報」標題與申報者姓名、單號、申報項目、應繳金額、末五碼與備註資訊。
+      - 底部配置「確認無誤（一鍵核銷）」主要按鈕（透過 LIFF 免登入確認頁帶 Token 核銷）與「檢視匯款截圖」次要按鈕（直接開啟 Google Drive 匯款證明）。
+      - 增強 pushAdminMessage 函式，支援傳入 Object 格式之 Flex Message 進行群組推播。
+    - 徹底移除 @小岳助理 文字指令核銷：
+      - 移除 gas_modules/02_LineBot_Webhook.js 與 src/gas.js 中之 @小岳助理 核銷 指令解析分支，杜絕群組內手動複製指令引發之格式錯誤或權限繞過風險。
+  - 單元測試與型別檢查驗證：
+    - 新增 test/gas_simulation.test.mjs Suite 59，完整涵蓋申報 Flex 卡片結構、核銷通知信/推播、社籍到期日正則解析與純文字核銷指令移除測試。
+    - 全專案 81 個測試套件、449 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。

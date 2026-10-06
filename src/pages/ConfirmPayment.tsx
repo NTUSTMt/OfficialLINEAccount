@@ -58,7 +58,7 @@ export default function ConfirmPayment() {
         } else {
           setStatus('success');
 
-          // 2. 非同步推播 LINE 通知 (社員個人 + 幹部管理群組)
+          // 2. 非同步推播 LINE 通知 (社員個人 + 幹部管理群組) 與寄送繳費確認通知信
           try {
             fetch(GAS_API_URL, {
               method: 'POST',
@@ -67,10 +67,11 @@ export default function ConfirmPayment() {
                 action: 'notify_payment_confirmed',
                 paymentId: res.paymentId,
                 userName: res.userName,
+                userEmail: res.userEmail,
                 amount: res.amount,
                 items: res.items,
                 lineUserId: res.lineUserId,
-                confirmedBy: 'Email 單鍵核銷'
+                confirmedBy: '單鍵快速核銷'
               })
             }).catch(() => {});
           } catch (e) {

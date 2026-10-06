@@ -145,19 +145,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // 2. 幹部核銷指令（支援「核銷 PAY_xxx」或「@小岳助理 核銷 PAY_xxx」）
-  if (queryText.indexOf("核銷") === 0 || queryText.indexOf("確認核銷") === 0) {
-    var paymentId = queryText.replace(/^(確認核銷|核銷)\s*/, "").trim();
-    if (paymentId) {
-      _processPaymentVerification(paymentId, "幹部指令核銷", true, replyToken);
-      return;
-    } else {
-      _replyMessageSmart(replyToken, "請輸入欲核銷的繳費單號，例如：\n@小岳助理 核銷 PAY_20260914_001", true);
-      return;
-    }
-  }
-
-  // 3. 最新活動查詢 (支援圖文選單「最新活動 Activities」、「最新活動」、「Activities」、「Activiies」、「報名活動」、「Events」)
+  // 2. 最新活動查詢 (支援圖文選單「最新活動 Activities」、「最新活動」、「Activities」、「Activiies」、「報名活動」、「Events」)
   if (
     text.indexOf("最新活動") > -1 ||
     lowerText.indexOf("activi") > -1 ||
@@ -168,7 +156,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     lowerText === "events" ||
     lowerQueryText === "events"
   ) {
-    sendEventList(replyToken);
+    sendEventList(replyToken, userId);
     return;
   }
 
@@ -746,10 +734,24 @@ function pushAdminMessage(text, customSubject, optionsOrHtml) {
     console.warn("pushAdminMessage LINE 略過: ADMIN_BOT_TOKEN 與 MEMBER_BOT_TOKEN 皆未設定");
     return;
   }
+
+  var lineMessages = [];
+  if (optionsOrHtml && typeof optionsOrHtml === 'object' && optionsOrHtml.flexMessage) {
+    lineMessages = [optionsOrHtml.flexMessage];
+  } else if (optionsOrHtml && typeof optionsOrHtml === 'object' && optionsOrHtml.flexContents) {
+    lineMessages = [{
+      type: 'flex',
+      altText: optionsOrHtml.altText || subject || (text ? text.slice(0, 400) : "新申報通知"),
+      contents: optionsOrHtml.flexContents
+    }];
+  } else {
+    lineMessages = [{ type: 'text', text: text }];
+  }
+
   try {
     var res = _lineAPI('push', token, {
       to: adminGroupId,
-      messages: [{ type: 'text', text: text }]
+      messages: lineMessages
     });
     var code = res ? res.getResponseCode() : 0;
     var content = res ? res.getContentText() : "";
@@ -760,7 +762,7 @@ function pushAdminMessage(text, customSubject, optionsOrHtml) {
       console.warn("主要 Token 推播失敗，切換 MEMBER_BOT_TOKEN 備援重試...");
       var fbRes = _lineAPI('push', MEMBER_BOT_TOKEN, {
         to: adminGroupId,
-        messages: [{ type: 'text', text: text }]
+        messages: lineMessages
       });
       console.log("MEMBER_BOT_TOKEN 備援推播結果: (HTTP " + (fbRes ? fbRes.getResponseCode() : 0) + "): " + (fbRes ? fbRes.getContentText() : ""));
     }
