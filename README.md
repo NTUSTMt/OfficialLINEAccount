@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.260-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.262-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.260)](#7-最新版本異動紀錄-changelog-v01260)
+- [7. 最新版本異動紀錄 (Changelog v0.1.262)](#7-最新版本異動紀錄-changelog-v01262)
 
 ---
 
@@ -421,7 +421,7 @@ pnpm test
   - **單純叫名引導**：若僅輸入「小岳」或「@小岳」，自動回傳友善提問範例引導，而非丟空字串給模型。
 - 🧹 **聊天室純文字指令與過時關鍵字全面清理**：
   - 徹底移除過往文字指令攔截（「最新活動」、「Activities」、「嗨」、「哈囉」、「選單」等），避免普通對話遭無效機器人字串打斷。
-  - 保留圖文選單按鈕必要之「更多服務 More Services」、次級選單按鈕（「使用指南」、「幹部是誰」、「意見與回饋」）及幹部核銷指令（「核銷 PAY_xxx」）。
+  - 保留圖文選單按鈕必要之「更多服務 More Services」、次級選單按鈕（「使用指南」、「幹部是誰」、「意見回饋」）及幹部核銷指令（「核銷 PAY_xxx」）。
 - 📖 **社員使用手冊 ([MEMBER_GUIDE.md](file:///Users/brianhung/Documents/OfficialLINEAccount/MEMBER_GUIDE.md)) 中英文版同步對齊更新**：
   - **導航途徑更新**：由舊有的「四大途徑」精簡為「兩大導航途徑」（LINE 官方底部圖文選單、系統頂部個人頭像下拉選單），全篇移除「途徑四：聊天室輸入文字指令」。
   - **裝備租借狀態同步**：依據資料庫與個人主頁實際邏輯，更新為「待領取 To Be Collected」、「使用中 In Use」、「已歸還 Returned」、「已取消 Cancelled」，並載明幹部聯繫取裝與社辦點交流程。
@@ -2153,20 +2153,32 @@ pnpm test
     - 新增 test/101_profile_intent_driven_registration.test.mjs 單元測試。
     - 全專案 85 個測試套件、464 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
 
-### v0.1.260 (2026-10-07)
-- 體能證明照片 Diff 偵測修復與幹部名片 LINE 大頭貼輪播瀏覽升級：
-  - 體能證明照片 Diff 異動比對修復 (src/pages/Register.tsx)：
-    - 在 handleSubmit 之 diffItems 生成邏輯中，精準解析 originalFormData.strengthProof 與 finalFormData.strengthProof 之照片陣列，比對照片張數與網址差異（以及 strengthProofFiles 上傳清單）。
-    - 解決過去僅新增或替換體能照片時，系統判定「資料未有變更」之誤判問題，於 LINE Diff 卡片中明確展示「體能證明照片 / Fitness Proof Photos」（如：1 張照片 -> 2 張照片），並同步將 strength 標記於 changedFields 中。
-  - 幹部是誰 (Meet the Officers) 卡片瀏覽升級 (src/gas.js 與 gas_modules/03_Flex_Templates.js)：
-    - 直查 Supabase officers 表 (line_user_id, name, role, responsibilities)，並於無紀錄時平滑 fallback 至 members (is_officer=true)。
-    - 大頭貼即時調用：透過幹部之 line_user_id 呼叫 LINE Messaging API (_getLineUserProfile)，動態取得幹部當前在 LINE 上設定的個人大頭貼 (pictureUrl) 作為卡片 Hero 封面圖片。
-    - 欄位統整：清理並移除冗餘之 title 欄位依賴，統一以 role 作為社團幹部職位標準，結構化呈現「大頭貼、職位 (role)、姓名 (name)、負責業務 (responsibilities)」。
-  - 資料庫架構與文檔同步 (supabase/member_officer_sync.sql 與 supabase/SCHEMA_DICTIONARY.md)：
-    - 補齊 officers 表 responsibilities TEXT 欄位定義，並將 role 定位為單一標準欄位。
+### v0.1.261 (2026-10-07)
+- 幹部名片輪播卡片職位文字色彩標準化：
+  - 職位色彩統一 (src/gas.js 與 gas_modules/03_Flex_Templates.js)：
+    - 移除 sendOfficerMenu 中針對「社長」職稱額外指定為橘色 (#FF9800) 的歷史條件邏輯。
+    - 全面統一所有幹部職位文字為社團經典深藍色 themeColor = "#0367D3"，確保視覺一致性與簡約美感。
   - 單元測試與建置驗證：
-    - 新增 test/103_officer_carousel_and_photo_diff.test.mjs 單元測試。
+    - 更新 test/103_officer_carousel_and_photo_diff.test.mjs 單元測試，斷言職位顏色固定為 #0367D3。
     - 全專案 87 個測試套件、474 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+
+### v0.1.262 (2026-10-07)
+- 社員指南、AI 客服指南與意見回饋全面 Flex 卡片化與雙語自動分流：
+  - 三大核心訊息轉為 LINE Flex Message 卡片：
+    - 小岳 AI 客服指南 (sendAiGuide / _buildAiGuideBubble)：提供 1 對 1 聊天室輸入「小岳」或「Yue」之使用方式與示範。
+    - 社員使用指南 (sendMemberGuide / _buildMemberGuideBubble)：完整展示「三大頁面切換途徑」與「六大核心功能」操作指南。
+    - 意見回饋表單 (sendFeedbackLink / _buildFeedbackBubble)：卡片化呈現回饋說明，並附帶綠色按鈕直接開啟外部回饋表單連結。
+  - 語系自動判定與分流 (Language Routing via Supabase members.preferred_language)：
+    - 若偏好語言為 zh：發送單張繁體中文 Flex Bubble。
+    - 若偏好語言為 en：發送單張完整英文 Flex Bubble。
+    - 若未設定或查無資料：發送中英文雙語 Carousel 輪播雙卡片（卡片 1: 中文 / 卡片 2: 英文）。
+  - 視覺風格與無 Emoji 規範：
+    - 頂部 Header 與主色調統一採用登山社綠色風格 (#059669 / #047857)。
+    - 全篇卡片文案嚴格落實零 Emoji 規範。
+  - 單元測試與建置驗證：
+    - 新增 test/104_guide_and_feedback_flex_cards.test.mjs 單元測試，全面驗證卡片結構、雙語切換、按鈕 URI 與零 Emoji 檢驗。
+    - 全專案 88 個測試套件、479 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤。
+
 
 
 

@@ -362,10 +362,10 @@ function _supabaseGet(table, queryParams) {
   var props = PropertiesService.getScriptProperties();
   var sbUrl = props.getProperty('SUPABASE_URL') || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '');
   var sbKey = props.getProperty('SUPABASE_SERVICE_ROLE_KEY') ||
-              props.getProperty('SUPABASE_KEY') ||
-              props.getProperty('SUPABASE_ANON_KEY') ||
-              (typeof SUPABASE_SERVICE_ROLE_KEY !== 'undefined' ? SUPABASE_SERVICE_ROLE_KEY : '') ||
-              (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '');
+    props.getProperty('SUPABASE_KEY') ||
+    props.getProperty('SUPABASE_ANON_KEY') ||
+    (typeof SUPABASE_SERVICE_ROLE_KEY !== 'undefined' ? SUPABASE_SERVICE_ROLE_KEY : '') ||
+    (typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '');
 
   if (!sbUrl || !sbKey) {
     console.warn("⚠️ [Supabase] 缺少 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY");
@@ -383,7 +383,7 @@ function _supabaseGet(table, queryParams) {
         if (valStr.indexOf("in.(") === 0 && valStr.slice(-1) === ")") {
           var inner = valStr.slice(4, -1);
           var items = inner.split(",");
-          encVal = "in.(" + items.map(function(it) {
+          encVal = "in.(" + items.map(function (it) {
             return encodeURIComponent(decodeURIComponent(it.trim()));
           }).join(",") + ")";
         } else {
@@ -443,7 +443,7 @@ function _getLineUserProfile(userId) {
   if (!token) {
     try {
       token = PropertiesService.getScriptProperties().getProperty('MEMBER_BOT_TOKEN') ||
-              PropertiesService.getScriptProperties().getProperty('ADMIN_BOT_TOKEN');
+        PropertiesService.getScriptProperties().getProperty('ADMIN_BOT_TOKEN');
     } catch (e) {
       // 於部分本機單元測試 mock 環境容錯
     }
@@ -809,9 +809,9 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // 3.2 意見與回饋 (支援「意見與回饋」、「Feedback」)
-  if (text.indexOf("意見與回饋") > -1 || lowerText.indexOf("feedback") > -1) {
-    sendFeedbackLink(replyToken);
+  // 3.2 意見回饋 (支援「意見回饋」、「Feedback」)
+  if (text.indexOf("意見回饋") > -1 || lowerText.indexOf("feedback") > -1) {
+    sendFeedbackLink(replyToken, userId);
     return;
   }
 
@@ -819,25 +819,10 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   if (
     text.indexOf("小岳說明") > -1 ||
     text.indexOf("小岳指南") > -1 ||
-    lowerText.indexOf("ai guide") > -1 || 
+    lowerText.indexOf("ai guide") > -1 ||
     text.indexOf("小岳說明 AI Guide") > -1
   ) {
-    var aiGuideMsg = "🏔️ 【小岳 (Yue) AI 客服使用指南 / AI Guide】\n" +
-      "─────────────\n" +
-      "我是台科登山社的 AI 助理「小岳 (Yue)」！很高興為大家服務！\n\n" +
-      "💬 【如何使用 How to Use】\n" +
-      "1. 個人 1 對 1 聊天室：\n" +
-      "   • 請輸入「小岳」或「Yue」開頭加上問題即可！\n" +
-      "   • 例如：「小岳 玉山有多高？」、「Yue 登山睡袋怎麼挑選？」、「Yue 奇萊南華適合新手嗎？」\n" +
-      "   • 💡 提醒：若未加上「小岳」或「Yue」，訊息將保留給社團幹部親自回覆喔！\n\n" +
-      "2. LINE 群組中使用：\n" +
-      "   • 在群組中請「@小岳」或「@Yue」並輸入您的問題。\n" +
-      "   • 例如：「@Yue 請問這次活動費用多少？」\n\n" +
-      "💡 貼心提醒：\n" +
-      "若需要報名活動、租借裝備或查看個人訂單，歡迎直接點擊下方圖文選單（Rich Menu）探索各項服務喔！\n" +
-      "─────────────\n" +
-      "Type '小岳' or 'Yue' before your question in 1-on-1 chat, or tag @Yue in group chats!";
-    _replyMessage(replyToken, aiGuideMsg);
+    sendAiGuide(replyToken, userId);
     return;
   }
 
@@ -850,26 +835,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     lowerText.indexOf("member guide") > -1 ||
     lowerText.indexOf("user guide") > -1
   ) {
-    var memberGuideMsg = "📖 【台科登山社 官方帳號社員使用指南】\n" +
-      "─────────────\n" +
-      "歡迎使用台科登山社線上系統！以下為常見功能與頁面切換指引：\n\n" +
-      "🗺️ 【三大頁面切換途徑】\n" +
-      "1. 底部圖文選單 (Rich Menu)：聊天室下方 6 大常駐按鈕。\n" +
-      "2. 網頁頂部頭貼選單：點擊右上角 LINE 頭像即可快速切換。\n" +
-      "3. 頁面內捷徑：未繳費項目一鍵「前往繳費」，出隊完一鍵「填寫心得」。\n\n" +
-      "🎒 【六大核心功能】\n" +
-      "• 📝 個人資料：首次使用請務必補齊 6 大必填欄位。\n" +
-      "• 🏕️ 最新活動：瀏覽活動詳情與登記報名。\n" +
-      "• 🎒 裝備租借：社員專屬租金 5 折優惠！\n" +
-      "• 💳 繳費申報：多筆費用合併申報，填寫末五碼。\n" +
-      "• 📊 個人主頁：掌握活動審核、借裝進度與待繳費用。\n" +
-      "• 🏆 成就與心得：累積出隊足跡並填寫回饋。\n\n" +
-      "─────────────\n" +
-      "📖 Member Guide (Quick Summary):\n" +
-      "• Navigation: Use the Rich Menu at the bottom or the top-right Avatar dropdown on any web page.\n" +
-      "• 6 Key Features: Events, Gear Loan (50% member discount), Dashboard, Payment, Footprints/Reflections, and AI Assistant.\n" +
-      "• Required: Complete your Profile (6 mandatory fields) before booking gear or joining hikes!";
-    _replyMessage(replyToken, memberGuideMsg);
+    sendMemberGuide(replyToken, userId);
     return;
   }
 
@@ -1617,7 +1583,7 @@ function _formatEventDate(dateVal) {
     var dateMatch = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
     // 若時間剛好為 23:59:59Z (歷史舊 Bug 造成 UTC 23:59:59)，將其當作當天，避免跨日跳到隔天
     if (str.indexOf("23:59:59Z") > -1 && dateMatch) {
-      var pad = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+      var pad = function (n) { return String(n).length < 2 ? '0' + n : String(n); };
       return dateMatch[1] + '/' + pad(dateMatch[2]) + '/' + pad(dateMatch[3]);
     }
     if (typeof Utilities !== "undefined" && Utilities.formatDate) {
@@ -1626,11 +1592,11 @@ function _formatEventDate(dateVal) {
         return Utilities.formatDate(d, "Asia/Taipei", "yyyy/MM/dd");
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   var m = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
   if (m) {
-    var padFn = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+    var padFn = function (n) { return String(n).length < 2 ? '0' + n : String(n); };
     return m[1] + '/' + padFn(m[2]) + '/' + padFn(m[3]);
   }
   return str.replace(/-/g, "/").substring(0, 10);
@@ -1722,8 +1688,8 @@ function sendEventList(replyToken, userId) {
     var regCountDisplay = (prefLang === "en")
       ? regCountStrEn
       : (prefLang === "zh"
-          ? regCountStrZh
-          : (regCountStrZh + " / " + regCountStrEn));
+        ? regCountStrZh
+        : (regCountStrZh + " / " + regCountStrEn));
 
     var costStrZh = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費";
     var costStrEn = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "Free";
@@ -1736,14 +1702,14 @@ function sendEventList(replyToken, userId) {
     var viewDisplayText = (prefLang === "en")
       ? ("I want to view details for " + eventNameEn)
       : (prefLang === "zh"
-          ? ("我想查看 " + eventNameZh + " 的資訊")
-          : ("我想查看 " + (hasEnglish ? (eventNameZh + " / " + eventNameEn) : eventNameZh) + " 的資訊 / I want to view details"));
+        ? ("我想查看 " + eventNameZh + " 的資訊")
+        : ("我想查看 " + (hasEnglish ? (eventNameZh + " / " + eventNameEn) : eventNameZh) + " 的資訊 / I want to view details"));
 
     var summaryText = (prefLang === "en")
       ? (ev.summary_en || ev.short_desc_en || ev.summary || "")
       : (prefLang === "zh"
-          ? (ev.summary || "")
-          : (hasEnglish ? _formatBilingualMessage(ev.summary, ev.summary_en, null) : (ev.summary || "")));
+        ? (ev.summary || "")
+        : (hasEnglish ? _formatBilingualMessage(ev.summary, ev.summary_en, null) : (ev.summary || "")));
 
     var startFormatted = _formatEventDate(ev.start_date);
     var endFormatted = _formatEventDate(ev.end_date);
@@ -1916,8 +1882,8 @@ function sendEventDetail(replyToken, eventId, userId) {
   var eventName = (prefLang === "en")
     ? eventNameEn
     : (prefLang === "zh"
-        ? eventNameZh
-        : (hasEnglish ? (eventNameZh + "\n" + eventNameEn) : (ev.title || "未命名活動 (Untitled Event)")));
+      ? eventNameZh
+      : (hasEnglish ? (eventNameZh + "\n" + eventNameEn) : (ev.title || "未命名活動 (Untitled Event)")));
 
   var rawStatus = String(ev.status || "").trim().toLowerCase();
   var deadlineStr = ev.deadline || "";
@@ -1966,24 +1932,24 @@ function sendEventDetail(replyToken, eventId, userId) {
   var regCountDisplay = (prefLang === "en")
     ? regCountStrEn
     : (prefLang === "zh"
-        ? regCountStrZh
-        : (regCountStrZh + " / " + regCountStrEn));
+      ? regCountStrZh
+      : (regCountStrZh + " / " + regCountStrEn));
 
   var summaryZh = ev.summary || "尚無簡介";
   var summaryEn = ev.summary_en || ev.short_desc_en || ev.summary || "No summary";
   var summaryContent = (prefLang === "en")
     ? summaryEn
     : (prefLang === "zh"
-        ? summaryZh
-        : (hasEnglish ? _formatBilingualMessage(summaryZh, summaryEn, null) : summaryZh));
+      ? summaryZh
+      : (hasEnglish ? _formatBilingualMessage(summaryZh, summaryEn, null) : summaryZh));
 
   var fullDescZh = ev.itinerary || ev.full_desc || "尚無詳細行程";
   var fullDescEn = ev.itinerary_en || ev.full_desc_en || ev.itinerary || ev.full_desc || "No detailed itinerary";
   var fullDescContent = (prefLang === "en")
     ? fullDescEn
     : (prefLang === "zh"
-        ? fullDescZh
-        : (hasEnglish ? _formatBilingualMessage(fullDescZh, fullDescEn, null) : fullDescZh));
+      ? fullDescZh
+      : (hasEnglish ? _formatBilingualMessage(fullDescZh, fullDescEn, null) : fullDescZh));
 
   var buttonBox;
   if (isOpen) {
@@ -1991,8 +1957,8 @@ function sendEventDetail(replyToken, eventId, userId) {
     var signupDisplayText = (prefLang === "en")
       ? ("Sign up for: " + eventNameEn)
       : (prefLang === "zh"
-          ? ("我要報名：" + eventNameZh)
-          : ("我要報名 Sign up for: " + (hasEnglish ? eventNameEn : eventNameZh)));
+        ? ("我要報名：" + eventNameZh)
+        : ("我要報名 Sign up for: " + (hasEnglish ? eventNameEn : eventNameZh)));
 
     buttonBox = {
       "type": "button",
@@ -2167,7 +2133,7 @@ function sendOfficerMenu(replyToken, ss) {
     if (!sbOfficers || !Array.isArray(sbOfficers) || sbOfficers.length === 0) {
       sbOfficers = _supabaseGet("members", { is_officer: "eq.true", select: "line_user_id,name,officer_role,want_to_say" });
       if (sbOfficers && Array.isArray(sbOfficers)) {
-        sbOfficers = sbOfficers.map(function(m) {
+        sbOfficers = sbOfficers.map(function (m) {
           return {
             line_user_id: m.line_user_id,
             name: m.name,
@@ -2188,7 +2154,7 @@ function sendOfficerMenu(replyToken, ss) {
         var role = String(off.role || "幹部 Officer").trim();
         var responsibilities = String(off.responsibilities || "協助社團各項事務與出隊帶領 Assist with club affairs").trim();
         var photoUrl = (lineProfile && lineProfile.pictureUrl) ? String(lineProfile.pictureUrl).trim() : "";
-        var themeColor = (role.indexOf("社長") > -1) ? "#FF9800" : "#0367D3";
+        var themeColor = "#0367D3";
 
         var bubble = {
           "type": "bubble",
@@ -2295,15 +2261,15 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "📖 社員使用指南 Member Guide",
-          "text": "使用指南"
+          "label": "社員使用指南 Member Guide",
+          "text": "使用指南 Member Guide"
         }
       }, {
         "type": "button",
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "🤖 小岳說明 AI Guide",
+          "label": "小岳說明 AI Guide",
           "text": "小岳說明 AI Guide"
         }
       }, {
@@ -2311,7 +2277,7 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "👤 幹部是誰 Officers",
+          "label": "幹部是誰 Officers",
           "text": "幹部是誰 Officers"
         }
       }, {
@@ -2319,8 +2285,8 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "📢 意見與回饋 Feedback",
-          "text": "意見與回饋 Feedback"
+          "label": "意見回饋 Feedback",
+          "text": "意見回饋 Feedback"
         }
       }]
     }
@@ -2336,17 +2302,430 @@ function sendMoreOptionsMenu(replyToken) {
 }
 
 /**
- * 發送「意見與回饋」連結表單
+ * 建立「AI 客服使用指南」Flex Bubble
+ * @param {string} lang 'zh' 或 'en'
+ * @returns {Object} Flex Bubble
  */
-function sendFeedbackLink(replyToken) {
-  var googleFormUrl = "https://forms.gle/bCT7fjVP3bSrReF96";
-  var msg = "【意見與回饋 / Feedback & Suggestions】\n\n" +
-    "無論是想對社團說的話、活動建議、問題詢問，還是回報系統錯誤 (可附截圖)，都歡迎透過下方表單告訴我們！\n\n" +
-    "Whether you have suggestions, questions, or want to report a bug (screenshots supported), please let us know!\n\n" +
-    "點此填寫回饋表單 Click here to fill out the feedback form：\n" + googleFormUrl + "\n\n" +
-    "收到您的回饋後，幹部會盡快查看並處理喔！After receiving your feedback, the club officers will review and handle it as soon as possible!🏔️";
+function _buildAiGuideBubble(lang) {
+  var isEn = (lang === "en");
+  var title = isEn ? "Yue AI Assistant Guide" : "小岳 (Yue) AI 客服使用指南";
+  var subtitle = isEn ? "NTUST Hiking Club Smart Assistant" : "台科登山社智慧助理";
 
-  _replyMessage(replyToken, msg);
+  var secTitle = isEn ? "How to Use in Chat" : "個人聊天室使用方式";
+  var desc1 = isEn ? "• Start your question with \"Yue\" or \"小岳\"." : "• 請輸入「小岳」或「Yue」開頭加上問題即可。";
+  var desc2 = isEn ? "• Examples: \"Yue How high is Yushan?\", \"Yue How to choose a sleeping bag?\"" : "• 例如：「小岳 玉山有多高？」、「Yue 登山睡袋怎麼挑選？」";
+  var desc3 = isEn ? "• Note: Messages without the prefix will be handled directly by club officers." : "• 提醒：若未加上「小岳」或「Yue」，訊息將保留給幹部親自回覆。";
+  var bottomTip = isEn ? "To join hikes, rent gear, or check your dashboard, please use the Rich Menu below." : "若需報名活動、租借裝備或查看個人訂單，歡迎直接點擊下方圖文選單。";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: title,
+          weight: "bold",
+          size: "md",
+          color: "#FFFFFF",
+          wrap: true
+        },
+        {
+          type: "text",
+          text: subtitle,
+          size: "xs",
+          color: "#A7F3D0",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      spacing: "md",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: secTitle,
+              weight: "bold",
+              size: "sm",
+              color: "#047857"
+            },
+            {
+              type: "text",
+              text: desc1,
+              size: "xs",
+              color: "#374151",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: desc2,
+              size: "xs",
+              color: "#6B7280",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: desc3,
+              size: "xs",
+              color: "#9CA3AF",
+              wrap: true
+            }
+          ]
+        },
+        {
+          type: "separator"
+        },
+        {
+          type: "text",
+          text: bottomTip,
+          size: "xs",
+          color: "#6B7280",
+          wrap: true
+        }
+      ]
+    }
+  };
+}
+
+/**
+ * 建立「社員使用指南」Flex Bubble
+ * @param {string} lang 'zh' 或 'en'
+ * @returns {Object} Flex Bubble
+ */
+function _buildMemberGuideBubble(lang) {
+  var isEn = (lang === "en");
+  var title = isEn ? "Member Guide" : "台科登山社 社員使用指南";
+  var subtitle = isEn ? "NTUST Hiking Club System Manual" : "官方帳號與系統操作指引";
+
+  var navTitle = isEn ? "3 Navigation Methods" : "三大頁面切換途徑";
+  var nav1 = isEn ? "1. Bottom Rich Menu: 6 main buttons in the LINE chat window." : "1. 底部圖文選單 (Rich Menu)：聊天室下方 6 大常駐按鈕。";
+  var nav2 = isEn ? "2. Top-Right Profile Menu: Tap your avatar on any webpage to switch pages." : "2. 網頁頂部頭貼選單：點擊右上角 LINE 頭像即可快速切換。";
+  var nav3 = isEn ? "3. In-Page Shortcuts: Quick jump to payment for pending dues, or submit hike reflections after trips." : "3. 頁面內捷徑：未繳費項目一鍵前往繳費，出隊完一鍵填寫心得。";
+
+  var featTitle = isEn ? "6 Core Features" : "六大核心功能";
+  var feat1 = isEn ? "• Profile: Complete 6 mandatory fields before joining hikes or renting gear." : "• 個人資料：首次使用請務必補齊 6 大必填欄位。";
+  var feat2 = isEn ? "• Events: Browse upcoming hikes and sign up online." : "• 最新活動：瀏覽活動詳情與登記報名。";
+  var feat3 = isEn ? "• Gear Loan: 50% discount for club members." : "• 裝備租借：社員專屬租金 5 折優惠！";
+  var feat4 = isEn ? "• Payment: Multi-item consolidated payment declaration with bank last 5 digits." : "• 繳費申報：多筆費用合併申報，填寫末五碼。";
+  var feat5 = isEn ? "• Dashboard: Real-time track your signups, gear bookings, and pending fees." : "• 個人主頁：掌握活動審核、借裝進度與待繳費用。";
+  var feat6 = isEn ? "• Reflections & Badges: Collect footprints and share your hiking reflections." : "• 成就與心得：累積出隊足跡並填寫回饋。";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: title,
+          weight: "bold",
+          size: "md",
+          color: "#FFFFFF",
+          wrap: true
+        },
+        {
+          type: "text",
+          text: subtitle,
+          size: "xs",
+          color: "#A7F3D0",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      spacing: "md",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: navTitle,
+              weight: "bold",
+              size: "sm",
+              color: "#047857"
+            },
+            {
+              type: "text",
+              text: nav1,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: nav2,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: nav3,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            }
+          ]
+        },
+        {
+          type: "separator"
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: featTitle,
+              weight: "bold",
+              size: "sm",
+              color: "#047857"
+            },
+            {
+              type: "text",
+              text: feat1,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat2,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat3,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat4,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat5,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat6,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            }
+          ]
+        }
+      ]
+    }
+  };
+}
+
+/**
+ * 建立「意見回饋」Flex Bubble
+ * @param {string} lang 'zh' 或 'en'
+ * @returns {Object} Flex Bubble
+ */
+function _buildFeedbackBubble(lang) {
+  var isEn = (lang === "en");
+  var title = isEn ? "Feedback & Suggestions" : "意見回饋與建議";
+  var subtitle = isEn ? "NTUST Hiking Club User Feedback" : "台科登山社使用者回饋";
+
+  var desc1 = isEn
+    ? "Whether you have suggestions for the club, event ideas, questions, or bug reports (screenshots supported), we would love to hear from you!"
+    : "無論是想對社團說的話、活動建議、問題詢問，還是回報系統錯誤 (可附截圖)，都歡迎透過表單告訴我們！";
+  var desc2 = isEn
+    ? "After receiving your feedback, our club officers will review and follow up as soon as possible."
+    : "收到您的回饋後，幹部會盡快查看並處理。";
+  var btnLabel = isEn ? "Open Feedback Form" : "開啟回饋表單";
+  var googleFormUrl = "https://forms.gle/bCT7fjVP3bSrReF96";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: title,
+          weight: "bold",
+          size: "md",
+          color: "#FFFFFF",
+          wrap: true
+        },
+        {
+          type: "text",
+          text: subtitle,
+          size: "xs",
+          color: "#A7F3D0",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      spacing: "md",
+      contents: [
+        {
+          type: "text",
+          text: desc1,
+          size: "sm",
+          color: "#374151",
+          wrap: true
+        },
+        {
+          type: "text",
+          text: desc2,
+          size: "xs",
+          color: "#6B7280",
+          wrap: true
+        }
+      ]
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "12px",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: btnLabel,
+            uri: googleFormUrl
+          }
+        }
+      ]
+    }
+  };
+}
+
+/**
+ * 發送「AI 客服指南」卡片 (支援語系自動分流)
+ */
+function sendAiGuide(replyToken, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
+  var contents;
+  var altText;
+  if (prefLang === "zh") {
+    contents = _buildAiGuideBubble("zh");
+    altText = "小岳 AI 客服使用指南";
+  } else if (prefLang === "en") {
+    contents = _buildAiGuideBubble("en");
+    altText = "Yue AI Assistant Guide";
+  } else {
+    contents = {
+      type: "carousel",
+      contents: [
+        _buildAiGuideBubble("zh"),
+        _buildAiGuideBubble("en")
+      ]
+    };
+    altText = "小岳 AI 客服使用指南 / Yue AI Assistant Guide";
+  }
+  _replyFlexMessage(replyToken, altText, contents);
+}
+
+/**
+ * 發送「社員使用指南」卡片 (支援語系自動分流)
+ */
+function sendMemberGuide(replyToken, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
+  var contents;
+  var altText;
+  if (prefLang === "zh") {
+    contents = _buildMemberGuideBubble("zh");
+    altText = "台科登山社 社員使用指南";
+  } else if (prefLang === "en") {
+    contents = _buildMemberGuideBubble("en");
+    altText = "Member Guide";
+  } else {
+    contents = {
+      type: "carousel",
+      contents: [
+        _buildMemberGuideBubble("zh"),
+        _buildMemberGuideBubble("en")
+      ]
+    };
+    altText = "社員使用指南 / Member Guide";
+  }
+  _replyFlexMessage(replyToken, altText, contents);
+}
+
+/**
+ * 發送「意見回饋」連結表單卡片 (支援語系自動分流)
+ */
+function sendFeedbackLink(replyToken, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
+  var contents;
+  var altText;
+  if (prefLang === "zh") {
+    contents = _buildFeedbackBubble("zh");
+    altText = "意見回饋與建議";
+  } else if (prefLang === "en") {
+    contents = _buildFeedbackBubble("en");
+    altText = "Feedback & Suggestions";
+  } else {
+    contents = {
+      type: "carousel",
+      contents: [
+        _buildFeedbackBubble("zh"),
+        _buildFeedbackBubble("en")
+      ]
+    };
+    altText = "意見回饋與建議 / Feedback & Suggestions";
+  }
+  _replyFlexMessage(replyToken, altText, contents);
 }
 
 /**
@@ -2689,7 +3068,7 @@ function _buildPaymentDeclarationFlex(params) {
   var paymentId = params.paymentId || "";
   var totalAmount = params.totalAmount || 0;
   var last5Digits = params.last5Digits || "無";
-  var items = params.selectedNames || (params.itemsZh ? params.itemsZh.split('\n').map(function(s){ return s.replace(/^-\s*/, '').replace(/^\s*-\s*/, '').trim(); }).filter(Boolean) : ["社團相關費用"]);
+  var items = params.selectedNames || (params.itemsZh ? params.itemsZh.split('\n').map(function (s) { return s.replace(/^-\s*/, '').replace(/^\s*-\s*/, '').trim(); }).filter(Boolean) : ["社團相關費用"]);
   var note = params.note || "";
   var verifyLink = params.verifyLink || "";
   var proofImageUrl = params.proofImageUrl || "";
@@ -2747,7 +3126,7 @@ function _buildPaymentDeclarationFlex(params) {
       spacing: "xs",
       contents: [
         { type: "text", text: "申報項目：", color: "#64748b", size: "xs", weight: "bold" }
-      ].concat(items.map(function(item) {
+      ].concat(items.map(function (item) {
         return {
           type: "text",
           text: "• " + item,
@@ -3152,7 +3531,7 @@ function _handleGeminiChat(userId, userQuery) {
         return {
           success: true,
           reply: finalReply,
-          toString: function() { return finalReply; }
+          toString: function () { return finalReply; }
         };
       } else {
         return { success: false, error: "模型未產生候選回覆內容 (Empty candidate response)" };
@@ -3211,7 +3590,7 @@ function _filterEventsForAiContext(eventsList, todayStr) {
       twTime.toISOString().slice(0, 10);
   }
 
-  return eventsList.filter(function(ev) {
+  return eventsList.filter(function (ev) {
     if (!ev) return false;
     var st = (ev.status || "").trim();
     var isOpen = (st === "開放" || st === "開放中" || st === "Open");
@@ -3247,7 +3626,7 @@ function _fetchOpenEventsContext() {
       if (Array.isArray(sbEvents) && sbEvents.length > 0) {
         var validEvents = _filterEventsForAiContext(sbEvents);
         if (validEvents.length > 0) {
-          return validEvents.map(function(ev) {
+          return validEvents.map(function (ev) {
             var title = ev.title || "";
             var fee = ev.fee || 0;
             var start = ev.start_date || "";
@@ -3321,7 +3700,7 @@ function _fetchDocsKnowledgeBase() {
       if (allKnowledge.length > 15000) {
         allKnowledge = allKnowledge.substring(0, 15000);
       }
-      try { cache.put("docs_kb_text", allKnowledge, 1800); } catch (cErr) {}
+      try { cache.put("docs_kb_text", allKnowledge, 1800); } catch (cErr) { }
       return allKnowledge;
     }
   } catch (e) {
@@ -3487,7 +3866,7 @@ function overwriteMainSpreadsheetFromSupabase() {
   if (!ss) {
     var errMsg = "❌ 找不到主試算表，請在試算表編輯器中執行或確認 SPREADSHEET_ID。";
     Logger.log(errMsg);
-    try { SpreadsheetApp.getUi().alert("錯誤", errMsg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) {}
+    try { SpreadsheetApp.getUi().alert("錯誤", errMsg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) { }
     return { status: "error", message: errMsg };
   }
 
@@ -3498,7 +3877,7 @@ function overwriteMainSpreadsheetFromSupabase() {
   if (!sbUrl || !sbKey) {
     var noKeyMsg = "❌ 缺少必要之 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY！";
     Logger.log(noKeyMsg);
-    try { SpreadsheetApp.getUi().alert("錯誤", noKeyMsg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) {}
+    try { SpreadsheetApp.getUi().alert("錯誤", noKeyMsg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) { }
     return { status: "error", message: noKeyMsg };
   }
 
@@ -3646,7 +4025,7 @@ function overwriteMainSpreadsheetFromSupabase() {
   Logger.log(summaryText);
   try {
     SpreadsheetApp.getUi().alert("全量同步完成", summaryText, SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch (e) {}
+  } catch (e) { }
 
   return { status: "success", summary: summary };
 }
@@ -3966,7 +4345,7 @@ function _syncSignupToSheet(ss, p, action) {
         if (!p.name && mems[0].name) p.name = mems[0].name;
         if (!p.line_id && mems[0].line_id) p.line_id = mems[0].line_id;
       }
-    } catch (e) {}
+    } catch (e) { }
   }
   var sanitizedPayload = {};
   for (var key in p) {
@@ -4046,7 +4425,7 @@ function _syncSignupToEventSpecificSheet(p) {
   try {
     var eventId = p.event_id;
     var ssId = "";
-    var evts = (typeof _supabaseGet === "function") 
+    var evts = (typeof _supabaseGet === "function")
       ? _supabaseGet("events", { id: "eq." + eventId, select: "title,spreadsheet_id,spreadsheet_url" })
       : [];
     if (evts && evts.length > 0) {
@@ -4075,7 +4454,7 @@ function _syncSignupToEventSpecificSheet(p) {
       var rCode = codeIdx > -1 ? String(sData[r][codeIdx]).trim() : "";
       var rUid = uidIdx > -1 ? String(sData[r][uidIdx]).trim() : "";
       if ((p.id && rCode === String(p.id).trim()) ||
-          (p.line_user_id && rUid === String(p.line_user_id).trim())) {
+        (p.line_user_id && rUid === String(p.line_user_id).trim())) {
         targetRow = r + 1;
         break;
       }
@@ -4714,7 +5093,7 @@ function handleSpreadsheetEdit(e) {
           _processPaymentVerification(paymentId, "試算表即時對帳", false, null);
           try {
             e.source.toast("✅ 繳費單 " + paymentId + " 已核銷並同步 Supabase！", "對帳成功", 5);
-          } catch (tErr) {}
+          } catch (tErr) { }
         }
       }
     }
@@ -4770,7 +5149,7 @@ function handleSpreadsheetEdit(e) {
 
           try {
             e.source.toast("✅ 裝備借用單 " + loanId + " 已標記歸還並回補庫存！", "歸還成功", 5);
-          } catch (tErr) {}
+          } catch (tErr) { }
         }
       }
     }
@@ -4803,7 +5182,7 @@ function handleSpreadsheetEdit(e) {
         Logger.log("⚡ [專屬試算表反向同步] 已同步報名紀錄 " + signupId + " (欄位 " + headers[col - 1] + " -> " + newValue + ")");
         try {
           e.source.toast("✅ 報名資料 (" + headers[col - 1] + " -> " + newValue + ") 已同步至 Supabase！", "反向同步成功", 5);
-        } catch (tErr) {}
+        } catch (tErr) { }
       }
     }
     return;
@@ -4835,7 +5214,7 @@ function setupSpreadsheetEditTrigger() {
   Logger.log("✅ 已成功安裝 handleSpreadsheetEdit 可安裝觸發器！");
   try {
     SpreadsheetApp.getUi().alert("安裝成功", "✅ 已成功安裝試算表即時編輯觸發器！\n未來在 Payments、Loans 或 Signups 分頁修改狀態，將自動即時同步 Supabase！", SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch (e) {}
+  } catch (e) { }
 }
 
 
@@ -5224,10 +5603,10 @@ function _handleNotifyOfficersPayment(json) {
     var itemsEn = (selectedNamesEn && selectedNamesEn.length > 0)
       ? selectedNamesEn.map(function (n) { return "  - " + n; }).join("\n")
       : (selectedNames.length > 0
-          ? selectedNames.map(function (n) {
-              return "  - " + n.replace(/含社員5折優惠/g, "Member 50% discount applied");
-            }).join("\n")
-          : "  - None");
+        ? selectedNames.map(function (n) {
+          return "  - " + n.replace(/含社員5折優惠/g, "Member 50% discount applied");
+        }).join("\n")
+        : "  - None");
 
     var verifyToken = details.verifyToken || json.verifyToken || "";
     var proofImageUrl = details.proofImageUrl || json.proofImageUrl || "";
@@ -5237,7 +5616,7 @@ function _handleNotifyOfficersPayment(json) {
     try {
       var props = (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties) ? PropertiesService.getScriptProperties() : null;
       frontendWebUrl = (props ? props.getProperty('FRONTEND_WEB_URL') : null) || (typeof FRONTEND_WEB_URL !== 'undefined' ? FRONTEND_WEB_URL : "") || (typeof DEFAULT_FRONTEND_WEB_URL !== 'undefined' ? DEFAULT_FRONTEND_WEB_URL : "");
-    } catch (eFw) {}
+    } catch (eFw) { }
     if (!frontendWebUrl) {
       frontendWebUrl = "https://equipments-seven.vercel.app";
     }
@@ -5256,13 +5635,13 @@ function _handleNotifyOfficersPayment(json) {
       if (typeof ScriptApp !== 'undefined' && ScriptApp.getServiceUrl) {
         webServiceUrl = ScriptApp.getServiceUrl();
       }
-    } catch (e) {}
+    } catch (e) { }
 
     if (!webServiceUrl) {
       try {
         var props = (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties) ? PropertiesService.getScriptProperties() : null;
         webServiceUrl = (props ? props.getProperty('WEB_APP_URL') : null) || (typeof WEB_APP_URL !== 'undefined' ? WEB_APP_URL : "") || (typeof DEFAULT_WEB_APP_URL !== 'undefined' ? DEFAULT_WEB_APP_URL : "");
-      } catch (e2) {}
+      } catch (e2) { }
     }
 
     // 備用 GAS 網址 (僅在 Web / LIFF 網址不可用時作為備援)
@@ -5287,17 +5666,17 @@ function _handleNotifyOfficersPayment(json) {
 
     var flexCard = (typeof _buildPaymentDeclarationFlex === 'function')
       ? _buildPaymentDeclarationFlex({
-          userName: userName,
-          userId: userId,
-          paymentId: paymentId,
-          totalAmount: totalAmount,
-          last5Digits: last5Digits,
-          selectedNames: selectedNames,
-          itemsZh: itemsZh,
-          note: details.note,
-          verifyLink: verifyLink,
-          proofImageUrl: proofImageUrl
-        })
+        userName: userName,
+        userId: userId,
+        paymentId: paymentId,
+        totalAmount: totalAmount,
+        last5Digits: last5Digits,
+        selectedNames: selectedNames,
+        itemsZh: itemsZh,
+        note: details.note,
+        verifyLink: verifyLink,
+        proofImageUrl: proofImageUrl
+      })
       : null;
 
     // 精緻 HTML Email 樣板 (內建 100% 保證可見的翡翠綠單鍵核銷大按鈕，免 Google 登入)
@@ -5413,55 +5792,55 @@ function _handleNotifyPaymentConfirmed(json) {
 
         var emailBody = isEn
           ? "Dear " + userName + ",\n\n" +
-            "Your payment has been successfully verified and confirmed by the club officers!\n\n" +
-            "• Payment ID: " + paymentId + "\n" +
-            "• Amount: $" + amount + " TWD\n" +
-            "• Items: " + items + "\n" +
-            "• Status: Confirmed\n\n" +
-            "Your event registration and gear rental status have been updated. You can check your status anytime on your LINE Dashboard. Thank you for your support!\n\n" +
-            "NTUST Mountaineering Club • Automated Notification System"
+          "Your payment has been successfully verified and confirmed by the club officers!\n\n" +
+          "• Payment ID: " + paymentId + "\n" +
+          "• Amount: $" + amount + " TWD\n" +
+          "• Items: " + items + "\n" +
+          "• Status: Confirmed\n\n" +
+          "Your event registration and gear rental status have been updated. You can check your status anytime on your LINE Dashboard. Thank you for your support!\n\n" +
+          "NTUST Mountaineering Club • Automated Notification System"
           : "親愛的 " + userName + " 您好：\n\n" +
-            "社團幹部已確認收到您的款項並完成核銷！\n\n" +
-            "• 繳費單號：" + paymentId + "\n" +
-            "• 核銷金額：$" + amount + " 元\n" +
-            "• 核銷項目：" + items + "\n" +
-            "• 核銷狀態：已核銷 Confirmed\n\n" +
-            "相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁查看最新狀態。感謝您的配合與支持！\n\n" +
-            "台科登山社 • 自動發送系統";
+          "社團幹部已確認收到您的款項並完成核銷！\n\n" +
+          "• 繳費單號：" + paymentId + "\n" +
+          "• 核銷金額：$" + amount + " 元\n" +
+          "• 核銷項目：" + items + "\n" +
+          "• 核銷狀態：已核銷 Confirmed\n\n" +
+          "相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁查看最新狀態。感謝您的配合與支持！\n\n" +
+          "台科登山社 • 自動發送系統";
 
         var emailHtml = isEn
           ? '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
-            '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
-            '<h2 style="color: #065f46; margin: 0; font-size: 20px;">NTUST Mountaineering Club • Payment Confirmation</h2>' +
-            '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Dear ' + userName + ', your payment has been verified by the club officers!</p>' +
-            '</div>' +
-            '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
-            '<table style="width: 100%; border-collapse: collapse;">' +
-            '<tr><td style="padding: 6px 0; color: #64748b; width: 120px;">Payment ID:</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
-            '<tr><td style="padding: 6px 0; color: #64748b;">Amount:</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' TWD</td></tr>' +
-            '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">Items:</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
-            '<tr><td style="padding: 6px 0; color: #64748b;">Status:</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">Confirmed</td></tr>' +
-            '</table>' +
-            '</div>' +
-            '<p style="color: #64748b; font-size: 13px; margin: 0;">Your event registration and gear rental status have been updated. You can check your status anytime on your LINE Dashboard. Thank you for your support!</p>' +
-            '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">NTUST Mountaineering Club • Automated Notification System</p>' +
-            '</div>'
+          '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
+          '<h2 style="color: #065f46; margin: 0; font-size: 20px;">NTUST Mountaineering Club • Payment Confirmation</h2>' +
+          '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Dear ' + userName + ', your payment has been verified by the club officers!</p>' +
+          '</div>' +
+          '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
+          '<table style="width: 100%; border-collapse: collapse;">' +
+          '<tr><td style="padding: 6px 0; color: #64748b; width: 120px;">Payment ID:</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
+          '<tr><td style="padding: 6px 0; color: #64748b;">Amount:</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' TWD</td></tr>' +
+          '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">Items:</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
+          '<tr><td style="padding: 6px 0; color: #64748b;">Status:</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">Confirmed</td></tr>' +
+          '</table>' +
+          '</div>' +
+          '<p style="color: #64748b; font-size: 13px; margin: 0;">Your event registration and gear rental status have been updated. You can check your status anytime on your LINE Dashboard. Thank you for your support!</p>' +
+          '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">NTUST Mountaineering Club • Automated Notification System</p>' +
+          '</div>'
           : '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">' +
-            '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
-            '<h2 style="color: #065f46; margin: 0; font-size: 20px;">台科登山社 • 繳費成功確認通知</h2>' +
-            '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">親愛的 ' + userName + ' 您好，社團幹部已確認收到您的款項並完成核銷！</p>' +
-            '</div>' +
-            '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
-            '<table style="width: 100%; border-collapse: collapse;">' +
-            '<tr><td style="padding: 6px 0; color: #64748b; width: 100px;">繳費單號：</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
-            '<tr><td style="padding: 6px 0; color: #64748b;">核銷金額：</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' 元</td></tr>' +
-            '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">核銷項目：</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
-            '<tr><td style="padding: 6px 0; color: #64748b;">核銷狀態：</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">已核銷 Confirmed</td></tr>' +
-            '</table>' +
-            '</div>' +
-            '<p style="color: #64748b; font-size: 13px; margin: 0;">相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁 (Dashboard) 查看最新狀態。感謝您的配合與支持！</p>' +
-            '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">台科登山社 • 自動發送系統</p>' +
-            '</div>';
+          '<div style="border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px;">' +
+          '<h2 style="color: #065f46; margin: 0; font-size: 20px;">台科登山社 • 繳費成功確認通知</h2>' +
+          '<p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">親愛的 ' + userName + ' 您好，社團幹部已確認收到您的款項並完成核銷！</p>' +
+          '</div>' +
+          '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px; font-size: 15px;">' +
+          '<table style="width: 100%; border-collapse: collapse;">' +
+          '<tr><td style="padding: 6px 0; color: #64748b; width: 100px;">繳費單號：</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">' + paymentId + '</td></tr>' +
+          '<tr><td style="padding: 6px 0; color: #64748b;">核銷金額：</td><td style="padding: 6px 0; font-size: 18px; font-weight: bold; color: #059669;">$' + amount + ' 元</td></tr>' +
+          '<tr><td style="padding: 6px 0; color: #64748b; vertical-align: top;">核銷項目：</td><td style="padding: 6px 0; color: #334155;">' + String(items).replace(/\n/g, '<br>') + '</td></tr>' +
+          '<tr><td style="padding: 6px 0; color: #64748b;">核銷狀態：</td><td style="padding: 6px 0; font-weight: bold; color: #059669;">已核銷 Confirmed</td></tr>' +
+          '</table>' +
+          '</div>' +
+          '<p style="color: #64748b; font-size: 13px; margin: 0;">相關活動報名與裝備租借狀態已同步更新，您可隨時至社團 LINE 個人主頁 (Dashboard) 查看最新狀態。感謝您的配合與支持！</p>' +
+          '<p style="color: #94a3b8; font-size: 12px; margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; text-align: center;">台科登山社 • 自動發送系統</p>' +
+          '</div>';
 
         var senderName = isEn ? "NTUST Mountaineering Club" : "台科登山社小岳助理";
 
@@ -5507,27 +5886,27 @@ function _handleNotifyPaymentConfirmed(json) {
       } else {
         var successMsg = isEn
           ? "🎉 Payment Confirmed\n\n" +
-            "Dear " + userName + ",\n" +
-            "Officers have confirmed your payment!\n\n" +
-            "• Payment ID: " + paymentId + "\n" +
-            "• Amount: $" + amount + " TWD\n" +
-            "• Items: " + items + "\n" +
-            "• Status: Confirmed\n\n" +
-            "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!"
+          "Dear " + userName + ",\n" +
+          "Officers have confirmed your payment!\n\n" +
+          "• Payment ID: " + paymentId + "\n" +
+          "• Amount: $" + amount + " TWD\n" +
+          "• Items: " + items + "\n" +
+          "• Status: Confirmed\n\n" +
+          "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!"
           : "🎉 繳費成功通知 / Payment Confirmed\n\n" +
-            "親愛的 " + userName + " 您好：\n" +
-            "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
-            "• 繳費單號：" + paymentId + "\n" +
-            "• 核銷金額：$" + amount + " 元\n" +
-            "• 核銷項目：" + items + "\n\n" +
-            "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
-            "─────────────\n" +
-            "Dear " + userName + ",\n" +
-            "Your payment has been successfully confirmed by the officers!\n\n" +
-            "• Payment ID: " + paymentId + "\n" +
-            "• Amount: $" + amount + " TWD\n" +
-            "• Items: " + items + "\n\n" +
-            "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
+          "親愛的 " + userName + " 您好：\n" +
+          "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
+          "• 繳費單號：" + paymentId + "\n" +
+          "• 核銷金額：$" + amount + " 元\n" +
+          "• 核銷項目：" + items + "\n\n" +
+          "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
+          "─────────────\n" +
+          "Dear " + userName + ",\n" +
+          "Your payment has been successfully confirmed by the officers!\n\n" +
+          "• Payment ID: " + paymentId + "\n" +
+          "• Amount: $" + amount + " TWD\n" +
+          "• Items: " + items + "\n\n" +
+          "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
         _pushMessage(lineUserId, successMsg);
       }
     }
@@ -6780,7 +7159,7 @@ function _asyncAppendToEventSpreadsheet(eventId, signupData, eventName) {
         var rCode = codeIdx > -1 ? String(sData[r][codeIdx]).trim() : "";
         var rUid = uidIdx > -1 ? String(sData[r][uidIdx]).trim() : "";
         if ((signupData.signupCode && rCode === String(signupData.signupCode).trim()) ||
-            (signupData.userId && rUid === String(signupData.userId).trim())) {
+          (signupData.userId && rUid === String(signupData.userId).trim())) {
           targetRow = r + 1;
           break;
         }
@@ -6870,7 +7249,7 @@ function _syncCancelToEventSpreadsheet(eventId, userId, signupCode, reason) {
       var rUid = uidIdx > -1 ? String(sData[r][uidIdx]).trim() : "";
 
       var matches = (signupCode && rCode === String(signupCode).trim()) ||
-                    (userId && rUid === String(userId).trim());
+        (userId && rUid === String(userId).trim());
 
       if (matches) {
         if (statusIdx > -1) {
@@ -6958,7 +7337,7 @@ function _appendToEventSpreadsheet(eventId, signupData, eventTitle) {
       var rCode = codeIdx > -1 ? String(sData[r][codeIdx]).trim() : "";
       var rUid = uidIdx > -1 ? String(sData[r][uidIdx]).trim() : "";
       if ((signupData.signupCode && rCode === String(signupData.signupCode).trim()) ||
-          (signupData.userId && rUid === String(signupData.userId).trim())) {
+        (signupData.userId && rUid === String(signupData.userId).trim())) {
         return; // 已存在於獨立試算表中
       }
     }
@@ -7398,15 +7777,15 @@ function _handleSendEventNotifications(json) {
                   var greetText = (prefLang === "en")
                     ? ("Hello " + applicantName + "! For the event:")
                     : ((prefLang === "zh")
-                        ? ("哈囉 " + applicantName + "！您報名的活動：")
-                        : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
+                      ? ("哈囉 " + applicantName + "！您報名的活動：")
+                      : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
                   var resPrompt = (prefLang === "en") ? "Review Result:" : ((prefLang === "zh") ? "審核結果為：" : "審核結果為 Result：");
                   var displayBadge = (prefLang === "en") ? "【 Confirmed 】" : ((prefLang === "zh") ? "【 正取 】" : "【 " + statusStr + " 】");
                   var noticeText = (prefLang === "en")
                     ? "Congratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!"
                     : ((prefLang === "zh")
-                        ? "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！"
-                        : "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!");
+                      ? "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！"
+                      : "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!");
                   var joinBtn = (prefLang === "en") ? "Join Group" : ((prefLang === "zh") ? "加入活動群組" : "加入活動群組 Join Group");
                   var payBtn = (prefLang === "en") ? "Pay Now" : ((prefLang === "zh") ? "前往繳費系統" : "前往繳費系統 Pay");
                   var altPushText = (prefLang === "en") ? "【Activity Admission Notice】" : ((prefLang === "zh") ? "【活動正取通知】" : "【活動正取通知 Confirmed】");
@@ -7462,15 +7841,15 @@ function _handleSendEventNotifications(json) {
                   var greetTextW = (prefLang === "en")
                     ? ("Hello " + applicantName + "! For the event:")
                     : ((prefLang === "zh")
-                        ? ("哈囉 " + applicantName + "！您報名的活動：")
-                        : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
+                      ? ("哈囉 " + applicantName + "！您報名的活動：")
+                      : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
                   var resPromptW = (prefLang === "en") ? "Review Result:" : ((prefLang === "zh") ? "審核結果為：" : "審核結果為 Result：");
                   var displayBadgeW = (prefLang === "en") ? "【 Waitlisted 】" : ((prefLang === "zh") ? "【 備取 】" : "【 " + statusStr + " 】");
                   var noticeTextW = (prefLang === "en")
                     ? "You are currently on the waitlist. We will contact you if a spot opens up!"
                     : ((prefLang === "zh")
-                        ? "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！"
-                        : "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!");
+                      ? "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！"
+                      : "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!");
                   var confirmBtn = (prefLang === "en") ? "Confirm Waitlist" : ((prefLang === "zh") ? "確認備取意願" : "確認備取意願 Confirm Waitlist");
                   var altPushTextW = (prefLang === "en") ? "【Activity Waitlist Notice】" : ((prefLang === "zh") ? "【活動備取通知】" : "【活動備取通知 Waitlist】");
 
@@ -7624,7 +8003,7 @@ function _handleGetAdminEvents(userId) {
 
       if (res.getResponseCode() === 200) {
         var sbEvents = JSON.parse(res.getContentText());
-        var events = (sbEvents || []).map(function(e) {
+        var events = (sbEvents || []).map(function (e) {
           return {
             id: e.id || "",
             name: e.title || "",
@@ -7681,7 +8060,7 @@ function _handleGetEventSignups(eventId, userId) {
       if (eventId) query.event_id = "eq." + eventId;
       var sbSignups = _supabaseGet("event_signups", query);
       if (sbSignups && Array.isArray(sbSignups) && sbSignups.length > 0) {
-        var sList = sbSignups.map(function(s, idx) {
+        var sList = sbSignups.map(function (s, idx) {
           var m = s.members || {};
           var proofUrlStr = "";
           if (Array.isArray(m.proof_urls)) {
@@ -7883,7 +8262,7 @@ function _handleCreateEventSheet(json) {
       var signupSheet = eventSS.getSheetByName("報名名冊") || eventSS.getSheets()[0];
 
       if (signupSheet) {
-        var userIds = signups.map(function(s) { return s.line_user_id; }).filter(Boolean);
+        var userIds = signups.map(function (s) { return s.line_user_id; }).filter(Boolean);
         var memberMap = {};
         if (userIds.length > 0) {
           var members = _supabaseGet("members", {
@@ -7891,7 +8270,7 @@ function _handleCreateEventSheet(json) {
             select: "*"
           });
           if (Array.isArray(members)) {
-            members.forEach(function(m) {
+            members.forEach(function (m) {
               if (m.line_user_id) memberMap[m.line_user_id] = m;
             });
           }
@@ -8091,7 +8470,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
       return { success: false, appendedCount: 0, backfilledCount: 0, totalSignups: 0, sheetTotal: 0, error: "從 Supabase 讀取報名紀錄失敗 (請確認 SUPABASE_URL 與 Service Role Key 配置)" };
     }
 
-    var userIds = signups.map(function(s) { return s.line_user_id; }).filter(Boolean);
+    var userIds = signups.map(function (s) { return s.line_user_id; }).filter(Boolean);
     var memberMap = {};
     if (userIds.length > 0) {
       var members = _supabaseGet("members", {
@@ -8099,7 +8478,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
         select: "*"
       });
       if (Array.isArray(members)) {
-        members.forEach(function(m) {
+        members.forEach(function (m) {
           if (m.line_user_id) memberMap[m.line_user_id] = m;
         });
       }
@@ -8131,7 +8510,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
       var m = (rowUid && memberMap[rowUid]) || (s && s.line_user_id && memberMap[s.line_user_id]);
       var rowChanged = false;
 
-      var checkAndUpdate = function(colIdx, newVal) {
+      var checkAndUpdate = function (colIdx, newVal) {
         if (colIdx > -1 && colIdx < headers.length && newVal !== undefined && newVal !== null) {
           var curVal = sData[r][colIdx] !== undefined && sData[r][colIdx] !== null ? String(sData[r][colIdx]).trim() : "";
           var targetVal = String(newVal).trim();
@@ -8247,7 +8626,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
         }
 
         var row = new Array(headers.length).fill("");
-        var setCell = function(idx, val) {
+        var setCell = function (idx, val) {
           if (idx > -1 && idx < headers.length && val !== undefined && val !== null) {
             row[idx] = val;
           }

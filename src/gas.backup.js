@@ -521,7 +521,7 @@ function doPost(e) {
 
           var cache = CacheService.getUserCache();
 
-          var menuCommands = ["我的狀態 My Status", "個人主頁 My Dashboard", "填寫資料 Register", "最新活動 Activities", "器材借用 Equipment Loan", "裝備租借 Equipment Loan", "取消預約 Cancel", "繳費系統 Payment System", "繳費中心 Payment Center", "繳費紀錄 History", "繳費紀錄 Payment History", "繳費回報", "其他", "更多服務 More Services", "幹部是誰 Officers", "意見與回饋 Feedback"];
+          var menuCommands = ["我的狀態 My Status", "個人主頁 My Dashboard", "填寫資料 Register", "最新活動 Activities", "器材借用 Equipment Loan", "裝備租借 Equipment Loan", "取消預約 Cancel", "繳費系統 Payment System", "繳費中心 Payment Center", "繳費紀錄 History", "繳費紀錄 Payment History", "繳費回報", "其他", "更多服務 More Services", "幹部是誰 Officers", "意見回饋 Feedback"];
           if (menuCommands.indexOf(userText) > -1) {
             cache.remove(userId + "_canceling_event");
             cache.remove(userId + "_payment_type");
@@ -1471,7 +1471,7 @@ function handleTextCommand(replyToken, userId, text, sourceType, event) {
     replyMessage(replyToken, "💰 歡迎使用繳費與對帳系統！\n請點擊下方連結進入多選結帳表單：\n\nhttps://liff.line.me/2009217429-u7OCkmQO");
   }
   else if (text === "繳費紀錄" || text === "繳費紀錄 Payment History" || text === "繳費紀錄 History") sendPaymentHistory(replyToken, userId, ss);
-  else if (text === "意見與回饋" || text === "意見與回饋 Feedback") sendFeedbackLink(replyToken);
+  else if (text === "意見回饋" || text === "意見回饋 Feedback") sendFeedbackLink(replyToken);
   else if (text === "其他" || text === "更多服務" || text === "更多服務 More Services") sendMoreOptionsMenu(replyToken);
   else if (text === "幹部是誰" || text === "幹部是誰 Officers") sendOfficerMenu(replyToken, ss);
   else {
@@ -4056,8 +4056,8 @@ function sendMoreOptionsMenu(replyToken) {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "📢 意見與回饋 Feedback",
-          "text": "意見與回饋 Feedback"
+          "label": "📢 意見回饋 Feedback",
+          "text": "意見回饋 Feedback"
         }
       }]
     }
@@ -4796,11 +4796,11 @@ function getClubKnowledgeFromDoc() {
 
 // ⭐️ 傳送意見回饋表單連結
 
-// 📢 全新功能：發送意見與回饋表單連結
+// 📢 全新功能：發送意見回饋表單連結
 function sendFeedbackLink(replyToken) {
   var googleFormUrl = "https://forms.gle/bCT7fjVP3bSrReF96";
 
-  var msg = "【意見與回饋 / Feedback & Suggestions】\n\n" +
+  var msg = "【意見回饋 / Feedback & Suggestions】\n\n" +
     "無論是想對社團說的話、活動建議、問題詢問，還是回報系統錯誤 (可附截圖)，都歡迎透過下方表單告訴我們！\n\n" +
     "Whether you have suggestions, questions, or want to report a bug (screenshots supported), please let us know!\n\n" +
     "點此填寫回饋表單 Click here to fill out the feedback form：\n" + googleFormUrl + "\n\n" +
@@ -4841,7 +4841,7 @@ function onFeedbackSubmit(e) {
 
     var subject = "【社團意見回饋】收到來自 " + name + " 的新訊息";
     var body = "幹部您好，\n\n" +
-      "系統剛剛收到了一筆新的意見與回饋，詳細內容如下：\n" +
+      "系統剛剛收到了一筆新的意見回饋，詳細內容如下：\n" +
       "───────────────\n" +
       "姓名：" + name + "\n" +
       "聯絡信箱：" + email + "\n" +

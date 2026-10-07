@@ -420,7 +420,7 @@ function _getLineUserProfile(userId) {
   if (!token) {
     try {
       token = PropertiesService.getScriptProperties().getProperty('MEMBER_BOT_TOKEN') ||
-              PropertiesService.getScriptProperties().getProperty('ADMIN_BOT_TOKEN');
+        PropertiesService.getScriptProperties().getProperty('ADMIN_BOT_TOKEN');
     } catch (e) {
       // 於部分本機單元測試 mock 環境容錯
     }
@@ -798,8 +798,8 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // 3.2 意見與回饋 (支援「意見與回饋」、「Feedback」)
-  if (text.indexOf("意見與回饋") > -1 || lowerText.indexOf("feedback") > -1) {
+  // 3.2 意見回饋 (支援「意見回饋」、「Feedback」)
+  if (text.indexOf("意見回饋") > -1 || lowerText.indexOf("feedback") > -1) {
     sendFeedbackLink(replyToken);
     return;
   }
@@ -808,7 +808,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   if (
     text.indexOf("小岳說明") > -1 ||
     text.indexOf("小岳指南") > -1 ||
-    lowerText.indexOf("ai guide") > -1 || 
+    lowerText.indexOf("ai guide") > -1 ||
     text.indexOf("小岳說明 AI Guide") > -1
   ) {
     var aiGuideMsg = "🏔️ 【小岳 (Yue) AI 客服使用指南 / AI Guide】\n" +
@@ -1490,7 +1490,7 @@ function _formatEventDate(dateVal) {
     var dateMatch = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
     // 若時間剛好為 23:59:59Z (歷史舊 Bug 造成 UTC 23:59:59)，將其當作當天，避免跨日跳到隔天
     if (str.indexOf("23:59:59Z") > -1 && dateMatch) {
-      var pad = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+      var pad = function (n) { return String(n).length < 2 ? '0' + n : String(n); };
       return dateMatch[1] + '/' + pad(dateMatch[2]) + '/' + pad(dateMatch[3]);
     }
     if (typeof Utilities !== "undefined" && Utilities.formatDate) {
@@ -1499,11 +1499,11 @@ function _formatEventDate(dateVal) {
         return Utilities.formatDate(d, "Asia/Taipei", "yyyy/MM/dd");
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   var m = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
   if (m) {
-    var padFn = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+    var padFn = function (n) { return String(n).length < 2 ? '0' + n : String(n); };
     return m[1] + '/' + padFn(m[2]) + '/' + padFn(m[3]);
   }
   return str.replace(/-/g, "/").substring(0, 10);
@@ -1574,14 +1574,14 @@ function sendEventList(replyToken, userId) {
     var viewDisplayText = (prefLang === "en")
       ? ("I want to view details for " + eventNameEn)
       : (prefLang === "zh"
-          ? ("我想查看 " + eventNameZh + " 的資訊")
-          : ("我想查看 " + (hasEnglish ? (eventNameZh + " / " + eventNameEn) : eventNameZh) + " 的資訊 / I want to view details"));
+        ? ("我想查看 " + eventNameZh + " 的資訊")
+        : ("我想查看 " + (hasEnglish ? (eventNameZh + " / " + eventNameEn) : eventNameZh) + " 的資訊 / I want to view details"));
 
     var summaryText = (prefLang === "en")
       ? (ev.summary_en || ev.short_desc_en || ev.summary || "")
       : (prefLang === "zh"
-          ? (ev.summary || "")
-          : (hasEnglish ? _formatBilingualMessage(ev.summary, ev.summary_en, null) : (ev.summary || "")));
+        ? (ev.summary || "")
+        : (hasEnglish ? _formatBilingualMessage(ev.summary, ev.summary_en, null) : (ev.summary || "")));
 
     var startFormatted = _formatEventDate(ev.start_date);
     var endFormatted = _formatEventDate(ev.end_date);
@@ -1729,8 +1729,8 @@ function sendEventDetail(replyToken, eventId, userId) {
   var eventName = (prefLang === "en")
     ? eventNameEn
     : (prefLang === "zh"
-        ? eventNameZh
-        : (hasEnglish ? (eventNameZh + "\n" + eventNameEn) : (ev.title || "未命名活動 (Untitled Event)")));
+      ? eventNameZh
+      : (hasEnglish ? (eventNameZh + "\n" + eventNameEn) : (ev.title || "未命名活動 (Untitled Event)")));
 
   var rawStatus = String(ev.status || "").trim().toLowerCase();
   var deadlineStr = ev.deadline || "";
@@ -1764,16 +1764,16 @@ function sendEventDetail(replyToken, eventId, userId) {
   var summaryContent = (prefLang === "en")
     ? summaryEn
     : (prefLang === "zh"
-        ? summaryZh
-        : (hasEnglish ? _formatBilingualMessage(summaryZh, summaryEn, null) : summaryZh));
+      ? summaryZh
+      : (hasEnglish ? _formatBilingualMessage(summaryZh, summaryEn, null) : summaryZh));
 
   var fullDescZh = ev.itinerary || ev.full_desc || "尚無詳細行程";
   var fullDescEn = ev.itinerary_en || ev.full_desc_en || ev.itinerary || ev.full_desc || "No detailed itinerary";
   var fullDescContent = (prefLang === "en")
     ? fullDescEn
     : (prefLang === "zh"
-        ? fullDescZh
-        : (hasEnglish ? _formatBilingualMessage(fullDescZh, fullDescEn, null) : fullDescZh));
+      ? fullDescZh
+      : (hasEnglish ? _formatBilingualMessage(fullDescZh, fullDescEn, null) : fullDescZh));
 
   var buttonBox;
   if (isOpen) {
@@ -1781,8 +1781,8 @@ function sendEventDetail(replyToken, eventId, userId) {
     var signupDisplayText = (prefLang === "en")
       ? ("Sign up for: " + eventNameEn)
       : (prefLang === "zh"
-          ? ("我要報名：" + eventNameZh)
-          : ("我要報名 Sign up for: " + (hasEnglish ? eventNameEn : eventNameZh)));
+        ? ("我要報名：" + eventNameZh)
+        : ("我要報名 Sign up for: " + (hasEnglish ? eventNameEn : eventNameZh)));
 
     buttonBox = {
       "type": "button",
@@ -2052,7 +2052,7 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "📖 社員使用指南 Member Guide",
+          "label": "社員使用指南 Member Guide",
           "text": "使用指南"
         }
       }, {
@@ -2060,7 +2060,7 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "🤖 小岳說明 AI Guide",
+          "label": "小岳說明 AI Guide",
           "text": "小岳說明 AI Guide"
         }
       }, {
@@ -2068,7 +2068,7 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "👤 幹部是誰 Officers",
+          "label": "幹部是誰 Officers",
           "text": "幹部是誰 Officers"
         }
       }, {
@@ -2076,8 +2076,8 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "📢 意見與回饋 Feedback",
-          "text": "意見與回饋 Feedback"
+          "label": "意見回饋 Feedback",
+          "text": "意見回饋 Feedback"
         }
       }]
     }
@@ -2093,11 +2093,11 @@ function sendMoreOptionsMenu(replyToken) {
 }
 
 /**
- * 發送「意見與回饋」連結表單
+ * 發送「意見回饋」連結表單
  */
 function sendFeedbackLink(replyToken) {
   var googleFormUrl = "https://forms.gle/bCT7fjVP3bSrReF96";
-  var msg = "【意見與回饋 / Feedback & Suggestions】\n\n" +
+  var msg = "【意見回饋 / Feedback & Suggestions】\n\n" +
     "無論是想對社團說的話、活動建議、問題詢問，還是回報系統錯誤 (可附截圖)，都歡迎透過下方表單告訴我們！\n\n" +
     "Whether you have suggestions, questions, or want to report a bug (screenshots supported), please let us know!\n\n" +
     "點此填寫回饋表單 Click here to fill out the feedback form：\n" + googleFormUrl + "\n\n" +
@@ -2457,7 +2457,7 @@ function _handleGeminiChat(userId, userQuery) {
         return {
           success: true,
           reply: finalReply,
-          toString: function() { return finalReply; }
+          toString: function () { return finalReply; }
         };
       } else {
         return { success: false, error: "模型未產生候選回覆內容 (Empty candidate response)" };
@@ -2516,7 +2516,7 @@ function _filterEventsForAiContext(eventsList, todayStr) {
       twTime.toISOString().slice(0, 10);
   }
 
-  return eventsList.filter(function(ev) {
+  return eventsList.filter(function (ev) {
     if (!ev) return false;
     var st = (ev.status || "").trim();
     var isOpen = (st === "開放" || st === "開放中" || st === "Open");
@@ -2552,7 +2552,7 @@ function _fetchOpenEventsContext() {
       if (Array.isArray(sbEvents) && sbEvents.length > 0) {
         var validEvents = _filterEventsForAiContext(sbEvents);
         if (validEvents.length > 0) {
-          return validEvents.map(function(ev) {
+          return validEvents.map(function (ev) {
             var title = ev.title || "";
             var fee = ev.fee || 0;
             var start = ev.start_date || "";
@@ -2626,7 +2626,7 @@ function _fetchDocsKnowledgeBase() {
       if (allKnowledge.length > 15000) {
         allKnowledge = allKnowledge.substring(0, 15000);
       }
-      try { cache.put("docs_kb_text", allKnowledge, 1800); } catch (cErr) {}
+      try { cache.put("docs_kb_text", allKnowledge, 1800); } catch (cErr) { }
       return allKnowledge;
     }
   } catch (e) {
@@ -2792,7 +2792,7 @@ function overwriteMainSpreadsheetFromSupabase() {
   if (!ss) {
     var errMsg = "❌ 找不到主試算表，請在試算表編輯器中執行或確認 SPREADSHEET_ID。";
     Logger.log(errMsg);
-    try { SpreadsheetApp.getUi().alert("錯誤", errMsg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) {}
+    try { SpreadsheetApp.getUi().alert("錯誤", errMsg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) { }
     return { status: "error", message: errMsg };
   }
 
@@ -2803,7 +2803,7 @@ function overwriteMainSpreadsheetFromSupabase() {
   if (!sbUrl || !sbKey) {
     var noKeyMsg = "❌ 缺少必要之 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY！";
     Logger.log(noKeyMsg);
-    try { SpreadsheetApp.getUi().alert("錯誤", noKeyMsg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) {}
+    try { SpreadsheetApp.getUi().alert("錯誤", noKeyMsg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) { }
     return { status: "error", message: noKeyMsg };
   }
 
@@ -2951,7 +2951,7 @@ function overwriteMainSpreadsheetFromSupabase() {
   Logger.log(summaryText);
   try {
     SpreadsheetApp.getUi().alert("全量同步完成", summaryText, SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch (e) {}
+  } catch (e) { }
 
   return { status: "success", summary: summary };
 }
@@ -3271,7 +3271,7 @@ function _syncSignupToSheet(ss, p, action) {
         if (!p.name && mems[0].name) p.name = mems[0].name;
         if (!p.line_id && mems[0].line_id) p.line_id = mems[0].line_id;
       }
-    } catch (e) {}
+    } catch (e) { }
   }
   var sanitizedPayload = {};
   for (var key in p) {
@@ -3351,7 +3351,7 @@ function _syncSignupToEventSpecificSheet(p) {
   try {
     var eventId = p.event_id;
     var ssId = "";
-    var evts = (typeof _supabaseGet === "function") 
+    var evts = (typeof _supabaseGet === "function")
       ? _supabaseGet("events", { id: "eq." + eventId, select: "title,spreadsheet_id,spreadsheet_url" })
       : [];
     if (evts && evts.length > 0) {
@@ -3380,7 +3380,7 @@ function _syncSignupToEventSpecificSheet(p) {
       var rCode = codeIdx > -1 ? String(sData[r][codeIdx]).trim() : "";
       var rUid = uidIdx > -1 ? String(sData[r][uidIdx]).trim() : "";
       if ((p.id && rCode === String(p.id).trim()) ||
-          (p.line_user_id && rUid === String(p.line_user_id).trim())) {
+        (p.line_user_id && rUid === String(p.line_user_id).trim())) {
         targetRow = r + 1;
         break;
       }
@@ -4027,7 +4027,7 @@ function handleSpreadsheetEdit(e) {
           _processPaymentVerification(paymentId, "試算表即時對帳", false, null);
           try {
             e.source.toast("✅ 繳費單 " + paymentId + " 已核銷並同步 Supabase！", "對帳成功", 5);
-          } catch (tErr) {}
+          } catch (tErr) { }
         }
       }
     }
@@ -4083,7 +4083,7 @@ function handleSpreadsheetEdit(e) {
 
           try {
             e.source.toast("✅ 裝備借用單 " + loanId + " 已標記歸還並回補庫存！", "歸還成功", 5);
-          } catch (tErr) {}
+          } catch (tErr) { }
         }
       }
     }
@@ -4116,7 +4116,7 @@ function handleSpreadsheetEdit(e) {
         Logger.log("⚡ [專屬試算表反向同步] 已同步報名紀錄 " + signupId + " (欄位 " + headers[col - 1] + " -> " + newValue + ")");
         try {
           e.source.toast("✅ 報名資料 (" + headers[col - 1] + " -> " + newValue + ") 已同步至 Supabase！", "反向同步成功", 5);
-        } catch (tErr) {}
+        } catch (tErr) { }
       }
     }
     return;
@@ -4148,7 +4148,7 @@ function setupSpreadsheetEditTrigger() {
   Logger.log("✅ 已成功安裝 handleSpreadsheetEdit 可安裝觸發器！");
   try {
     SpreadsheetApp.getUi().alert("安裝成功", "✅ 已成功安裝試算表即時編輯觸發器！\n未來在 Payments、Loans 或 Signups 分頁修改狀態，將自動即時同步 Supabase！", SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch (e) {}
+  } catch (e) { }
 }
 
 
@@ -4527,10 +4527,10 @@ function _handleNotifyOfficersPayment(json) {
     var itemsEn = (selectedNamesEn && selectedNamesEn.length > 0)
       ? selectedNamesEn.map(function (n) { return "  - " + n; }).join("\n")
       : (selectedNames.length > 0
-          ? selectedNames.map(function (n) {
-              return "  - " + n.replace(/含社員5折優惠/g, "Member 50% discount applied");
-            }).join("\n")
-          : "  - None");
+        ? selectedNames.map(function (n) {
+          return "  - " + n.replace(/含社員5折優惠/g, "Member 50% discount applied");
+        }).join("\n")
+        : "  - None");
 
     var verifyToken = details.verifyToken || json.verifyToken || "";
 
@@ -4539,7 +4539,7 @@ function _handleNotifyOfficersPayment(json) {
     try {
       var props = (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties) ? PropertiesService.getScriptProperties() : null;
       frontendWebUrl = (props ? props.getProperty('FRONTEND_WEB_URL') : null) || (typeof FRONTEND_WEB_URL !== 'undefined' ? FRONTEND_WEB_URL : "") || (typeof DEFAULT_FRONTEND_WEB_URL !== 'undefined' ? DEFAULT_FRONTEND_WEB_URL : "");
-    } catch (eFw) {}
+    } catch (eFw) { }
     if (!frontendWebUrl) {
       frontendWebUrl = "https://equipments-seven.vercel.app";
     }
@@ -4558,13 +4558,13 @@ function _handleNotifyOfficersPayment(json) {
       if (typeof ScriptApp !== 'undefined' && ScriptApp.getServiceUrl) {
         webServiceUrl = ScriptApp.getServiceUrl();
       }
-    } catch (e) {}
+    } catch (e) { }
 
     if (!webServiceUrl) {
       try {
         var props = (typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties) ? PropertiesService.getScriptProperties() : null;
         webServiceUrl = (props ? props.getProperty('WEB_APP_URL') : null) || (typeof WEB_APP_URL !== 'undefined' ? WEB_APP_URL : "") || (typeof DEFAULT_WEB_APP_URL !== 'undefined' ? DEFAULT_WEB_APP_URL : "");
-      } catch (e2) {}
+      } catch (e2) { }
     }
 
     // 備用 GAS 網址 (僅在 Web / LIFF 網址不可用時作為備援)
@@ -5839,7 +5839,7 @@ function _asyncAppendToEventSpreadsheet(eventId, signupData, eventName) {
         var rCode = codeIdx > -1 ? String(sData[r][codeIdx]).trim() : "";
         var rUid = uidIdx > -1 ? String(sData[r][uidIdx]).trim() : "";
         if ((signupData.signupCode && rCode === String(signupData.signupCode).trim()) ||
-            (signupData.userId && rUid === String(signupData.userId).trim())) {
+          (signupData.userId && rUid === String(signupData.userId).trim())) {
           targetRow = r + 1;
           break;
         }
@@ -5918,7 +5918,7 @@ function _syncCancelToEventSpreadsheet(eventId, userId, signupCode, reason) {
       var rUid = uidIdx > -1 ? String(sData[r][uidIdx]).trim() : "";
 
       var matches = (signupCode && rCode === String(signupCode).trim()) ||
-                    (userId && rUid === String(userId).trim());
+        (userId && rUid === String(userId).trim());
 
       if (matches) {
         if (statusIdx > -1) {
@@ -6344,15 +6344,15 @@ function _handleSendEventNotifications(json) {
                   var greetText = (prefLang === "en")
                     ? ("Hello " + applicantName + "! For the event:")
                     : ((prefLang === "zh")
-                        ? ("哈囉 " + applicantName + "！您報名的活動：")
-                        : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
+                      ? ("哈囉 " + applicantName + "！您報名的活動：")
+                      : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
                   var resPrompt = (prefLang === "en") ? "Review Result:" : ((prefLang === "zh") ? "審核結果為：" : "審核結果為 Result：");
                   var displayBadge = (prefLang === "en") ? "【 Confirmed 】" : ((prefLang === "zh") ? "【 正取 】" : "【 " + statusStr + " 】");
                   var noticeText = (prefLang === "en")
                     ? "Congratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!"
                     : ((prefLang === "zh")
-                        ? "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！"
-                        : "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!");
+                      ? "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！"
+                      : "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!");
                   var joinBtn = (prefLang === "en") ? "Join Group" : ((prefLang === "zh") ? "加入活動群組" : "加入活動群組 Join Group");
                   var payBtn = (prefLang === "en") ? "Pay Now" : ((prefLang === "zh") ? "前往繳費系統" : "前往繳費系統 Pay");
                   var altPushText = (prefLang === "en") ? "【Activity Admission Notice】" : ((prefLang === "zh") ? "【活動正取通知】" : "【活動正取通知 Confirmed】");
@@ -6408,15 +6408,15 @@ function _handleSendEventNotifications(json) {
                   var greetTextW = (prefLang === "en")
                     ? ("Hello " + applicantName + "! For the event:")
                     : ((prefLang === "zh")
-                        ? ("哈囉 " + applicantName + "！您報名的活動：")
-                        : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
+                      ? ("哈囉 " + applicantName + "！您報名的活動：")
+                      : ("哈囉 " + applicantName + "！您報名的活動：\nHello " + applicantName + "! For the event:"));
                   var resPromptW = (prefLang === "en") ? "Review Result:" : ((prefLang === "zh") ? "審核結果為：" : "審核結果為 Result：");
                   var displayBadgeW = (prefLang === "en") ? "【 Waitlisted 】" : ((prefLang === "zh") ? "【 備取 】" : "【 " + statusStr + " 】");
                   var noticeTextW = (prefLang === "en")
                     ? "You are currently on the waitlist. We will contact you if a spot opens up!"
                     : ((prefLang === "zh")
-                        ? "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！"
-                        : "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!");
+                      ? "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！"
+                      : "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!");
                   var confirmBtn = (prefLang === "en") ? "Confirm Waitlist" : ((prefLang === "zh") ? "確認備取意願" : "確認備取意願 Confirm Waitlist");
                   var altPushTextW = (prefLang === "en") ? "【Activity Waitlist Notice】" : ((prefLang === "zh") ? "【活動備取通知】" : "【活動備取通知 Waitlist】");
 
@@ -6570,7 +6570,7 @@ function _handleGetAdminEvents(userId) {
 
       if (res.getResponseCode() === 200) {
         var sbEvents = JSON.parse(res.getContentText());
-        var events = (sbEvents || []).map(function(e) {
+        var events = (sbEvents || []).map(function (e) {
           return {
             id: e.id || "",
             name: e.title || "",
@@ -6623,7 +6623,7 @@ function _handleGetEventSignups(eventId, userId) {
       if (eventId) query.event_id = "eq." + eventId;
       var sbSignups = _supabaseGet("event_signups", query);
       if (sbSignups && Array.isArray(sbSignups) && sbSignups.length > 0) {
-        var sList = sbSignups.map(function(s, idx) {
+        var sList = sbSignups.map(function (s, idx) {
           var m = s.members || {};
           var proofUrlStr = "";
           if (Array.isArray(m.proof_urls)) {
@@ -6805,7 +6805,7 @@ function _handleCreateEventSheet(json) {
       var signupSheet = eventSS.getSheetByName("報名名冊") || eventSS.getSheets()[0];
 
       if (signupSheet) {
-        var userIds = signups.map(function(s) { return s.line_user_id; }).filter(Boolean);
+        var userIds = signups.map(function (s) { return s.line_user_id; }).filter(Boolean);
         var memberMap = {};
         if (userIds.length > 0) {
           var members = _supabaseGet("members", {
@@ -6813,7 +6813,7 @@ function _handleCreateEventSheet(json) {
             select: "*"
           });
           if (Array.isArray(members)) {
-            members.forEach(function(m) {
+            members.forEach(function (m) {
               if (m.line_user_id) memberMap[m.line_user_id] = m;
             });
           }
@@ -6910,7 +6910,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
     var signups = _supabaseGet("event_signups", { event_id: "eq." + eventId, select: "*", order: "created_at.asc" });
     if (!Array.isArray(signups) || signups.length === 0) return 0;
 
-    var userIds = signups.map(function(s) { return s.line_user_id; }).filter(Boolean);
+    var userIds = signups.map(function (s) { return s.line_user_id; }).filter(Boolean);
     var memberMap = {};
     if (userIds.length > 0) {
       var members = _supabaseGet("members", {
@@ -6918,7 +6918,7 @@ function _backfillEventSpreadsheetMemberInfo(ssId, eventId) {
         select: "*"
       });
       if (Array.isArray(members)) {
-        members.forEach(function(m) {
+        members.forEach(function (m) {
           if (m.line_user_id) memberMap[m.line_user_id] = m;
         });
       }

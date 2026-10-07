@@ -113,7 +113,7 @@ function _formatEventDate(dateVal) {
     var dateMatch = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
     // 若時間剛好為 23:59:59Z (歷史舊 Bug 造成 UTC 23:59:59)，將其當作當天，避免跨日跳到隔天
     if (str.indexOf("23:59:59Z") > -1 && dateMatch) {
-      var pad = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+      var pad = function (n) { return String(n).length < 2 ? '0' + n : String(n); };
       return dateMatch[1] + '/' + pad(dateMatch[2]) + '/' + pad(dateMatch[3]);
     }
     if (typeof Utilities !== "undefined" && Utilities.formatDate) {
@@ -122,11 +122,11 @@ function _formatEventDate(dateVal) {
         return Utilities.formatDate(d, "Asia/Taipei", "yyyy/MM/dd");
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   var m = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
   if (m) {
-    var padFn = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+    var padFn = function (n) { return String(n).length < 2 ? '0' + n : String(n); };
     return m[1] + '/' + padFn(m[2]) + '/' + padFn(m[3]);
   }
   return str.replace(/-/g, "/").substring(0, 10);
@@ -218,8 +218,8 @@ function sendEventList(replyToken, userId) {
     var regCountDisplay = (prefLang === "en")
       ? regCountStrEn
       : (prefLang === "zh"
-          ? regCountStrZh
-          : (regCountStrZh + " / " + regCountStrEn));
+        ? regCountStrZh
+        : (regCountStrZh + " / " + regCountStrEn));
 
     var costStrZh = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "免費";
     var costStrEn = (ev.fee !== undefined && ev.fee !== null && ev.fee > 0) ? "$" + ev.fee : "Free";
@@ -232,14 +232,14 @@ function sendEventList(replyToken, userId) {
     var viewDisplayText = (prefLang === "en")
       ? ("I want to view details for " + eventNameEn)
       : (prefLang === "zh"
-          ? ("我想查看 " + eventNameZh + " 的資訊")
-          : ("我想查看 " + (hasEnglish ? (eventNameZh + " / " + eventNameEn) : eventNameZh) + " 的資訊 / I want to view details"));
+        ? ("我想查看 " + eventNameZh + " 的資訊")
+        : ("我想查看 " + (hasEnglish ? (eventNameZh + " / " + eventNameEn) : eventNameZh) + " 的資訊 / I want to view details"));
 
     var summaryText = (prefLang === "en")
       ? (ev.summary_en || ev.short_desc_en || ev.summary || "")
       : (prefLang === "zh"
-          ? (ev.summary || "")
-          : (hasEnglish ? _formatBilingualMessage(ev.summary, ev.summary_en, null) : (ev.summary || "")));
+        ? (ev.summary || "")
+        : (hasEnglish ? _formatBilingualMessage(ev.summary, ev.summary_en, null) : (ev.summary || "")));
 
     var startFormatted = _formatEventDate(ev.start_date);
     var endFormatted = _formatEventDate(ev.end_date);
@@ -412,8 +412,8 @@ function sendEventDetail(replyToken, eventId, userId) {
   var eventName = (prefLang === "en")
     ? eventNameEn
     : (prefLang === "zh"
-        ? eventNameZh
-        : (hasEnglish ? (eventNameZh + "\n" + eventNameEn) : (ev.title || "未命名活動 (Untitled Event)")));
+      ? eventNameZh
+      : (hasEnglish ? (eventNameZh + "\n" + eventNameEn) : (ev.title || "未命名活動 (Untitled Event)")));
 
   var rawStatus = String(ev.status || "").trim().toLowerCase();
   var deadlineStr = ev.deadline || "";
@@ -462,24 +462,24 @@ function sendEventDetail(replyToken, eventId, userId) {
   var regCountDisplay = (prefLang === "en")
     ? regCountStrEn
     : (prefLang === "zh"
-        ? regCountStrZh
-        : (regCountStrZh + " / " + regCountStrEn));
+      ? regCountStrZh
+      : (regCountStrZh + " / " + regCountStrEn));
 
   var summaryZh = ev.summary || "尚無簡介";
   var summaryEn = ev.summary_en || ev.short_desc_en || ev.summary || "No summary";
   var summaryContent = (prefLang === "en")
     ? summaryEn
     : (prefLang === "zh"
-        ? summaryZh
-        : (hasEnglish ? _formatBilingualMessage(summaryZh, summaryEn, null) : summaryZh));
+      ? summaryZh
+      : (hasEnglish ? _formatBilingualMessage(summaryZh, summaryEn, null) : summaryZh));
 
   var fullDescZh = ev.itinerary || ev.full_desc || "尚無詳細行程";
   var fullDescEn = ev.itinerary_en || ev.full_desc_en || ev.itinerary || ev.full_desc || "No detailed itinerary";
   var fullDescContent = (prefLang === "en")
     ? fullDescEn
     : (prefLang === "zh"
-        ? fullDescZh
-        : (hasEnglish ? _formatBilingualMessage(fullDescZh, fullDescEn, null) : fullDescZh));
+      ? fullDescZh
+      : (hasEnglish ? _formatBilingualMessage(fullDescZh, fullDescEn, null) : fullDescZh));
 
   var buttonBox;
   if (isOpen) {
@@ -487,8 +487,8 @@ function sendEventDetail(replyToken, eventId, userId) {
     var signupDisplayText = (prefLang === "en")
       ? ("Sign up for: " + eventNameEn)
       : (prefLang === "zh"
-          ? ("我要報名：" + eventNameZh)
-          : ("我要報名 Sign up for: " + (hasEnglish ? eventNameEn : eventNameZh)));
+        ? ("我要報名：" + eventNameZh)
+        : ("我要報名 Sign up for: " + (hasEnglish ? eventNameEn : eventNameZh)));
 
     buttonBox = {
       "type": "button",
@@ -663,7 +663,7 @@ function sendOfficerMenu(replyToken, ss) {
     if (!sbOfficers || !Array.isArray(sbOfficers) || sbOfficers.length === 0) {
       sbOfficers = _supabaseGet("members", { is_officer: "eq.true", select: "line_user_id,name,officer_role,want_to_say" });
       if (sbOfficers && Array.isArray(sbOfficers)) {
-        sbOfficers = sbOfficers.map(function(m) {
+        sbOfficers = sbOfficers.map(function (m) {
           return {
             line_user_id: m.line_user_id,
             name: m.name,
@@ -684,7 +684,7 @@ function sendOfficerMenu(replyToken, ss) {
         var role = String(off.role || "幹部 Officer").trim();
         var responsibilities = String(off.responsibilities || "協助社團各項事務與出隊帶領 Assist with club affairs").trim();
         var photoUrl = (lineProfile && lineProfile.pictureUrl) ? String(lineProfile.pictureUrl).trim() : "";
-        var themeColor = (role.indexOf("社長") > -1) ? "#FF9800" : "#0367D3";
+        var themeColor = "#0367D3";
 
         var bubble = {
           "type": "bubble",
@@ -815,8 +815,8 @@ function _buildMoreServicesFlex() {
         "style": "secondary",
         "action": {
           "type": "message",
-          "label": "📢 意見與回饋 Feedback",
-          "text": "意見與回饋 Feedback"
+          "label": "📢 意見回饋 Feedback",
+          "text": "意見回饋 Feedback"
         }
       }]
     }
@@ -832,17 +832,430 @@ function sendMoreOptionsMenu(replyToken) {
 }
 
 /**
- * 發送「意見與回饋」連結表單
+ * 建立「AI 客服使用指南」Flex Bubble
+ * @param {string} lang 'zh' 或 'en'
+ * @returns {Object} Flex Bubble
  */
-function sendFeedbackLink(replyToken) {
-  var googleFormUrl = "https://forms.gle/bCT7fjVP3bSrReF96";
-  var msg = "【意見與回饋 / Feedback & Suggestions】\n\n" +
-    "無論是想對社團說的話、活動建議、問題詢問，還是回報系統錯誤 (可附截圖)，都歡迎透過下方表單告訴我們！\n\n" +
-    "Whether you have suggestions, questions, or want to report a bug (screenshots supported), please let us know!\n\n" +
-    "點此填寫回饋表單 Click here to fill out the feedback form：\n" + googleFormUrl + "\n\n" +
-    "收到您的回饋後，幹部會盡快查看並處理喔！After receiving your feedback, the club officers will review and handle it as soon as possible!🏔️";
+function _buildAiGuideBubble(lang) {
+  var isEn = (lang === "en");
+  var title = isEn ? "Yue AI Assistant Guide" : "小岳 (Yue) AI 客服使用指南";
+  var subtitle = isEn ? "NTUST Hiking Club Smart Assistant" : "台科登山社智慧助理";
 
-  _replyMessage(replyToken, msg);
+  var secTitle = isEn ? "How to Use in Chat" : "個人聊天室使用方式";
+  var desc1 = isEn ? "• Start your question with \"Yue\" or \"小岳\"." : "• 請輸入「小岳」或「Yue」開頭加上問題即可。";
+  var desc2 = isEn ? "• Examples: \"Yue How high is Yushan?\", \"Yue How to choose a sleeping bag?\"" : "• 例如：「小岳 玉山有多高？」、「Yue 登山睡袋怎麼挑選？」";
+  var desc3 = isEn ? "• Note: Messages without the prefix will be handled directly by club officers." : "• 提醒：若未加上「小岳」或「Yue」，訊息將保留給幹部親自回覆。";
+  var bottomTip = isEn ? "To join hikes, rent gear, or check your dashboard, please use the Rich Menu below." : "若需報名活動、租借裝備或查看個人訂單，歡迎直接點擊下方圖文選單。";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: title,
+          weight: "bold",
+          size: "md",
+          color: "#FFFFFF",
+          wrap: true
+        },
+        {
+          type: "text",
+          text: subtitle,
+          size: "xs",
+          color: "#A7F3D0",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      spacing: "md",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: secTitle,
+              weight: "bold",
+              size: "sm",
+              color: "#047857"
+            },
+            {
+              type: "text",
+              text: desc1,
+              size: "xs",
+              color: "#374151",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: desc2,
+              size: "xs",
+              color: "#6B7280",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: desc3,
+              size: "xs",
+              color: "#9CA3AF",
+              wrap: true
+            }
+          ]
+        },
+        {
+          type: "separator"
+        },
+        {
+          type: "text",
+          text: bottomTip,
+          size: "xs",
+          color: "#6B7280",
+          wrap: true
+        }
+      ]
+    }
+  };
+}
+
+/**
+ * 建立「社員使用指南」Flex Bubble
+ * @param {string} lang 'zh' 或 'en'
+ * @returns {Object} Flex Bubble
+ */
+function _buildMemberGuideBubble(lang) {
+  var isEn = (lang === "en");
+  var title = isEn ? "Member Guide" : "台科登山社 社員使用指南";
+  var subtitle = isEn ? "NTUST Hiking Club System Manual" : "官方帳號與系統操作指引";
+
+  var navTitle = isEn ? "3 Navigation Methods" : "三大頁面切換途徑";
+  var nav1 = isEn ? "1. Bottom Rich Menu: 6 main buttons in the LINE chat window." : "1. 底部圖文選單 (Rich Menu)：聊天室下方 6 大常駐按鈕。";
+  var nav2 = isEn ? "2. Top-Right Profile Menu: Tap your avatar on any webpage to switch pages." : "2. 網頁頂部頭貼選單：點擊右上角 LINE 頭像即可快速切換。";
+  var nav3 = isEn ? "3. In-Page Shortcuts: Quick jump to payment for pending dues, or submit hike reflections after trips." : "3. 頁面內捷徑：未繳費項目一鍵前往繳費，出隊完一鍵填寫心得。";
+
+  var featTitle = isEn ? "6 Core Features" : "六大核心功能";
+  var feat1 = isEn ? "• Profile: Complete 6 mandatory fields before joining hikes or renting gear." : "• 個人資料：首次使用請務必補齊 6 大必填欄位。";
+  var feat2 = isEn ? "• Events: Browse upcoming hikes and sign up online." : "• 最新活動：瀏覽活動詳情與登記報名。";
+  var feat3 = isEn ? "• Gear Loan: 50% discount for club members." : "• 裝備租借：社員專屬租金 5 折優惠！";
+  var feat4 = isEn ? "• Payment: Multi-item consolidated payment declaration with bank last 5 digits." : "• 繳費申報：多筆費用合併申報，填寫末五碼。";
+  var feat5 = isEn ? "• Dashboard: Real-time track your signups, gear bookings, and pending fees." : "• 個人主頁：掌握活動審核、借裝進度與待繳費用。";
+  var feat6 = isEn ? "• Reflections & Badges: Collect footprints and share your hiking reflections." : "• 成就與心得：累積出隊足跡並填寫回饋。";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: title,
+          weight: "bold",
+          size: "md",
+          color: "#FFFFFF",
+          wrap: true
+        },
+        {
+          type: "text",
+          text: subtitle,
+          size: "xs",
+          color: "#A7F3D0",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      spacing: "md",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: navTitle,
+              weight: "bold",
+              size: "sm",
+              color: "#047857"
+            },
+            {
+              type: "text",
+              text: nav1,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: nav2,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: nav3,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            }
+          ]
+        },
+        {
+          type: "separator"
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: featTitle,
+              weight: "bold",
+              size: "sm",
+              color: "#047857"
+            },
+            {
+              type: "text",
+              text: feat1,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat2,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat3,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat4,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat5,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            },
+            {
+              type: "text",
+              text: feat6,
+              size: "xs",
+              color: "#4B5563",
+              wrap: true
+            }
+          ]
+        }
+      ]
+    }
+  };
+}
+
+/**
+ * 建立「意見回饋」Flex Bubble
+ * @param {string} lang 'zh' 或 'en'
+ * @returns {Object} Flex Bubble
+ */
+function _buildFeedbackBubble(lang) {
+  var isEn = (lang === "en");
+  var title = isEn ? "Feedback & Suggestions" : "意見回饋與建議";
+  var subtitle = isEn ? "NTUST Hiking Club User Feedback" : "台科登山社使用者回饋";
+
+  var desc1 = isEn
+    ? "Whether you have suggestions for the club, event ideas, questions, or bug reports (screenshots supported), we would love to hear from you!"
+    : "無論是想對社團說的話、活動建議、問題詢問，還是回報系統錯誤 (可附截圖)，都歡迎透過表單告訴我們！";
+  var desc2 = isEn
+    ? "After receiving your feedback, our club officers will review and follow up as soon as possible."
+    : "收到您的回饋後，幹部會盡快查看並處理。";
+  var btnLabel = isEn ? "Open Feedback Form" : "開啟回饋表單";
+  var googleFormUrl = "https://forms.gle/bCT7fjVP3bSrReF96";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: title,
+          weight: "bold",
+          size: "md",
+          color: "#FFFFFF",
+          wrap: true
+        },
+        {
+          type: "text",
+          text: subtitle,
+          size: "xs",
+          color: "#A7F3D0",
+          margin: "xs"
+        }
+      ]
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      spacing: "md",
+      contents: [
+        {
+          type: "text",
+          text: desc1,
+          size: "sm",
+          color: "#374151",
+          wrap: true
+        },
+        {
+          type: "text",
+          text: desc2,
+          size: "xs",
+          color: "#6B7280",
+          wrap: true
+        }
+      ]
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "12px",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: btnLabel,
+            uri: googleFormUrl
+          }
+        }
+      ]
+    }
+  };
+}
+
+/**
+ * 發送「AI 客服指南」卡片 (支援語系自動分流)
+ */
+function sendAiGuide(replyToken, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
+  var contents;
+  var altText;
+  if (prefLang === "zh") {
+    contents = _buildAiGuideBubble("zh");
+    altText = "小岳 AI 客服使用指南";
+  } else if (prefLang === "en") {
+    contents = _buildAiGuideBubble("en");
+    altText = "Yue AI Assistant Guide";
+  } else {
+    contents = {
+      type: "carousel",
+      contents: [
+        _buildAiGuideBubble("zh"),
+        _buildAiGuideBubble("en")
+      ]
+    };
+    altText = "小岳 AI 客服使用指南 / Yue AI Assistant Guide";
+  }
+  _replyFlexMessage(replyToken, altText, contents);
+}
+
+/**
+ * 發送「社員使用指南」卡片 (支援語系自動分流)
+ */
+function sendMemberGuide(replyToken, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
+  var contents;
+  var altText;
+  if (prefLang === "zh") {
+    contents = _buildMemberGuideBubble("zh");
+    altText = "台科登山社 社員使用指南";
+  } else if (prefLang === "en") {
+    contents = _buildMemberGuideBubble("en");
+    altText = "Member Guide";
+  } else {
+    contents = {
+      type: "carousel",
+      contents: [
+        _buildMemberGuideBubble("zh"),
+        _buildMemberGuideBubble("en")
+      ]
+    };
+    altText = "社員使用指南 / Member Guide";
+  }
+  _replyFlexMessage(replyToken, altText, contents);
+}
+
+/**
+ * 發送「意見回饋」連結表單卡片 (支援語系自動分流)
+ */
+function sendFeedbackLink(replyToken, userId) {
+  var prefLang = _getUserPreferredLanguage(userId);
+  var contents;
+  var altText;
+  if (prefLang === "zh") {
+    contents = _buildFeedbackBubble("zh");
+    altText = "意見回饋與建議";
+  } else if (prefLang === "en") {
+    contents = _buildFeedbackBubble("en");
+    altText = "Feedback & Suggestions";
+  } else {
+    contents = {
+      type: "carousel",
+      contents: [
+        _buildFeedbackBubble("zh"),
+        _buildFeedbackBubble("en")
+      ]
+    };
+    altText = "意見回饋與建議 / Feedback & Suggestions";
+  }
+  _replyFlexMessage(replyToken, altText, contents);
 }
 
 /**
@@ -1185,7 +1598,7 @@ function _buildPaymentDeclarationFlex(params) {
   var paymentId = params.paymentId || "";
   var totalAmount = params.totalAmount || 0;
   var last5Digits = params.last5Digits || "無";
-  var items = params.selectedNames || (params.itemsZh ? params.itemsZh.split('\n').map(function(s){ return s.replace(/^-\s*/, '').replace(/^\s*-\s*/, '').trim(); }).filter(Boolean) : ["社團相關費用"]);
+  var items = params.selectedNames || (params.itemsZh ? params.itemsZh.split('\n').map(function (s) { return s.replace(/^-\s*/, '').replace(/^\s*-\s*/, '').trim(); }).filter(Boolean) : ["社團相關費用"]);
   var note = params.note || "";
   var verifyLink = params.verifyLink || "";
   var proofImageUrl = params.proofImageUrl || "";
@@ -1243,7 +1656,7 @@ function _buildPaymentDeclarationFlex(params) {
       spacing: "xs",
       contents: [
         { type: "text", text: "申報項目：", color: "#64748b", size: "xs", weight: "bold" }
-      ].concat(items.map(function(item) {
+      ].concat(items.map(function (item) {
         return {
           type: "text",
           text: "• " + item,

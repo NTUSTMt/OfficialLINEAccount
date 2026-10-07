@@ -83,6 +83,14 @@ describe('103. 體能證明照片 Diff 偵測與幹部名片 LINE 大頭貼輪�
         !code.includes('off.title'),
         'sendOfficerMenu 必須統一使用 role，不應依賴 title 欄位'
       );
+      assert.ok(
+        code.includes('var themeColor = "#0367D3";'),
+        '幹部卡片職位顏色必須統一固定為 #0367D3'
+      );
+      assert.ok(
+        !code.includes('role.indexOf("社長") > -1'),
+        '不應對社長做特殊顏色分流'
+      );
     }
   });
 

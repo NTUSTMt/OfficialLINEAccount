@@ -1766,17 +1766,17 @@ describe('14. 活動報名資料防呆檢查、幹部群組 @Mention 召喚與�
     assert.equal(res4, null);
   });
 
-  it('「更多服務 More Services」包含「幹部是誰」與「意見與回饋」功能項目', () => {
+  it('「更多服務 More Services」包含「幹部是誰」與「意見回饋」功能項目', () => {
     const options = [
       { title: '裝備租借商城', keyword: '裝備租借' },
       { title: '繳費與對帳申報', keyword: '繳費系統' },
       { title: '個人主頁 / 我的狀態', keyword: '我的狀態' },
       { title: '幹部名單 (幹部是誰)', keyword: '幹部是誰' },
-      { title: '意見與回饋', keyword: '意見與回饋' }
+      { title: '意見回饋', keyword: '意見回饋' }
     ];
 
     const hasOfficers = options.some(o => o.keyword === '幹部是誰');
-    const hasFeedback = options.some(o => o.keyword === '意見與回饋');
+    const hasFeedback = options.some(o => o.keyword === '意見回饋');
     assert.equal(hasOfficers, true);
     assert.equal(hasFeedback, true);
   });
@@ -4269,7 +4269,7 @@ describe('58. 社員使用指南 (Member Guide) 在更多服務卡片與 Webhook
           { type: "button", action: { type: "message", label: "📖 社員使用指南 Member Guide", text: "使用指南" } },
           { type: "button", action: { type: "message", label: "🤖 小岳助理說明 AI Guide", text: "小岳助理說明" } },
           { type: "button", action: { type: "message", label: "👤 幹部是誰 Officers", text: "幹部是誰 Officers" } },
-          { type: "button", action: { type: "message", label: "📢 意見與回饋 Feedback", text: "意見與回饋 Feedback" } }
+          { type: "button", action: { type: "message", label: "📢 意見回饋 Feedback", text: "意見回饋 Feedback" } }
         ]
       }
     };
@@ -4314,7 +4314,7 @@ describe('59. 繳費申報卡片設計、繳費成功 Email 通知與社籍到�
       var paymentId = params.paymentId || "";
       var totalAmount = params.totalAmount || 0;
       var last5Digits = params.last5Digits || "無";
-      var items = params.selectedNames || (params.itemsZh ? params.itemsZh.split('\n').map(function(s){ return s.replace(/^-\s*/, '').replace(/^\s*-\s*/, '').trim(); }).filter(Boolean) : ["社團相關費用"]);
+      var items = params.selectedNames || (params.itemsZh ? params.itemsZh.split('\n').map(function (s) { return s.replace(/^-\s*/, '').replace(/^\s*-\s*/, '').trim(); }).filter(Boolean) : ["社團相關費用"]);
       var note = params.note || "";
       var verifyLink = params.verifyLink || "";
       var proofImageUrl = params.proofImageUrl || "";
@@ -4372,7 +4372,7 @@ describe('59. 繳費申報卡片設計、繳費成功 Email 通知與社籍到�
           spacing: "xs",
           contents: [
             { type: "text", text: "申報項目：", color: "#64748b", size: "xs", weight: "bold" }
-          ].concat(items.map(function(item) {
+          ].concat(items.map(function (item) {
             return {
               type: "text",
               text: "• " + item,

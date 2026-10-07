@@ -1164,7 +1164,7 @@
   - **完整像素級還原**：還原為原版圖二設計，包含：
     - 主視覺標題：`🛠️ 聯絡與支援 Support`、`幫助中心 Help Center`、`聯絡社團幹部 Contact Officers`。
     - 按鈕 1：`👤 幹部是誰 Officers`（點擊發送指令，即時回傳幹部職稱、頭像與業務卡片輪播）。
-    - 按鈕 2：`📢 意見與回饋 Feedback`（點擊發送 Google 表單回饋連結 `https://forms.gle/bCT7fjVP3bSrReF96`）。
+    - 按鈕 2：`📢 意見回饋 Feedback`（點擊發送 Google 表單回饋連結 `https://forms.gle/bCT7fjVP3bSrReF96`）。
 - **最新活動「點擊無反應」靜默失敗根除與原版 sendEventList 完整恢復 (`03_Flex_Templates.js`, `02_LineBot_Webhook.js`)**：
   - **根本原因排查**：
     1. **LINE 400 協定被拒**：先前樣板對每張卡片強制放入 `hero` 封面圖；當試算表中封面為 Google Drive 共享連結或非直連圖片時，LINE Messaging API 判定格式錯誤回傳 `400 Bad Request`，因 `muteHttpExceptions: true` 導致靜默失敗、使用者畫面全無反應。
@@ -2758,7 +2758,7 @@
   - 更新 [GAS.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/GAS.js) 的指令白名單 `menuCommands` 與 `handleTextCommand` 路由。新增對 `個人主頁 My Dashboard` (舊為「我的狀態」)、`裝備租借 Equipment Loan` (舊為「器材借用」)、`繳費中心 Payment Center` 的支援，同時保留舊指令的向下相容性。
 - **繳費中心獨立化**：
   - 新增 `sendPaymentCenterMenu(replyToken)` 方法，當使用者點擊「繳費中心」時直接發送獨立的帳務卡片（包含「繳費系統」與「繳費紀錄」）。
-  - 將「繳費中心」從「更多服務」中移出，並將 `sendMoreOptionsMenu(replyToken)` 簡化為直接發送「幫助中心 Help Center」（包含「幹部是誰」與「意見與回饋」）單一 bubble 卡片。
+  - 將「繳費中心」從「更多服務」中移出，並將 `sendMoreOptionsMenu(replyToken)` 簡化為直接發送「幫助中心 Help Center」（包含「幹部是誰」與「意見回饋」）單一 bubble 卡片。
 
 ### 50. 獨立身分狀態欄位與必填設定 (v0.0.50)
 - **解耦身分狀態與系所欄位**：

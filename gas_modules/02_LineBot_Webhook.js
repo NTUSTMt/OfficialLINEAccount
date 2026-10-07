@@ -172,9 +172,9 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     return;
   }
 
-  // 3.2 意見與回饋 (支援「意見與回饋」、「Feedback」)
-  if (text.indexOf("意見與回饋") > -1 || lowerText.indexOf("feedback") > -1) {
-    sendFeedbackLink(replyToken);
+  // 3.2 意見回饋 (支援「意見回饋」、「Feedback」)
+  if (text.indexOf("意見回饋") > -1 || lowerText.indexOf("feedback") > -1) {
+    sendFeedbackLink(replyToken, userId);
     return;
   }
 
@@ -182,25 +182,10 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
   if (
     text.indexOf("小岳說明") > -1 ||
     text.indexOf("小岳指南") > -1 ||
-    lowerText.indexOf("ai guide") > -1 || 
+    lowerText.indexOf("ai guide") > -1 ||
     text.indexOf("小岳說明 AI Guide") > -1
   ) {
-    var aiGuideMsg = "🏔️ 【小岳 (Yue) AI 客服使用指南 / AI Guide】\n" +
-      "─────────────\n" +
-      "我是台科登山社的 AI 助理「小岳 (Yue)」！很高興為大家服務！\n\n" +
-      "💬 【如何使用 How to Use】\n" +
-      "1. 個人 1 對 1 聊天室：\n" +
-      "   • 請輸入「小岳」或「Yue」開頭加上問題即可！\n" +
-      "   • 例如：「小岳 玉山有多高？」、「Yue 登山睡袋怎麼挑選？」、「Yue 奇萊南華適合新手嗎？」\n" +
-      "   • 💡 提醒：若未加上「小岳」或「Yue」，訊息將保留給社團幹部親自回覆喔！\n\n" +
-      "2. LINE 群組中使用：\n" +
-      "   • 在群組中請「@小岳」或「@Yue」並輸入您的問題。\n" +
-      "   • 例如：「@Yue 請問這次活動費用多少？」\n\n" +
-      "💡 貼心提醒：\n" +
-      "若需要報名活動、租借裝備或查看個人訂單，歡迎直接點擊下方圖文選單（Rich Menu）探索各項服務喔！\n" +
-      "─────────────\n" +
-      "Type '小岳' or 'Yue' before your question in 1-on-1 chat, or tag @Yue in group chats!";
-    _replyMessage(replyToken, aiGuideMsg);
+    sendAiGuide(replyToken, userId);
     return;
   }
 
@@ -213,26 +198,7 @@ function _handleTextMessage(replyToken, userId, text, groupId, ev) {
     lowerText.indexOf("member guide") > -1 ||
     lowerText.indexOf("user guide") > -1
   ) {
-    var memberGuideMsg = "📖 【台科登山社 官方帳號社員使用指南】\n" +
-      "─────────────\n" +
-      "歡迎使用台科登山社線上系統！以下為常見功能與頁面切換指引：\n\n" +
-      "🗺️ 【三大頁面切換途徑】\n" +
-      "1. 底部圖文選單 (Rich Menu)：聊天室下方 6 大常駐按鈕。\n" +
-      "2. 網頁頂部頭貼選單：點擊右上角 LINE 頭像即可快速切換。\n" +
-      "3. 頁面內捷徑：未繳費項目一鍵「前往繳費」，出隊完一鍵「填寫心得」。\n\n" +
-      "🎒 【六大核心功能】\n" +
-      "• 📝 個人資料：首次使用請務必補齊 6 大必填欄位。\n" +
-      "• 🏕️ 最新活動：瀏覽活動詳情與登記報名。\n" +
-      "• 🎒 裝備租借：社員專屬租金 5 折優惠！\n" +
-      "• 💳 繳費申報：多筆費用合併申報，填寫末五碼。\n" +
-      "• 📊 個人主頁：掌握活動審核、借裝進度與待繳費用。\n" +
-      "• 🏆 成就與心得：累積出隊足跡並填寫回饋。\n\n" +
-      "─────────────\n" +
-      "📖 Member Guide (Quick Summary):\n" +
-      "• Navigation: Use the Rich Menu at the bottom or the top-right Avatar dropdown on any web page.\n" +
-      "• 6 Key Features: Events, Gear Loan (50% member discount), Dashboard, Payment, Footprints/Reflections, and AI Assistant.\n" +
-      "• Required: Complete your Profile (6 mandatory fields) before booking gear or joining hikes!";
-    _replyMessage(replyToken, memberGuideMsg);
+    sendMemberGuide(replyToken, userId);
     return;
   }
 

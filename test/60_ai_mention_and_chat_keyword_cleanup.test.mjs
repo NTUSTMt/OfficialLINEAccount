@@ -108,8 +108,8 @@ describe('60. 小岳 (Yue) 對外 AI 客服與小岳助理幹部管理 Bot 隔�
       return { handled: true, action: "officer_menu" };
     }
 
-    // 意見與回饋
-    if (text.indexOf("意見與回饋") > -1 || lowerText.indexOf("feedback") > -1) {
+    // 意見回饋
+    if (text.indexOf("意見回饋") > -1 || lowerText.indexOf("feedback") > -1) {
       return { handled: true, action: "feedback_form" };
     }
 
