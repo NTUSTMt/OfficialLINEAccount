@@ -2158,22 +2158,36 @@ function sendEventDetail(replyToken, eventId, userId) {
 }
 
 /**
- * 產生幹部團隊名冊卡片 (支援職稱、頭像與負責業務)
+ * 產生幹部團隊名冊卡片 (支援職稱、LINE 大頭貼與負責業務)
  */
 function sendOfficerMenu(replyToken, ss) {
-  // 1. 優先直通 Supabase members 表 (is_officer: "eq.true") (SSOT)
+  // 1. 優先直通 Supabase officers 表 (SSOT)
   try {
-    var sbOfficers = _supabaseGet("members", { is_officer: "eq.true", select: "name,role,quote,duty,photo_url" });
+    var sbOfficers = _supabaseGet("officers", { select: "line_user_id,name,role,responsibilities" });
+    if (!sbOfficers || !Array.isArray(sbOfficers) || sbOfficers.length === 0) {
+      sbOfficers = _supabaseGet("members", { is_officer: "eq.true", select: "line_user_id,name,officer_role,want_to_say" });
+      if (sbOfficers && Array.isArray(sbOfficers)) {
+        sbOfficers = sbOfficers.map(function(m) {
+          return {
+            line_user_id: m.line_user_id,
+            name: m.name,
+            role: m.officer_role,
+            responsibilities: m.want_to_say || ""
+          };
+        });
+      }
+    }
     if (sbOfficers && Array.isArray(sbOfficers) && sbOfficers.length > 0) {
       var bubbles = [];
       for (var k = 0; k < sbOfficers.length; k++) {
         var off = sbOfficers[k];
-        var name = String(off.name || "").trim();
+        var lineUserId = String(off.line_user_id || "").trim();
+        var lineProfile = lineUserId ? _getLineUserProfile(lineUserId) : null;
+        var name = String(off.name || (lineProfile && lineProfile.displayName) || "").trim();
         if (!name) continue;
         var role = String(off.role || "幹部 Officer").trim();
-        var duty = String(off.duty || "協助社團事務 Assist with club affairs").trim();
-        var quote = String(off.quote || "歡迎加入登山社！ Welcome to the club!").trim();
-        var photoUrl = String(off.photo_url || "").trim();
+        var responsibilities = String(off.responsibilities || "協助社團各項事務與出隊帶領 Assist with club affairs").trim();
+        var photoUrl = (lineProfile && lineProfile.pictureUrl) ? String(lineProfile.pictureUrl).trim() : "";
         var themeColor = (role.indexOf("社長") > -1) ? "#FF9800" : "#0367D3";
 
         var bubble = {
@@ -2199,33 +2213,22 @@ function sendOfficerMenu(replyToken, ss) {
               "margin": "md"
             }, {
               "type": "text",
-              "text": "📌 負責業務 Duties",
+              "text": "📌 負責業務 Responsibilities",
               "size": "xxs",
               "color": "#999999",
               "margin": "md"
             }, {
               "type": "text",
-              "text": duty,
+              "text": responsibilities,
               "size": "xs",
               "color": "#333333",
               "wrap": true,
               "margin": "xs"
-            }, {
-              "type": "separator",
-              "margin": "md"
-            }, {
-              "type": "text",
-              "text": "💬 " + quote,
-              "size": "xs",
-              "color": "#666666",
-              "wrap": true,
-              "margin": "md",
-              "style": "italic"
             }]
           }
         };
 
-        if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://")) && !photoUrl.includes("drive.google.com")) {
+        if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"))) {
           bubble.hero = {
             "type": "image",
             "url": photoUrl,
@@ -6471,11 +6474,11 @@ function checkOfficerInternal(ss, userId, userName) {
       // 2. 查驗 officers 表 (支援以 line_user_id 查詢)
       var officers = _supabaseGet("officers", {
         line_user_id: "eq." + userId,
-        select: "name,role,title"
+        select: "name,role"
       });
       if (officers && officers.length > 0) {
         var off = officers[0];
-        return { isOfficer: true, role: off.title || off.role || "幹部", name: off.name || "" };
+        return { isOfficer: true, role: off.role || "幹部", name: off.name || "" };
       }
     }
 
@@ -6497,11 +6500,11 @@ function checkOfficerInternal(ss, userId, userName) {
 
       var offByName = _supabaseGet("officers", {
         name: "eq." + cleanName,
-        select: "name,role,title"
+        select: "name,role"
       });
       if (offByName && offByName.length > 0) {
         var oByName = offByName[0];
-        return { isOfficer: true, role: oByName.title || oByName.role || "幹部", name: oByName.name || "" };
+        return { isOfficer: true, role: oByName.role || "幹部", name: oByName.name || "" };
       }
     }
   } catch (err) {

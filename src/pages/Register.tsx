@@ -828,6 +828,23 @@ function Register({ userId }: { userId: string }) {
         checkField('medicalHistory', isEn ? 'Medical History' : '特殊病史 / Medical History');
         checkField('exp', isEn ? 'Hiking Experience' : '登山經歷 / Experience');
         checkField('strength', isEn ? 'Fitness Level' : '體能自評 / Fitness Level');
+
+        const oldProofs = originalFormData.strengthProof
+          ? originalFormData.strengthProof.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
+          : [];
+        const newProofs = finalFormData.strengthProof
+          ? finalFormData.strengthProof.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
+          : [];
+        const oldCount = oldProofs.length;
+        const newCount = newProofs.length;
+        if (oldCount !== newCount || strengthProofFiles.length > 0 || (oldProofs.join(',') !== newProofs.join(','))) {
+          diffItems.push({
+            label: isEn ? 'Fitness Proof Photos' : '體能證明照片 / Fitness Proof',
+            oldVal: oldCount > 0 ? (isEn ? `${oldCount} photo(s)` : `${oldCount} 張照片`) : (isEn ? '(empty)' : '(無照片)'),
+            newVal: newCount > 0 ? (isEn ? `${newCount} photo(s)` : `${newCount} 張照片`) : (isEn ? '(empty)' : '(無照片)')
+          });
+        }
+
         checkField('intendOfficial', isEn ? 'Official Member Intent' : '入社意願 / Member Intent');
         checkField('intendOfficer', isEn ? 'Officer Intent' : '幹部意願 / Officer Intent');
         checkField('wantToSay', isEn ? 'Message to Officers' : '備註留言 / Notes');
@@ -837,6 +854,12 @@ function Register({ userId }: { userId: string }) {
       const changedFields: string[] = [];
       if (!isNewUser && originalFormData) {
         const norm = (v?: string) => (v || '').trim();
+        const oldProofs = originalFormData.strengthProof
+          ? originalFormData.strengthProof.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
+          : [];
+        const newProofs = finalFormData.strengthProof
+          ? finalFormData.strengthProof.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
+          : [];
         if (norm(finalFormData.name) !== norm(originalFormData.name)) changedFields.push('name');
         if (norm(finalFormData.gender) !== norm(originalFormData.gender)) changedFields.push('gender');
         if (norm(finalFormData.nationality) !== norm(originalFormData.nationality)) changedFields.push('nationality');
@@ -866,7 +889,8 @@ function Register({ userId }: { userId: string }) {
         if (
           norm(finalFormData.strength) !== norm(originalFormData.strength) ||
           norm(finalFormData.strengthProof) !== norm(originalFormData.strengthProof) ||
-          strengthProofFiles.length > 0
+          strengthProofFiles.length > 0 ||
+          oldProofs.join(',') !== newProofs.join(',')
         ) {
           changedFields.push('strength');
         }

@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.259-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.260-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.259)](#7-最新版本異動紀錄-changelog-v01259)
+- [7. 最新版本異動紀錄 (Changelog v0.1.260)](#7-最新版本異動紀錄-changelog-v01260)
 
 ---
 
@@ -2153,20 +2153,21 @@ pnpm test
     - 新增 test/101_profile_intent_driven_registration.test.mjs 單元測試。
     - 全專案 85 個測試套件、464 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
 
-### v0.1.259 (2026-10-07)
-- 活動出隊必填欄位強化 (特殊病史、體能證明照片) 與隱私權同意書位置調整：
-  - 特殊病史與過敏 (Medical History / Allergies) 必填強化：
-    - 前端介面 (src/pages/Register.tsx)：當使用者目的包含「活動出隊 (activity)」時，標籤附加 required class 呈現紅色星號 (*)。
-    - 輸入框提示 (src/locales/zh.json 與 src/locales/en.json)：更新 placeholder 提示文字為「如氣喘、嚴重高山症病史、過敏藥物等（若無特殊病史請填『無』）」與英文「(enter 'None' if none)」。
-    - 送出檢核：於 isStep2Complete 中嚴格驗證 formData.medicalHistory 非空，若未填寫自動跳轉 Step 2 並提示補齊身分、保險與特殊病史必填欄位。
-  - 上傳體能證明 (Upload Fitness Proof) 必填強化：
-    - 前端介面 (src/pages/Register.tsx)：當使用者目的包含「活動出隊 (activity)」時，標籤附加 required class 呈現紅色星號 (*)。
-    - 送出檢核：於 isStep4Complete 中檢查 totalProofsCount > 0（歷史上傳證明與本次新選取照片合計至少 1 張），若未上傳自動跳轉 Step 4 並彈出「活動出隊請至少上傳一張體能證明照片！」專屬提示。
-  - 隱私權同意書位置調整：
-    - 將 Step 4 中的「隱私權同意書 (privacy-consent-box)」區塊自頂部移至最下方（位於「想說的話 (wantToSay)」下方，緊鄰底部送出按鈕上方），使整體填寫流程符合由上而下之閱讀與確認體驗。
+### v0.1.260 (2026-10-07)
+- 體能證明照片 Diff 偵測修復與幹部名片 LINE 大頭貼輪播瀏覽升級：
+  - 體能證明照片 Diff 異動比對修復 (src/pages/Register.tsx)：
+    - 在 handleSubmit 之 diffItems 生成邏輯中，精準解析 originalFormData.strengthProof 與 finalFormData.strengthProof 之照片陣列，比對照片張數與網址差異（以及 strengthProofFiles 上傳清單）。
+    - 解決過去僅新增或替換體能照片時，系統判定「資料未有變更」之誤判問題，於 LINE Diff 卡片中明確展示「體能證明照片 / Fitness Proof Photos」（如：1 張照片 -> 2 張照片），並同步將 strength 標記於 changedFields 中。
+  - 幹部是誰 (Meet the Officers) 卡片瀏覽升級 (src/gas.js 與 gas_modules/03_Flex_Templates.js)：
+    - 直查 Supabase officers 表 (line_user_id, name, role, responsibilities)，並於無紀錄時平滑 fallback 至 members (is_officer=true)。
+    - 大頭貼即時調用：透過幹部之 line_user_id 呼叫 LINE Messaging API (_getLineUserProfile)，動態取得幹部當前在 LINE 上設定的個人大頭貼 (pictureUrl) 作為卡片 Hero 封面圖片。
+    - 欄位統整：清理並移除冗餘之 title 欄位依賴，統一以 role 作為社團幹部職位標準，結構化呈現「大頭貼、職位 (role)、姓名 (name)、負責業務 (responsibilities)」。
+  - 資料庫架構與文檔同步 (supabase/member_officer_sync.sql 與 supabase/SCHEMA_DICTIONARY.md)：
+    - 補齊 officers 表 responsibilities TEXT 欄位定義，並將 role 定位為單一標準欄位。
   - 單元測試與建置驗證：
-    - 更新 test/101_profile_intent_driven_registration.test.mjs 單元測試，驗證特殊病史、體能照片必填驗證與隱私權同意書區塊排序。
-    - 全專案 86 個測試套件、470 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+    - 新增 test/103_officer_carousel_and_photo_diff.test.mjs 單元測試。
+    - 全專案 87 個測試套件、474 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤，全篇嚴格零 Emoji。
+
 
 
 

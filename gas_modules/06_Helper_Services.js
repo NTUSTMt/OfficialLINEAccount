@@ -1630,11 +1630,11 @@ function checkOfficerInternal(ss, userId, userName) {
       // 2. 查驗 officers 表 (支援以 line_user_id 查詢)
       var officers = _supabaseGet("officers", {
         line_user_id: "eq." + userId,
-        select: "name,role,title"
+        select: "name,role"
       });
       if (officers && officers.length > 0) {
         var off = officers[0];
-        return { isOfficer: true, role: off.title || off.role || "幹部", name: off.name || "" };
+        return { isOfficer: true, role: off.role || "幹部", name: off.name || "" };
       }
     }
 
@@ -1656,11 +1656,11 @@ function checkOfficerInternal(ss, userId, userName) {
 
       var offByName = _supabaseGet("officers", {
         name: "eq." + cleanName,
-        select: "name,role,title"
+        select: "name,role"
       });
       if (offByName && offByName.length > 0) {
         var oByName = offByName[0];
-        return { isOfficer: true, role: oByName.title || oByName.role || "幹部", name: oByName.name || "" };
+        return { isOfficer: true, role: oByName.role || "幹部", name: oByName.name || "" };
       }
     }
   } catch (err) {

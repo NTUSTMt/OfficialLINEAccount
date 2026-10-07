@@ -69,13 +69,10 @@
 
 | 欄位名稱 (English Column) | 資料型別 (PostgreSQL Type) | 允許 NULL | 預設值 (Default) | 繁體中文說明與用途 |
 | :--- | :--- | :--- | :--- | :--- |
-| `line_user_id` | `TEXT` | 否 | 無 | **系統識別碼** (LINE UID，主鍵) |
-| `title` | `TEXT` | 是 | `'幹部'` | **社團職稱** (如 `社長`, `嚮導長`, `裝備長`, `總務`) |
+| `line_user_id` | `TEXT` | 否 | 無 | **系統識別碼** (LINE UID，主鍵，用於即時調用 LINE 大頭貼) |
 | `name` | `TEXT` | 是 | NULL | **幹部姓名** |
-| `photo_url` | `TEXT` | 是 | NULL | **幹部個人頭像相片網址** |
-| `responsibilities` | `TEXT` | 是 | NULL | **幹部負責業務自述說明** |
-| `message` | `TEXT` | 是 | NULL | **幹部給社員的話 / 專屬留言** |
-| `role` | `TEXT` | 是 | `'幹部'` | **權限角色** (如 `admin`, `equipment_officer`, `cadre`) |
+| `role` | `TEXT` | 是 | `'幹部'` | **社團職位與角色** (如 `社長`, `嚮導長`, `裝備長`, `總務`, `活動長`) |
+| `responsibilities` | `TEXT` | 是 | NULL | **幹部負責業務職責說明** |
 | `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | **建立時間** |
 | `updated_at` | `TIMESTAMPTZ` | 是 | `NOW()` | **最後更新時間** |
 

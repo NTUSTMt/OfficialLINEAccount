@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS officers (
     line_user_id TEXT,
     name TEXT NOT NULL DEFAULT '幹部',
     role TEXT NOT NULL DEFAULT '幹部',
-    title TEXT DEFAULT '幹部',
+    responsibilities TEXT,
     contact TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS officers (
 -- 若 officers 表早已存在但缺少欄位，動態補齊
 ALTER TABLE officers ADD COLUMN IF NOT EXISTS line_user_id TEXT;
 ALTER TABLE officers ADD COLUMN IF NOT EXISTS role TEXT DEFAULT '幹部';
-ALTER TABLE officers ADD COLUMN IF NOT EXISTS title TEXT DEFAULT '幹部';
+ALTER TABLE officers ADD COLUMN IF NOT EXISTS responsibilities TEXT;
 
 -- 關鍵自癒：自動解除 officers 表中所有欄位 (除 id / line_user_id 外) 的 NOT NULL 約束
 DO $$
