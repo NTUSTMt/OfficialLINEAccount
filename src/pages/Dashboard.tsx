@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { appendAuthToken, withAuthPayload, notifyDispatcher } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
 import { fetchDashboardFromSupabase, cancelEquipmentLoanInSupabase, cancelEventSignupInSupabase, getLastSupabaseError } from '../utils/supabaseClient';
 import {
@@ -215,8 +215,7 @@ function Dashboard({ userId }: { userId: string }) {
         const borrowerName = data?.profile?.name || lineProfile?.displayName || '社員';
 
         try {
-          const payload = withAuthPayload({
-            action: 'notify_loan_cancelled',
+          notifyDispatcher('notify_loan_cancelled', {
             loanId: orderId,
             userId: userId || 'TEST_USER_ID',
             borrowerName: borrowerName,
@@ -225,12 +224,6 @@ function Dashboard({ userId }: { userId: string }) {
             isPaid: isPaid,
             pickupDate: targetEq?.pickupDate || '',
             returnDate: targetEq?.returnDate || ''
-          });
-          fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload),
-            mode: 'no-cors'
           }).catch(e => console.warn('通知取消裝備失敗:', e));
         } catch (notifyErr) {
           console.warn('組裝裝備取消通知酬載失敗:', notifyErr);
@@ -289,8 +282,7 @@ function Dashboard({ userId }: { userId: string }) {
         const userName = data?.profile?.name || lineProfile?.displayName || '社員';
 
         try {
-          const payload = withAuthPayload({
-            action: 'notify_event_cancelled',
+          notifyDispatcher('notify_event_cancelled', {
             eventId: eventId,
             eventName: eventName,
             userId: userId || 'TEST_USER_ID',
@@ -298,12 +290,6 @@ function Dashboard({ userId }: { userId: string }) {
             reviewStatus: reviewStatus,
             cancelReason: '自願取消',
             isPaid: isPaid
-          });
-          fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload),
-            mode: 'no-cors'
           }).catch(e => console.warn('通知取消活動失敗:', e));
         } catch (notifyErr) {
           console.warn('組裝活動取消通知酬載失敗:', notifyErr);
@@ -348,8 +334,7 @@ function Dashboard({ userId }: { userId: string }) {
         const userName = data?.profile?.name || lineProfile?.displayName || '社員';
 
         try {
-          const payload = withAuthPayload({
-            action: 'notify_event_cancelled',
+          notifyDispatcher('notify_event_cancelled', {
             eventId: eventId,
             eventName: eventName,
             userId: userId || 'TEST_USER_ID',
@@ -357,12 +342,6 @@ function Dashboard({ userId }: { userId: string }) {
             reviewStatus: '正取',
             cancelReason: cancelReason.trim(),
             isPaid: isPaid
-          });
-          fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload),
-            mode: 'no-cors'
           }).catch(e => console.warn('通知正取取消失敗:', e));
         } catch (notifyErr) {
           console.warn('組裝正取取消通知酬載失敗:', notifyErr);

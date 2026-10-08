@@ -1,23 +1,24 @@
-# 🏔️ 台科登山社社團系統：Supabase 資料表與欄位字典 (Schema Dictionary)
+# 台科登山社社團系統：Supabase 資料表與欄位字典 (Schema Dictionary)
 
-> **建立目的**：本文件為台科登山社系統資料層之唯一真實來源（SSOT, Single Source of Truth）。本文件所有欄位名稱、資料型別、預設值與自訂列舉 (ENUM) 皆於 2026 年 9 月透過正式資料庫之 PostgREST OpenAPI Specification (`/rest/v1/`) 即時同步驗證。在開發前端 LIFF、後端 GAS、PostgreSQL RPC、或與 Google Sheets 同步時，**嚴禁臆測或使用不存在之欄位名稱**。任何資料庫結構變更皆須同步更新此文件。
+> **建立目的**：本文件為台科登山社系統資料層之唯一真實來源（SSOT, Single Source of Truth）。本文件所有欄位名稱、資料型別、預設值與自訂列舉 (ENUM) 皆於 2026 年 10 月透過 Supabase MCP 即時同步與驗證。在開發前端 LIFF、後端 GAS、PostgreSQL RPC、或與 Google Sheets 同步時，**嚴禁臆測或使用不存在之欄位名稱**。任何資料庫結構變更皆須同步更新此文件。
 
 ---
 
-## 📑 資料表概覽與 Google Sheets 分頁對齊
+## 資料表概覽與 Google Sheets 分頁對齊
 
 | Supabase 資料表名稱 | Google Sheets 對應分頁 | 主鍵 (Primary Key) | 核心功能說明 |
 | :--- | :--- | :--- | :--- |
-| **`members`** | `members` | `line_user_id` (TEXT) | 社員基本個資、登山經驗、體能證明與正式社籍狀態 |
-| **`officers`** | `officers` | `line_user_id` (TEXT) | 社團幹部名冊、頭銜、職責自述與管理權限角色 |
-| **`events`** | `events` | `id` (TEXT) | 登山活動行程、費用、日期、雲端相簿與名冊試算表 |
+| **`members`** | `members` | `line_user_id` (TEXT) | 社員基本個資、登山經驗、體能證明、多語系偏好與正式社籍狀態 |
+| **`officers`** | `officers` | `line_user_id` (TEXT) | 社團幹部名冊、職稱頭銜、職責自述、寄語與管理權限角色 |
+| **`events`** | `events` | `id` (TEXT) | 登山活動行程、中英對照、費用、日期、LINE群組、雲端相簿與名冊試算表 |
 | **`event_signups`** | `event_signups` | `id` (TEXT) | 活動隊員報名名冊、錄取審核狀態、繳費狀態與通知紀錄 |
-| **`equipments`** | `equipments` | `id` (TEXT) | 裝備庫存品項、2天基本租金、續租加成與圖庫連結 |
+| **`equipments`** | `equipments` | `id` (TEXT) | 裝備庫存品項、分類、2天基本租金、續租加成與圖庫連結 |
 | **`loans`** | `loans` | `id` (TEXT) | 裝備租借主訂單、借還日期、訂單狀態、租金押金與細項快照 |
-| **`loan_items`** | `loan_items` | `id` (INTEGER) | 單筆租借單中各裝備品項與數量細項明細 |
+| **`loan_items`** | `loan_items` | `id` (BIGINT) | 單筆租借單中各裝備品項與數量細項明細 |
 | **`payments`** | `payments` | `id` (TEXT) | 社員繳費申報記錄、匯款末五碼、單鍵核銷 Token 與幹部審核 |
-| **`reflections`** | `reflections` | `id` (INTEGER) | 活動心得評價、難度與美景星級、登頂相片 |
-| **`sync_queue`** | - (系統佇列) | `id` (INTEGER) | Supabase 與 Google Sheets 非同步重試同步佇列表 |
+| **`reflections`** | `reflections` | `id` (BIGINT) | 活動心得評價、公開設定、難度與美景星級、登頂相片 |
+| **`sync_queue`** | - (系統佇列) | `id` (BIGINT) | Supabase 與 Google Sheets 非同步重試同步佇列表 |
+| **`audit_logs`** | - (系統日誌) | `id` (BIGINT) | 系統安全與管理員重要操作軌跡稽核日誌表 |
 
 ---
 
@@ -33,7 +34,7 @@
 | `student_id` | `TEXT` | 是 | NULL | - | **學號** (校外人士可填身分備註) |
 | `department` | `TEXT` | 是 | NULL | - | **系所** (如：資工系、企管所) |
 | `gender` | `TEXT` | 是 | NULL | `男`, `女`, `其他` | **性別** |
-| `nationality` | `TEXT` | 是 | `'中華民國'` | - | **國籍** (預設中華民國，外籍社員記錄國家名稱) |
+| `nationality` | `TEXT` | 是 | NULL | - | **國籍** (外籍社員記錄國家名稱) |
 | `phone` | `TEXT` | 是 | NULL | - | **聯絡電話** (手機號碼) |
 | `email` | `TEXT` | 是 | NULL | - | **聯絡信箱** |
 | `birthday` | `TEXT` | 是 | NULL | - | **生日** (格式：`YYYY-MM-DD` 或 `YYYY/MM/DD`) |
@@ -45,12 +46,12 @@
 | `outdoor_experience` | `TEXT` | 是 | NULL | - | **爬山經驗** (百岳座數、中級山經歷) |
 | `fitness_desc` | `TEXT` | 是 | NULL | - | **體能測驗自述** |
 | `proof_urls` | `JSONB` | 是 | `'[]'::jsonb` | 字串陣列 | **體能證明照片網址陣列** (Google Drive 直連) |
-| `is_official_member` | `BOOLEAN` | 否 | `FALSE` | `TRUE`, `FALSE` | **正式社員身分** (享有裝備 5 折等社員權益) |
+| `is_official_member` | `BOOLEAN` | 是 | `FALSE` | `TRUE`, `FALSE` | **正式社員身分** (享有裝備 5 折等社員權益) |
 | `membership_expires_at` | `DATE` | 是 | NULL | - | **社籍到期日** (格式：`YYYY-MM-DD`) |
 | `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | - | **建立時間** |
 | `updated_at` | `TIMESTAMPTZ` | 是 | `NOW()` | - | **最後更新時間** |
 | `line_id` | `TEXT` | 是 | NULL | - | **LINE ID** (方便幹部聯絡) |
-| `payment_status` | `payment_status_enum` | 否 | `'未繳費 Unpaid'` | 1. `已繳費 Paid`<br>2. `待確認 Checking`<br>3. `未繳費 Unpaid` | **社員社費繳納狀態** |
+| `payment_status` | `payment_status_enum` | 是 | `'未繳費 Unpaid'` | 1. `已繳費 Paid`<br>2. `待確認 Checking`<br>3. `未繳費 Unpaid` | **社員社費繳納狀態** |
 | `address` | `TEXT` | 是 | NULL | - | **聯絡地址** (學生租屋處或戶籍地址) |
 | `medical_history` | `TEXT` | 是 | NULL | - | **個人特殊病史或過敏藥物** (入山安全防護) |
 | `identity_status` | `TEXT` | 是 | NULL | - | **身分狀態** (臺科大在校學生 / 畢業校友 / 校外人士) |
@@ -58,7 +59,9 @@
 | `officer_intent` | `TEXT` | 是 | NULL | - | **擔任幹部意願** (初次填寫或改為有意願會推播) |
 | `want_to_say` | `TEXT` | 是 | NULL | - | **想說的話 I want to say...** (使用者自由留言，完全非必填) |
 | `is_officer` | `BOOLEAN` | 是 | `FALSE` | `TRUE`, `FALSE` | **是否為幹部** (連動幹部名冊與後台權限) |
-| `officer_role` | `TEXT` | 是 | `'幹部'` | - | **幹部職責角色** |
+| `officer_role` | `TEXT` | 是 | NULL | - | **幹部職責角色** |
+| `preferred_language` | `TEXT` | 是 | `'zh'` | `'zh'`, `'en'` | **偏好介面語系** |
+| `avatar_url` | `TEXT` | 是 | NULL | - | **LINE 個人頭像網址** |
 
 ---
 
@@ -69,10 +72,13 @@
 
 | 欄位名稱 (English Column) | 資料型別 (PostgreSQL Type) | 允許 NULL | 預設值 (Default) | 繁體中文說明與用途 |
 | :--- | :--- | :--- | :--- | :--- |
-| `line_user_id` | `TEXT` | 否 | 無 | **系統識別碼** (LINE UID，主鍵，用於即時調用 LINE 大頭貼) |
+| `line_user_id` | `TEXT` | 否 | 無 | **系統識別碼** (LINE UID，主鍵) |
+| `title` | `TEXT` | 是 | `'幹部'` | **幹部頭銜** (如：社長、活動長、裝備長) |
 | `name` | `TEXT` | 是 | NULL | **幹部姓名** |
-| `role` | `TEXT` | 是 | `'幹部'` | **社團職位與角色** (如 `社長`, `嚮導長`, `裝備長`, `總務`, `活動長`) |
+| `photo_url` | `TEXT` | 是 | NULL | **幹部個人照片網址** |
 | `responsibilities` | `TEXT` | 是 | NULL | **幹部負責業務職責說明** |
+| `message` | `TEXT` | 是 | NULL | **幹部寄語或個人自述** |
+| `role` | `TEXT` | 是 | `'幹部'` | **社團職位與角色** |
 | `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | **建立時間** |
 | `updated_at` | `TIMESTAMPTZ` | 是 | `NOW()` | **最後更新時間** |
 
@@ -82,23 +88,27 @@
 
 - **對應分頁**：`events`
 - **主鍵**：`id` (活動編號，如 `E01`, `E20260901_01`)
-- ⚠️ **重要架構事實**：本表**無 `max_participants`（人數上限）欄位**，報名一律由主辦幹部手動審核分配正取或備取。
+- 注意架構事實：本表無 `max_participants`（人數上限）欄位，報名一律由主辦幹部手動審核分配正取或備取。
 
 | 欄位名稱 (English Column) | 資料型別 (PostgreSQL Type) | 允許 NULL | 預設值 (Default) | 允許值 | 繁體中文說明與用途 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `id` | `TEXT` | 否 | 無 | - | **活動編號** (主鍵) |
-| `title` | `TEXT` | 否 | 無 | - | **活動名稱** |
+| `title` | `TEXT` | 否 | 無 | - | **活動名稱** (中文) |
+| `title_en` | `TEXT` | 是 | NULL | - | **活動名稱** (英文) |
 | `start_date` | `DATE` | 否 | 無 | - | **活動開始日期** (`YYYY-MM-DD`) |
 | `end_date` | `DATE` | 否 | 無 | - | **活動結束日期** (`YYYY-MM-DD`) |
 | `deadline` | `TIMESTAMPTZ` | 否 | 無 | - | **報名截止時間** |
 | `fee` | `INTEGER` | 否 | `0` | - | **預計費用** (新台幣，純整數) |
 | `status` | `TEXT` | 否 | `'報名中 Open'` | `報名中 Open`, `已截止 Closed`, `已結束 Finished` | **報名狀態** |
-| `summary` | `TEXT` | 是 | NULL | - | **活動簡介** |
-| `itinerary` | `TEXT` | 是 | NULL | - | **詳細行程規劃** |
+| `summary` | `TEXT` | 是 | NULL | - | **活動簡介** (中文) |
+| `summary_en` | `TEXT` | 是 | NULL | - | **活動簡介** (英文) |
+| `itinerary` | `TEXT` | 是 | NULL | - | **詳細行程規劃** (中文) |
+| `itinerary_en` | `TEXT` | 是 | NULL | - | **詳細行程規劃** (英文) |
 | `cover_image_url` | `TEXT` | 是 | NULL | - | **活動封面圖網址** |
 | `drive_folder_url` | `TEXT` | 是 | NULL | - | **Google Drive 專屬活動相簿/資料夾網址** |
 | `spreadsheet_url` | `TEXT` | 是 | NULL | - | **專屬活動名冊試算表完整網址** |
 | `spreadsheet_id` | `TEXT` | 是 | NULL | - | **專屬名冊試算表 ID** (供 GAS 快速追加名冊) |
+| `line_group_url` | `TEXT` | 是 | NULL | - | **LINE 活動群組加入連結** |
 | `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | - | **建立時間** |
 | `updated_at` | `TIMESTAMPTZ` | 是 | `NOW()` | - | **最後更新時間** |
 
@@ -109,7 +119,7 @@
 - **對應分頁**：`event_signups`
 - **主鍵**：`id` (報名專屬碼，如 `S123456`)
 - **外鍵**：`event_id` -> `events(id)`、`line_user_id` -> `members(line_user_id)`
-- ⚠️ **重要架構事實**：本表**無 `attended`（出席確認）狀態**。
+- 注意架構事實：本表無 `attended`（出席確認）狀態。
 
 | 欄位名稱 (English Column) | 資料型別 (PostgreSQL Type) | 允許 NULL | 預設值 (Default) | ENUM / 允許值 | 繁體中文說明與用途 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -119,7 +129,7 @@
 | `name` | `TEXT` | 是 | NULL | - | **隊員姓名** (直觀檢視) |
 | `line_id` | `TEXT` | 是 | NULL | - | **LINE ID** (關聯 `members.line_id`，方便幹部出隊聯絡) |
 | `status` | `event_signup_status_enum` | 否 | `'審核中 Checking'` | 1. `正取 Confirmed`<br>2. `正取（已繳費）Confirmed (Paid)`<br>3. `備取 Waitlisted`<br>4. `備取（有意願）Waitlisted (Interested)`<br>5. `審核中 Checking`<br>6. `已取消 Cancelled` | **審核結果 / 報名狀態** |
-| `payment_status` | `payment_status_enum` | 否 | `'未繳費 Unpaid'` | 1. `已繳費 Paid`<br>2. `待確認 Checking`<br>3. `未繳費 Unpaid` | **活動繳費狀態** |
+| `payment_status` | `payment_status_enum` | 是 | `'未繳費 Unpaid'` | 1. `已繳費 Paid`<br>2. `待確認 Checking`<br>3. `未繳費 Unpaid` | **活動繳費狀態** |
 | `notification_status` | `TEXT` | 是 | `'未發送'` | `未發送`, `已發送` | **LINE 推播通知發送狀態** |
 | `is_official_member_snapshot` | `BOOLEAN` | 否 | `FALSE` | `TRUE`, `FALSE` | **報名時社員身分快照** (享受社員價依據) |
 | `cancel_reason` | `TEXT` | 是 | NULL | - | **取消報名原因自述** |
@@ -138,16 +148,13 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `id` | `TEXT` | 否 | 無 | - | **裝備代號** (主鍵) |
 | `name` | `TEXT` | 否 | 無 | - | **裝備名稱** (如：MSR 雙人帳篷) |
-| `category` | `equipment_category` | 否 | `'其他裝備'` | `睡眠系統`, `背負系統`, `炊事系統`, `照明通訊`, `攀登技術`, `行進安全`, `其他裝備` | **裝備分類** (自訂 ENUM) |
+| `category` | `equipment_category` | 是 | `'其他裝備'` | `睡眠系統`, `背負系統`, `炊事系統`, `照明通訊`, `攀登技術`, `行進安全`, `其他裝備` | **裝備分類** (自訂 ENUM) |
 | `total_qty` | `INTEGER` | 否 | `0` | - | **總庫存數量** |
 | `available_qty` | `INTEGER` | 否 | `0` | - | **目前剩餘可借數量** |
 | `is_borrowable` | `BOOLEAN` | 否 | `TRUE` | `TRUE`, `FALSE` | **是否開放借用** |
 | `price_2day` | `INTEGER` | 否 | `0` | - | **2天基本租金** (短天期固定計費) |
 | `price_extra_day` | `INTEGER` | 否 | `0` | - | **續租每日租金** (超過2天后每日加成) |
-| `member_price_per_day` | `INTEGER` | 是 | `0` | - | **社員每日租金** (歷史相容欄位) |
-| `non_member_price_per_day` | `INTEGER` | 是 | `0` | - | **非社員每日租金** (歷史相容欄位) |
 | `status` | `TEXT` | 是 | NULL | - | **裝備狀態** |
-| `specs` | `TEXT` | 是 | NULL | - | **規格描述** (重量、材質、尺寸) |
 | `notes` | `TEXT` | 是 | NULL | - | **使用注意事項與保養備註** |
 | `images` | `JSONB` | 是 | `'[]'::jsonb` | 字串陣列 | **相片網址陣列** (Google Drive 直連) |
 | `sort_order` | `INTEGER` | 是 | `0` | - | **顯示排序權重** |
@@ -179,7 +186,7 @@
 | `total_deposit` | `INTEGER` | 是 | `0` | - | **押金總計** (目前預設 0) |
 | `is_official_member_snapshot` | `BOOLEAN` | 否 | `FALSE` | `TRUE`, `FALSE` | **下單時社員身分快照** (享有5折資格快照) |
 | `refund_needed` | `BOOLEAN` | 是 | `FALSE` | `TRUE`, `FALSE` | **是否需退款** (取消且已繳費時為 TRUE) |
-| `items` | `JSONB` | 是 | NULL | - | **訂單品項與數量 JSON 快照** |
+| `items` | `JSONB` | 是 | `'[]'::jsonb` | - | **訂單品項與數量 JSON 快照** |
 | `notes` | `TEXT` | 是 | NULL | - | **訂單備註** |
 | `cancelled_at` | `TIMESTAMPTZ` | 是 | NULL | - | **取消時間戳記** |
 | `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | - | **建立時間** |
@@ -190,12 +197,12 @@
 ## 7. 裝備租借品項明細 (`loan_items`)
 
 - **對應分頁**：`loan_items`
-- **主鍵**：`id` (INTEGER)
+- **主鍵**：`id` (BIGINT)
 - **外鍵**：`loan_id` -> `loans(id)`、`equipment_id` -> `equipments(id)`
 
 | 欄位名稱 (English Column) | 資料型別 (PostgreSQL Type) | 允許 NULL | 預設值 (Default) | 繁體中文說明與用途 |
 | :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | 否 | 自增 | **明細流水號** (主鍵) |
+| `id` | `BIGINT` | 否 | 自增 (`nextval`) | **明細流水號** (主鍵) |
 | `loan_id` | `TEXT` | 否 | 無 | **租借主單號** (關聯 `loans.id`) |
 | `equipment_id` | `TEXT` | 否 | 無 | **裝備代號** (關聯 `equipments.id`) |
 | `quantity` | `INTEGER` | 否 | `1` | **借用數量** |
@@ -222,11 +229,13 @@
 | `proof_image_url` | `TEXT` | 是 | NULL | - | **匯款證明相片網址** (Google Drive 直連) |
 | `target_type` | `TEXT` | 是 | NULL | `membership`, `event`, `loan`, `multi` | **關聯業務目標類型** |
 | `target_id` | `TEXT` | 是 | NULL | - | **目標編號** (活動 ID、租借單號或 NULL) |
-| `status` | `TEXT` | 否 | `'待確認 Checking'` | `待確認 Checking`<br>`已核銷 Confirmed`<br>`退件 Rejected` | **款項核銷審核狀態** (統一標準為 `已核銷 Confirmed`，舊稱「已確認無誤」已廢棄) |
-| `verify_token` | `TEXT` | 是 | NULL | - | **單鍵免登入核銷安全密鑰** (32位元 md5 隨機字串) |
+| `selected_ids` | `JSONB` | 是 | NULL | - | **多筆合併繳費時選取的項目代號陣列** |
+| `status` | `TEXT` | 否 | `'待確認 Checking'` | `待確認 Checking`<br>`已核銷 Confirmed`<br>`退件 Rejected` | **款項核銷審核狀態** (統一標準為 `已核銷 Confirmed`) |
+| `verify_token` | `TEXT` | 是 | NULL | - | **單鍵免登入核銷安全密鑰** (32位元隨機字串) |
 | `officer_notes` | `TEXT` | 是 | NULL | - | **幹部審核備註 / 退件原因** |
 | `confirmed_by` | `TEXT` | 是 | NULL | - | **核銷幹部身分 / 姓名** |
 | `confirmed_at` | `TIMESTAMPTZ` | 是 | NULL | - | **核銷確認時間** |
+| `notification_status` | `TEXT` | 是 | `'未通知'` | `未通知`, `已通知` | **核銷推播通知發送狀態** |
 | `notes` | `TEXT` | 是 | NULL | - | **申報備註** |
 | `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | - | **申報送出時間** |
 | `updated_at` | `TIMESTAMPTZ` | 是 | `NOW()` | - | **最後更新時間** |
@@ -236,12 +245,12 @@
 ## 9. 活動心得與登頂相片 (`reflections`)
 
 - **對應分頁**：`reflections`
-- **主鍵**：`id` (INTEGER)
+- **主鍵**：`id` (BIGINT)
 - **外鍵**：`event_id` -> `events(id)`、`line_user_id` -> `members(line_user_id)`
 
 | 欄位名稱 (English Column) | 資料型別 (PostgreSQL Type) | 允許 NULL | 預設值 (Default) | 繁體中文說明與用途 |
 | :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | 否 | 自增 | **心得流水號** (主鍵) |
+| `id` | `BIGINT` | 否 | 自增 (`nextval`) | **心得流水號** (主鍵) |
 | `event_id` | `TEXT` | 否 | 無 | **活動編號** |
 | `line_user_id` | `TEXT` | 否 | 無 | **隊員系統識別碼** |
 | `name` | `TEXT` | 是 | NULL | **隊員姓名** |
@@ -249,6 +258,7 @@
 | `beauty_rating` | `INTEGER` | 是 | NULL | **美景星級評分** (1 ~ 5) |
 | `content` | `TEXT` | 是 | NULL | **心得內文自述** |
 | `photo_urls` | `JSONB` | 是 | `'[]'::jsonb` | **相片網址陣列** (Google Drive 直連) |
+| `is_public` | `BOOLEAN` | 是 | `TRUE` | **是否公開展示於首頁與活動牆** |
 | `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | **填寫送出時間** |
 | `updated_at` | `TIMESTAMPTZ` | 是 | `NOW()` | **最後更新時間** |
 
@@ -257,12 +267,12 @@
 ## 10. 試算表同步重試佇列表 (`sync_queue`)
 
 - **對應分頁**：無 (系統內部佇列表)
-- **主鍵**：`id` (INTEGER)
+- **主鍵**：`id` (BIGINT)
 
 | 欄位名稱 (English Column) | 資料型別 (PostgreSQL Type) | 允許 NULL | 預設值 (Default) | 繁體中文說明與用途 |
 | :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | 否 | 自增 | **佇列流水號** (主鍵) |
-| `table_name` | `TEXT` | 否 | 無 | **目標異動資料表** (如 `members`, `loans`, `payments`) |
+| `id` | `BIGINT` | 否 | 自增 (`nextval`) | **佇列流水號** (主鍵) |
+| `table_name` | `TEXT` | 否 | 無 | **目標異動資料表** (如 `members`, `loans`, `payments`, `events`, `event_signups`) |
 | `action` | `TEXT` | 否 | 無 | **觸發動作** (`INSERT`, `UPDATE`, `DELETE`) |
 | `record_id` | `TEXT` | 否 | 無 | **異動記錄之主鍵** |
 | `payload` | `JSONB` | 否 | 無 | **該筆記錄異動後的完整 JSON 資料快照** |
@@ -271,3 +281,64 @@
 | `error_message` | `TEXT` | 是 | NULL | **最後一次同步失敗之錯誤訊息** |
 | `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | **排入佇列時間** |
 | `processed_at` | `TIMESTAMPTZ` | 是 | NULL | **處理完成時間** |
+
+---
+
+## 11. 稽核日誌資料表 (`audit_logs`)
+
+- **對應分頁**：無 (系統內部日誌表)
+- **主鍵**：`id` (BIGINT)
+
+| 欄位名稱 (English Column) | 資料型別 (PostgreSQL Type) | 允許 NULL | 預設值 (Default) | 繁體中文說明與用途 |
+| :--- | :--- | :--- | :--- | :--- |
+| `id` | `BIGINT` | 否 | 自增 (`nextval`) | **日誌流水號** (主鍵) |
+| `actor_user_id` | `TEXT` | 否 | 無 | **操作者識別碼** (LINE UID 或系統角色) |
+| `action` | `TEXT` | 否 | 無 | **操作行為名稱** (如 `UPDATE_MEMBER`, `CONFIRM_PAYMENT`) |
+| `resource_type` | `TEXT` | 是 | NULL | **目標資源類型** (如 `payments`, `events`, `members`) |
+| `resource_id` | `TEXT` | 是 | NULL | **目標資源主鍵代號** |
+| `ip_address` | `TEXT` | 是 | NULL | **操作來源 IP 位址** |
+| `metadata` | `JSONB` | 是 | `'{}'::jsonb` | **操作前/後之結構化額外資訊快照** |
+| `created_at` | `TIMESTAMPTZ` | 是 | `NOW()` | **操作紀錄建立時間** |
+
+---
+
+## 12. PostgreSQL 自訂列舉型別 (Custom ENUM Types)
+
+| ENUM 名稱 | 定義之列舉項目清單 | 關聯使用欄位 |
+| :--- | :--- | :--- |
+| **`equipment_category`** | 1. `睡眠系統`<br>2. `背負系統`<br>3. `炊事系統`<br>4. `照明通訊`<br>5. `攀登技術`<br>6. `行進安全`<br>7. `其他裝備` | `equipments.category` |
+| **`event_signup_status_enum`** | 1. `正取 Confirmed`<br>2. `正取（已繳費）Confirmed (Paid)`<br>3. `備取 Waitlisted`<br>4. `備取（有意願）Waitlisted (Interested)`<br>5. `審核中 Checking`<br>6. `已取消 Cancelled` | `event_signups.status` |
+| **`payment_status_enum`** | 1. `已繳費 Paid`<br>2. `待確認 Checking`<br>3. `未繳費 Unpaid` | `members.payment_status`<br>`event_signups.payment_status`<br>`loans.payment_status` |
+
+---
+
+## 13. 核心 PostgreSQL Stored Procedures (RPC 函式清單)
+
+以下為 Supabase 線上已部署並經過驗證之核心 RPC 預存程序清單：
+
+| RPC 函式名稱 | 傳回型別 | 核心功能說明 |
+| :--- | :--- | :--- |
+| `get_member_profile(p_line_user_id)` | `JSONB` | 取得單一社員完整個資、幹部權限與社籍狀態 |
+| `save_member_profile(...)` | `JSONB` | 儲存/更新社員資料，具備幹部權限防竄改守衛 |
+| `get_my_dashboard(p_line_user_id)` | `JSONB` | 取得個人主頁聚合資訊（報名中活動、租借單、繳費狀態） |
+| `get_my_payment_history(p_line_user_id)` | `JSONB` | 取得個人歷史繳費申報清單與審核狀態 |
+| `get_my_achievements(p_line_user_id)` | `JSONB` | 取得個人登頂與參與活動里程碑成就統計 |
+| `get_unpaid_items_rpc(p_line_user_id)` | `JSONB` | 查詢個人所有待繳項目（社費、活動、租借訂單）供合併繳費 |
+| `submit_payment_rpc(...)` | `JSONB` | 提交繳費申報記錄並更新相關單據為待確認狀態 |
+| `verify_payment_by_token(p_token)` | `JSONB` | 幹部使用安全 token 單鍵免登入核銷繳費 |
+| `submit_equipment_loan_rpc(...)` | `JSONB` | 建立裝備租借主單與明細，原子化扣減庫存 |
+| `cancel_equipment_loan_rpc(...)` | `JSONB` | 取消裝備租借單並原子化釋放庫存 |
+| `cancel_event_signup_rpc(...)` | `JSONB` | 取消活動報名並記錄取消原因 |
+| `save_reflection_rpc(...)` | `JSONB` | 儲存活動心得與登頂相片紀錄 |
+| `get_event_public_reflections_rpc(...)` | `JSONB` | 取得活動公開心得與評價清單 |
+| `get_admin_members_rpc(...)` | `JSONB` | [幹部] 取得全體社員名冊與權限管理列表 |
+| `get_admin_member_detail_rpc(...)` | `JSONB` | [幹部] 取得單一社員完整歷史出隊與租借紀錄 |
+| `get_admin_events_rpc(...)` | `JSONB` | [幹部] 取得活動列表與管理資訊 |
+| `save_admin_event_rpc(...)` | `JSONB` | [幹部] 建立或編輯活動行程 |
+| `update_event_status_rpc(...)` | `JSONB` | [幹部] 更新活動狀態（報名中/已截止/已結束） |
+| `get_admin_event_signups_rpc(...)` | `JSONB` | [幹部] 取得特定活動之完整報名名冊 |
+| `update_signup_status_rpc(...)` | `JSONB` | [幹部] 審核活動報名狀態（正取/備取/取消） |
+| `get_admin_loans_rpc(...)` | `JSONB` | [幹部] 取得所有裝備租借訂單清單 |
+| `update_admin_loan_status_rpc(...)` | `JSONB` | [幹部] 更新裝備租借狀態（待領取/租借中/已歸還） |
+| `get_admin_finance_rpc(...)` | `JSONB` | [幹部] 取得財務繳費申報清單與統計 |
+| `update_admin_payment_status_rpc(...)` | `JSONB` | [幹部] 審核或退件款項申報 |

@@ -1,7 +1,7 @@
 import liff from '@line/liff';
-import { GAS_API_URL } from '../constants/api';
+import { GAS_API_URL, NOTIFY_DISPATCHER_URL } from '../constants/api';
 
-export { GAS_API_URL };
+export { GAS_API_URL, NOTIFY_DISPATCHER_URL };
 
 /**
  * 取得當前 LIFF 登入之 ID Token (JWT)
@@ -91,4 +91,43 @@ export const gasPost = async <T = unknown>(payload: Record<string, unknown>): Pr
     throw err;
   }
 };
+
+/**
+ * 調用 Supabase 通知調度中心 (notify-dispatcher)
+ */
+export const notifyDispatcher = async (
+  action: string,
+  payload: Record<string, unknown>
+): Promise<{ success: boolean; message?: string }> => {
+  try {
+    const bodyWithAuth = withAuthPayload({ action, ...payload });
+    const idToken = getIdToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (idToken) {
+      headers['x-line-id-token'] = idToken;
+      headers['Authorization'] = `Bearer ${idToken}`;
+    }
+
+    const res = await fetch(NOTIFY_DISPATCHER_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(bodyWithAuth)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[notifyDispatcher] HTTP ${res.status}:`, errText);
+      return { success: false, message: errText };
+    }
+
+    const json = await res.json();
+    return { success: json.status === 'success', message: json.message };
+  } catch (err) {
+    console.warn('[notifyDispatcher] 推播發送失敗:', err);
+    return { success: false, message: err instanceof Error ? err.message : String(err) };
+  }
+};
+
 

@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.262-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.271-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.262)](#7-最新版本異動紀錄-changelog-v01262)
+- [7. 最新版本異動紀錄 (Changelog v0.1.269)](#7-最新版本異動紀錄-changelog-v01269)
 
 ---
 
@@ -204,7 +204,62 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.250)
+## 7. 最新版本異動紀錄 (Changelog v0.1.269)
+
+### v0.1.269 (2026-10-08)
+- **完成 Phase 4: GAS 薄 Worker 與遷移切換復原計畫**:
+  - **建立 Google 專屬薄 Worker ([src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js))**:
+    - 實作 Google Drive 實體相片刪除與檔案建立。
+    - 實作 Google Docs 社團規章知識庫讀取 API (`get_knowledge_base`)。
+    - 實作 GmailApp / MailApp 雙軌郵件發送 API (`send_admin_email`, `send_user_email`)。
+    - 實作活動專屬獨立試算表建立與名冊追加同步 (`create_event_sheet`, `append_event_sheet`, `sync_cancel_event_sheet`)。
+    - 嚴格校驗 `x-worker-secret` 共享密鑰，無密鑰一律拒絕 (401)。
+  - **保留既有完整備援 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**:
+    - 原 8,000+ 行既有完整後端程式碼完全凍結保留，確保可無縫一鍵復原。
+  - **定時巡檢時間調整**:
+    - 依使用者需求將每日定時巡檢時間調整為台北時間晚上 00:00 (UTC 16:00)。
+
+### v0.1.268 (2026-10-08)
+- **完成 Phase 3: 推播轉發與定時巡檢架構建置**:
+  - **幹部雙軌通知模組 ([supabase/functions/_shared/pushAdminMessage.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/_shared/pushAdminMessage.ts))**:
+    - 支援自動推導 Email 主旨並透過 GAS Worker 非同步寄送管理郵件。
+    - 支援 LINE Push 發送至 `ADMIN_GROUP_ID`，優先使用 `ADMIN_BOT_TOKEN` 並自動備援 `MEMBER_BOT_TOKEN`。
+    - 支援純文字、Flex Message 與客製化 HTML 內容。
+  - **推播轉發入口 ([supabase/functions/notify-dispatcher/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/notify-dispatcher/index.ts))**:
+    - 完整實作 10 大通知動作：`notify_officers_loan`、`notify_loan_cancelled`、`notify_officers_payment`、`notify_payment_confirmed`、`notify_loan_status_updated`、`notify_officer_event`、`notify_profile_saved`、`notify_event_cancelled`、`notify_reflection_submitted`、`send_event_notifications`。
+    - 實作審核推播狀態搶占機制（`notification_status` claim），徹底杜絕併發重複推播。
+    - 正取報名者嚴格檢查 `line_group_url`，未設定時即時阻擋並提示。
+  - **每日定時巡檢 Edge Function ([supabase/functions/daily-patrol/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/daily-patrol/index.ts))**:
+    - 每日台北時間 09:00 (UTC 01:00) 自動巡檢過期活動並切換為「關閉」。
+    - 巡檢過期社籍並重置為「未繳費 Unpaid」與非正式社員。
+    - 巡檢逾期未歸還裝備單並透過 `members.phone` 關聯催收電話。
+    - 僅在有異動項目或逾期時自動彙整報告並推播至幹部群組。
+  - **pg_cron 排程 SQL ([supabase/migrations/20261008000001_phase3_pg_cron_patrol.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/migrations/20261008000001_phase3_pg_cron_patrol.sql))**:
+    - 建立 `invoke_daily_patrol()` 預存程序，透過 `pg_net` 自動發送 HTTP 請求觸發 Edge Function。
+    - 註冊 `0 1 * * *` 排程。
+  - **單元測試與覆蓋**:
+    - 新增 `pushAdminMessage.test.ts`、`notifyDispatcher.test.ts`、`dailyPatrol.test.ts`。
+
+### v0.1.267 (2026-10-08)
+- **Supabase Edge Function (`line-webhook`) 雲端部署上線**:
+  - **部署確認與狀態驗證**: 透過 Supabase API 成功將本地 `supabase/functions/line-webhook` 及相依之 `_shared` 工具庫（包含 `lineClient`, `supabaseClient`, `i18n`, `messages`, `dateUtils`, `statusUtils`, `flexTemplates`, `geminiService`）封裝並部署至雲端專案（Reference ID: `bvyyuobmizfrosbgcqbu`）。
+  - **安全性與驗證設定**:
+    - 設定 `verify_jwt: false`，確保 LINE 伺服器 Webhook 請求（僅攜帶 `x-line-signature` 標頭）正常通過閘道驗證而不被 401 攔截。
+    - 支援 `deno.json` import map 自動解析。
+  - **正式 Webhook URL**: `https://bvyyuobmizfrosbgcqbu.supabase.co/functions/v1/line-webhook`。
+
+### v0.1.264 (2026-10-08)
+- **全面透過 Supabase MCP 校對與更新資料庫字典文件 ([supabase/SCHEMA_DICTIONARY.md](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/SCHEMA_DICTIONARY.md))**:
+  - **即時比對驗證 (MCP Verification)**: 透過 Supabase MCP 工具全面檢視線上 PostgreSQL 之 11 張資料表結構、欄位型別、Nullability、預設值、自訂列舉 (ENUM) 與 RPC 函式。
+  - **補齊缺漏資料表與欄位**:
+    - 新增系統稽核日誌表 `audit_logs` 完整規格定義。
+    - 補齊 `members` 表之 `preferred_language`（語系偏好）、`avatar_url`（LINE 頭像）。
+    - 補齊 `officers` 表之 `title`、`photo_url`、`message` 欄位。
+    - 補齊 `events` 表之 `line_group_url`、`title_en`、`summary_en`、`itinerary_en` 多語系與群組欄位。
+    - 補齊 `payments` 表之 `selected_ids`（多筆合併繳費項目）與 `notification_status`。
+    - 補齊 `reflections` 表之 `is_public`（公開展示標記）。
+    - 移除 `equipments` 表中過往已廢棄或不存在之舊欄位（`specs`, `member_price_per_day`, `non_member_price_per_day`）。
+  - **彙整 ENUM 與 RPC 函式字典**: 完整列出 `equipment_category`、`event_signup_status_enum`、`payment_status_enum` 之列舉項目，並收錄 24+ 項經由 Supabase 線上驗證之核心 RPC 預存程序說明。
 
 ### v0.1.250 (2026-10-02)
 - **活動卡片已報名人數膠囊徽章修復 ([src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js), [gas_modules/03_Flex_Templates.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/03_Flex_Templates.js), [gas_modules/02_LineBot_Webhook.js](file:///Users/brianhung/Documents/OfficialLINEAccount/gas_modules/02_LineBot_Webhook.js))**:
@@ -2177,7 +2232,58 @@ pnpm test
     - 全篇卡片文案嚴格落實零 Emoji 規範。
   - 單元測試與建置驗證：
     - 新增 test/104_guide_and_feedback_flex_cards.test.mjs 單元測試，全面驗證卡片結構、雙語切換、按鈕 URI 與零 Emoji 檢驗。
-    - 全專案 88 個測試套件、479 項單元測試 100% 通過，TypeScript 與 Vite 編譯零錯誤。
+### v0.1.263 (2026-10-08)
+- 遷移至 Supabase Edge Functions 之 Prompt 全面架構審查與優化 (prompt.md)：
+  - 訊息文字集中管理重構：
+    - 移除 bot_messages 資料表與 60 秒 DB 快取設計，改為在 TypeScript 模組 (supabase/functions/_shared/messages.ts) 集中管理型別化文案函式。
+    - 由統一的 render(pair, prefLang) 處理雙語、繁中、英文之字串渲染，消除 DB 查詢延遲並支援 Git 版本控管。
+  - 精簡 Edge Function 職責與直通 Supabase RPC：
+    - 前端查詢與資料變更已直通 Supabase RPC (如 admin_portal_rpc, verify_payment_rpc, get_my_dashboard 等)，移除在 Edge Function 重複開發查詢 API 之冗餘要求。
+### v0.1.265 (2026-10-08)
+- 遷移提示詞 (prompt.md) 強化測試規範、手動驗證流程、Secrets 清單與 GAS 原生代碼保留防護：
+  - 各階段完整測試規範：
+    - 強調每個 Phase 都必須附帶涵蓋所有舊版業務分支與邊界條件的完整 Deno 單元與整合測試。
+  - 手動測試指引與功能完成清單：
+    - 輸出格式中強制要求列出目前階段「已完成遷移功能清單」，並提供明確的 LINE 聊天室指令、Postman 或網頁端手動測試步驟。
+  - Supabase Secrets 清單主動提示：
+    - 要求各 Phase 明確列出本階段需於 Supabase 後台新增之環境變數（Secrets）清單與配置說明。
+  - 原生 GAS 檔案硬性保留防護 (R7)：
+    - 增設硬性規則 R7，嚴格禁止修改或刪除既有 src/gas.js 與 gas_modules/，確保在 Supabase 遷移若有異常時具備 100% 即時回滾能力。
+### v0.1.266 (2026-10-08)
+- 完成 Supabase Edge Functions 遷移 Phase 1：基礎層、共用模組與訊息字典建置：
+  - Deno 與 TypeScript 基礎架構配置：
+    - 建立 supabase/functions/deno.json 與 import_map.json，支援 Deno 測試與 Supabase JS Client。
+    - 建立 supabase/functions/_shared/types.ts 完整對齊 SCHEMA_DICTIONARY.md 核心型別。
+  - LINE 雙 Token 與簽章驗證客戶端 (supabase/functions/_shared/lineClient.ts)：
+    - 實作 Web Crypto HMAC-SHA256 時序安全簽章比對演算法。
+    - 實作 LIFF ID Token 驗證與 10 分鐘本機快取機制。
+    - 實作 MEMBER_BOT_TOKEN 與 ADMIN_BOT_TOKEN 優先發送與自動備援切換。
+  - 多語系訊息字典與渲染器 (supabase/functions/_shared/messages.ts, i18n.ts)：
+    - 集中管理所有使用者可見中英文文案，支援 zh / en / null（雙語對照）渲染輸出。
+    - 實作使用者語系偏好解析流程（members.preferred_language -> LINE profile -> 漢字啟發式判斷）。
+  - 日期與狀態核心工具 (supabase/functions/_shared/dateUtils.ts, statusUtils.ts)：
+    - 實作台北時區 (Asia/Taipei) 格式化與歷史 23:59:59Z 容錯解析。
+    - 實作活動狀態（未來、開放、關閉）與報名狀態判定邏輯。
+  - 資料庫遷移與原子報名 RPC (supabase/migrations/20261008000000_phase1_core_tables_and_rpc.sql)：
+    - 建立 app_config（執行期組態）、webhook_events（Webhook 冪等去重）、worker_failures（GAS 轉發失敗記錄表）。
+    - 建立 event_signups partial unique index (idx_event_signups_active_unique) 防止重複報名。
+    - 實作 signup_rpc 預存程序，於資料庫單一交易內完成活動截止檢查、180天個資時效驗證、必填檢查與報名號碼生成。
+  - 單元測試套件：
+    - 建立 lineClient.test.ts, messages.test.ts, dateUtils.test.ts, statusUtils.test.ts 單元測試。
+
+### v0.1.271 (2026-10-08)
+- 修正活動與裝備取消通知推播機制與 Webhook 幹部簽章校驗：
+  - 後端 Webhook 簽章驗證精準化 (supabase/functions/line-webhook/index.ts)：
+    - 將簽章驗證明確指定為使用 ADMIN_BOT_SECRET，杜絕混用造成之身分比對異常與 401 拒絕存取。
+    - 確保幹部在 LINE 群組執行 @小岳助理 綁定幹部群組 能順暢寫入 app_config (ADMIN_GROUP_ID)。
+  - 前端通知調度中心直連封裝 (src/utils/api.ts, src/constants/api.ts)：
+    - 新增 NOTIFY_DISPATCHER_URL 與 notifyDispatcher 輔助函式，支援帶附 LIFF ID Token 驗證與錯誤透明化。
+  - 個人主頁取消報名與預約推播切換 (src/pages/Dashboard.tsx)：
+    - 將活動報名取消 (notify_event_cancelled) 與裝備取消 (notify_loan_cancelled) 統一轉由 notifyDispatcher 直連 Supabase Edge Function。
+    - 確保正取社員取消時，幹部群組能即時收到「正取棄權緊急通知」並提示遞補與退款事宜。
+
+
+
 
 
 

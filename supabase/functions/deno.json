@@ -1,0 +1,14 @@
+{
+  "tasks": {
+    "test": "deno test --allow-env --allow-net --allow-read"
+  },
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.49.1",
+    "../_shared/": "./_shared/",
+    "std/": "https://deno.land/std@0.224.0/"
+  },
+  "compilerOptions": {
+    "lib": ["deno.window", "deno.ns"],
+    "strict": true
+  }
+}
