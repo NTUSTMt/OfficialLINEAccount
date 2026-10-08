@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { appendAuthToken, withAuthPayload, notifyDispatcher } from '../utils/api';
+import { appendAuthToken, notifyDispatcher } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
 import { fetchDashboardFromSupabase, cancelEquipmentLoanInSupabase, cancelEventSignupInSupabase, getLastSupabaseError } from '../utils/supabaseClient';
 import {

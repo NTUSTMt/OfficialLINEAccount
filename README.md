@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.271-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.272-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.269)](#7-最新版本異動紀錄-changelog-v01269)
+- [7. 最新版本異動紀錄 (Changelog v0.1.272)](#7-最新版本異動紀錄-changelog-v01272)
 
 ---
 
@@ -204,7 +204,20 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.269)
+## 7. 最新版本異動紀錄 (Changelog v0.1.272)
+
+### v0.1.272 (2026-10-08)
+- **修復前端 Vercel 建置錯誤**:
+  - **清理未引用變數 ([src/pages/Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx))**:
+    - 移除未使用的 `withAuthPayload` 引用，解決 TypeScript `noUnusedLocals` (TS6133) 建置報錯。
+    - 驗證 `tsc -b && vite build` 本機與 CI 建置 100% 通過。
+
+### v0.1.271 (2026-10-08)
+- **幹部 Webhook 簽章驗證金鑰精準分離與通知調度中心直連**:
+  - **Webhook 簽章驗證優化 ([supabase/functions/line-webhook/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/index.ts))**:
+    - 徹底移除 `LINE_CHANNEL_SECRET` 之相容 fallback，唯一指定使用 `ADMIN_BOT_SECRET` 進行驗證，杜絕雙 Bot 金鑰碰撞造成之 401 拒絕存取。
+  - **前端通知調度中心直連 ([src/utils/api.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/api.ts), [src/pages/Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx))**:
+    - 取消活動報名與取消裝備租借全面直連 Supabase `notify-dispatcher` Edge Function，確保正取棄權與取消即時推播至幹部群組。
 
 ### v0.1.269 (2026-10-08)
 - **完成 Phase 4: GAS 薄 Worker 與遷移切換復原計畫**:
