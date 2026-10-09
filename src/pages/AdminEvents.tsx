@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
-import { appendAuthToken, withAuthPayload, gasGet, notifyDispatcher } from '../utils/api';
+import { appendAuthToken, gasGet, notifyDispatcher } from '../utils/api';
 import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';

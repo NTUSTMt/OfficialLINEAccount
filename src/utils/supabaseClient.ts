@@ -1051,8 +1051,8 @@ export const saveEventToSupabase = async (
     spreadsheetId?: string;
     lineGroupUrl?: string;
   }
-): Promise<{ success: boolean; eventId?: string }> => {
-  if (!supabase || !userId) return { success: false };
+): Promise<{ success: boolean; eventId?: string; error?: string }> => {
+  if (!supabase || !userId) return { success: false, error: '缺少 Supabase 連線或使用者身分' };
 
   try {
     const { data, error } = await supabase.rpc('save_admin_event_rpc', {
@@ -1060,16 +1060,26 @@ export const saveEventToSupabase = async (
       p_event_data: eventData
     });
 
-    if (error || data?.status !== 'success') {
-      console.warn('[Supabase] 儲存活動失敗:', error?.message || data?.message);
-      return { success: false };
+    if (error) {
+      console.warn('[Supabase] 儲存活動失敗:', error.message);
+      lastSupabaseError = error.message;
+      return { success: false, error: error.message };
+    }
+
+    if (data?.status !== 'success') {
+      const errMsg = data?.message || '儲存活動未成功';
+      console.warn('[Supabase] 儲存活動失敗:', errMsg);
+      lastSupabaseError = errMsg;
+      return { success: false, error: errMsg };
     }
 
     console.log('%c[DataSource: Supabase] 活動已極速儲存！', 'color: #10b981; font-weight: bold;', data);
     return { success: true, eventId: data.eventId };
-  } catch (err) {
-    console.warn('[Supabase] 儲存活動例外:', err);
-    return { success: false };
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.warn('[Supabase] 儲存活動例外:', errMsg);
+    lastSupabaseError = errMsg;
+    return { success: false, error: errMsg };
   }
 };
 

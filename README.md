@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.279-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.280-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.279)](#7-最新版本異動紀錄-changelog-v01279)
+- [7. 最新版本異動紀錄 (Changelog v0.1.280)](#7-最新版本異動紀錄-changelog-v01280)
 
 ---
 
@@ -204,7 +204,14 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.279)
+## 7. 最新版本異動紀錄 (Changelog v0.1.280)
+
+### v0.1.280 (2026-10-09)
+- **修復 TypeScript 型別檢查與 Vite 打包錯誤，保障 Vercel 部署正常發布**:
+  - **移除未使用的函式匯入與補全型別宣告 ([src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx), [src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts))**:
+    - 移除 `AdminEvents.tsx` 中未使用的 `withAuthPayload` 匯入，消除 `TS6133` 編譯錯誤。
+    - 補全 `saveEventToSupabase` 回傳型別定義（新增 `error?: string` 欄位），支援透明錯誤訊息提取並消除 `TS2339` 型別檢查失敗。
+    - 通過 `pnpm build` (`tsc -b && vite build`) 100% 零錯誤打包驗證，確保 Vercel CI/CD 自動化構建發布順利完成，使用者端即可即時載入最新直通 Supabase RPC 構建產物。
 
 ### v0.1.279 (2026-10-09)
 - **手機端活動管理直通 Supabase RPC 存檔與推播去 GAS 化修復**:
