@@ -971,29 +971,125 @@ export function buildFeedbackFlex(prefLang: PreferredLanguage) {
   };
 }
 
-const FIELD_EN_MAP: Record<string, string> = {
-  "姓名": "Full Name",
-  "性別": "Gender",
-  "身分證字號/居留證號": "ID / ARC / Passport Number",
-  "身分證/護照": "ID / ARC / Passport Number",
-  "生日": "Date of Birth (Birthday)",
-  "聯絡電話": "Phone Number",
-  "系所": "Department",
-  "學號": "Student ID",
-  "身分別": "Identity Status",
-  "現居地址": "Current Residential Address",
-  "電子郵件": "Email Address",
+const FIELD_ZH_MAP: Record<string, string> = {
+  "姓名": "姓名",
+  "姓名 Name": "姓名",
+  "name": "姓名",
+  "性別": "性別",
+  "性別 Gender": "性別",
+  "gender": "性別",
+  "身分證字號/居留證號": "身分證字號 / 居留證號",
+  "身分證字號/居留證號 ID Card": "身分證字號 / 居留證號",
+  "身分證/護照": "身分證字號 / 護照號碼",
+  "id_card": "身分證字號 / 居留證號",
+  "生日": "出生年月日",
+  "生日 Birthday": "出生年月日",
+  "birthday": "出生年月日",
+  "聯絡電話": "聯絡電話",
+  "聯絡電話 Phone": "聯絡電話",
+  "phone": "聯絡電話",
+  "系所": "就讀系所",
+  "系所 Department": "就讀系所",
+  "department": "就讀系所",
+  "學號": "學校學號",
+  "學號 Student ID": "學校學號",
+  "student_id": "學校學號",
+  "身分別": "身分別",
+  "identity_status": "身分別",
+  "現居地址": "現居通訊地址",
+  "現居地址 Address": "現居通訊地址",
+  "通訊地址": "現居通訊地址",
+  "address": "現居通訊地址",
+  "電子郵件": "電子郵件信箱",
+  "電子郵件 Email": "電子郵件信箱",
+  "email": "電子郵件信箱",
   "真實 LINE ID": "LINE ID",
-  "緊急聯絡人姓名": "Emergency Contact Name",
-  "與緊急聯絡人關係": "Relationship with Emergency Contact",
-  "緊急聯絡人電話": "Emergency Contact Phone",
-  "緊急聯絡人現居地址": "Emergency Contact Address",
-  "爬山經歷": "Hiking Experience",
-  "體能自評": "Fitness Self-Assessment",
-  "體能證明": "Fitness Proof",
+  "line_id": "LINE ID",
+  "緊急聯絡人姓名": "緊急聯絡人姓名",
+  "緊急聯絡人姓名 Emergency Contact Name": "緊急聯絡人姓名",
+  "emergency_contact_name": "緊急聯絡人姓名",
+  "與緊急聯絡人關係": "與緊急聯絡人關係",
+  "與緊急聯絡人關係 Relationship": "與緊急聯絡人關係",
+  "emergency_contact_rel": "與緊急聯絡人關係",
+  "緊急聯絡人電話": "緊急聯絡人電話",
+  "緊急聯絡人電話 Emergency Phone": "緊急聯絡人電話",
+  "emergency_contact_phone": "緊急聯絡人電話",
+  "緊急聯絡人地址": "緊急聯絡人通訊地址",
+  "緊急聯絡人地址 Emergency Address": "緊急聯絡人通訊地址",
+  "緊急聯絡人現居地址": "緊急聯絡人通訊地址",
+  "emergency_contact_address": "緊急聯絡人通訊地址",
+  "爬山經歷": "爬山經歷",
+  "爬山經歷 Outdoor Experience": "爬山經歷",
+  "outdoor_experience": "爬山經歷",
+  "體能自評": "體能狀況自評",
+  "體能自評 Fitness Description": "體能狀況自評",
+  "fitness_desc": "體能狀況自評",
+  "體能證明": "體能證明相片",
+  "體能證明照片": "體能證明相片",
+  "體能證明照片 Proof Photos": "體能證明相片",
+  "proof_urls": "體能證明相片",
 };
 
-export function buildMemberNotFoundFlex(liffUrl: string) {
+const FIELD_EN_MAP: Record<string, string> = {
+  "姓名": "Full Name",
+  "姓名 Name": "Full Name",
+  "name": "Full Name",
+  "性別": "Gender",
+  "性別 Gender": "Gender",
+  "gender": "Gender",
+  "身分證字號/居留證號": "National ID / ARC / Passport Number",
+  "身分證字號/居留證號 ID Card": "National ID / ARC / Passport Number",
+  "身分證/護照": "National ID / Passport Number",
+  "id_card": "National ID / ARC / Passport Number",
+  "生日": "Date of Birth",
+  "生日 Birthday": "Date of Birth",
+  "birthday": "Date of Birth",
+  "聯絡電話": "Phone Number",
+  "聯絡電話 Phone": "Phone Number",
+  "phone": "Phone Number",
+  "系所": "Department",
+  "系所 Department": "Department",
+  "department": "Department",
+  "學號": "Student ID",
+  "學號 Student ID": "Student ID",
+  "student_id": "Student ID",
+  "身分別": "Identity Status",
+  "identity_status": "Identity Status",
+  "現居地址": "Current Residential Address",
+  "現居地址 Address": "Current Residential Address",
+  "通訊地址": "Current Residential Address",
+  "address": "Current Residential Address",
+  "電子郵件": "Email Address",
+  "電子郵件 Email": "Email Address",
+  "email": "Email Address",
+  "真實 LINE ID": "LINE ID",
+  "line_id": "LINE ID",
+  "緊急聯絡人姓名": "Emergency Contact Name",
+  "緊急聯絡人姓名 Emergency Contact Name": "Emergency Contact Name",
+  "emergency_contact_name": "Emergency Contact Name",
+  "與緊急聯絡人關係": "Relationship with Emergency Contact",
+  "與緊急聯絡人關係 Relationship": "Relationship with Emergency Contact",
+  "emergency_contact_rel": "Relationship with Emergency Contact",
+  "緊急聯絡人電話": "Emergency Contact Phone",
+  "緊急聯絡人電話 Emergency Phone": "Emergency Contact Phone",
+  "emergency_contact_phone": "Emergency Contact Phone",
+  "緊急聯絡人地址": "Emergency Contact Address",
+  "緊急聯絡人地址 Emergency Address": "Emergency Contact Address",
+  "緊急聯絡人現居地址": "Emergency Contact Address",
+  "emergency_contact_address": "Emergency Contact Address",
+  "爬山經歷": "Hiking Experience",
+  "爬山經歷 Outdoor Experience": "Hiking Experience",
+  "outdoor_experience": "Hiking Experience",
+  "體能自評": "Fitness Self-Assessment",
+  "體能自評 Fitness Description": "Fitness Self-Assessment",
+  "fitness_desc": "Fitness Self-Assessment",
+  "體能證明": "Fitness Proof Photo",
+  "體能證明照片": "Fitness Proof Photo",
+  "體能證明照片 Proof Photos": "Fitness Proof Photo",
+  "proof_urls": "Fitness Proof Photo",
+};
+
+export function buildMemberNotFoundFlex(liffUrl: string, prefLang?: PreferredLanguage) {
   const targetUrl = liffUrl || "https://liff.line.me/2009217429-AhPRqAHg";
   const bubbleZh = {
     type: "bubble",
@@ -1007,7 +1103,7 @@ export function buildMemberNotFoundFlex(liffUrl: string) {
       paddingStart: "16px",
       paddingEnd: "16px",
       contents: [
-        { type: "text", text: "⚠️ 報名失敗 / 需填寫資料", color: "#FFFFFF", weight: "bold", size: "sm" },
+        { type: "text", text: "報名失敗 / 需填寫資料", color: "#FFFFFF", weight: "bold", size: "sm" },
       ],
     },
     body: {
@@ -1017,7 +1113,7 @@ export function buildMemberNotFoundFlex(liffUrl: string) {
       paddingAll: "16px",
       contents: [
         { type: "text", text: "系統找不到您的社員資料！", weight: "bold", size: "md", color: "#0F172A", wrap: true },
-        { type: "text", text: "請先點選單中的「填寫資料」完成註冊登記後再報名喔！🏕️\n（為了辦理入山平安保險與確保出隊安全）", size: "xs", color: "#475569", wrap: true },
+        { type: "text", text: "請先點選單中的「填寫資料」完成註冊登記後再報名。\n（為了辦理入山平安保險與確保出隊安全）", size: "xs", color: "#475569", wrap: true },
       ],
     },
     footer: {
@@ -1027,9 +1123,9 @@ export function buildMemberNotFoundFlex(liffUrl: string) {
         {
           type: "button",
           style: "primary",
-          color: "#16A34A",
+          color: "#EA580C",
           height: "sm",
-          action: { type: "uri", label: "前往填寫資料 (Register)", uri: targetUrl },
+          action: { type: "uri", label: "前往填寫資料", uri: targetUrl },
         },
       ],
     },
@@ -1047,7 +1143,7 @@ export function buildMemberNotFoundFlex(liffUrl: string) {
       paddingStart: "16px",
       paddingEnd: "16px",
       contents: [
-        { type: "text", text: "⚠️ Registration Failed", color: "#FFFFFF", weight: "bold", size: "sm" },
+        { type: "text", text: "Registration Failed / Profile Required", color: "#FFFFFF", weight: "bold", size: "sm" },
       ],
     },
     body: {
@@ -1057,7 +1153,7 @@ export function buildMemberNotFoundFlex(liffUrl: string) {
       paddingAll: "16px",
       contents: [
         { type: "text", text: "Member Profile Not Found!", weight: "bold", size: "md", color: "#0F172A", wrap: true },
-        { type: "text", text: "Please click 'Register' in the menu or tap the button below to complete your profile for mountain insurance and safety clearance! 🏕️", size: "xs", color: "#475569", wrap: true },
+        { type: "text", text: "Please click 'Register' in the menu or tap the button below to complete your profile for mountain insurance and safety clearance.", size: "xs", color: "#475569", wrap: true },
       ],
     },
     footer: {
@@ -1067,7 +1163,7 @@ export function buildMemberNotFoundFlex(liffUrl: string) {
         {
           type: "button",
           style: "primary",
-          color: "#0284C7",
+          color: "#EA580C",
           height: "sm",
           action: { type: "uri", label: "Complete Profile Now", uri: targetUrl },
         },
@@ -1075,16 +1171,22 @@ export function buildMemberNotFoundFlex(liffUrl: string) {
     },
   };
 
+  if (prefLang === "en") return bubbleEn;
+  if (prefLang === "zh") return bubbleZh;
   return {
     type: "carousel",
     contents: [bubbleZh, bubbleEn],
   };
 }
 
-export function buildProfileIncompleteFlex(missingFields: string[], liffUrl: string) {
+export function buildProfileIncompleteFlex(
+  missingFields: string[],
+  liffUrl: string,
+  prefLang?: PreferredLanguage
+) {
   const targetUrl = liffUrl || "https://liff.line.me/2009217429-AhPRqAHg";
-  const missingZh = (missingFields || []).map(f => `👉 ${f} (${FIELD_EN_MAP[f] || f})`).join("\n");
-  const missingEn = (missingFields || []).map(f => `👉 ${FIELD_EN_MAP[f] || f}`).join("\n");
+  const missingZh = (missingFields || []).map(f => `• ${FIELD_ZH_MAP[f] || f.split(" ")[0] || f}`).join("\n");
+  const missingEn = (missingFields || []).map(f => `• ${FIELD_EN_MAP[f] || f}`).join("\n");
 
   const bubbleZh = {
     type: "bubble",
@@ -1098,7 +1200,7 @@ export function buildProfileIncompleteFlex(missingFields: string[], liffUrl: str
       paddingStart: "16px",
       paddingEnd: "16px",
       contents: [
-        { type: "text", text: "⚠️ 報名失敗 / 資料未完整", color: "#FFFFFF", weight: "bold", size: "sm" },
+        { type: "text", text: "報名失敗 / 資料未完整", color: "#FFFFFF", weight: "bold", size: "sm" },
       ],
     },
     body: {
@@ -1110,8 +1212,8 @@ export function buildProfileIncompleteFlex(missingFields: string[], liffUrl: str
         { type: "text", text: "您的個人資料尚不完整！", weight: "bold", size: "md", color: "#0F172A", wrap: true },
         { type: "text", text: "為了辦理平安保險與確保戶外活動安全，請先點擊下方按鈕補齊以下必填資訊：", size: "xs", color: "#475569", wrap: true },
         { type: "separator", margin: "sm" },
-        { type: "text", text: missingZh || "👉 必填資料未完整", size: "xs", color: "#DC2626", wrap: true, margin: "sm" },
-        { type: "text", text: "完成資料更新後，再回來點擊一鍵報名喔！🏕️", size: "xxs", color: "#64748B", wrap: true, margin: "sm" },
+        { type: "text", text: missingZh || "• 必填資料未完整", size: "xs", color: "#DC2626", wrap: true, margin: "sm" },
+        { type: "text", text: "完成資料更新後，再回來點擊一鍵報名。", size: "xxs", color: "#64748B", wrap: true, margin: "sm" },
       ],
     },
     footer: {
@@ -1121,9 +1223,9 @@ export function buildProfileIncompleteFlex(missingFields: string[], liffUrl: str
         {
           type: "button",
           style: "primary",
-          color: "#16A34A",
+          color: "#DC2626",
           height: "sm",
-          action: { type: "uri", label: "前往補齊資料 (Update Profile)", uri: targetUrl },
+          action: { type: "uri", label: "前往補齊資料", uri: targetUrl },
         },
       ],
     },
@@ -1141,7 +1243,7 @@ export function buildProfileIncompleteFlex(missingFields: string[], liffUrl: str
       paddingStart: "16px",
       paddingEnd: "16px",
       contents: [
-        { type: "text", text: "⚠️ Incomplete Member Profile", color: "#FFFFFF", weight: "bold", size: "sm" },
+        { type: "text", text: "Registration Failed / Incomplete Profile", color: "#FFFFFF", weight: "bold", size: "sm" },
       ],
     },
     body: {
@@ -1153,8 +1255,8 @@ export function buildProfileIncompleteFlex(missingFields: string[], liffUrl: str
         { type: "text", text: "Required Fields Missing", weight: "bold", size: "md", color: "#0F172A", wrap: true },
         { type: "text", text: "For insurance coverage and outdoor activity safety, please complete the following required fields:", size: "xs", color: "#475569", wrap: true },
         { type: "separator", margin: "sm" },
-        { type: "text", text: missingEn || "👉 Incomplete Profile Fields", size: "xs", color: "#DC2626", wrap: true, margin: "sm" },
-        { type: "text", text: "Once your profile is updated, return here to sign up with one click! 🏕️", size: "xxs", color: "#64748B", wrap: true, margin: "sm" },
+        { type: "text", text: missingEn || "• Incomplete Profile Fields", size: "xs", color: "#DC2626", wrap: true, margin: "sm" },
+        { type: "text", text: "Once your profile is updated, return here to sign up with one click.", size: "xxs", color: "#64748B", wrap: true, margin: "sm" },
       ],
     },
     footer: {
@@ -1164,7 +1266,7 @@ export function buildProfileIncompleteFlex(missingFields: string[], liffUrl: str
         {
           type: "button",
           style: "primary",
-          color: "#0284C7",
+          color: "#DC2626",
           height: "sm",
           action: { type: "uri", label: "Update Profile Now", uri: targetUrl },
         },
@@ -1172,13 +1274,14 @@ export function buildProfileIncompleteFlex(missingFields: string[], liffUrl: str
     },
   };
 
-  return {
-    type: "carousel",
-    contents: [bubbleZh, bubbleEn],
-  };
+  return prefLang === "en" ? bubbleEn : bubbleZh;
 }
 
-export function buildProfileExpiredFlex(reason: string, liffUrl: string) {
+export function buildProfileExpiredFlex(
+  reason: string,
+  liffUrl: string,
+  prefLang?: PreferredLanguage
+) {
   const targetUrl = liffUrl || "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard";
   const isUnverified = reason.includes("未校驗") || reason.includes("unverified");
   const reasonZh = isUnverified
@@ -1200,7 +1303,7 @@ export function buildProfileExpiredFlex(reason: string, liffUrl: string) {
       paddingStart: "16px",
       paddingEnd: "16px",
       contents: [
-        { type: "text", text: "⚠️ 報名提醒 / 經歷時效更新", color: "#FFFFFF", weight: "bold", size: "sm" },
+        { type: "text", text: "報名提醒 / 經歷時效更新", color: "#FFFFFF", weight: "bold", size: "sm" },
       ],
     },
     body: {
@@ -1210,7 +1313,7 @@ export function buildProfileExpiredFlex(reason: string, liffUrl: string) {
       paddingAll: "16px",
       contents: [
         { type: "text", text: `${reasonZh}！`, weight: "bold", size: "sm", color: "#D97706", wrap: true },
-        { type: "text", text: "社團出團活動將依據您的「爬山經歷」與「體能狀況」進行審查與篩選。為了維護出隊安全並增加您的錄取機會，若近期有更豐富的登山紀錄或更佳的體能表現，請先前往更新個人資料後，再回到此處報名活動喔！", size: "xs", color: "#475569", wrap: true },
+        { type: "text", text: "社團出團活動將依據您的「爬山經歷」與「體能狀況」進行審查與篩選。為了維護出隊安全並增加您的錄取機會，若近期有更豐富的登山紀錄或更佳的體能表現，請先前往更新個人資料後，再回到此處報名活動。", size: "xs", color: "#475569", wrap: true },
       ],
     },
     footer: {
@@ -1220,9 +1323,9 @@ export function buildProfileExpiredFlex(reason: string, liffUrl: string) {
         {
           type: "button",
           style: "primary",
-          color: "#16A34A",
+          color: "#D97706",
           height: "sm",
-          action: { type: "uri", label: "立即前往更新個人資料", uri: targetUrl },
+          action: { type: "uri", label: "前往更新資料", uri: targetUrl },
         },
       ],
     },
@@ -1240,7 +1343,7 @@ export function buildProfileExpiredFlex(reason: string, liffUrl: string) {
       paddingStart: "16px",
       paddingEnd: "16px",
       contents: [
-        { type: "text", text: "⚠️ Registration Notice / Fitness Update", color: "#FFFFFF", weight: "bold", size: "sm" },
+        { type: "text", text: "Registration Notice / Profile Update Required", color: "#FFFFFF", weight: "bold", size: "sm" },
       ],
     },
     body: {
@@ -1260,17 +1363,487 @@ export function buildProfileExpiredFlex(reason: string, liffUrl: string) {
         {
           type: "button",
           style: "primary",
-          color: "#0284C7",
+          color: "#D97706",
           height: "sm",
-          action: { type: "uri", label: "Update Your Profile Now", uri: targetUrl },
+          action: { type: "uri", label: "Update Profile Now", uri: targetUrl },
         },
       ],
     },
   };
 
+  return prefLang === "en" ? bubbleEn : bubbleZh;
+}
+
+export function buildSignupSuccessFlex(
+  params: {
+    eventName: string;
+    eventId: string;
+    signupCode: string;
+    name: string;
+  },
+  prefLang?: PreferredLanguage
+) {
+  const isEn = prefLang === "en";
+
+  if (isEn) {
+    return {
+      type: "bubble",
+      size: "mega",
+      header: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#059669",
+        paddingTop: "14px",
+        paddingBottom: "14px",
+        paddingStart: "16px",
+        paddingEnd: "16px",
+        contents: [
+          {
+            type: "text",
+            text: "Registration Submitted",
+            color: "#FFFFFF",
+            weight: "bold",
+            size: "md",
+          },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "16px",
+        spacing: "md",
+        contents: [
+          {
+            type: "text",
+            text: `Dear ${params.name}, we have received your application.`,
+            weight: "bold",
+            size: "sm",
+            color: "#0F172A",
+            wrap: true,
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            contents: [
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "Event:", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: params.eventName, size: "xs", color: "#0F172A", weight: "bold", flex: 7, wrap: true },
+                ],
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "Event ID:", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: params.eventId, size: "xs", color: "#0F172A", flex: 7 },
+                ],
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "Signup Code:", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: params.signupCode, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+                ],
+              },
+            ],
+          },
+          { type: "separator" },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            contents: [
+              {
+                type: "text",
+                text: "【Important Reminder】",
+                weight: "bold",
+                size: "xs",
+                color: "#0F172A",
+              },
+              {
+                type: "text",
+                text: "This stage is registration & review. Officers will evaluate qualifications, and admission status (Confirmed/Waitlisted) will be notified to you via this LINE account!",
+                size: "xs",
+                color: "#475569",
+                wrap: true,
+              },
+            ],
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            contents: [
+              {
+                type: "text",
+                text: "【Fitness & Experience Reminder】",
+                weight: "bold",
+                size: "xs",
+                color: "#0F172A",
+              },
+              {
+                type: "text",
+                text: "Admission is evaluated based on hiking experience and fitness. If you have newer hiking records or fitness proofs, remember to update them anytime on your Dashboard to boost your admission chances!",
+                size: "xs",
+                color: "#475569",
+                wrap: true,
+              },
+            ],
+          },
+        ],
+      },
+    };
+  }
+
   return {
-    type: "carousel",
-    contents: [bubbleZh, bubbleEn],
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "報名登記已送出！",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "md",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      spacing: "md",
+      contents: [
+        {
+          type: "text",
+          text: `${params.name}，我們收到您的報名資料囉～`,
+          weight: "bold",
+          size: "sm",
+          color: "#0F172A",
+          wrap: true,
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "活動：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: params.eventName, size: "xs", color: "#0F172A", weight: "bold", flex: 7, wrap: true },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "活動代號：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: params.eventId, size: "xs", color: "#0F172A", flex: 7 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "報名專屬碼：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: params.signupCode, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+              ],
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: "【重要提醒】",
+              weight: "bold",
+              size: "xs",
+              color: "#0F172A",
+            },
+            {
+              type: "text",
+              text: "此階段為「報名登記與資格審核」，幹部將進行體能評估與篩選，最終錄取名單（正取/備取）將透過本帳號推播通知您！",
+              size: "xs",
+              color: "#475569",
+              wrap: true,
+            },
+          ],
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: "【體能與經歷更新說明】",
+              weight: "bold",
+              size: "xs",
+              color: "#0F172A",
+            },
+            {
+              type: "text",
+              text: "社團出團會依據爬山經驗與體能進行評估，若有最新的登山紀錄或更佳體能證明，記得隨時至個人主頁更新資料，增加自己的錄取機會喔！",
+              size: "xs",
+              color: "#475569",
+              wrap: true,
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+export function buildLoanStatusUpdatedFlex(
+  params: {
+    borrowerName: string;
+    loanId: string;
+    newStatus: string;
+    pickupDate: string;
+    returnDate: string;
+    itemsSummary?: Array<{ name?: string; equipment_id?: string; quantity?: number }> | string;
+  },
+  prefLang?: PreferredLanguage
+) {
+  const isEn = prefLang === "en";
+
+  let itemsTextZh = "";
+  let itemsTextEn = "";
+  if (Array.isArray(params.itemsSummary)) {
+    itemsTextZh = params.itemsSummary
+      .map(it => `• ${it.name || it.equipment_id || "裝備"} x ${it.quantity || 1}`)
+      .join("\n");
+    itemsTextEn = params.itemsSummary
+      .map(it => `• ${it.name || it.equipment_id || "Equipment"} x ${it.quantity || 1}`)
+      .join("\n");
+  } else if (typeof params.itemsSummary === "string" && params.itemsSummary.trim()) {
+    itemsTextZh = params.itemsSummary;
+    itemsTextEn = params.itemsSummary;
+  } else {
+    itemsTextZh = "無品項細項";
+    itemsTextEn = "No item details";
+  }
+
+  if (isEn) {
+    return {
+      type: "bubble",
+      size: "mega",
+      header: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#059669",
+        paddingTop: "14px",
+        paddingBottom: "14px",
+        paddingStart: "16px",
+        paddingEnd: "16px",
+        contents: [
+          {
+            type: "text",
+            text: "Equipment Loan Status Update",
+            color: "#FFFFFF",
+            weight: "bold",
+            size: "md",
+          },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "16px",
+        spacing: "md",
+        contents: [
+          {
+            type: "text",
+            text: `Dear ${params.borrowerName},\nYour equipment loan application status has been updated!`,
+            weight: "bold",
+            size: "sm",
+            color: "#0F172A",
+            wrap: true,
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            contents: [
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "Order ID:", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: params.loanId, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+                ],
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "Status:", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: params.newStatus, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+                ],
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "Period:", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: `${params.pickupDate} ~ ${params.returnDate}`, size: "xs", color: "#0F172A", flex: 7 },
+                ],
+              },
+            ],
+          },
+          { type: "separator" },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            contents: [
+              {
+                type: "text",
+                text: "Items:",
+                weight: "bold",
+                size: "xs",
+                color: "#0F172A",
+              },
+              {
+                type: "text",
+                text: itemsTextEn,
+                size: "xs",
+                color: "#475569",
+                wrap: true,
+              },
+            ],
+          },
+          { type: "separator" },
+          {
+            type: "text",
+            text: "If you have any questions or need to confirm pickup/return times, please contact equipment officers. Thank you!",
+            size: "xxs",
+            color: "#64748B",
+            wrap: true,
+          },
+        ],
+      },
+    };
+  }
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "裝備租借狀態更新通知",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "md",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      spacing: "md",
+      contents: [
+        {
+          type: "text",
+          text: `親愛的 ${params.borrowerName} 您好：\n您的裝備租借申請單狀態已更新！`,
+          weight: "bold",
+          size: "sm",
+          color: "#0F172A",
+          wrap: true,
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "訂單編號：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: params.loanId, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "最新租借狀態：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: `【${params.newStatus}】`, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "租借期間：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: `${params.pickupDate} ~ ${params.returnDate}`, size: "xs", color: "#0F172A", flex: 7 },
+              ],
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: "租借裝備品項：",
+              weight: "bold",
+              size: "xs",
+              color: "#0F172A",
+            },
+            {
+              type: "text",
+              text: itemsTextZh,
+              size: "xs",
+              color: "#475569",
+              wrap: true,
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: "如有任何疑問或需確認領取/歸還時間，請隨時與社團裝備幹部聯絡，謝謝！",
+          size: "xxs",
+          color: "#64748B",
+          wrap: true,
+        },
+      ],
+    },
   };
 }
 

@@ -585,6 +585,239 @@ async function handleNotifyPaymentConfirmed(json: Record<string, any>) {
   return successResponse({ message: "核銷通知推播與確認信已成功送出" });
 }
 
+function buildLoanStatusUpdatedFlex(
+  params: {
+    borrowerName: string;
+    loanId: string;
+    newStatus: string;
+    pickupDate: string;
+    returnDate: string;
+    itemsSummary?: Array<{ name?: string; equipment_id?: string; quantity?: number }> | string;
+  },
+  prefLang?: "zh" | "en" | null
+) {
+  const isEn = prefLang === "en";
+
+  let itemsTextZh = "";
+  let itemsTextEn = "";
+  if (Array.isArray(params.itemsSummary)) {
+    itemsTextZh = params.itemsSummary
+      .map((it: any) => `• ${it.name || it.equipment_id || "裝備"} x ${it.quantity || 1}`)
+      .join("\n");
+    itemsTextEn = params.itemsSummary
+      .map((it: any) => `• ${it.name || it.equipment_id || "Equipment"} x ${it.quantity || 1}`)
+      .join("\n");
+  } else if (typeof params.itemsSummary === "string" && params.itemsSummary.trim()) {
+    itemsTextZh = params.itemsSummary;
+    itemsTextEn = params.itemsSummary;
+  } else {
+    itemsTextZh = "無品項細項";
+    itemsTextEn = "No item details";
+  }
+
+  if (isEn) {
+    return {
+      type: "bubble",
+      size: "mega",
+      header: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#059669",
+        paddingTop: "14px",
+        paddingBottom: "14px",
+        paddingStart: "16px",
+        paddingEnd: "16px",
+        contents: [
+          {
+            type: "text",
+            text: "Equipment Loan Status Update",
+            color: "#FFFFFF",
+            weight: "bold",
+            size: "md",
+          },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "16px",
+        spacing: "md",
+        contents: [
+          {
+            type: "text",
+            text: `Dear ${params.borrowerName},\nYour equipment loan application status has been updated!`,
+            weight: "bold",
+            size: "sm",
+            color: "#0F172A",
+            wrap: true,
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            contents: [
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "Order ID:", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: params.loanId, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+                ],
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "Status:", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: params.newStatus, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+                ],
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "Period:", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: `${params.pickupDate} ~ ${params.returnDate}`, size: "xs", color: "#0F172A", flex: 7 },
+                ],
+              },
+            ],
+          },
+          { type: "separator" },
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "xs",
+            contents: [
+              {
+                type: "text",
+                text: "Items:",
+                weight: "bold",
+                size: "xs",
+                color: "#0F172A",
+              },
+              {
+                type: "text",
+                text: itemsTextEn,
+                size: "xs",
+                color: "#475569",
+                wrap: true,
+              },
+            ],
+          },
+          { type: "separator" },
+          {
+            type: "text",
+            text: "If you have any questions or need to confirm pickup/return times, please contact equipment officers. Thank you!",
+            size: "xxs",
+            color: "#64748B",
+            wrap: true,
+          },
+        ],
+      },
+    };
+  }
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "裝備租借狀態更新通知",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "md",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      spacing: "md",
+      contents: [
+        {
+          type: "text",
+          text: `親愛的 ${params.borrowerName} 您好：\n您的裝備租借申請單狀態已更新！`,
+          weight: "bold",
+          size: "sm",
+          color: "#0F172A",
+          wrap: true,
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "訂單編號：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: params.loanId, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "最新租借狀態：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: `【${params.newStatus}】`, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "租借期間：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: `${params.pickupDate} ~ ${params.returnDate}`, size: "xs", color: "#0F172A", flex: 7 },
+              ],
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: "租借裝備品項：",
+              weight: "bold",
+              size: "xs",
+              color: "#0F172A",
+            },
+            {
+              type: "text",
+              text: itemsTextZh,
+              size: "xs",
+              color: "#475569",
+              wrap: true,
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: "如有任何疑問或需確認領取/歸還時間，請隨時與社團裝備幹部聯絡，謝謝！",
+          size: "xxs",
+          color: "#64748B",
+          wrap: true,
+        },
+      ],
+    },
+  };
+}
+
 // 5. 裝備狀態更新推播
 async function handleNotifyLoanStatusUpdated(json: Record<string, any>) {
   const loanId = json.loanId || "";
@@ -594,34 +827,27 @@ async function handleNotifyLoanStatusUpdated(json: Record<string, any>) {
   const pickupDate = json.pickupDate || "";
   const returnDate = json.returnDate || "";
   const itemsSummary = json.itemsSummary || [];
-  const itemsText = Array.isArray(itemsSummary)
-    ? itemsSummary.map((it: any) => `${it.name || it.equipment_id || "裝備"} x ${it.quantity || 1}`).join("\n• ")
-    : String(itemsSummary || "無品項細項");
 
   if (userId && userId.startsWith("U")) {
     const prefLang = await getUserPreferredLanguage(userId);
-    const userMsgZh =
-      "【裝備租借狀態更新通知】\n\n" +
-      `親愛的 ${borrowerName} 您好：\n` +
-      "您的裝備租借申請單狀態已更新！\n\n" +
-      `• 訂單編號：${loanId}\n` +
-      `• 最新租借狀態：【${newStatus}】\n` +
-      `• 租借期間：${pickupDate} ~ ${returnDate}\n` +
-      (itemsText ? `• 租借裝備品項：\n• ${itemsText}\n\n` : "\n") +
-      "如有任何疑問或需確認領取/歸還時間，請隨時與社團裝備幹部聯絡，謝謝！";
+    const bubble = buildLoanStatusUpdatedFlex({
+      borrowerName,
+      loanId,
+      newStatus,
+      pickupDate,
+      returnDate,
+      itemsSummary,
+    }, prefLang);
 
-    const userMsgEn =
-      "【Equipment Loan Status Update】\n\n" +
-      `Dear ${borrowerName},\n` +
-      "Your equipment loan application status has been updated!\n\n" +
-      `• Order ID: ${loanId}\n` +
-      `• Status: [${newStatus}]\n` +
-      `• Period: ${pickupDate} ~ ${returnDate}\n` +
-      (itemsText ? `• Items:\n• ${itemsText}\n\n` : "\n") +
-      "If you have any questions or need to confirm pickup/return times, please contact equipment officers. Thank you!";
+    const altText = prefLang === "en"
+      ? `Equipment Loan Status Update - ${loanId}`
+      : `裝備租借狀態更新通知 - ${loanId}`;
 
-    const rendered = render({ zh: userMsgZh, en: userMsgEn }, prefLang);
-    await pushMessage(userId, [{ type: "text", text: rendered }]);
+    await pushMessage(userId, [{
+      type: "flex",
+      altText,
+      contents: bubble,
+    }]);
   }
 
   return successResponse({ message: "裝備狀態推播通知已成功送出" });

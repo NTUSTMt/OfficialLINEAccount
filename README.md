@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.284-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.286-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.284)](#7-最新版本異動紀錄-changelog-v01284)
+- [7. 最新版本異動紀錄 (Changelog v0.1.286)](#7-最新版本異動紀錄-changelog-v01286)
 
 ---
 
@@ -204,7 +204,25 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.284)
+## 7. 最新版本異動紀錄 (Changelog v0.1.285)
+
+### v0.1.285 (2026-10-09)
+- **Flex 訊息卡片純淨語言化、零 Emoji 規範、單一卡片發送與報名/租借卡片化全面升級**:
+  - **100% 純淨語言分離與按鈕色系統一 ([supabase/functions/line-webhook/flexTemplates.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/flexTemplates.ts))**:
+    - 中文卡片 100% 正體中文，徹底移除所有英文註解與重複翻譯（如「身分證字號 / 居留證號」，按鈕為「前往填寫資料」、「前往補齊資料」、「前往更新資料」）。
+    - 英文卡片 100% 英文，徹底移除所有中文字元。
+    - 所有操作按鈕顏色統一為社團主色綠色（`#059669`），字體白色。
+  - **全面落實零 Emoji 規範 ([supabase/functions/line-webhook/flexTemplates.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/flexTemplates.ts), [supabase/functions/_shared/messages.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/_shared/messages.ts))**:
+    - 移除所有 Header、內文、清單符號與按鈕中的 Emoji（如 ⚠️, 👉, 🏕️, 🌲, 🏔️, ✅ 等），改採標準圓點符號 `•`。
+  - **依語言偏好 (`preferred_language`) 擇一發送單卡片 ([supabase/functions/line-webhook/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/index.ts))**:
+    - 「資料未完整」與「經歷逾期」依據 `preferred_language` 僅發送單張純中文或純英文卡片（不再發送雙語 Carousel）。
+    - 「查無社員資料」若可判斷語言則發送單張，若無法判斷則發送雙語 Carousel（兩張按鈕顏色統一為 `#059669` 且 0 emoji）。
+  - **報名成功通知卡片化 ([supabase/functions/line-webhook/flexTemplates.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/flexTemplates.ts), [supabase/functions/line-webhook/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/index.ts))**:
+    - 新增 `buildSignupSuccessFlex`，100% 採用原版 `src/gas.js` 文案結構（活動名稱、活動代號、專屬報名碼、審核說明、經歷體能更新說明），依語言偏好發送簡潔 Flex 卡片，0 emoji，無多餘按鈕。
+  - **裝備租借狀態更新通知卡片化 ([supabase/functions/notify-dispatcher/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/notify-dispatcher/index.ts))**:
+    - 新增 `buildLoanStatusUpdatedFlex`，100% 採用原版 `src/gas.js` 文案結構（借用人、訂單編號、最新租借狀態、租借期間、品項清單），依借用人偏好語言推播簡潔 Flex 卡片，0 emoji，無多餘按鈕。
+  - **自動化測試與 Supabase 部署驗證 ([test/109_signup_validation_flex_and_quota_optimization.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/109_signup_validation_flex_and_quota_optimization.test.mjs))**:
+    - 單元測試 100% 通過，且 Edge Functions（`line-webhook` v20, `notify-dispatcher` v15, `daily-patrol` v15）已順利部署上線。
 
 ### v0.1.284 (2026-10-09)
 - **報名失敗與提醒訊息全面升級 Flex 互動卡片，文案 100% 精準對齊，推播額度零浪費**:
@@ -2424,25 +2442,22 @@ pnpm test
     - gas_modules 已全數移除，後續 GAS 相關邏輯統一直接維護於 src/gas.js。
   - Canva Connect API 與 Instagram Graph API 一鍵社群發文功能研究與架構規劃完成。
 
-### v0.1.282 (2026-10-09)
-- 全面移除前端 GAS 唯讀降級備援與推播操作直連 Supabase / notifyDispatcher：
-  - 徹底移除前端無效之 GAS 降級備援（Fallback GET）：
-    - 個人資料與幹部權限檢驗 (App.tsx)
-    - 社員個人主頁狀態與待繳查詢 (Dashboard.tsx)
-    - 社員註冊個資載入 (Register.tsx)
-    - 裝備清單與身分折扣查詢 (Borrow.tsx)
-    - 待繳款項載入 (Payment.tsx)
-    - 繳費歷史紀錄 (History.tsx)
-    - 歷史活動成就 (Achievements.tsx)
-    - 幹部活動管理與報名名冊 (AdminEvents.tsx, AdminEventsHistory.tsx)
-    - 當 Supabase 查詢失敗時直接透明回報具體錯誤細節，不再轉向無效的 GAS 備援。
-  - 前端推播與審核操作全面改走 Supabase / notifyDispatcher：
-    - 裝備預約推播 (Borrow.tsx -> notify_officers_loan)
-    - 裝備借還審核推播 (AdminLoans.tsx -> notify_loan_status_updated)
-    - 繳費申報審核推播 (Payment.tsx -> notify_officers_payment)
-    - 財務核銷推播 (AdminFinance.tsx, WebAdminFinance.tsx, ConfirmPayment.tsx -> notify_payment_confirmed)
-    - 個人資料更新推播 (Register.tsx -> notify_profile_saved)
-    - 歷程心得推播 (Achievements.tsx -> notify_reflection_submitted)
-    - 活動審核名冊推播 (WebAdminRoster.tsx -> send_event_notifications)
-  - 核心 Google Drive 上傳模組保留：
-    - 註冊體能證明、繳費收據、證書、裝備相片與活動封面圖之上傳繼續由 GAS Thin Worker 提供支援。
+### v0.1.286 (2026-10-09)
+- 卡片頂部橫條與按鈕顏色同步、報名姓名與活動名稱多語系適配、未填欄位中英文純淨化：
+  - 卡片視覺配色同步一致化：
+    - 需填寫資料卡片 (buildMemberNotFoundFlex)：頂部橫條與按鈕顏色同步採用警告橘紅 (#EA580C)。
+    - 資料未完整卡片 (buildProfileIncompleteFlex)：頂部橫條與按鈕顏色同步採用警示紅 (#DC2626)。
+    - 經歷時效更新卡片 (buildProfileExpiredFlex)：頂部橫條與按鈕顏色同步採用琥珀黃 (#D97706)。
+  - 報名成功卡片姓名與活動名稱多語系適配：
+    - 更新資料庫函式 public.signup_rpc，在回傳結果中包含 member_name、event_title 與 event_title_en。
+    - LINE Webhook (handleSignup) 依據 preferred_language 動態切換：
+      - 英文用戶：優先顯示英文活動名稱（若無則 fallback 中文活動名），並顯示社員真實全名。
+      - 中文用戶：顯示中文活動名稱與社員真實全名（徹底解決先前誤顯示為預設「社員」稱呼之問題）。
+  - 資料未完整未填欄位多語系純淨化：
+    - 擴充 FIELD_ZH_MAP 與 FIELD_EN_MAP 雙向映射字典。
+    - 中文偏好用戶輸出 100% 正體中文欄位名稱（如：姓名、性別、出生年月日、身分證字號 / 居留證號等）。
+    - 英文偏好用戶輸出 100% 英文欄位名稱（如：Full Name, Gender, Date of Birth, National ID / ARC / Passport Number 等）。
+  - 部署上線：
+    - 已執行 SQL 更新 public.signup_rpc。
+    - 已部署更新後的 line-webhook Edge Function 至 Supabase。
+

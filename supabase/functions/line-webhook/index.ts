@@ -28,6 +28,7 @@ import {
   buildMemberNotFoundFlex,
   buildProfileIncompleteFlex,
   buildProfileExpiredFlex,
+  buildSignupSuccessFlex,
 } from "./flexTemplates.ts";
 
 function maskString(str: string, keepStart = 2, keepEnd = 2): string {
@@ -318,7 +319,9 @@ async function handleSignup(
   const status = result.status;
   if (status === "ok") {
     const actualSignupId = result.signup_id || signupId;
-    const title = result.event_title || "活動";
+    const title = prefLang === "en"
+      ? (result.event_title_en || result.event_title || "Event")
+      : (result.event_title || "活動");
     const fee = result.fee || 0;
     const isOfficial = Boolean(result.is_official_member);
 
@@ -344,18 +347,25 @@ async function handleSignup(
       });
     }
 
+    const memberName = result.member_name || result.name || (prefLang === "en" ? "Member" : "社員");
+
     await replyMessage(replyToken, [{
-      type: "text",
-      text: render(
-        messages.signupSuccessReceipt(title, actualSignupId, fee, isOfficial, frontendUrl),
-        prefLang
-      ),
+      type: "flex",
+      altText: prefLang === "en" ? "Registration Submitted" : "報名登記已送出！",
+      contents: buildSignupSuccessFlex({
+        eventName: title,
+        eventId: eventId,
+        signupCode: actualSignupId,
+        name: memberName,
+      }, prefLang),
     }]);
     return;
   }
 
   if (status === "closed") {
-    const evTitle = result.event_title || "該活動";
+    const evTitle = prefLang === "en"
+      ? (result.event_title_en || result.event_title || "This event")
+      : (result.event_title || "該活動");
     const evDeadline = result.deadline || "";
     await replyMessage(replyToken, [{
       type: "text",
@@ -378,8 +388,8 @@ async function handleSignup(
   if (status === "not_found_member") {
     await replyMessage(replyToken, [{
       type: "flex",
-      altText: "⚠️ 報名失敗：尚未建立社員資料 / Member Profile Not Found",
-      contents: buildMemberNotFoundFlex(registerLiffUrl),
+      altText: prefLang === "en" ? "Registration Failed / Profile Required" : "報名失敗 / 需填寫資料",
+      contents: buildMemberNotFoundFlex(registerLiffUrl, prefLang),
     }]);
     return;
   }
@@ -390,8 +400,8 @@ async function handleSignup(
       : [];
     await replyMessage(replyToken, [{
       type: "flex",
-      altText: "⚠️ 報名失敗：個人資料未完整 / Incomplete Profile",
-      contents: buildProfileIncompleteFlex(missingArr, registerLiffUrl),
+      altText: prefLang === "en" ? "Registration Failed / Incomplete Profile" : "報名失敗 / 資料未完整",
+      contents: buildProfileIncompleteFlex(missingArr, registerLiffUrl, prefLang),
     }]);
     return;
   }
@@ -400,14 +410,16 @@ async function handleSignup(
     const reason = result.reason || "已超過 6 個月未更新";
     await replyMessage(replyToken, [{
       type: "flex",
-      altText: "⚠️ 報名提醒：個人資料時效校驗 / Profile Validity Notice",
-      contents: buildProfileExpiredFlex(reason, dashboardLiffUrl),
+      altText: prefLang === "en" ? "Registration Notice / Profile Update Required" : "報名提醒 / 經歷時效更新",
+      contents: buildProfileExpiredFlex(reason, dashboardLiffUrl, prefLang),
     }]);
     return;
   }
 
   if (status === "duplicate") {
-    const title = result.event_title || "活動";
+    const title = prefLang === "en"
+      ? (result.event_title_en || result.event_title || "Event")
+      : (result.event_title || "活動");
     await replyMessage(replyToken, [{
       type: "text",
       text: render(messages.signupDuplicate(title), prefLang),
