@@ -2,9 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { ShoppingCart, RotateCw, Search, X, ShieldAlert } from 'lucide-react';
-import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { notifyDispatcher } from '../utils/api';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
-import { GAS_API_URL } from '../constants/api';
 import { fetchEquipmentsFromSupabase, fetchDashboardFromSupabase, fetchMemberProfileFromSupabase, submitEquipmentLoanToSupabase } from '../utils/supabaseClient';
 import type { Equipment } from '../types/equipment';
 import { EquipmentCard } from '../components/borrow/EquipmentCard';
@@ -31,12 +30,6 @@ interface FormState {
   purpose: string;
   otherPurpose?: string;
   cart: Record<string, number>;
-}
-
-interface ApiResponse {
-  status: string;
-  data: Equipment[];
-  message?: string;
 }
 
 const CACHE_KEY_EQUIPMENTS = 'borrow_equipments_list';
@@ -112,28 +105,12 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
     async function loadData() {
       try {
-        let loadedEquipments: Equipment[] | null = null;
-        try {
-          loadedEquipments = await fetchEquipmentsFromSupabase();
-        } catch (sbErr) {
-          console.warn('[Borrow] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
-          loadedEquipments = null;
+        const loadedEquipments = await fetchEquipmentsFromSupabase();
+        if (!ignore && loadedEquipments && loadedEquipments.length > 0) {
+          setEquipments(loadedEquipments);
+          setCache(CACHE_KEY_EQUIPMENTS, loadedEquipments, 300);
         }
-
-        if (loadedEquipments && loadedEquipments.length > 0) {
-          if (!ignore) {
-            setEquipments(loadedEquipments);
-            setCache(CACHE_KEY_EQUIPMENTS, loadedEquipments, 300);
-          }
-        } else {
-          const response = await fetch(GAS_API_URL, { redirect: 'follow' });
-          const resData: ApiResponse = await response.json();
-          if (!ignore && resData.status === 'success' && Array.isArray(resData.data)) {
-            setEquipments(resData.data);
-            setCache(CACHE_KEY_EQUIPMENTS, resData.data, 300);
-          }
-        }
-      } catch (err) {
+      } catch (err: any) {
         console.error('裝備清單載入失敗:', err);
       } finally {
         if (!ignore) {
@@ -157,12 +134,10 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         if (cachedOfficial !== null) {
           setIsOfficial(cachedOfficial);
         } else {
-          let checkedFromSupabase = false;
           try {
-            // ⚡ 1. 優先從 Supabase 秒級讀取社員身分與折扣權益 (< 50ms)
+            // 優先從 Supabase 讀取社員身分與折扣權益 (< 50ms)
             const dash = await fetchDashboardFromSupabase(userId);
             if (dash && dash.profile) {
-              checkedFromSupabase = true;
               const official = Boolean(dash.profile.isOfficial);
               if (!ignore) {
                 setIsOfficial(official);
@@ -172,26 +147,8 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
                 }
               }
             }
-          } catch (sbErr) {
-            console.warn('[Borrow] Supabase 社員身分檢查例外，啟用 GAS 備援:', sbErr);
-          }
-
-          // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
-          if (!checkedFromSupabase) {
-            try {
-              const myStatusRes = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${userId}`));
-              const myStatusData = await myStatusRes.json();
-              if (!ignore && myStatusData.status === 'success' && myStatusData.data?.profile) {
-                const official = Boolean(myStatusData.data.profile.isOfficial);
-                setIsOfficial(official);
-                setCache(CACHE_KEY_OFFICIAL + userId, official, 600);
-                if (myStatusData.data.profile.name) {
-                  setUserProfile(prev => ({ ...prev, name: prev.name || myStatusData.data.profile.name }));
-                }
-              }
-            } catch (err) {
-              console.error('社員身分載入失敗:', err);
-            }
+          } catch (sbErr: any) {
+            console.error('[Borrow] Supabase 社員身分檢查失敗:', sbErr);
           }
         }
       }
@@ -209,26 +166,12 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
     removeCache(CACHE_KEY_EQUIPMENTS);
 
     try {
-      let loadedEquipments: Equipment[] | null = null;
-      try {
-        loadedEquipments = await fetchEquipmentsFromSupabase();
-      } catch (sbErr) {
-        console.warn('[Borrow] Supabase 重新整理例外，啟用 GAS 備援:', sbErr);
-        loadedEquipments = null;
-      }
-
+      const loadedEquipments = await fetchEquipmentsFromSupabase();
       if (loadedEquipments && loadedEquipments.length > 0) {
         setEquipments(loadedEquipments);
         setCache(CACHE_KEY_EQUIPMENTS, loadedEquipments, 300);
-      } else {
-        const response = await fetch(GAS_API_URL, { redirect: 'follow' });
-        const resData: ApiResponse = await response.json();
-        if (resData.status === 'success' && Array.isArray(resData.data)) {
-          setEquipments(resData.data);
-          setCache(CACHE_KEY_EQUIPMENTS, resData.data, 300);
-        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('裝備清單重新整理失敗:', err);
     } finally {
       setIsRefreshing(false);
@@ -408,26 +351,20 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
 
       const totalRentValue = result.totalRent !== undefined ? result.totalRent : totalPrice;
 
-      // 3. 發送 LINE 幹部審核推播與個人保底推播 (確實等待 GAS 完成，避免關閉視窗中斷連線)
+      // 3. 發送 LINE 幹部審核推播 (透過 Supabase notify-dispatcher)
       try {
-        const response = await fetch(GAS_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(withAuthPayload({
-            action: 'notify_officers_loan',
-            userId: userId,
-            loanId: result.loanId,
-            borrowerName: userProfile.name || '',
-            borrowerLineId: userProfile.realLineId || '',
-            borrowerPhone: userProfile.phone || '',
-            isOfficial: isOfficial,
-            days: days,
-            details: form,
-            cartDetails: selectedCartItems,
-            totalRent: totalRentValue
-          }))
+        await notifyDispatcher('notify_officers_loan', {
+          userId: userId,
+          loanId: result.loanId,
+          borrowerName: userProfile.name || '',
+          borrowerLineId: userProfile.realLineId || '',
+          borrowerPhone: userProfile.phone || '',
+          isOfficial: isOfficial,
+          days: days,
+          details: form,
+          cartDetails: selectedCartItems,
+          totalRent: totalRentValue
         });
-        await response.json().catch(() => ({}));
       } catch (err) {
         console.warn('[Borrow] 幹部推播通知發送例外:', err);
       }

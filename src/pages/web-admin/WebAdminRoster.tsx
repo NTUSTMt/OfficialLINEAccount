@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import { GAS_API_URL } from '../../constants/api';
+import { notifyDispatcher } from '../../utils/api';
 import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
 import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
 import './webAdmin.css';
@@ -962,26 +963,21 @@ export const WebAdminRoster: React.FC = () => {
 
     setSendingNotification(true);
     try {
-      const query = new URLSearchParams({
-        action: 'send_event_notifications',
+      const result = await notifyDispatcher('send_event_notifications', {
         userId: session.userId,
         eventId: selectedEventId,
         ...(selectedSignupIds.size > 0 ? { signupIds: targetSignups.map((s) => s.id).join(',') } : {}),
       });
 
-      const res = await fetch(`${GAS_API_URL}?${query.toString()}`);
-      const result = await res.json();
-
-      if (result.status === 'success') {
-        const count = result.notifiedCount || targetSignups.length;
-        alert(`發送成功！共發送了 ${count} 則審核推播通知。`);
+      if (result.success) {
+        alert(`發送成功！共發送了 ${targetSignups.length} 則審核推播通知。`);
         // 更新前端與快取
         const targetIds = new Set(targetSignups.map((s) => s.id));
         setSignups((prev) =>
           prev.map((s) => (targetIds.has(s.id) ? { ...s, notification_status: '已通知' } : s))
         );
         logWebAuditAction(client, session.userId, 'SEND_NOTIFICATIONS', 'event_signups', selectedEventId, {
-          count,
+          count: targetSignups.length,
         });
       } else {
         alert(`[推播通知失敗]: ${result.message || '未知錯誤'}`);

@@ -36,7 +36,7 @@ import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
 import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
 import { useAdvancedTable, type AdvancedColumnDef } from '../../components/admin/useAdvancedTable';
 import { openExternalUrl } from '../../utils/applicantUtils';
-import { GAS_API_URL } from '../../constants/api';
+import { notifyDispatcher } from '../../utils/api';
 import './webAdmin.css';
 
 const FINANCE_COLUMNS: AdvancedColumnDef[] = [
@@ -656,19 +656,14 @@ export const WebAdminFinance: React.FC = () => {
 
     for (const item of targetItems) {
       try {
-        await fetch(GAS_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({
-            action: 'notify_payment_confirmed',
-            paymentId: item.id,
-            userName: item.name,
-            amount: item.amount,
-            items: item.type,
-            lineUserId: item.line_user_id,
-            confirmedBy: session.displayName || '電腦工作站幹部審核'
-          })
-        }).catch(e => console.warn('[WebAdminFinance] 推播呼叫異常:', e));
+        await notifyDispatcher('notify_payment_confirmed', {
+          paymentId: item.id,
+          userName: item.name,
+          amount: item.amount,
+          items: item.type,
+          lineUserId: item.line_user_id,
+          confirmedBy: session.displayName || '電腦工作站幹部審核'
+        });
 
         await updatePaymentAndLinkedStatusInSupabase({
           paymentId: item.id,
@@ -717,19 +712,14 @@ export const WebAdminFinance: React.FC = () => {
 
       if (shouldNotify) {
         try {
-          fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-              action: 'notify_payment_confirmed',
-              paymentId: editingItem.id,
-              userName: editingItem.name,
-              amount: editingItem.amount,
-              items: editingItem.type,
-              lineUserId: editingItem.line_user_id,
-              confirmedBy: session.displayName || '電腦工作站幹部審核'
-            })
-          }).catch(e => console.warn('[WebAdminFinance] 推播通知例外:', e));
+          await notifyDispatcher('notify_payment_confirmed', {
+            paymentId: editingItem.id,
+            userName: editingItem.name,
+            amount: editingItem.amount,
+            items: editingItem.type,
+            lineUserId: editingItem.line_user_id,
+            confirmedBy: session.displayName || '電腦工作站幹部審核'
+          });
 
           finalNotificationStatus = '已通知';
         } catch (e) {

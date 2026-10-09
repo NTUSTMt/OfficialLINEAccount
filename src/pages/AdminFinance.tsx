@@ -15,7 +15,7 @@ import type { AdminFinanceItem } from '../types/admin';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
 import { AdminSubNav } from '../components/admin/AdminSubNav';
 import { MemberProfileModal } from '../components/admin/MemberProfileModal';
-import { GAS_API_URL } from '../constants/api';
+import { notifyDispatcher } from '../utils/api';
 
 const SORT_OPTIONS: SortOption[] = [
   { key: 'created_at', label: '依申報時間' },
@@ -96,19 +96,14 @@ export default function AdminFinance({ userId }: { userId?: string }) {
 
       if (shouldNotify) {
         try {
-          fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-              action: 'notify_payment_confirmed',
-              paymentId: selectedItem.id,
-              userName: selectedItem.name,
-              amount: selectedItem.amount,
-              items: selectedItem.type,
-              lineUserId: selectedItem.line_user_id,
-              confirmedBy: '財務幹部線上審核'
-            })
-          }).catch(e => console.warn('[AdminFinance] 推播通知例外:', e));
+          await notifyDispatcher('notify_payment_confirmed', {
+            paymentId: selectedItem.id,
+            userName: selectedItem.name,
+            amount: selectedItem.amount,
+            items: selectedItem.type,
+            lineUserId: selectedItem.line_user_id,
+            confirmedBy: '財務幹部線上審核'
+          });
 
           // 成功觸發推播後，自動將通知狀態設為已通知
           finalNotificationStatus = '已通知';

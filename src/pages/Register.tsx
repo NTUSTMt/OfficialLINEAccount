@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { ShieldCheck, Info, Plus, X } from 'lucide-react';
-import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { withAuthPayload, notifyDispatcher } from '../utils/api';
 import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
 import { fetchMemberProfileFromSupabase, saveMemberProfileToSupabase } from '../utils/supabaseClient';
@@ -364,61 +364,6 @@ function Register({ userId }: { userId: string }) {
               }
             }
             setPrivacyAgreed(true);
-          } else {
-            // Supabase 尚未有紀錄或連線失敗，向 GAS 查詢現有社員資料 fallback
-            const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`), { cache: 'no-store' });
-            const result = await res.json();
-            if (result.status === 'success' && result.isMember && result.profile) {
-              memberFound = true;
-              setIsNewUser(false);
-              const p = result.profile;
-              
-              // 安全解析生日字串，避免 typeof/Invalid Date 造成 toISOString 崩潰或白屏
-              let birthdayStr = '';
-              if (p.birthday) {
-                const cleanBirthday = String(p.birthday).replace(/\//g, '-');
-                const d = new Date(cleanBirthday);
-                if (!isNaN(d.getTime())) {
-                  birthdayStr = d.toISOString().split('T')[0];
-                } else {
-                  birthdayStr = cleanBirthday.substring(0, 10);
-                }
-              }
-
-              const loadedData: ProfileData = {
-                name: p.name ? String(p.name) : '',
-                gender: p.gender ? String(p.gender) : '',
-                nationality: p.nationality ? String(p.nationality) : '',
-                birthday: birthdayStr,
-                idNumber: p.idNumber ? String(p.idNumber) : '',
-                department: p.department ? String(p.department) : '',
-                identityStatus: p.identityStatus ? String(p.identityStatus) : 
-                  (p.department === '臺科大在校學生' || p.department === '畢業校友' || p.department === '校外人士' ? p.department : '臺科大在校學生'),
-                studentId: p.studentId ? String(p.studentId) : '',
-                phone: p.phone ? String(p.phone) : '',
-                email: p.email ? String(p.email) : '',
-                realLineId: p.realLineId ? String(p.realLineId) : (lineDisplayName || ''),
-                studentAddr: p.studentAddr ? String(p.studentAddr) : '',
-                emerName: p.emerName ? String(p.emerName) : '',
-                emerRel: p.emerRel ? String(p.emerRel) : '',
-                emerPhone: p.emerPhone ? String(p.emerPhone) : '',
-                emerAddr: p.emerAddr ? String(p.emerAddr) : '',
-                medicalHistory: p.medicalHistory ? String(p.medicalHistory) : '',
-                exp: p.exp ? String(p.exp) : '',
-                strength: p.strength ? String(p.strength) : '',
-                strengthProof: p.strengthProof ? String(p.strengthProof) : '',
-                intendOfficial: p.intendOfficial ? String(p.intendOfficial) : '',
-                intendOfficer: p.intendOfficer ? String(p.intendOfficer) : '',
-                wantToSay: p.wantToSay ? String(p.wantToSay) : '',
-                preferredLanguage: p.preferredLanguage || (p as any).preferred_language || 'zh',
-              };
-
-              setFormData(loadedData);
-              setOriginalFormData(loadedData);
-              const loadedIntent = p.intendOfficer ? String(p.intendOfficer) : '';
-              setInitialOfficerIntent(loadedIntent);
-              setPrivacyAgreed(true);
-            }
           }
         }
 
@@ -923,26 +868,16 @@ function Register({ userId }: { userId: string }) {
             ? isNowWilling
             : ((!wasWilling && isNowWilling) || (isNowWilling && (finalFormData.intendOfficer || '').trim() !== (originalFormData?.intendOfficer || '').trim()));
 
-          // 確實等待 GAS 推播請求完成，避免隨後 liff.closeWindow() 銷毀 WebKit 中斷連線
+          // 透過 Supabase notify-dispatcher 發送 LINE 基本資料更新/註冊完成推播通知
           try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000);
-            const notifyRes = await fetch(GAS_API_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              signal: controller.signal,
-              body: JSON.stringify(withAuthPayload({
-                action: 'notify_profile_saved',
-                userId: userId,
-                formData: finalFormData,
-                isNewUser: isNewUser,
-                isOfficerIntentNew: isOfficerIntentNew,
-                previousOfficerIntent: initialOfficerIntent,
-                changedFields: !isNewUser ? changedFields : undefined
-              }))
+            await notifyDispatcher('notify_profile_saved', {
+              userId: userId,
+              formData: finalFormData,
+              isNewUser: isNewUser,
+              isOfficerIntentNew: isOfficerIntentNew,
+              previousOfficerIntent: initialOfficerIntent,
+              changedFields: !isNewUser ? changedFields : undefined
             });
-            clearTimeout(timeoutId);
-            await notifyRes.json().catch(() => ({}));
           } catch (notifyErr: any) {
             console.warn('[Register] 推播通知發送例外 (不影響基本資料儲存):', notifyErr?.message || notifyErr);
           }

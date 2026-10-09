@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Award, Star, Edit3, Globe, Lock, ChevronRight } from 'lucide-react';
-import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { withAuthPayload, notifyDispatcher } from '../utils/api';
 import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
 import { fetchAchievementsFromSupabase, saveReflectionToSupabase, getLastSupabaseError } from '../utils/supabaseClient';
@@ -62,47 +62,22 @@ function Achievements({ userId }: { userId: string }) {
     const fetchData = async () => {
       try {
         if (userId && userId !== 'TEST_USER_ID') {
-          // ⚡ 1. 優先嘗試從 Supabase 秒開活動成就 (< 50ms)
-          let loadedFromSupabase = false;
-          let sbErrorDetail: string | null = null;
+          // 優先嘗試從 Supabase 秒開活動成就 (< 50ms)
           try {
             const sbData = await fetchAchievementsFromSupabase(userId);
-            if (sbData && !ignore) {
-              setData(sbData);
-              setLoading(false);
-              loadedFromSupabase = true;
-            } else {
-              sbErrorDetail = getLastSupabaseError();
+            if (!ignore) {
+              if (sbData) {
+                setData(sbData);
+                setLoading(false);
+              } else {
+                const sbErrorDetail = getLastSupabaseError() || '無法取得歷史活動與成就';
+                setError(`[Supabase 載入失敗]: ${sbErrorDetail}`);
+              }
             }
           } catch (sbErr: any) {
-            console.warn('[Achievements] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
-            sbErrorDetail = sbErr?.message || String(sbErr);
-          }
-
-          // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
-          if (!loadedFromSupabase) {
-            try {
-              const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_past_activities&userId=${userId}`));
-              const result = await res.json();
-              if (!ignore) {
-                if (result.status === 'success') {
-                  setData(result.data);
-                } else {
-                  const gasMsg = result.message || '無法取得歷史活動與成就';
-                  const fullMsg = sbErrorDetail
-                    ? `[Supabase RPC 錯誤]: ${sbErrorDetail} | [GAS]: ${gasMsg}`
-                    : gasMsg;
-                  setError(fullMsg);
-                }
-              }
-            } catch (gasErr: any) {
-              if (!ignore) {
-                const gasErrMsg = gasErr?.message || String(gasErr);
-                const fullMsg = sbErrorDetail
-                  ? `[Supabase RPC 錯誤]: ${sbErrorDetail} | [GAS 連線錯誤]: ${gasErrMsg}`
-                  : `載入歷史活動失敗: ${gasErrMsg}`;
-                setError(fullMsg);
-              }
+            console.error('[Achievements] Supabase 讀取成就失敗:', sbErr);
+            if (!ignore) {
+              setError(`[Supabase 讀取錯誤]: ${sbErr?.message || String(sbErr)}`);
             }
           }
         } else {
@@ -364,14 +339,13 @@ function Achievements({ userId }: { userId: string }) {
         }
 
         if (sbSuccess) {
-          // ⭐️ 僅首次提交時發送心得推播通知給幹部群組，編輯更新不重複發送通知
+          // 僅首次提交時發送心得推播通知給幹部群組，編輯更新不重複發送通知
           if (!isEditing) {
             try {
               const photoList = combinedImageUrl
                 ? combinedImageUrl.split(/[\n,]/).map(u => u.trim()).filter(Boolean)
                 : [];
-              const payload = withAuthPayload({
-                action: 'notify_reflection_submitted',
+              await notifyDispatcher('notify_reflection_submitted', {
                 userId: userId,
                 userName: '社員',
                 eventName: selectedActivity.title,
@@ -380,12 +354,6 @@ function Achievements({ userId }: { userId: string }) {
                 content: content,
                 photoUrls: photoList
               });
-              fetch(GAS_API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(payload),
-                mode: 'no-cors'
-              }).catch(e => console.warn('通知心得失敗:', e));
             } catch (notifErr) {
               console.warn('發送心得推播例外:', notifErr);
             }
@@ -397,7 +365,8 @@ function Achievements({ userId }: { userId: string }) {
           setRefreshKey(k => k + 1); // 重新整理成就清單
           setWallRefreshKey(k => k + 1); // 重新整理心得牆
         } else {
-          alert(t('achievements.alert.submitFailed', { message: t('achievements.alert.contactAdmin', '儲存失敗，請稍後再試') }));
+          const lastErr = getLastSupabaseError() || '儲存失敗，請稍後再試';
+          alert(`[Supabase 儲存失敗]: ${lastErr}`);
         }
       } else {
         // 假資料本地模擬提交

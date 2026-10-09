@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.281-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.282-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -2390,3 +2390,26 @@ pnpm test
   - 後端維護架構更新：
     - gas_modules 已全數移除，後續 GAS 相關邏輯統一直接維護於 src/gas.js。
   - Canva Connect API 與 Instagram Graph API 一鍵社群發文功能研究與架構規劃完成。
+
+### v0.1.282 (2026-10-09)
+- 全面移除前端 GAS 唯讀降級備援與推播操作直連 Supabase / notifyDispatcher：
+  - 徹底移除前端無效之 GAS 降級備援（Fallback GET）：
+    - 個人資料與幹部權限檢驗 (App.tsx)
+    - 社員個人主頁狀態與待繳查詢 (Dashboard.tsx)
+    - 社員註冊個資載入 (Register.tsx)
+    - 裝備清單與身分折扣查詢 (Borrow.tsx)
+    - 待繳款項載入 (Payment.tsx)
+    - 繳費歷史紀錄 (History.tsx)
+    - 歷史活動成就 (Achievements.tsx)
+    - 幹部活動管理與報名名冊 (AdminEvents.tsx, AdminEventsHistory.tsx)
+    - 當 Supabase 查詢失敗時直接透明回報具體錯誤細節，不再轉向無效的 GAS 備援。
+  - 前端推播與審核操作全面改走 Supabase / notifyDispatcher：
+    - 裝備預約推播 (Borrow.tsx -> notify_officers_loan)
+    - 裝備借還審核推播 (AdminLoans.tsx -> notify_loan_status_updated)
+    - 繳費申報審核推播 (Payment.tsx -> notify_officers_payment)
+    - 財務核銷推播 (AdminFinance.tsx, WebAdminFinance.tsx, ConfirmPayment.tsx -> notify_payment_confirmed)
+    - 個人資料更新推播 (Register.tsx -> notify_profile_saved)
+    - 歷程心得推播 (Achievements.tsx -> notify_reflection_submitted)
+    - 活動審核名冊推播 (WebAdminRoster.tsx -> send_event_notifications)
+  - 核心 Google Drive 上傳模組保留：
+    - 註冊體能證明、繳費收據、證書、裝備相片與活動封面圖之上傳繼續由 GAS Thin Worker 提供支援。

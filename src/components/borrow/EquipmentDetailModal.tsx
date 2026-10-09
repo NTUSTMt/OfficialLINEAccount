@@ -5,7 +5,7 @@ import type { Equipment } from '../../types/equipment';
 import { ProductImage } from './ProductImage';
 import { getDirectImageUrl } from '../../utils/image';
 import { GAS_API_URL } from '../../constants/api';
-import { appendAuthToken, withAuthPayload } from '../../utils/api';
+import { withAuthPayload } from '../../utils/api';
 import { updateEquipmentImagesInSupabase } from '../../utils/supabaseClient';
 
 interface EquipmentDetailModalProps {
@@ -216,7 +216,7 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
     setIsSavingPhotos(true);
     try {
       // 分流優化 1：若無新照片需上傳至 Drive（純刪除既有照片或調整順序）
-      // 直接透過 Supabase 更新 equipments 資料表（耗時 < 30ms，0% 依賴 GAS，徹底免除 iOS WebKit 跨域 302 重導向之 Load failed 阻斷）
+      // 直接透過 Supabase 更新 equipments 資料表
       if (newPhotoFiles.length === 0) {
         const sbRes = await updateEquipmentImagesInSupabase(equipment.id, keptUrls);
         if (sbRes.success) {
@@ -226,25 +226,10 @@ export const EquipmentDetailModal: React.FC<EquipmentDetailModalProps> = ({
           setActivePhotoIdx(0);
           setIsEditMode(false);
           alert(t('borrow.modal.photoSaveSuccess'));
-
-          // 背景非同步通知 GAS 同步主試算表（不阻塞前端，若失敗亦不影響）
-          fetch(appendAuthToken(GAS_API_URL), {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(withAuthPayload({
-              action: 'update_equipment_images',
-              equipId: equipment.id,
-              equipName: equipment.name,
-              keptUrls,
-              newPhotoFiles: [],
-              userId
-            }))
-          }).catch(gasErr => console.warn('[EquipmentDetail] 背景同步試算表略過:', gasErr));
-
           return;
         } else {
-          // 若 Supabase 直更失敗，依 Rule 透明印出完整錯誤細節
-          console.warn('[EquipmentDetail] Supabase 直更照片失敗，嘗試 GAS fallback:', sbRes.message);
+          // 若 Supabase 直更失敗，依規範直接明確報錯
+          throw new Error(`[Supabase 裝備相片更新失敗]: ${sbRes.message || '未知錯誤'}`);
         }
       }
 

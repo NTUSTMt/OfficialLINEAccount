@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, AlertCircle, Copy, Check, Building2, X, Plus, Image as ImageIcon } from 'lucide-react';
-import { appendAuthToken, withAuthPayload } from '../utils/api';
+import { withAuthPayload, notifyDispatcher } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
 import { validateImageUploadFile } from '../utils/image';
 import { fetchUnpaidPaymentsFromSupabase, submitPaymentToSupabase, fetchDashboardFromSupabase } from '../utils/supabaseClient';
@@ -197,7 +197,6 @@ function Payment({ userId }: { userId: string }) {
       try {
         if (userId && userId !== 'TEST_USER_ID') {
           // 1. 優先嘗試從 Supabase 秒開讀取待繳費用清單 (< 50ms)
-          let loadedFromSupabase = false;
           try {
             const sbUnpaid = await fetchUnpaidPaymentsFromSupabase(userId);
             if (sbUnpaid && !ignore) {
@@ -209,34 +208,11 @@ function Payment({ userId }: { userId: string }) {
               ]));
               setSelectedIds(initialSelectedIds);
               setLoading(false);
-              loadedFromSupabase = true;
             }
-          } catch (sbErr) {
-            console.warn('[Payment] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
-          }
-
-          // 2. 若 Supabase 尚未配置或讀取失敗，嘗試自 GAS 唯讀備援讀取
-          if (!loadedFromSupabase) {
-            try {
-              const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_unpaid&userId=${userId}`));
-              const result = await res.json();
-              if (!ignore) {
-                if (result.status === 'success' && result.data) {
-                  setError(null);
-                  setUnpaidList(result.data);
-                  const initialSelectedIds = Array.from(new Set([
-                    ...(result.data.activities || []).map((item: UnpaidItem) => item.id),
-                    ...(result.data.equipments || []).map((item: UnpaidItem) => item.id)
-                  ]));
-                  setSelectedIds(initialSelectedIds);
-                } else {
-                  // 若查無待繳紀錄，視為無欠款清單，不呈現紅色錯誤橫幅
-                  setError(null);
-                }
-              }
-            } catch (gasErr) {
-              console.warn('[Payment] GAS 備援讀取未回應，預設無待繳款項:', gasErr);
-              if (!ignore) setError(null);
+          } catch (sbErr: any) {
+            console.error('[Payment] Supabase 讀取未繳費失敗:', sbErr);
+            if (!ignore) {
+              setError(`[Supabase 載入失敗]: ${sbErr?.message || String(sbErr)}`);
             }
           }
 
@@ -549,24 +525,18 @@ function Payment({ userId }: { userId: string }) {
         // 2. 發送 LINE 幹部審核推播 (若非 0 元且有費用需對帳才發送；0 元申報完全略過，不推播幹部群組、不消耗 Push 額度)
         if (!isZeroAmount) {
           try {
-            const response = await fetch(GAS_API_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain' },
-              body: JSON.stringify(withAuthPayload({
-                action: 'notify_officers_payment',
-                userId,
+            await notifyDispatcher('notify_officers_payment', {
+              userId,
+              paymentId: sbResult.paymentId,
+              verifyToken: sbResult.verifyToken,
+              proofImageUrl: uploadedProofUrl || undefined,
+              details: {
+                ...detailsPayload,
                 paymentId: sbResult.paymentId,
                 verifyToken: sbResult.verifyToken,
-                proofImageUrl: uploadedProofUrl || undefined,
-                details: {
-                  ...detailsPayload,
-                  paymentId: sbResult.paymentId,
-                  verifyToken: sbResult.verifyToken,
-                  proofImageUrl: uploadedProofUrl || undefined
-                }
-              }))
+                proofImageUrl: uploadedProofUrl || undefined
+              }
             });
-            await response.json().catch(() => ({}));
           } catch (err) {
             console.warn('[Payment] 幹部推播通知發送例外:', err);
           }

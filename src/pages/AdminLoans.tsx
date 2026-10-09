@@ -14,7 +14,7 @@ import type { AdminLoanItem } from '../types/admin';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
 import { AdminSubNav } from '../components/admin/AdminSubNav';
 import { MemberProfileModal } from '../components/admin/MemberProfileModal';
-import { GAS_API_URL } from '../constants/api';
+import { notifyDispatcher } from '../utils/api';
 
 const SORT_OPTIONS: SortOption[] = [
   { key: 'start_date', label: '依預計領取出隊日' },
@@ -92,23 +92,18 @@ export default function AdminLoans({ userId }: { userId?: string }) {
         return;
       }
 
-      // 非同步推播 LINE 租借狀態通知給借用人
+      // 非同步推播 LINE 租借狀態通知給借用人 (透過 Supabase notify-dispatcher)
       if (selectedLoan.line_user_id) {
         try {
-          fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-              action: 'notify_loan_status_updated',
-              loanId: selectedLoan.id,
-              userId: selectedLoan.line_user_id,
-              borrowerName: selectedLoan.name,
-              newStatus: editStatus,
-              pickupDate: selectedLoan.start_date,
-              returnDate: selectedLoan.end_date,
-              itemsSummary: selectedLoan.items
-            })
-          }).catch(e => console.warn('[AdminLoans] 推播例外:', e));
+          await notifyDispatcher('notify_loan_status_updated', {
+            loanId: selectedLoan.id,
+            userId: selectedLoan.line_user_id,
+            borrowerName: selectedLoan.name,
+            newStatus: editStatus,
+            pickupDate: selectedLoan.start_date,
+            returnDate: selectedLoan.end_date,
+            itemsSummary: selectedLoan.items
+          });
         } catch (e) {
           console.warn('[AdminLoans] 推播呼叫異常:', e);
         }

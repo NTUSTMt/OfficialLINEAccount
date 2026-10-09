@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle2, AlertTriangle, ShieldCheck, ArrowRight, Loader2, Info, X } from 'lucide-react';
 import { verifyPaymentByTokenFromSupabase, type VerifyPaymentResult } from '../utils/supabaseClient';
-import { GAS_API_URL } from '../constants/api';
+import { notifyDispatcher } from '../utils/api';
 import { LIFF_URLS } from '../constants/liff';
 import liff from '@line/liff';
 
@@ -58,23 +58,18 @@ export default function ConfirmPayment() {
         } else {
           setStatus('success');
 
-          // 2. 非同步推播 LINE 通知 (社員個人 + 幹部管理群組) 與寄送繳費確認通知信
+          // 2. 非同步推播 LINE 通知 (社員個人 + 幹部管理群組) (透過 Supabase notify-dispatcher)
           try {
-            fetch(GAS_API_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain' },
-              body: JSON.stringify({
-                action: 'notify_payment_confirmed',
-                paymentId: res.paymentId,
-                userName: res.userName,
-                userEmail: res.userEmail,
-                userLanguage: res.userLanguage,
-                amount: res.amount,
-                items: res.items,
-                lineUserId: res.lineUserId,
-                confirmedBy: '單鍵快速核銷'
-              })
-            }).catch(() => {});
+            await notifyDispatcher('notify_payment_confirmed', {
+              paymentId: res.paymentId,
+              userName: res.userName,
+              userEmail: res.userEmail,
+              userLanguage: res.userLanguage,
+              amount: res.amount,
+              items: res.items,
+              lineUserId: res.lineUserId,
+              confirmedBy: '單鍵快速核銷'
+            });
           } catch (e) {
             console.warn('[ConfirmPayment] 推播通知例外:', e);
           }

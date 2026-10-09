@@ -12,10 +12,9 @@ describe('100. 活動正取通知按鈕色彩優化與 0 元申報自動核銷�
 
   it('1. 正取通知推播卡片「前往繳費系統」按鈕升級為 Primary 樣式且色彩為經典深藍 #0367D3', () => {
     const gasJs = fs.readFileSync(gasJsPath, 'utf8');
-    const helperJs = fs.readFileSync(helperJsPath, 'utf8');
 
-    // 檢查 gas.js 與 gas_modules/06_Helper_Services.js 中的按鈕宣告
-    [gasJs, helperJs].forEach((code) => {
+    // 檢查 gas.js 中的按鈕宣告
+    [gasJs].forEach((code) => {
       assert.ok(code.includes('style: "primary"'), 'payBtn 必須使用 primary 樣式');
       assert.ok(code.includes('color: "#0367D3"'), 'payBtn 必須使用經典深藍 #0367D3 色彩');
       assert.ok(code.includes('label: payBtn'), '必須綁定 payBtn 標籤變數');
@@ -39,7 +38,7 @@ describe('100. 活動正取通知按鈕色彩優化與 0 元申報自動核銷�
 
     // 檢查略過幹部推播條件
     assert.ok(tsx.includes('if (!isZeroAmount) {'), '0 元申報必須略過幹部推播 notify_officers_payment');
-    assert.ok(tsx.includes("action: 'notify_officers_payment'"), '非 0 元維持幹部推播');
+    assert.ok(tsx.includes("'notify_officers_payment'"), '非 0 元維持幹部推播');
 
     // 檢查 0 元 Flex 卡片結構與中英分流
     assert.ok(tsx.includes("backgroundColor: '#059669'"), '0 元核銷確認 Flex 卡片必須採用與幹部核銷同款綠色頂部 #059669');

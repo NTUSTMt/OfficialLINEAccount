@@ -12,7 +12,6 @@ import {
   updateSignupStatusInSupabase,
   updateEventStatusInSupabase,
   saveEventToSupabase,
-  registerOfficerToSupabase,
   getLastSupabaseError
 } from '../utils/supabaseClient';
 import type { AdminEvent, SignupApplicant } from '../types/event';
@@ -159,63 +158,25 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     }
 
     try {
-      let loadedFromSb = false;
-      let sbErrorDetail: string | null = null;
+      // 無論是否 forceRefresh，一律優先從 Supabase 讀取活動清單與報名人數統計
       try {
-        // 1. 無論是否 forceRefresh，一律優先從 Supabase 秒級讀取活動清單與報名人數統計 (< 50ms)
         const sbRes = await fetchAdminEventsFromSupabase(userId);
         if (sbRes && sbRes.isOfficer) {
-          loadedFromSb = true;
           setIsOfficer(true);
           setEvents(sbRes.events);
           setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
-          setLoadingEvents(false);
-          setAuthLoading(false);
           setErrorNotice(null);
           if (forceRefresh) {
             setToastMessage('已同步最新資料！');
           }
         } else {
-          sbErrorDetail = getLastSupabaseError();
+          setIsOfficer(false);
+          const sbErrorDetail = getLastSupabaseError() || '權限不足或非現任幹部身分';
+          setErrorNotice(`[Supabase 載入失敗]: ${sbErrorDetail}`);
         }
       } catch (sbErr: any) {
-        console.warn('[AdminEvents] Supabase 活動讀取例外:', sbErr);
-        sbErrorDetail = sbErr?.message || String(sbErr);
-      }
-
-      // 2. 僅在 Supabase 讀取失敗或未命中幹部時，才無縫由 GAS 備援
-      if (!loadedFromSb) {
-        try {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId}`));
-          const data = await res.json();
-          if (data.status === 'success' && Array.isArray(data.events)) {
-            setIsOfficer(true);
-            setEvents(data.events);
-            setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
-            if (forceRefresh) {
-              setToastMessage('已同步最新資料！');
-            }
-            if (sbErrorDetail) {
-              setErrorNotice(`[Supabase 載入異常已改走 GAS 備援]: ${sbErrorDetail}`);
-            } else {
-              setErrorNotice(null);
-            }
-
-            // 若經由 GAS 認證為幹部，自動同步至 Supabase officers 表，下次即可享受 < 50ms 秒開
-            if (userId && userId !== 'TEST_USER_ID') {
-              registerOfficerToSupabase(userId, data.officerName, data.officerRole).catch(() => {});
-            }
-          } else if (!loadedFromSb) {
-            setIsOfficer(false);
-            if (sbErrorDetail) {
-              setErrorNotice(`[Supabase RPC 錯誤]: ${sbErrorDetail}`);
-            }
-          }
-        } catch (gasErr: any) {
-          if (sbErrorDetail) {
-            setErrorNotice(`[Supabase 錯誤]: ${sbErrorDetail}\n[GAS 連線錯誤]: ${gasErr?.message || String(gasErr)}`);
-          }
-        }
+        console.error('[AdminEvents] Supabase 活動讀取失敗:', sbErr);
+        setErrorNotice(`[Supabase 活動讀取錯誤]: ${sbErr?.message || String(sbErr)}`);
       }
     } catch (err: any) {
       console.error('獲取管理端活動失敗:', err);
@@ -242,40 +203,20 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       }
 
       try {
-        let loadedFromSb = false;
-        try {
-          // 1. 優先從 Supabase 讀取 (< 50ms)
-          const sbRes = await fetchAdminEventsFromSupabase(userId);
-          if (sbRes && sbRes.isOfficer && !ignore) {
-            loadedFromSb = true;
-            setIsOfficer(true);
-            setEvents(sbRes.events);
-            setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
-            setAuthLoading(false);
-            setLoadingEvents(false);
-          }
-        } catch (sbErr) {
-          console.warn('[AdminEvents] Supabase 初始讀取例外:', sbErr);
+        // 優先從 Supabase 讀取 (< 50ms)
+        const sbRes = await fetchAdminEventsFromSupabase(userId);
+        if (sbRes && sbRes.isOfficer && !ignore) {
+          setIsOfficer(true);
+          setEvents(sbRes.events);
+          setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
+        } else if (!ignore) {
+          setIsOfficer(false);
         }
-
-        // 2. 若 Supabase 尚未建置該幹部快取，無縫由 GAS 備援
-        if (!loadedFromSb) {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId}`));
-          const data = await res.json();
-          if (!ignore && data.status === 'success' && Array.isArray(data.events)) {
-            setIsOfficer(true);
-            setEvents(data.events);
-            setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
-
-            if (userId && userId !== 'TEST_USER_ID') {
-              registerOfficerToSupabase(userId, data.officerName, data.officerRole).catch(() => {});
-            }
-          } else if (!ignore && !loadedFromSb) {
-            setIsOfficer(false);
-          }
+      } catch (sbErr) {
+        console.error('[AdminEvents] Supabase 初始讀取失敗:', sbErr);
+        if (!ignore) {
+          setIsOfficer(false);
         }
-      } catch (err) {
-        console.error('後台活動載入失敗:', err);
       } finally {
         if (!ignore) {
           setAuthLoading(false);
@@ -671,41 +612,21 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     } else {
       setLoadingSignups(true);
     }
-    let loadedFromSb = false;
     try {
-      try {
-        // 1. 無論是否 forceRefresh，一律優先從 Supabase 秒開讀取報名名冊 (< 50ms)
-        const sbSignups = await fetchAdminEventSignupsFromSupabase(userId || 'TEST_USER_ID', evt.id);
-        if (sbSignups) {
-          loadedFromSb = true;
-          setSignupsList(sbSignups);
-          setCache(cacheKey, sbSignups, 120);
-          setLoadingSignups(false);
-          if (forceRefresh) {
-            setToastMessage('已同步最新資料！');
-          }
+      // 無論是否 forceRefresh，一律優先從 Supabase 讀取報名名冊 (< 50ms)
+      const sbSignups = await fetchAdminEventSignupsFromSupabase(userId || 'TEST_USER_ID', evt.id);
+      if (sbSignups) {
+        setSignupsList(sbSignups);
+        setCache(cacheKey, sbSignups, 120);
+        if (forceRefresh) {
+          setToastMessage('已同步最新資料！');
         }
-      } catch (sbErr) {
-        console.warn('[AdminEvents] Supabase 報名名冊讀取例外:', sbErr);
+      } else {
+        setSignupsList([]);
       }
-
-      // 2. 僅在 Supabase 尚未配置或讀取失敗時，由 GAS 備援
-      if (!loadedFromSb) {
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_event_signups&eventId=${evt.id}&userId=${userId || 'TEST_USER_ID'}`));
-        const data = await res.json();
-        if (data.status === 'success' && Array.isArray(data.signups)) {
-          setSignupsList(data.signups);
-          setCache(cacheKey, data.signups, 120);
-          if (forceRefresh) {
-            setToastMessage('已同步最新資料！');
-          }
-        } else if (!loadedFromSb) {
-          setSignupsList([]);
-        }
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error('讀取報名名冊失敗:', err);
-      if (!loadedFromSb) setSignupsList([]);
+      setSignupsList([]);
     } finally {
       setLoadingSignups(false);
     }

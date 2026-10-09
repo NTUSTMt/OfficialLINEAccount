@@ -4,9 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Award, FileText, ClipboardList, CreditCard, User, Compass, Languages, AlertCircle, Calendar, Users, PackageCheck, Layers, BookOpen, History as HistoryIcon } from 'lucide-react';
 import { SystemGuideModal } from './components/common/SystemGuideModal';
 import liff from '@line/liff';
-import { appendAuthToken } from './utils/api';
 import { getCache, setCache } from './utils/cacheUtils';
-import { GAS_API_URL } from './constants/api';
 import { LIFF_URLS } from './constants/liff';
 import { fetchMemberProfileFromSupabase, checkOfficerStatusFromSupabase, supabase } from './utils/supabaseClient';
 import './App.css';
@@ -464,12 +462,10 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
         return;
       }
 
-      let checkedFromSupabase = false;
       try {
-        // 1. 優先從 Supabase 秒級驗證個人資料完整性 (< 50ms)
+        // 優先從 Supabase 秒級驗證個人資料完整性
         const sbProfile = await fetchMemberProfileFromSupabase(userId);
         if (sbProfile) {
-          checkedFromSupabase = true;
           const nameOk = sbProfile.name ? sbProfile.name.trim() !== '' : false;
           const deptOk = sbProfile.department ? sbProfile.department.trim() !== '' : false;
           const studentIdOk = sbProfile.studentId ? sbProfile.studentId.trim() !== '' : false;
@@ -484,44 +480,15 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
             setIsComplete(false);
             setShowModal(true);
           }
+        } else {
+          // 非社員或未填寫個人資料
+          setIsComplete(false);
+          setShowModal(true);
         }
-      } catch (sbErr) {
-        console.warn('[App] Supabase 個人資料驗證例外，啟用 GAS 備援:', sbErr);
-      }
-
-      // 2. 若 Supabase 尚未配置或回傳 null，無縫由 GAS 備援讀取
-      if (!checkedFromSupabase) {
-        try {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_profile&userId=${userId}`));
-          const result = await res.json();
-
-          if (result.status === 'success' && result.isMember && result.profile) {
-            const p = result.profile;
-            // 檢查 6 個必填欄位 (姓名、系所、學號、手機、Email、LINE ID) 是否非空
-            const nameOk = p.name ? String(p.name).trim() !== '' : false;
-            const deptOk = p.department ? String(p.department).trim() !== '' : false;
-            const studentIdOk = p.studentId ? String(p.studentId).trim() !== '' : false;
-            const phoneOk = p.phone ? String(p.phone).trim() !== '' : false;
-            const emailOk = p.email ? String(p.email).trim() !== '' : false;
-            const lineIdOk = p.realLineId ? String(p.realLineId).trim() !== '' : false;
-
-            if (nameOk && deptOk && studentIdOk && phoneOk && emailOk && lineIdOk) {
-              setIsComplete(true);
-              setCache(cacheKey, true, 600);
-            } else {
-              setIsComplete(false);
-              setShowModal(true);
-            }
-          } else {
-            // 非社員或無 profile 資料
-            setIsComplete(false);
-            setShowModal(true);
-          }
-        } catch (err) {
-          console.error('檢查個人資料失敗:', err);
-          // 連線失敗時預設不阻擋，以免影響出隊租借
-          setIsComplete(true);
-        }
+      } catch (sbErr: any) {
+        console.error('[App] Supabase 個人資料驗證失敗:', sbErr);
+        // 連線失敗時預設不阻擋，以免影響出隊租借
+        setIsComplete(true);
       }
 
       setLoading(false);
@@ -632,27 +599,14 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
     }
     const cacheKey = `officer_status_${liffInit.userId}`;
 
-    // 1. 優先從 Supabase 秒開檢查幹部身分 (< 30ms，免冷啟動)
+    // 優先從 Supabase 秒開檢查幹部身分 (< 30ms)
     checkOfficerStatusFromSupabase(liffInit.userId).then((sbOfficer) => {
       if (ignore) return;
       if (sbOfficer !== null) {
         setIsOfficer(sbOfficer.isOfficer);
         setCache(cacheKey, sbOfficer.isOfficer, 300);
-        return;
       }
-
-      // 2. 若 Supabase 異常，無縫使用 GAS 備援檢查 (相容 status: success 與 isOfficer)
-      fetch(appendAuthToken(`${GAS_API_URL}?action=check_officer_status&userId=${liffInit.userId}`))
-        .then((res) => res.json())
-        .then((data) => {
-          if (!ignore) {
-            const officerResult = !!(data.isOfficer || (data.status === 'success' && data.isOfficer));
-            setIsOfficer(officerResult);
-            setCache(cacheKey, officerResult, 300);
-          }
-        })
-        .catch((err) => console.error('幹部權限初檢出錯:', err));
-    }).catch((err) => console.warn('[App] Supabase 幹部檢查例外:', err));
+    }).catch((err) => console.error('[App] Supabase 幹部身分檢查失敗:', err));
 
     return () => {
       ignore = true;

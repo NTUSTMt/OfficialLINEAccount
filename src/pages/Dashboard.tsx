@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
-import { appendAuthToken, notifyDispatcher } from '../utils/api';
-import { GAS_API_URL } from '../constants/api';
+import { notifyDispatcher } from '../utils/api';
 import { fetchDashboardFromSupabase, cancelEquipmentLoanInSupabase, cancelEventSignupInSupabase, getLastSupabaseError } from '../utils/supabaseClient';
 import {
   ShieldCheck,
@@ -128,55 +127,31 @@ function Dashboard({ userId }: { userId: string }) {
         }
 
         const requestUserId = userId || 'TEST_USER_ID';
-        let sbErrorDetail: string | null = null;
 
-        // ⚡ 1. 優先嘗試由 Supabase 極速讀取個人儀表板 (< 100ms 秒開)
+        // 優先由 Supabase 讀取個人儀表板
         try {
           const sbData = await fetchDashboardFromSupabase(requestUserId);
-          if (!ignore && sbData && sbData.profile && sbData.profile.name) {
-            setData(sbData);
-            setLoading(false);
-            loadedFromSupabase = true;
+          if (!ignore) {
+            if (sbData && sbData.profile && sbData.profile.name) {
+              setData(sbData);
 
-            // 依社員偏好語言同步前端 i18n 語系 (若使用者未手動點擊切換過)
-            const prefLang = sbData.profile.preferredLanguage;
-            if (prefLang && localStorage.getItem('app_lang_manual') !== 'true') {
-              if (i18n.language !== prefLang) {
-                i18n.changeLanguage(prefLang);
-                localStorage.setItem('app_lang', prefLang);
+              // 依社員偏好語言同步前端 i18n 語系 (若使用者未手動點擊切換過)
+              const prefLang = sbData.profile.preferredLanguage;
+              if (prefLang && localStorage.getItem('app_lang_manual') !== 'true') {
+                if (i18n.language !== prefLang) {
+                  i18n.changeLanguage(prefLang);
+                  localStorage.setItem('app_lang', prefLang);
+                }
               }
+            } else {
+              const sbErrorDetail = getLastSupabaseError() || '找不到社員個人資料，請先前往註冊';
+              setError(`[Supabase 載入失敗]: ${sbErrorDetail}`);
             }
-          } else {
-            sbErrorDetail = getLastSupabaseError();
           }
         } catch (sbErr: any) {
-          console.warn('[Dashboard] Supabase 讀取例外，啟用 GAS 備援:', sbErr);
-          sbErrorDetail = sbErr?.message || String(sbErr);
-        }
-
-        // 🐢 2. 背景或備援向 GAS 請求最新即時狀態
-        try {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_my_status&userId=${requestUserId}`));
-          const result = await res.json();
-
+          console.error('[Dashboard] Supabase 讀取失敗:', sbErr);
           if (!ignore) {
-            if (result.status === 'success' && result.data) {
-              setData(result.data);
-            } else if (!loadedFromSupabase) {
-              const gasMsg = result.message || 'GAS 未回傳資料';
-              const fullMsg = sbErrorDetail
-                ? `[Supabase RPC 錯誤]: ${sbErrorDetail}\n[GAS 備援回應]: ${gasMsg}`
-                : gasMsg;
-              setError(fullMsg);
-            }
-          }
-        } catch (gasFetchErr: any) {
-          if (!ignore && !loadedFromSupabase) {
-            const gasErrMsg = gasFetchErr?.message || String(gasFetchErr);
-            const fullMsg = sbErrorDetail
-              ? `[Supabase RPC 錯誤]: ${sbErrorDetail}\n[GAS 連線錯誤]: ${gasErrMsg}`
-              : `網路或伺服器連線異常: ${gasErrMsg}`;
-            setError(fullMsg);
+            setError(`[Supabase 讀取錯誤]: ${sbErr?.message || String(sbErr)}`);
           }
         }
       } catch (err: any) {

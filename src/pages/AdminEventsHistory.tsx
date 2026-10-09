@@ -1,13 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mountain, CheckCircle2, Lock } from 'lucide-react';
-import { appendAuthToken } from '../utils/api';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
-import { GAS_API_URL } from '../constants/api';
 import {
   fetchAdminEventsFromSupabase,
   fetchAdminEventSignupsFromSupabase,
-  registerOfficerToSupabase,
   getLastSupabaseError
 } from '../utils/supabaseClient';
 import type { AdminEvent, SignupApplicant } from '../types/event';
@@ -98,59 +95,24 @@ export default function AdminEventsHistory({ userId }: AdminEventsHistoryProps) 
     }
 
     try {
-      let loadedFromSb = false;
-      let sbErrorDetail: string | null = null;
-
       try {
         const sbRes = await fetchAdminEventsFromSupabase(userId);
         if (sbRes && sbRes.isOfficer) {
-          loadedFromSb = true;
           setIsOfficer(true);
           setEvents(sbRes.events);
           setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
-          setLoadingEvents(false);
-          setAuthLoading(false);
           setErrorNotice(null);
           if (forceRefresh) {
             setToastMessage('已同步最新資料！');
           }
         } else {
-          sbErrorDetail = getLastSupabaseError();
+          setIsOfficer(false);
+          const sbErrorDetail = getLastSupabaseError() || '權限不足或非現任幹部身分';
+          setErrorNotice(`[Supabase 載入失敗]: ${sbErrorDetail}`);
         }
       } catch (sbErr: any) {
-        sbErrorDetail = sbErr?.message || String(sbErr);
-      }
-
-      if (!loadedFromSb) {
-        try {
-          const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId}`));
-          const data = await res.json();
-          if (data.status === 'success' && Array.isArray(data.events)) {
-            setIsOfficer(true);
-            setEvents(data.events);
-            setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
-            if (forceRefresh) {
-              setToastMessage('已同步最新資料！');
-            }
-            if (sbErrorDetail) {
-              setErrorNotice(`[Supabase 載入異常已改走 GAS 備援]: ${sbErrorDetail}`);
-            } else {
-              setErrorNotice(null);
-            }
-            if (userId && userId !== 'TEST_USER_ID') {
-              registerOfficerToSupabase(userId, data.officerName, data.officerRole).catch(() => {});
-            }
-          } else if (!loadedFromSb) {
-            setIsOfficer(false);
-            if (sbErrorDetail) {
-              setErrorNotice(`[Supabase RPC 錯誤]: ${sbErrorDetail}`);
-            }
-          }
-        } catch (gasErr: any) {
-          if (sbErrorDetail) {
-            setErrorNotice(`[Supabase 錯誤]: ${sbErrorDetail}\n[GAS 連線錯誤]: ${gasErr?.message || String(gasErr)}`);
-          }
-        }
+        console.error('[AdminEventsHistory] Supabase 歷史活動讀取失敗:', sbErr);
+        setErrorNotice(`[Supabase 讀取錯誤]: ${sbErr?.message || String(sbErr)}`);
       }
     } catch (err: any) {
       setErrorNotice(err?.message || String(err));
@@ -179,22 +141,14 @@ export default function AdminEventsHistory({ userId }: AdminEventsHistoryProps) 
           setIsOfficer(true);
           setEvents(sbRes.events);
           setCache(CACHE_KEY_ADMIN_EVENTS, sbRes.events, 180);
-          setAuthLoading(false);
-          setLoadingEvents(false);
-          return;
-        }
-
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_admin_events&userId=${userId}`));
-        const data = await res.json();
-        if (!ignore && data.status === 'success' && Array.isArray(data.events)) {
-          setIsOfficer(true);
-          setEvents(data.events);
-          setCache(CACHE_KEY_ADMIN_EVENTS, data.events, 180);
         } else if (!ignore) {
           setIsOfficer(false);
         }
       } catch (err) {
         console.error('歷史活動載入失敗:', err);
+        if (!ignore) {
+          setIsOfficer(false);
+        }
       } finally {
         if (!ignore) {
           setAuthLoading(false);
@@ -303,16 +257,11 @@ export default function AdminEventsHistory({ userId }: AdminEventsHistoryProps) 
         setSignupsMap((prev) => ({ ...prev, [eventId]: sbSignups }));
         setCache(`${CACHE_KEY_SIGNUPS_PREFIX}${eventId}`, sbSignups, 300);
       } else {
-        // GAS 備援
-        const res = await fetch(appendAuthToken(`${GAS_API_URL}?action=get_event_signups&eventId=${eventId}&userId=${userId}`));
-        const data = await res.json();
-        if (data.status === 'success' && Array.isArray(data.signups)) {
-          setSignupsMap((prev) => ({ ...prev, [eventId]: data.signups }));
-          setCache(`${CACHE_KEY_SIGNUPS_PREFIX}${eventId}`, data.signups, 300);
-        }
+        setSignupsMap((prev) => ({ ...prev, [eventId]: [] }));
       }
     } catch (err) {
       console.warn(`[AdminEventsHistory] 載入活動 ${eventId} 名冊例外:`, err);
+      setSignupsMap((prev) => ({ ...prev, [eventId]: [] }));
     } finally {
       setLoadingSignupsMap((prev) => ({ ...prev, [eventId]: false }));
     }
