@@ -114,8 +114,12 @@ BEGIN
     -- 生成唯一繳費單號 PAY_YYYYMMDD_HH24MISS_xxx
     v_payment_id := 'PAY_' || to_char(NOW(), 'YYYYMMDD_HH24MISS_') || lpad(floor(random() * 1000)::text, 3, '0');
 
-    -- 生成 32 位元隨機安全憑證 (單次防偽核銷 Token，使用 PostgreSQL 核心內建 md5，免除 pgcrypto 相依性)
-    v_verify_token := md5(random()::text || clock_timestamp()::text || p_line_user_id || v_payment_id);
+    -- 生成 32 位元隨機安全憑證 (單次防偽核銷 Token，採用密碼學安全 CSPRNG gen_random_uuid)
+    BEGIN
+        v_verify_token := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+    EXCEPTION WHEN OTHERS THEN
+        v_verify_token := md5(random()::text || clock_timestamp()::text || p_line_user_id || v_payment_id);
+    END;
 
     -- 檢查是否包含社費
     FOR i IN 0 .. (jsonb_array_length(v_selected_ids) - 1) LOOP
@@ -295,11 +299,9 @@ BEGIN
         SELECT email, COALESCE(preferred_language, 'zh') INTO v_user_email, v_user_language FROM members WHERE line_user_id = v_payment.line_user_id;
     END IF;
 
-    -- 比對安全金鑰 (若該紀錄存在 verify_token 則必須相符)
-    IF v_payment.verify_token IS NOT NULL AND v_payment.verify_token != '' THEN
-        IF v_payment.verify_token != trim(p_verify_token) THEN
-            RETURN jsonb_build_object('success', FALSE, 'error', '安全金鑰無效或已過期，拒絕核銷 (Invalid verifyToken)');
-        END IF;
+    -- 比對安全金鑰 (強制要求 verify_token 必須存在且完全相符，杜絕空值繞過)
+    IF v_payment.verify_token IS NULL OR trim(v_payment.verify_token) = '' OR v_payment.verify_token != trim(p_verify_token) THEN
+        RETURN jsonb_build_object('success', FALSE, 'error', '安全金鑰無效、不存在或已過期，拒絕核銷 (Invalid or Missing verifyToken)');
     END IF;
 
     -- 檢查是否先前已核銷

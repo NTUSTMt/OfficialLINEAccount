@@ -3,7 +3,7 @@ import liff from '@line/liff';
 import { useTranslation } from 'react-i18next';
 import { ShieldCheck, Info, Plus, X } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
-import { getDirectImageUrl } from '../utils/image';
+import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
 import { fetchMemberProfileFromSupabase, saveMemberProfileToSupabase } from '../utils/supabaseClient';
 import { NATIONALITY_LIST } from '../constants/nationalities';
@@ -535,8 +535,9 @@ function Register({ userId }: { userId: string }) {
     let processedCount = 0;
 
     fileList.forEach((file) => {
-      if (file.size > 10 * 1024 * 1024) {
-        alert(t('register.alert.fileTooLarge', { name: file.name }));
+      const validation = validateImageUploadFile(file, 10 * 1024 * 1024);
+      if (!validation.valid) {
+        alert(validation.error || t('register.alert.fileTooLarge', { name: file.name }));
         processedCount++;
         return;
       }

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
-import { appendAuthToken, withAuthPayload, gasGet } from '../utils/api';
-import { getDirectImageUrl } from '../utils/image';
+import { appendAuthToken, withAuthPayload, gasGet, notifyDispatcher } from '../utils/api';
+import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
 import {
@@ -296,8 +296,10 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert(t('register.alert.fileTooLarge', { name: file.name }) || '檔案超過 10MB 限制！');
+    const validation = validateImageUploadFile(file);
+    if (!validation.valid) {
+      alert(validation.error || '檔案格式不符');
+      e.target.value = '';
       return;
     }
 
@@ -486,95 +488,57 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     setSubmittingForm(true);
     try {
-      // 若為「編輯舊活動」(formData.eventId 已存在)，才可在背景立即更新 Supabase
-      // 若為「新活動建立」(formData.eventId 為空)，不可在未確定 ID 時發送 RPC，避免產生 E20260912_... 時間戳重複紀錄
-      if (formData.eventId) {
-        saveEventToSupabase(userId || 'TEST_USER_ID', {
-          eventId: formData.eventId,
-          name: formData.name.trim(),
-          nameEn: formData.nameEn.trim(),
-          startDate: formData.startDate,
-          endDate: formData.endDate || formData.startDate,
-          deadline: formData.deadline,
-          cost: formData.cost.trim(),
-          status: formData.status,
-          shortDesc: formData.shortDesc.trim(),
-          shortDescEn: formData.shortDescEn.trim(),
-          fullDesc: formData.fullDesc.trim(),
-          fullDescEn: formData.fullDescEn.trim(),
-          imageUrl: formData.imageUrl,
-          lineGroupUrl: groupUrlTrimmed
-        }).catch(sbErr => {
-          console.warn('[AdminEvents] Supabase 儲存活動例外:', sbErr);
-        });
-      }
+      const finalImageUrl = selectedFile ? selectedFile.base64 : formData.imageUrl;
 
-      // 2. 發送 GAS 請求處理 Google Drive 資料夾建立、試算表範本複製、圖片上傳與幹部群組推播
-      const payload = {
-        action: 'save_event',
-        userId: userId || 'TEST_USER_ID',
+      // 1. 直通 Supabase 儲存 (透過 save_admin_event_rpc 具備原子性與即時反應 < 50ms)
+      const res = await saveEventToSupabase(userId || 'TEST_USER_ID', {
         eventId: formData.eventId,
         name: formData.name.trim(),
         nameEn: formData.nameEn.trim(),
-        startDate: formData.startDate.replace(/-/g, '/'),
-        endDate: formData.endDate ? formData.endDate.replace(/-/g, '/') : formData.startDate.replace(/-/g, '/'),
-        deadline: formData.deadline.replace(/-/g, '/'),
+        startDate: formData.startDate,
+        endDate: formData.endDate || formData.startDate,
+        deadline: formData.deadline,
         cost: formData.cost.trim(),
         status: formData.status,
         shortDesc: formData.shortDesc.trim(),
         shortDescEn: formData.shortDescEn.trim(),
         fullDesc: formData.fullDesc.trim(),
         fullDescEn: formData.fullDescEn.trim(),
-        imageUrl: formData.imageUrl,
-        lineGroupUrl: groupUrlTrimmed,
-        coverImageFile: selectedFile,
-        notifyOfficerGroup: formData.notifyOfficerGroup
-      };
-
-      const res = await fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(withAuthPayload(payload)),
-        redirect: 'follow'
+        imageUrl: finalImageUrl,
+        lineGroupUrl: groupUrlTrimmed
       });
-      const result = await res.json();
 
-      if (result.status === 'success') {
-        // 若為新活動建立，GAS 會自動完成 Drive/Sheet 建立並將統一 eventId (如 E2609-02) 完整 Upsert 至 Supabase
-        // 前端再次以確定之 eventId 及雲端連結呼叫 saveEventToSupabase，確保本地狀態與 Supabase 完全同步
-        if (!formData.eventId && result.eventId) {
-          saveEventToSupabase(userId || 'TEST_USER_ID', {
-            eventId: result.eventId,
-            name: formData.name.trim(),
-            nameEn: formData.nameEn.trim(),
-            startDate: formData.startDate,
-            endDate: formData.endDate || formData.startDate,
-            deadline: formData.deadline,
-            cost: formData.cost.trim(),
-            status: formData.status,
-            shortDesc: formData.shortDesc.trim(),
-            shortDescEn: formData.shortDescEn.trim(),
-            fullDesc: formData.fullDesc.trim(),
-            fullDescEn: formData.fullDescEn.trim(),
-            imageUrl: result.imageUrl || formData.imageUrl,
-            driveFolderUrl: result.driveFolderUrl,
-            spreadsheetUrl: result.spreadsheetUrl,
-            spreadsheetId: result.spreadsheetId,
-            lineGroupUrl: groupUrlTrimmed
-          }).catch(err => console.warn('[AdminEvents] 前端確認同步 Supabase 警告:', err));
-        }
-
-        alert(t('adminEvents.alerts.saveSuccess'));
-        resetFormForCreate();
-        setActiveTab('list');
-        removeCache(CACHE_KEY_ADMIN_EVENTS);
-        fetchEvents(true);
-      } else {
-        alert(t('adminEvents.alerts.error', { message: result.message || '儲存失敗' }));
+      if (!res.success) {
+        throw new Error(res.error || '儲存活動至 Supabase 失敗');
       }
-    } catch (err) {
+
+      const savedEventId = res.eventId || formData.eventId;
+
+      // 2. 若勾選推播幹部群組，透過 notifyDispatcher (Supabase Edge Function) 進行推播 (推播失敗不阻斷活動儲存)
+      if (formData.notifyOfficerGroup) {
+        notifyDispatcher('notify_officer_event', {
+          userId: userId || 'TEST_USER_ID',
+          eventId: savedEventId,
+          name: formData.name.trim(),
+          startDate: formData.startDate || '',
+          endDate: formData.endDate || formData.startDate || '',
+          deadline: formData.deadline || '',
+          cost: formData.cost.trim() || '0',
+          status: formData.status,
+          isUpdate: String(!!formData.eventId)
+        }).catch(pushErr => {
+          console.warn('[AdminEvents] 推播幹部群組例外 (不影響活動儲存):', pushErr);
+        });
+      }
+
+      alert(t('adminEvents.alerts.saveSuccess'));
+      resetFormForCreate();
+      setActiveTab('list');
+      removeCache(CACHE_KEY_ADMIN_EVENTS);
+      fetchEvents(true);
+    } catch (err: any) {
       console.error('儲存活動失敗:', err);
-      alert('連線失敗，請檢查網路狀態！');
+      alert(t('adminEvents.alerts.error', { message: err?.message || String(err) }));
     } finally {
       setSubmittingForm(false);
     }
@@ -878,16 +842,13 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     setSendingNotifications(true);
     try {
-      const query = new URLSearchParams({
-        action: 'send_event_notifications',
+      const res = await notifyDispatcher('send_event_notifications', {
         userId: userId || 'TEST_USER_ID',
         eventId: selectedEventForSignups.id
       });
 
-      const result = await gasGet(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
-
-      if (result?.status === 'success') {
-        alert(t('adminEvents.alerts.notificationsSent', { count: result?.notifiedCount || unnotifiedCount }));
+      if (res.success) {
+        alert(t('adminEvents.alerts.notificationsSent', { count: unnotifiedCount }));
         setSignupsList((prev) => {
           const updated = prev.map((s) =>
             s.reviewResult.indexOf('正取') > -1 || s.reviewResult.indexOf('備取') > -1
@@ -900,11 +861,11 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           return updated;
         });
       } else {
-        alert(t('adminEvents.alerts.error', { message: result?.message || '推播通知失敗' }));
+        alert(t('adminEvents.alerts.error', { message: res.message || '推播通知失敗' }));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('發送通知失敗:', err);
-      alert('連線失敗，請稍後再試！');
+      alert(t('adminEvents.alerts.error', { message: err?.message || String(err) }));
     } finally {
       setSendingNotifications(false);
     }

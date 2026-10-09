@@ -20,6 +20,7 @@ import {
 } from '../utils/supabaseClient';
 import type { MemberTimelineRecord, MemberTimelineCategory } from '../types/admin';
 import { safeNavigateBack } from '../utils/navigationUtils';
+import { getDirectImageUrl, sanitizeUrl } from '../utils/image';
 
 const SORT_OPTIONS: SortOption[] = [
   { key: 'timestamp', label: '依紀錄時間（預設上新下舊）' },
@@ -648,19 +649,19 @@ export default function MemberRecords({ officerUserId }: MemberRecordsProps) {
                                   backgroundColor: '#f8fafc',
                                   boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                                 }}
-                                onClick={() => setLightboxImageUrl(r.details!.proofImageUrl!)}
+                                onClick={() => setLightboxImageUrl(getDirectImageUrl(r.details!.proofImageUrl!) || r.details!.proofImageUrl!)}
                                 title="點擊預覽大圖"
                               >
                                 <img
-                                  src={r.details.proofImageUrl}
+                                  src={getDirectImageUrl(r.details.proofImageUrl) || r.details.proofImageUrl}
                                   alt="繳費證明截圖"
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
                               </div>
                               <a
-                                href={r.details.proofImageUrl}
+                                href={sanitizeUrl(r.details.proofImageUrl)}
                                 target="_blank"
-                                rel="noreferrer"
+                                rel="noopener noreferrer"
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',

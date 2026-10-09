@@ -21,16 +21,19 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { code, redirectUri } = await req.json();
+    const body = await req.json();
+    const code = body.code;
+    const redirectUri = body.redirectUri;
+    const idToken = body.idToken || body.id_token;
 
-    if (!code || !redirectUri) {
-      return new Response(JSON.stringify({ error: 'Missing code or redirectUri parameter' }), {
+    if (!idToken && (!code || !redirectUri)) {
+      return new Response(JSON.stringify({ error: 'Missing code/redirectUri or idToken parameter' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const channelId = Deno.env.get('LINE_CHANNEL_ID');
+    const channelId = Deno.env.get('LINE_CHANNEL_ID') || Deno.env.get('LIFF_CHANNEL_ID') || '2009217429';
     const channelSecret = Deno.env.get('LINE_CHANNEL_SECRET');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -39,10 +42,10 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('CUSTOM_JWT_SECRET') ||
       Deno.env.get('SUPABASE_JWT_SECRET');
 
-    if (!channelId || !channelSecret || !supabaseUrl || !supabaseServiceKey || !supabaseJwtSecret) {
+    if (!supabaseUrl || !supabaseServiceKey || !supabaseJwtSecret) {
       return new Response(
         JSON.stringify({
-          error: 'Server configuration error: missing required environment variables (LINE_CHANNEL_ID, LINE_CHANNEL_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, JWT_SECRET)',
+          error: 'Server configuration error: missing required environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, JWT_SECRET)',
         }),
         {
           status: 500,
@@ -51,53 +54,95 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 1. 向 LINE OAuth2 Token API 交換 access_token
-    const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-        client_id: channelId,
-        client_secret: channelSecret,
-      }),
-    });
+    let userId = '';
+    let displayName = '';
+    let pictureUrl = '';
 
-    if (!tokenRes.ok) {
-      const errText = await tokenRes.text();
-      return new Response(
-        JSON.stringify({ error: `LINE token exchange failed (${tokenRes.status}): ${errText}` }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+    if (idToken) {
+      // 1-A. LIFF 端：驗證 LINE ID Token
+      const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          id_token: idToken,
+          client_id: channelId,
+        }),
+      });
+
+      if (!verifyRes.ok) {
+        const errText = await verifyRes.text();
+        return new Response(
+          JSON.stringify({ error: `LINE ID Token verification failed (${verifyRes.status}): ${errText}` }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const idTokenData = await verifyRes.json();
+      userId = idTokenData.sub;
+      displayName = idTokenData.name || '';
+      pictureUrl = idTokenData.picture || '';
+    } else {
+      // 1-B. Web Admin 端：向 LINE OAuth2 Token API 交換 access_token
+      if (!channelSecret) {
+        return new Response(
+          JSON.stringify({ error: 'Server configuration error: missing LINE_CHANNEL_SECRET for code flow' }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: redirectUri,
+          client_id: channelId,
+          client_secret: channelSecret,
+        }),
+      });
+
+      if (!tokenRes.ok) {
+        const errText = await tokenRes.text();
+        return new Response(
+          JSON.stringify({ error: `LINE token exchange failed (${tokenRes.status}): ${errText}` }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const tokenData = await tokenRes.json();
+      const accessToken = tokenData.access_token;
+
+      // 向 LINE Profile API 取得使用者資料 (userId, displayName, pictureUrl)
+      const profileRes = await fetch('https://api.line.me/v2/profile', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!profileRes.ok) {
+        const errText = await profileRes.text();
+        return new Response(
+          JSON.stringify({ error: `LINE profile query failed (${profileRes.status}): ${errText}` }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const profileData = await profileRes.json();
+      userId = profileData.userId;
+      displayName = profileData.displayName || '';
+      pictureUrl = profileData.pictureUrl || '';
     }
-
-    const tokenData = await tokenRes.json();
-    const accessToken = tokenData.access_token;
-
-    // 2. 向 LINE Profile API 取得使用者資料 (userId, displayName, pictureUrl)
-    const profileRes = await fetch('https://api.line.me/v2/profile', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!profileRes.ok) {
-      const errText = await profileRes.text();
-      return new Response(
-        JSON.stringify({ error: `LINE profile query failed (${profileRes.status}): ${errText}` }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    const profileData = await profileRes.json();
-    const userId = profileData.userId;
-    const displayName = profileData.displayName || '';
-    const pictureUrl = profileData.pictureUrl || '';
 
     // 3. 連線 Supabase 雙軌查驗幹部身分 (members 表與 officers 表)
     const supabase = createClient(supabaseUrl, supabaseServiceKey);

@@ -328,8 +328,10 @@ CREATE POLICY "Public read equipments" ON equipments
     FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Allow update equipments" ON equipments;
-CREATE POLICY "Allow update equipments" ON equipments
-    FOR UPDATE USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access equipments" ON equipments;
+CREATE POLICY "Service role full access equipments" ON equipments
+    FOR ALL USING (auth.role() = 'service_role');
 
 -- 裝備照片安全直更 RPC (免除 GAS 跨域 302 重導向之 Load failed 阻斷)
 CREATE OR REPLACE FUNCTION update_equipment_images(

@@ -22,26 +22,51 @@ DROP FUNCTION IF EXISTS update_admin_loan_status_rpc(TEXT, TEXT, TEXT, TEXT) CAS
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS notification_status TEXT DEFAULT '未通知';
 
--- 1. 內部幹部鑑權函式 (is_officer) 確保存在且支援雙軌查核
+-- 1. 內部幹部鑑權函式 (is_officer) 支援 JWT Claim 鑑權與雙軌資料表比對 (杜絕身分偽冒)
 CREATE OR REPLACE FUNCTION is_officer(p_line_user_id TEXT)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+    v_jwt_sub TEXT;
+    v_jwt_officer BOOLEAN;
+    v_target_id TEXT;
 BEGIN
-    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
+    -- 1. 提取 JWT 宣告 (若呼叫者持有 Supabase Auth JWT)
+    BEGIN
+        v_jwt_sub := auth.jwt() ->> 'sub';
+        v_jwt_officer := (auth.jwt() ->> 'is_officer')::boolean;
+    EXCEPTION WHEN OTHERS THEN
+        v_jwt_sub := NULL;
+        v_jwt_officer := NULL;
+    END;
+
+    -- 若持有合法幹部 JWT 且未指定 ID 或 ID 相符，直接核准
+    IF v_jwt_officer IS TRUE THEN
+        IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' OR trim(p_line_user_id) = v_jwt_sub THEN
+            RETURN TRUE;
+        END IF;
+    END IF;
+
+    -- 若持有非幹部 JWT 但意圖傳入他人幹部 ID 進行偽冒，直接拒絕 (Anti-Spoofing)
+    IF v_jwt_sub IS NOT NULL AND trim(v_jwt_sub) != '' AND v_jwt_officer IS NOT TRUE THEN
+        IF p_line_user_id IS NOT NULL AND trim(p_line_user_id) != '' AND trim(p_line_user_id) != v_jwt_sub THEN
+            RETURN FALSE;
+        END IF;
+    END IF;
+
+    v_target_id := COALESCE(NULLIF(trim(p_line_user_id), ''), v_jwt_sub);
+    IF v_target_id IS NULL OR v_target_id = '' OR v_target_id = 'TEST_USER_ID' THEN
         RETURN FALSE;
     END IF;
 
-    IF trim(p_line_user_id) = 'TEST_USER_ID' THEN
-        RETURN TRUE;
-    END IF;
-
+    -- 2. 雙軌資料表查核
     RETURN EXISTS (
-        SELECT 1 FROM officers WHERE line_user_id = trim(p_line_user_id)
+        SELECT 1 FROM officers WHERE line_user_id = v_target_id
         UNION
-        SELECT 1 FROM members WHERE line_user_id = trim(p_line_user_id) AND (is_officer = TRUE OR officer_role IS NOT NULL)
+        SELECT 1 FROM members WHERE line_user_id = v_target_id AND (is_officer = TRUE OR officer_role IS NOT NULL)
     );
 END;
 $$;

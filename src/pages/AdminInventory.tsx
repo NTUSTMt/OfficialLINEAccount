@@ -20,7 +20,7 @@ import { NotionFilterBar, type FilterGroup, type SortOption } from '../component
 import { AdminSubNav } from '../components/admin/AdminSubNav';
 import { GAS_API_URL } from '../constants/api';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
-import { getDirectImageUrl } from '../utils/image';
+import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { ProductImage } from '../components/borrow/ProductImage';
 
 const CATEGORIES: AdminInventoryItem['category'][] = [
@@ -192,6 +192,14 @@ export default function AdminInventory({ userId }: { userId?: string } = {}) {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validation = validateImageUploadFile(file);
+    if (!validation.valid) {
+      setErrorMessage(`[檔案驗證失敗]: ${validation.error}`);
+      alert(validation.error || '檔案格式不符');
+      e.target.value = '';
+      return;
+    }
 
     if (formState.images.length >= 5) {
       alert('最多只能上傳 5 張裝備相片');

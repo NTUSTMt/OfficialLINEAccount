@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Award, Star, Edit3, Globe, Lock, ChevronRight } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
-import { getDirectImageUrl } from '../utils/image';
+import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
 import { fetchAchievementsFromSupabase, saveReflectionToSupabase, getLastSupabaseError } from '../utils/supabaseClient';
 import ReflectionWallModal from '../components/achievements/ReflectionWallModal';
@@ -229,8 +229,9 @@ function Achievements({ userId }: { userId: string }) {
     let processedCount = 0;
 
     fileList.forEach((file) => {
-      if (file.size > 10 * 1024 * 1024) {
-        alert(t('register.alert.fileTooLarge', { name: file.name }) || `檔案 ${file.name} 超過 10MB 限制！`);
+      const validation = validateImageUploadFile(file, 10 * 1024 * 1024);
+      if (!validation.valid) {
+        alert(validation.error || t('register.alert.fileTooLarge', { name: file.name }) || `檔案 ${file.name} 超過 10MB 限制！`);
         processedCount++;
         return;
       }

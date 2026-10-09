@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.272-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.279-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.272)](#7-最新版本異動紀錄-changelog-v01272)
+- [7. 最新版本異動紀錄 (Changelog v0.1.279)](#7-最新版本異動紀錄-changelog-v01279)
 
 ---
 
@@ -204,7 +204,71 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.272)
+## 7. 最新版本異動紀錄 (Changelog v0.1.279)
+
+### v0.1.279 (2026-10-09)
+- **手機端活動管理直通 Supabase RPC 存檔與推播去 GAS 化修復**:
+  - **修復活動儲存觸發 GAS Worker 401 密鑰阻斷問題 ([src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx))**:
+    - 將活動建立與修改全面改為直通 Supabase PostgreSQL 預存程序（`saveEventToSupabase` / `save_admin_event_rpc`），達成耗時小於 50ms 之原子性寫入與自動排入 `sync_queue` 佇列。
+    - 徹底移除過往對 GAS `save_event` 舊端點之阻塞呼叫，杜絕因 GAS Thin Worker 啟用 `x-worker-secret` 內部共享密鑰檢驗而引發之 `Unauthorized: Invalid or missing x-worker-secret` 權限錯誤彈窗。
+  - **幹部推播與名冊審核通知全面改走 Edge Function ([src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx))**:
+    - 若勾選「推播至幹部群組」，改為呼叫 Supabase `notify-dispatcher` Edge Function（`notify_officer_event`），並採非同步處理使推播異常不影響活動主體資料之儲存。
+    - 審核通知發送（`handleSendNotifications`）同步改由 `notifyDispatcher('send_event_notifications')` 處理，完整實現全端點微服務化與錯誤訊息透明呈現。
+
+### v0.1.278 (2026-10-09)
+- **全面防禦惡意檔案上傳與儲存型 XSS 攻擊 (Malicious File Upload & Stored XSS Defense)**:
+  - **建立集中式檔案驗證與網址安全淨化模組 ([src/utils/image.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/image.ts))**:
+    - `validateImageUploadFile`：採用嚴格白名單（`image/jpeg`, `image/jpg`, `image/png`, `image/webp`, `image/gif`, `image/heic`, `image/heif`），主動攔截包含 XML 腳本執行風險之 SVG 格式（`image/svg+xml` 與 `.svg` 副檔名），並封殺所有可執行與腳本副檔名（`.html`, `.htm`, `.js`, `.mjs`, `.php`, `.sh`, `.exe`, `.bat`, `.vbs`, `.xml` 等），強制實施單檔 10MB 大小上限防禦。
+    - `sanitizeUrl`：對外部超連結與圖片 URL 進行嚴格協議白名單過濾（`https://`, `http://`, `line://`, `mailto:`, `tel:`），全面阻斷 `javascript:`, `vbscript:`, `data:text/html` 等 XSS 惡意偽協議。
+    - `getDirectImageUrl`：整合 `sanitizeUrl`，確保 Google Drive CDN 轉換與一般外鏈在渲染前皆經過安全淨化。
+  - **全系統上傳端點導入安全驗證**:
+    - 社員端：活動體能證明上傳 ([src/pages/Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx))、匯款單據上傳 ([src/pages/Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx))、登頂心得照片上傳 ([src/pages/Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx))。
+    - 幹部端：活動封面照片上傳 ([src/pages/AdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminEvents.tsx), [src/pages/web-admin/WebAdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/web-admin/WebAdminEvents.tsx))、裝備相片上傳 ([src/pages/AdminInventory.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/AdminInventory.tsx), [src/pages/web-admin/WebAdminInventory.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/web-admin/WebAdminInventory.tsx))。
+  - **外部連結安全性全面加固 (Tabnabbing & Opener Protection)**:
+    - 確保全系統所有 `target="_blank"` 外部連結（[src/pages/MemberRecords.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/MemberRecords.tsx), [src/pages/Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx), [src/components/admin/AdminEventCard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/components/admin/AdminEventCard.tsx) 等）均配置 `rel="noopener noreferrer"` 與 `sanitizeUrl`，防堵反向視窗劫持。
+  - **新增檔案安全與 XSS 防禦單元測試 ([test/107_file_upload_and_xss_defense.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/107_file_upload_and_xss_defense.test.mjs))**:
+    - 6 項單元測試 100% 通過（包含 SVG 阻擋、危險副檔名攔截、大小限制、合法圖片放行、XSS 協議阻斷、全前端上傳呼叫檢驗）。
+
+### v0.1.277 (2026-10-09)
+- **第二階段身分鑑權架構升級與 BOLA/IDOR 越權防護 (Phase 2 Auth Architecture Modernization & Anti-Spoofing)**:
+  - **line-auth Edge Function 支援 LIFF ID Token 驗證與簽發 Custom JWT ([supabase/functions/line-auth/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-auth/index.ts))**:
+    - 擴充驗證入口支援 `{ idToken }`，直接向 LINE 官方驗證端點校驗簽章，成功後查驗幹部身分並簽署 `authenticated` 角色之 Supabase Custom JWT（8小時有效）。
+    - 讓手機 LIFF 與電腦版 Web Admin 雙端均可取得受密碼學保護的身分權杖。
+  - **幹部鑑權函式升級支援 JWT Claim 與身分防偽冒 ([supabase/admin_portal_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_portal_rpc.sql))**:
+    - `is_officer` 升級為優先提取 `auth.jwt() ->> 'is_officer'`，且當非幹部持有 JWT 意圖傳入他人幹部 ID 試圖越權時，強制直接拒絕（Anti-Spoofing）。
+  - **個資讀寫與個人儀表板 RPC 實裝 BOLA/IDOR 防禦 ([supabase/member_profile_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/member_profile_rpc.sql), [supabase/get_my_dashboard.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/get_my_dashboard.sql))**:
+    - `get_member_profile`、`save_member_profile` 與 `get_my_dashboard` 導入 JWT 宣告校驗，持有 JWT 之非幹部使用者僅被允許讀寫本人（`sub = p_line_user_id`）資料，攔截跨帳號橫向越權。
+  - **新增第二階段資安架構升級單元測試 ([test/106_auth_architecture_modernization.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/106_auth_architecture_modernization.test.mjs))**:
+    - 新增 4 項身分鑑權升級、JWT Claim 校驗與 BOLA 越權防禦驗證測試。
+
+### v0.1.276 (2026-10-09)
+- **第一階段資安架構防禦強化與弱點修補 (Phase 1 Security Hardening & Vulnerability Patches)**:
+  - **徹底移除幹部鑑權萬用後門 (`TEST_USER_ID`) ([supabase/admin_portal_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_portal_rpc.sql), [supabase/admin_events_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/admin_events_rpc.sql))**:
+    - 自 `is_officer` 內部鑑權函式中徹底刪除 `IF trim(p_line_user_id) = 'TEST_USER_ID' THEN RETURN TRUE; END IF;`，杜絕任何未經授權者利用測試 ID 越權存取全體社員名冊、機密個資與財務對帳紀錄。
+  - **修補單鍵核銷 Token 繞過弱點 ([supabase/verify_payment_rpc.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/verify_payment_rpc.sql))**:
+    - `verify_payment_by_token` 改為強制檢驗 `verify_token`，若資料庫內 Token 為空、不存在或不符合一律拒絕核銷，杜絕歷史或空值繳費單遭隨機金鑰惡意核銷。
+    - 升級核銷 Token 產生器，採用密碼學安全 CSPRNG `gen_random_uuid()` 取代傳統弱 PRNG `md5(random())`。
+  - **收緊資料庫 RLS 存取權限策略 ([supabase/schema.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/schema.sql))**:
+    - 移除 `equipments` 表之過寬匿名 `UPDATE` 政策 (`Allow update equipments`)，嚴格維持公開唯讀（`SELECT`）以保障首屏秒開，寫入權限收攏至 `service_role` 與專屬鑑權 RPC。
+  - **新增資安測試套件 ([test/105_security_vulnerability_audit.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/105_security_vulnerability_audit.test.mjs))**:
+    - 新增 5 項第一階段資安修補驗證測試，確保後門移除、核銷 Token 嚴格防禦與 RLS 邊界無誤。
+
+### v0.1.274 (2026-10-09)
+- **調整系統巡檢為每週一 00:00 執行與活動結束一週自動關閉規則**:
+  - **更新 pg_cron 巡檢排程 ([supabase/migrations/20261009000001_change_patrol_to_weekly.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/migrations/20261009000001_change_patrol_to_weekly.sql))**:
+    - 移除每日舊排程 `daily_patrol_job`，建立 `weekly_patrol_job`（`0 16 * * 0`，台北時間每週一 00:00）。
+    - 成功於 Supabase 資料庫執行並啟用排程。
+  - **優化活動關閉條件與巡檢報告 ([supabase/functions/daily-patrol/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/daily-patrol/index.ts))**:
+    - 活動結束時間尚未超過一週（7 天）者保持開放，僅在活動結束超過一週後才自動切換為「關閉」。
+    - 將巡檢報告調整為「每週自動巡檢報告」，並移除報告字串中的 Emoji，符合專案規範。
+    - 成功重新部署 `daily-patrol` Edge Function 至 Supabase。
+
+### v0.1.273 (2026-10-09)
+- **修復 LINE Webhook 多 Bot 簽章驗證與 401 拒絕存取問題**:
+  - **支援雙 Bot 密鑰驗證 ([supabase/functions/line-webhook/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/index.ts))**:
+    - 將 Webhook 簽章驗證升級為動態比對 `MEMBER_BOT_SECRET`、`ADMIN_BOT_SECRET` 與 `LINE_CHANNEL_SECRET`，確保社員官方帳號 (Member Bot) 與幹部管理機器人 (Admin Bot) 之 Webhook 皆能順利通過驗證。
+    - 成功部署新版 Edge Function `line-webhook` 至 Supabase 專案 (`bvyyuobmizfrosbgcqbu`)。
+    - 解決 LINE Developers Console 點擊 Verify 發生 401 Unauthorized 以及點擊「最新活動」選單無反應之問題。
 
 ### v0.1.272 (2026-10-08)
 - **修復前端 Vercel 建置錯誤**:
@@ -2295,12 +2359,21 @@ pnpm test
     - 將活動報名取消 (notify_event_cancelled) 與裝備取消 (notify_loan_cancelled) 統一轉由 notifyDispatcher 直連 Supabase Edge Function。
     - 確保正取社員取消時，幹部群組能即時收到「正取棄權緊急通知」並提示遞補與退款事宜。
 
+### v0.1.274 (2026-10-09)
+- 自動巡檢週期調整為每週巡檢與活動保留規則實作：
+  - 巡檢週期改為每週一 00:00 (Asia/Taipei)：
+    - 更新 daily-patrol 標題為「登山社系統每週巡檢報告 (Weekly Patrol Report)」。
+    - 於 Supabase pg_cron 排程 weekly_patrol_job (每週一 00:00 台北時間，Cron 表達式 0 16 * * 0)。
+  - 活動狀態保留寬限規則：
+    - 若活動結束尚未滿一週（7天以內），系統保留開放狀態不自動設為關閉。
 
-
-
-
-
-
-
-
-
+### v0.1.275 (2026-10-09)
+- 正備取通知推播名額統計與單一語系標題優化：
+  - 活動正備取人數即時統計標籤 (notify-dispatcher / GAS Worker)：
+    - 審核通知 (send_event_notifications) 自動計算該活動正取與備取人數（排除已取消與核對中名額）。
+    - 於活動名稱下方插入灰色統計膠囊標籤（中文：正取：X 人 ｜ 備取：Y 人；英文：Confirmed: X | Waitlisted: Y）。
+  - 單一語系輸出無雙語混雜：
+    - 依據使用者偏好語系（preferred_language）輸出對應語言之活動名稱（英文優先讀取 title_en）與通知內文。
+  - 後端維護架構更新：
+    - gas_modules 已全數移除，後續 GAS 相關邏輯統一直接維護於 src/gas.js。
+  - Canva Connect API 與 Instagram Graph API 一鍵社群發文功能研究與架構規劃完成。

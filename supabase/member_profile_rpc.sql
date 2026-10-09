@@ -9,7 +9,7 @@ DROP POLICY IF EXISTS "Anon read member" ON members;
 DROP POLICY IF EXISTS "Anon insert member" ON members;
 DROP POLICY IF EXISTS "Anon update member" ON members;
 
--- 2. 安全讀取 RPC 函式：嚴格僅能以指定之 line_user_id 查閱本人紀錄 (查無則回傳 null，杜絕整表爬取)
+-- 2. 安全讀取 RPC 函式：嚴格僅能以指定之 line_user_id 查閱本人紀錄 (若持有 JWT 則強制檢查 sub，杜絕 BOLA/IDOR 越權爬取)
 CREATE OR REPLACE FUNCTION get_member_profile(p_line_user_id TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -18,12 +18,34 @@ SET search_path = public
 AS $$
 DECLARE
     v_member members%ROWTYPE;
+    v_jwt_sub TEXT;
+    v_jwt_officer BOOLEAN;
+    v_target_id TEXT;
 BEGIN
-    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' OR trim(p_line_user_id) = 'TEST_USER_ID' THEN
+    -- 1. 提取 JWT 宣告 (若呼叫者持有 Supabase Auth JWT)
+    BEGIN
+        v_jwt_sub := auth.jwt() ->> 'sub';
+        v_jwt_officer := (auth.jwt() ->> 'is_officer')::boolean;
+    EXCEPTION WHEN OTHERS THEN
+        v_jwt_sub := NULL;
+        v_jwt_officer := NULL;
+    END;
+
+    -- 2. 防範 BOLA/IDOR：若持有 JWT，非幹部僅允許讀取本人 (sub = p_line_user_id)
+    IF v_jwt_sub IS NOT NULL AND trim(v_jwt_sub) != '' THEN
+        IF v_jwt_officer IS NOT TRUE AND p_line_user_id IS NOT NULL AND trim(p_line_user_id) != '' AND trim(p_line_user_id) != v_jwt_sub THEN
+            RETURN jsonb_build_object('error', 'Forbidden: Identity mismatch (禁止越權讀取他人個資)');
+        END IF;
+        v_target_id := COALESCE(NULLIF(trim(p_line_user_id), ''), v_jwt_sub);
+    ELSE
+        v_target_id := trim(p_line_user_id);
+    END IF;
+
+    IF v_target_id IS NULL OR v_target_id = '' OR v_target_id = 'TEST_USER_ID' THEN
         RETURN NULL;
     END IF;
 
-    SELECT * INTO v_member FROM members WHERE line_user_id = trim(p_line_user_id);
+    SELECT * INTO v_member FROM members WHERE line_user_id = v_target_id;
     IF FOUND THEN
         RETURN to_jsonb(v_member);
     ELSE
@@ -32,7 +54,7 @@ BEGIN
 END;
 $$;
 
--- 3. 安全儲存 RPC 函式：以 line_user_id 為唯一鎖定，嚴格僅能寫入本人資料
+-- 3. 安全儲存 RPC 函式：以 line_user_id 為唯一鎖定，嚴格僅能寫入本人資料 (防範 BOLA/IDOR)
 CREATE OR REPLACE FUNCTION save_member_profile(
     p_line_user_id TEXT,
     p_data JSONB
@@ -44,15 +66,37 @@ SET search_path = public
 DECLARE
     v_is_officer BOOLEAN := FALSE;
     v_officer_role TEXT := NULL;
+    v_jwt_sub TEXT;
+    v_jwt_officer BOOLEAN;
+    v_target_id TEXT;
 BEGIN
-    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
+    -- 1. 提取 JWT 宣告 (若呼叫者持有 Supabase Auth JWT)
+    BEGIN
+        v_jwt_sub := auth.jwt() ->> 'sub';
+        v_jwt_officer := (auth.jwt() ->> 'is_officer')::boolean;
+    EXCEPTION WHEN OTHERS THEN
+        v_jwt_sub := NULL;
+        v_jwt_officer := NULL;
+    END;
+
+    -- 2. 防範 BOLA/IDOR：若持有 JWT，非幹部僅允許寫入本人 (sub = p_line_user_id)
+    IF v_jwt_sub IS NOT NULL AND trim(v_jwt_sub) != '' THEN
+        IF v_jwt_officer IS NOT TRUE AND p_line_user_id IS NOT NULL AND trim(p_line_user_id) != '' AND trim(p_line_user_id) != v_jwt_sub THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Forbidden: Identity mismatch (禁止越權修改他人資料)');
+        END IF;
+        v_target_id := COALESCE(NULLIF(trim(p_line_user_id), ''), v_jwt_sub);
+    ELSE
+        v_target_id := trim(p_line_user_id);
+    END IF;
+
+    IF v_target_id IS NULL OR v_target_id = '' THEN
         RETURN jsonb_build_object('success', false, 'message', '缺少使用者識別碼');
     END IF;
 
     -- 檢查該成員目前是否具備幹部身分
     SELECT is_officer, officer_role INTO v_is_officer, v_officer_role
     FROM members
-    WHERE line_user_id = trim(p_line_user_id);
+    WHERE line_user_id = v_target_id;
 
     INSERT INTO members (
         line_user_id,

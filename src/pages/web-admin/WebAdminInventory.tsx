@@ -33,7 +33,7 @@ import type { AdminInventoryItem } from '../../types/admin';
 import { useAdvancedTable, type AdvancedColumnDef } from '../../components/admin/useAdvancedTable';
 import { GAS_API_URL } from '../../constants/api';
 import { appendAuthToken, withAuthPayload } from '../../utils/api';
-import { getDirectImageUrl } from '../../utils/image';
+import { getDirectImageUrl, validateImageUploadFile } from '../../utils/image';
 import './webAdmin.css';
 
 const CATEGORIES: string[] = [
@@ -440,6 +440,14 @@ export const WebAdminInventory: React.FC = () => {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validation = validateImageUploadFile(file);
+    if (!validation.valid) {
+      setErrorMsg(`[檔案驗證失敗]: ${validation.error}`);
+      alert(validation.error || '檔案格式不符');
+      e.target.value = '';
+      return;
+    }
 
     if (formState.images.length >= 5) {
       alert('最多只能上傳 5 張裝備相片');

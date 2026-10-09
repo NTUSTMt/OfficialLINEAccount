@@ -573,6 +573,28 @@ async function handleSendEventNotifications(json: Record<string, any>) {
   const targetEventTitle = event.title || targetEventId;
   const targetGroupUrl = (event.line_group_url || "").trim();
 
+  // 查詢該活動所有名單以統計有效正取與備取人數（排除已取消與審核中）
+  const { data: allEventSignups } = await client
+    .from("event_signups")
+    .select("status")
+    .eq("event_id", targetEventId);
+
+  let confirmedCount = 0;
+  let waitlistedCount = 0;
+  if (allEventSignups && Array.isArray(allEventSignups)) {
+    for (const su of allEventSignups) {
+      const st = String(su.status || "").trim();
+      if (st.includes("取消") || st.includes("cancel") || st.includes("審核中") || st.includes("Checking")) {
+        continue;
+      }
+      if (st.includes("正取")) {
+        confirmedCount++;
+      } else if (st.includes("備取")) {
+        waitlistedCount++;
+      }
+    }
+  }
+
   let query = client
     .from("event_signups")
     .select("id,event_id,line_user_id,name,status,notification_status")
@@ -623,25 +645,30 @@ async function handleSendEventNotifications(json: Record<string, any>) {
       if (claimErr) continue;
 
       const prefLang = await getUserPreferredLanguage(targetUid);
+      const isEnglish = prefLang === "en";
+
+      const targetEventTitle = isEnglish
+        ? (event.title_en || event.title || targetEventId)
+        : (event.title || targetEventId);
+
+      const statsPillText = isEnglish
+        ? `Confirmed: ${confirmedCount} | Waitlisted: ${waitlistedCount}`
+        : `正取：${confirmedCount} 人 ｜ 備取：${waitlistedCount} 人`;
 
       if (statusStr.includes("正取")) {
-        const resTag = prefLang === "en" ? "Review Result Released" : prefLang === "zh" ? "審核結果出爐" : "審核結果出爐 Result";
-        const resTitle = prefLang === "en" ? "Admission Confirmed" : "活動正取通知";
-        const greetText = prefLang === "en"
+        const resTag = isEnglish ? "Review Result Released" : "審核結果出爐";
+        const resTitle = isEnglish ? "Admission Confirmed" : "活動正取通知";
+        const greetText = isEnglish
           ? `Hello ${applicantName}! For the event:`
-          : prefLang === "zh"
-          ? `哈囉 ${applicantName}！您報名的活動：`
-          : `哈囉 ${applicantName}！您報名的活動：\nHello ${applicantName}! For the event:`;
-        const resPrompt = prefLang === "en" ? "Review Result:" : prefLang === "zh" ? "審核結果為：" : "審核結果為 Result：";
-        const displayBadge = prefLang === "en" ? "【 Confirmed 】" : prefLang === "zh" ? "【 正取 】" : `【 ${statusStr} 】`;
-        const noticeText = prefLang === "en"
+          : `哈囉 ${applicantName}！您報名的活動：`;
+        const resPrompt = isEnglish ? "Review Result:" : "審核結果為：";
+        const displayBadge = isEnglish ? "【 Confirmed 】" : "【 正取 】";
+        const noticeText = isEnglish
           ? "Congratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!"
-          : prefLang === "zh"
-          ? "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！"
-          : "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！\nCongratulations! Please click the button below to join the activity LINE group and complete payment before the deadline!";
-        const joinBtn = prefLang === "en" ? "Join Group" : prefLang === "zh" ? "加入活動群組" : "加入活動群組 Join Group";
-        const payBtn = prefLang === "en" ? "Pay Now" : prefLang === "zh" ? "前往繳費系統" : "前往繳費系統 Pay";
-        const altPushText = prefLang === "en" ? "【Activity Admission Notice】" : prefLang === "zh" ? "【活動正取通知】" : "【活動正取通知 Confirmed】";
+          : "恭喜您錄取！請點擊下方按鈕加入出隊專屬群組，並請於期限內完成繳費！";
+        const joinBtn = isEnglish ? "Join Group" : "加入活動群組";
+        const payBtn = isEnglish ? "Pay Now" : "前往繳費系統";
+        const altPushText = isEnglish ? "【Activity Admission Notice】" : "【活動正取通知】";
 
         const acceptedFlex = {
           type: "bubble",
@@ -653,6 +680,27 @@ async function handleSendEventNotifications(json: Record<string, any>) {
               { type: "text", text: resTitle, weight: "bold", size: "xl", margin: "md" },
               { type: "text", text: greetText, margin: "md", size: "sm", wrap: true },
               { type: "text", text: targetEventTitle, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
+              {
+                type: "box",
+                layout: "horizontal",
+                backgroundColor: "#F3F4F6",
+                cornerRadius: "md",
+                paddingStart: "md",
+                paddingEnd: "md",
+                paddingTop: "xs",
+                paddingBottom: "xs",
+                margin: "md",
+                contents: [
+                  {
+                    type: "text",
+                    text: statsPillText,
+                    size: "xs",
+                    color: "#374151",
+                    weight: "bold",
+                    align: "center",
+                  },
+                ],
+              },
               { type: "text", text: resPrompt, margin: "md", size: "sm" },
               { type: "text", text: displayBadge, weight: "bold", color: "#1DB446", size: "lg", align: "center", margin: "md" },
               { type: "separator", margin: "md" },
@@ -696,22 +744,18 @@ async function handleSendEventNotifications(json: Record<string, any>) {
           await client.from("event_signups").update({ notification_status: "未發送", updated_at: new Date().toISOString() }).eq("id", sItem.id);
         }
       } else {
-        const resTagW = prefLang === "en" ? "Review Result Released" : prefLang === "zh" ? "審核結果出爐" : "審核結果出爐 Result";
-        const resTitleW = prefLang === "en" ? "Activity Waitlist Notice" : "活動備取通知";
-        const greetTextW = prefLang === "en"
+        const resTagW = isEnglish ? "Review Result Released" : "審核結果出爐";
+        const resTitleW = isEnglish ? "Activity Waitlist Notice" : "活動備取通知";
+        const greetTextW = isEnglish
           ? `Hello ${applicantName}! For the event:`
-          : prefLang === "zh"
-          ? `哈囉 ${applicantName}！您報名的活動：`
-          : `哈囉 ${applicantName}！您報名的活動：\nHello ${applicantName}! For the event:`;
-        const resPromptW = prefLang === "en" ? "Review Result:" : prefLang === "zh" ? "審核結果為：" : "審核結果為 Result：";
-        const displayBadgeW = prefLang === "en" ? "【 Waitlisted 】" : prefLang === "zh" ? "【 備取 】" : `【 ${statusStr} 】`;
-        const noticeTextW = prefLang === "en"
+          : `哈囉 ${applicantName}！您報名的活動：`;
+        const resPromptW = isEnglish ? "Review Result:" : "審核結果為：";
+        const displayBadgeW = isEnglish ? "【 Waitlisted 】" : "【 備取 】";
+        const noticeTextW = isEnglish
           ? "You are currently on the waitlist. We will contact you if a spot opens up!"
-          : prefLang === "zh"
-          ? "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！"
-          : "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！\nYou are currently on the waitlist. We will contact you if a spot opens up!";
-        const confirmBtn = prefLang === "en" ? "Confirm Waitlist" : prefLang === "zh" ? "確認備取意願" : "確認備取意願 Confirm Waitlist";
-        const altPushTextW = prefLang === "en" ? "【Activity Waitlist Notice】" : prefLang === "zh" ? "【活動備取通知】" : "【活動備取通知 Waitlist】";
+          : "目前為備取狀態，若有正取人員釋出名額，幹部將主動聯絡您遞補！";
+        const confirmBtn = isEnglish ? "Confirm Waitlist" : "確認備取意願";
+        const altPushTextW = isEnglish ? "【Activity Waitlist Notice】" : "【活動備取通知】";
 
         const waitlistFlex = {
           type: "bubble",
@@ -723,6 +767,27 @@ async function handleSendEventNotifications(json: Record<string, any>) {
               { type: "text", text: resTitleW, weight: "bold", size: "xl", margin: "md" },
               { type: "text", text: greetTextW, margin: "md", size: "sm", wrap: true },
               { type: "text", text: targetEventTitle, weight: "bold", color: "#111111", size: "md", wrap: true, margin: "sm" },
+              {
+                type: "box",
+                layout: "horizontal",
+                backgroundColor: "#F3F4F6",
+                cornerRadius: "md",
+                paddingStart: "md",
+                paddingEnd: "md",
+                paddingTop: "xs",
+                paddingBottom: "xs",
+                margin: "md",
+                contents: [
+                  {
+                    type: "text",
+                    text: statsPillText,
+                    size: "xs",
+                    color: "#374151",
+                    weight: "bold",
+                    align: "center",
+                  },
+                ],
+              },
               { type: "text", text: resPromptW, margin: "md", size: "sm" },
               { type: "text", text: displayBadgeW, weight: "bold", color: "#FF9800", size: "lg", align: "center", margin: "md" },
               { type: "separator", margin: "md" },

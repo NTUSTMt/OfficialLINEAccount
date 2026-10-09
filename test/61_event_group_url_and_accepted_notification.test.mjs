@@ -61,14 +61,16 @@ describe('61. 活動專屬群組連結 (line_group_url) 與正取推播卡片一
     assert.ok(gasCode.includes('此活動尚未設定專屬群組連結 (line_group_url)'));
 
     // 檢查 acceptedFlex 卡片按鈕佈局與文字 (不得有 emoji)
-    assert.ok(gasCode.includes('"加入活動群組 Join Group"'));
-    assert.ok(gasCode.includes('"前往繳費系統 Pay"'));
+    assert.ok(gasCode.includes('var joinBtn = isEnglish ? "Join Group" : "加入活動群組";'));
+    assert.ok(gasCode.includes('var payBtn = isEnglish ? "Pay Now" : "前往繳費系統";'));
     assert.ok(gasCode.includes('uri: targetGroupUrl'));
 
     // 驗證按鈕文字無任何 emoji
     const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
-    assert.equal(emojiRegex.test("加入活動群組 Join Group"), false, "加入群組按鈕不可含有 emoji");
-    assert.equal(emojiRegex.test("前往繳費系統 Pay"), false, "繳費按鈕不可含有 emoji");
+    assert.equal(emojiRegex.test("Join Group"), false, "加入群組按鈕不可含有 emoji");
+    assert.equal(emojiRegex.test("加入活動群組"), false, "加入群組按鈕不可含有 emoji");
+    assert.equal(emojiRegex.test("Pay Now"), false, "繳費按鈕不可含有 emoji");
+    assert.equal(emojiRegex.test("前往繳費系統"), false, "繳費按鈕不可含有 emoji");
   });
 
   test('4. 前端個人中心 (Dashboard)：正取社員入群按鈕備援呈現', () => {

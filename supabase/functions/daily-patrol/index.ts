@@ -19,28 +19,37 @@ export async function runDailyPatrol(): Promise<{
   const expiredMembers: string[] = [];
   const overdueLoans: string[] = [];
 
-  // 1. 活動截止巡檢：超過報名截止日且狀態為「開放」，自動切換為「關閉」
+  // 1. 活動結束巡檢：活動結束超過一週 (7 天) 且狀態為「開放」者，自動切換為「關閉」
+  // 若活動尚未結束一週（以 end_date || start_date 判定），則保留不設為關閉。
   try {
-    const { data: expEvents, error: evErr } = await client
+    const { data: openEvents, error: evErr } = await client
       .from("events")
-      .select("id,title,deadline,status")
-      .eq("status", "開放")
-      .lt("deadline", nowIso);
+      .select("id,title,deadline,status,start_date,end_date")
+      .eq("status", "開放");
 
-    if (!evErr && expEvents && expEvents.length > 0) {
-      for (const evt of expEvents) {
-        const { error: patchErr } = await client
-          .from("events")
-          .update({ status: "關閉", updated_at: new Date().toISOString() })
-          .eq("id", evt.id);
+    if (!evErr && openEvents && openEvents.length > 0) {
+      for (const evt of openEvents) {
+        const targetEndDateStr = evt.end_date || evt.start_date;
+        if (!targetEndDateStr) continue;
 
-        if (!patchErr) {
-          closedEvents.push(`• ${evt.title || evt.id} (截止日: ${evt.deadline})`);
+        const endD = new Date(targetEndDateStr);
+        if (isNaN(endD.getTime())) continue;
+
+        // 若結束超過 7 天 (7 * 86400000 毫秒)
+        if (now.getTime() - endD.getTime() > 7 * 86400000) {
+          const { error: patchErr } = await client
+            .from("events")
+            .update({ status: "關閉", updated_at: new Date().toISOString() })
+            .eq("id", evt.id);
+
+          if (!patchErr) {
+            closedEvents.push(`• ${evt.title || evt.id} (結束日: ${targetEndDateStr})`);
+          }
         }
       }
     }
   } catch (errEv) {
-    console.warn("巡檢活動截止異常:", errEv);
+    console.warn("巡檢活動結束狀態異常:", errEv);
   }
 
   // 2. 社員社籍期滿巡檢：到期日小於今日者，轉為未繳費
@@ -105,8 +114,8 @@ export async function runDailyPatrol(): Promise<{
   const noticeSections: string[] = [];
   if (closedEvents.length > 0) {
     noticeSections.push(
-      "【活動截止自動關閉】\n" +
-        `系統已自動將下列 ${closedEvents.length} 場已過截止日之活動狀態切換為「關閉」：\n\n` +
+      "【活動結束超過一週自動關閉】\n" +
+        `系統已自動將下列 ${closedEvents.length} 場結束超過一週之活動狀態切換為「關閉」：\n\n` +
         closedEvents.join("\n") +
         "\n\n社員將無法再進行報名，幹部可於管理中心進行後續名冊審核。"
     );
@@ -121,7 +130,7 @@ export async function runDailyPatrol(): Promise<{
   }
   if (overdueLoans.length > 0) {
     noticeSections.push(
-      "【⚠️ 裝備逾期未歸還催收提醒】\n" +
+      "【裝備逾期未歸還催收提醒】\n" +
         `系統偵測到下列 ${overdueLoans.length} 筆裝備租借單已逾預計歸還日：\n\n` +
         overdueLoans.join("\n") +
         "\n\n請幹部主動與借用人聯繫確認歸還或續借狀況。"
@@ -129,12 +138,12 @@ export async function runDailyPatrol(): Promise<{
   }
 
   if (noticeSections.length > 0) {
-    const reportSubject = `【台科登山社】系統每日自動巡檢報告 - ${todayStr}`;
+    const reportSubject = `【台科登山社】系統每週自動巡檢報告 - ${todayStr}`;
     const reportBody =
-      "【系統每日自動巡檢報告】\n" +
+      "【系統每週自動巡檢報告】\n" +
       "─────────────\n\n" +
       noticeSections.join("\n\n────────────────────\n\n") +
-      `\n\n⚡ 巡檢時間：${formatTaipeiDate(now, "YYYY-MM-DD HH:mm:ss")}`;
+      `\n\n巡檢時間：${formatTaipeiDate(now, "YYYY-MM-DD HH:mm:ss")}`;
 
     await pushAdminMessage(reportBody, reportSubject);
   }

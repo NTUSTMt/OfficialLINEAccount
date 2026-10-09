@@ -50,11 +50,6 @@ BEGIN
         RETURN FALSE;
     END IF;
 
-    -- 支援本機開發測試帳號
-    IF trim(p_line_user_id) = 'TEST_USER_ID' THEN
-        RETURN TRUE;
-    END IF;
-
     -- 雙軌鑑權：同時檢查 officers 表與 members 表 (is_officer 旗標或幹部職務角色)
     RETURN EXISTS (
         SELECT 1 FROM officers WHERE line_user_id = trim(p_line_user_id)

@@ -19,7 +19,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
-import { getDirectImageUrl } from '../../utils/image';
+import { getDirectImageUrl, validateImageUploadFile } from '../../utils/image';
 import { GAS_API_URL } from '../../constants/api';
 import { withAuthPayload } from '../../utils/api';
 import './webAdmin.css';
@@ -201,8 +201,9 @@ export const WebAdminEvents: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMsg(`[檔案過大]: 圖片「${file.name}」超過 10MB 限制`);
+    const validation = validateImageUploadFile(file, 10 * 1024 * 1024);
+    if (!validation.valid) {
+      setErrorMsg(`[檔案驗證失敗]: ${validation.error || '圖片不合法'}`);
       return;
     }
 

@@ -758,18 +758,27 @@ Deno.serve(async (req: Request) => {
   }
 
   const signature = req.headers.get("x-line-signature") || req.headers.get("X-Line-Signature");
-  const channelSecret = Deno.env.get("ADMIN_BOT_SECRET") || "";
+  const memberSecret = Deno.env.get("MEMBER_BOT_SECRET") || "";
+  const adminSecret = Deno.env.get("ADMIN_BOT_SECRET") || "";
+  const generalSecret = Deno.env.get("LINE_CHANNEL_SECRET") || "";
+  const availableSecrets = [memberSecret, adminSecret, generalSecret].filter((s) => Boolean(s && s.trim()));
 
   const rawBody = await req.text();
 
-  if (channelSecret) {
-    const isValid = await validateSignature(rawBody, signature, channelSecret);
+  if (availableSecrets.length > 0) {
+    let isValid = false;
+    for (const secret of availableSecrets) {
+      if (await validateSignature(rawBody, signature, secret)) {
+        isValid = true;
+        break;
+      }
+    }
     if (!isValid) {
-      console.warn("[line-webhook] 401 拒絕存取：LINE Webhook 簽章驗證未通過。請確認 Supabase Secrets 中的 ADMIN_BOT_SECRET 是否與幹部 Bot 頻道的 Channel secret 一致。");
+      console.warn("[line-webhook] 401 拒絕存取：LINE Webhook 簽章驗證未通過。請確認 Supabase Secrets 中的 MEMBER_BOT_SECRET / ADMIN_BOT_SECRET 是否與 LINE 頻道 Channel secret 一致。");
       return new Response("Unauthorized", { status: 401 });
     }
   } else {
-    console.warn("[line-webhook] 警告：ADMIN_BOT_SECRET 未設定，暫時略過簽章校驗。");
+    console.warn("[line-webhook] 警告：MEMBER_BOT_SECRET 與 ADMIN_BOT_SECRET 均未設定，暫時略過簽章校驗。");
   }
 
   let payload: LineWebhookPayload;

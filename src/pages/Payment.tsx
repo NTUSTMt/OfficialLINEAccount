@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle2, AlertCircle, Copy, Check, Building2, X, Plus, Image as ImageIcon } from 'lucide-react';
 import { appendAuthToken, withAuthPayload } from '../utils/api';
 import { GAS_API_URL } from '../constants/api';
+import { validateImageUploadFile } from '../utils/image';
 import { fetchUnpaidPaymentsFromSupabase, submitPaymentToSupabase, fetchDashboardFromSupabase } from '../utils/supabaseClient';
 import '../App.css';
 
@@ -62,8 +63,9 @@ function Payment({ userId }: { userId: string }) {
     if (!files || files.length === 0) return;
 
     const file = files[0];
-    if (file.size > 10 * 1024 * 1024) {
-      alert('檔案過大（超過 10MB），請選擇較小的圖片');
+    const validation = validateImageUploadFile(file, 10 * 1024 * 1024);
+    if (!validation.valid) {
+      alert(validation.error || '檔案格式不符或檔案過大（超過 10MB），請選擇合法的圖片');
       e.target.value = '';
       return;
     }

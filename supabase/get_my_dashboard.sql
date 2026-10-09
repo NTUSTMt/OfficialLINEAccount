@@ -13,8 +13,33 @@ DECLARE
     v_profile JSONB;
     v_activities JSONB;
     v_equipments JSONB;
+    v_jwt_sub TEXT;
+    v_jwt_officer BOOLEAN;
+    v_target_id TEXT;
 BEGIN
-    IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' THEN
+    -- 1. 提取 JWT 宣告 (若呼叫者持有 Supabase Auth JWT)
+    BEGIN
+        v_jwt_sub := auth.jwt() ->> 'sub';
+        v_jwt_officer := (auth.jwt() ->> 'is_officer')::boolean;
+    EXCEPTION WHEN OTHERS THEN
+        v_jwt_sub := NULL;
+        v_jwt_officer := NULL;
+    END;
+
+    -- 2. 防範 BOLA/IDOR：若持有 JWT，非幹部僅允許讀取本人儀表板 (sub = p_line_user_id)
+    IF v_jwt_sub IS NOT NULL AND trim(v_jwt_sub) != '' THEN
+        IF v_jwt_officer IS NOT TRUE AND p_line_user_id IS NOT NULL AND trim(p_line_user_id) != '' AND trim(p_line_user_id) != v_jwt_sub THEN
+            RETURN jsonb_build_object(
+                'status', 'error',
+                'message', 'Forbidden: Identity mismatch (禁止越權讀取他人儀表板)'
+            );
+        END IF;
+        v_target_id := COALESCE(NULLIF(trim(p_line_user_id), ''), v_jwt_sub);
+    ELSE
+        v_target_id := trim(p_line_user_id);
+    END IF;
+
+    IF v_target_id IS NULL OR v_target_id = '' THEN
         RETURN jsonb_build_object(
             'status', 'error',
             'message', '缺少 LINE User ID'
@@ -22,7 +47,7 @@ BEGIN
     END IF;
 
     -- 1. 查詢該社員基本身分資訊
-    SELECT * INTO v_member FROM members WHERE line_user_id = p_line_user_id LIMIT 1;
+    SELECT * INTO v_member FROM members WHERE line_user_id = v_target_id LIMIT 1;
 
     IF FOUND THEN
         v_profile := jsonb_build_object(
