@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.280-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.281-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.280)](#7-最新版本異動紀錄-changelog-v01280)
+- [7. 最新版本異動紀錄 (Changelog v0.1.281)](#7-最新版本異動紀錄-changelog-v01281)
 
 ---
 
@@ -204,7 +204,13 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.280)
+## 7. 最新版本異動紀錄 (Changelog v0.1.281)
+
+### v0.1.281 (2026-10-09)
+- **GAS Thin Worker 前端相片上傳權限分流修復**:
+  - **放行 LIFF 前端 Drive 相片上傳與維護操作 ([src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js))**:
+    - 調整 `doPost` 與 `doGet` 鑑權分流機制：對公開/前端照片上傳（`upload_drive_file`、`upload_drive_files`、`upload_image_to_drive`）、相片垃圾桶刪除（`delete_drive_file`）與幹部活動試算表建立（`create_event_sheet`）予以放行，徹底修復社員於 `Register.tsx` 上傳體能證明、`Payment.tsx` 上傳匯款單據時被判定為 `401 Unauthorized: Invalid or missing x-worker-secret` 之阻斷問題。
+    - 對後端內部管理任務（`send_admin_email`、`send_user_email`、`append_event_sheet`、`sync_cancel_event_sheet`、`get_knowledge_base`）持續嚴格執行 `x-worker-secret` 共享密鑰校驗，兼顧前端操作體驗與後端微服務邊界安全。
 
 ### v0.1.280 (2026-10-09)
 - **修復 TypeScript 型別檢查與 Vite 打包錯誤，保障 Vercel 部署正常發布**:

@@ -57,7 +57,7 @@ function _verifyWorkerSecret(e) {
 }
 
 /**
- * HTTP GET 處理 (提供 Docs 知識庫讀取、Health Check)
+ * HTTP GET 處理 (提供 Docs 知識庫讀取、Health Check、試算表建立)
  */
 function doGet(e) {
   try {
@@ -67,6 +67,12 @@ function doGet(e) {
       return _workerSuccess({ message: 'GAS Thin Worker is running actively', timestamp: new Date().toISOString() });
     }
 
+    // 幹部前端建立/同步活動試算表
+    if (action === 'create_event_sheet') {
+      return _handleCreateEventSheet(e && e.parameter ? e.parameter : {});
+    }
+
+    // 後端內部任務（讀取規章知識庫等）需校驗密鑰
     if (!_verifyWorkerSecret(e)) {
       return _workerError('Unauthorized: Invalid or missing x-worker-secret', 401);
     }
@@ -87,18 +93,34 @@ function doGet(e) {
  */
 function doPost(e) {
   try {
+    var json = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        json = JSON.parse(e.postData.contents);
+      } catch (parseErr) {
+        return _workerError('Invalid JSON format: ' + parseErr.toString(), 400);
+      }
+    }
+
+    var action = json.action || (e && e.parameter && e.parameter.action) || '';
+
+    // 1. 公開/前端允許之 Drive 檔案上傳與相片維護動作 (供社員與幹部於 LIFF 即時上傳體能證明、繳費收據、心得照片)
+    if (action === 'upload_drive_files' || action === 'upload_drive_file' || action === 'upload_image_to_drive') {
+      return _handleUploadDriveFiles(json);
+    }
+    if (action === 'delete_drive_file' || action === 'delete_drive_files') {
+      return _handleDeleteDriveFiles(json);
+    }
+    if (action === 'create_event_sheet') {
+      return _handleCreateEventSheet(json);
+    }
+
+    // 2. 後端專屬任務（郵件發送、試算表名冊操作等）強制校驗 x-worker-secret 密鑰
     if (!_verifyWorkerSecret(e)) {
       return _workerError('Unauthorized: Invalid or missing x-worker-secret', 401);
     }
 
-    var json = {};
-    if (e && e.postData && e.postData.contents) {
-      json = JSON.parse(e.postData.contents);
-    }
-
-    var action = json.action || '';
-
-    // 1. Gmail 管理員/社員郵件發送
+    // Gmail 管理員/社員郵件發送
     if (action === 'send_admin_email') {
       return _handleSendAdminEmail(json);
     }
@@ -106,27 +128,12 @@ function doPost(e) {
       return _handleSendUserEmail(json);
     }
 
-    // 2. Google Drive 實體相片刪除 (移入垃圾桶)
-    if (action === 'delete_drive_file' || action === 'delete_drive_files') {
-      return _handleDeleteDriveFiles(json);
-    }
-
-    // 3. Google Drive 檔案上傳
-    if (action === 'upload_drive_files' || action === 'upload_drive_file') {
-      return _handleUploadDriveFiles(json);
-    }
-
-    // 4. 建立活動專屬資料夾與獨立試算表
-    if (action === 'create_event_sheet') {
-      return _handleCreateEventSheet(json);
-    }
-
-    // 5. 活動獨立試算表名冊追加 (append)
+    // 活動獨立試算表名冊追加 (append)
     if (action === 'append_event_sheet') {
       return _handleAppendEventSheet(json);
     }
 
-    // 6. 活動獨立試算表名冊取消同步 (sync cancel)
+    // 活動獨立試算表名冊取消同步 (sync cancel)
     if (action === 'sync_cancel_event_sheet') {
       return _handleSyncCancelEventSheet(json);
     }
