@@ -308,8 +308,9 @@ function Achievements({ userId }: { userId: string }) {
               }))
             });
             const uploadResult = await uploadRes.json();
-            if (uploadResult.status === 'success' && Array.isArray(uploadResult.urls)) {
-              finalPhotoUrls = [...finalPhotoUrls, ...uploadResult.urls];
+            const validUrls = uploadResult.urls || uploadResult.uploadedUrls || (uploadResult.imageUrl ? [uploadResult.imageUrl] : []);
+            if (uploadResult.status === 'success' && Array.isArray(validUrls)) {
+              finalPhotoUrls = [...finalPhotoUrls, ...validUrls];
             }
           }
         } catch (uploadErr) {

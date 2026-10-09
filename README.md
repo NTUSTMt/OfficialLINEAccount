@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.282-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.284-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.281)](#7-最新版本異動紀錄-changelog-v01281)
+- [7. 最新版本異動紀錄 (Changelog v0.1.284)](#7-最新版本異動紀錄-changelog-v01284)
 
 ---
 
@@ -204,7 +204,40 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.281)
+## 7. 最新版本異動紀錄 (Changelog v0.1.284)
+
+### v0.1.284 (2026-10-09)
+- **報名失敗與提醒訊息全面升級 Flex 互動卡片，文案 100% 精準對齊，推播額度零浪費**:
+  - **報名失敗（查無社員資料）升級雙語 Carousel 滑動卡片 ([supabase/functions/line-webhook/flexTemplates.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/flexTemplates.ts))**:
+    - 建立 `buildMemberNotFoundFlex`，採用左右滑動雙卡片結構（中文版與英文版獨立分頁），附帶「一鍵填寫基本資料 / Fill Profile Now」主按鈕，點擊直連註冊頁面（`https://liff.line.me/2009217429-AhPRqAHg`）。
+    - 此回覆全面走 Webhook `replyMessage`（使用報名 Postback 之 `replyToken`），**不計入每月官方帳號推播額度（消耗 0 則）**。
+  - **報名失敗（資料不完整）升級明細 Flex 卡片 ([supabase/functions/line-webhook/flexTemplates.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/flexTemplates.ts))**:
+    - 建立 `buildProfileIncompleteFlex`，條列缺漏之必填欄位清單（中英對照），並附帶「一鍵補齊基本資料 / Complete Profile」按鈕直連個人資料頁面。
+  - **報名提醒（資料超過 6 個月）升級時效 Flex 卡片 ([supabase/functions/line-webhook/flexTemplates.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/flexTemplates.ts))**:
+    - 建立 `buildProfileExpiredFlex`，提醒隊員時效安全規範，並附帶「一鍵更新個人資料 / Update Profile」按鈕。
+  - **幹部通知全面升級帶操作按鈕之 Flex 卡片 ([supabase/functions/notify-dispatcher/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/notify-dispatcher/index.ts))**:
+    - **新裝備租借申請**：生成 `loanFlex` 卡片至幹部群組，列出申請人、學號、裝備清單、預計取歸還日，並附帶「進入幹部租借管理系統」按鈕直連後台審核頁面。
+    - **新繳費申報**：生成 `paymentFlex` 卡片（對齊原 `gas.js` 風格）至幹部群組，附帶「一鍵核銷」與「查看匯款證明照片」按鈕。
+  - **推播額度優化與文案 100% 還原**:
+    - 移除社員送出繳費申報後後端對個人的重複 `pushMessage`（避免浪費推播額度），改由前端 LIFF 發送憑證訊息。
+    - 所有報名檢核文字 100% 還原為 `src/gas.js` 原版文字（非語意相似）。
+  - **單元測試全數覆蓋 ([test/109_signup_validation_flex_and_quota_optimization.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/109_signup_validation_flex_and_quota_optimization.test.mjs))**:
+    - 7 項單元測試 100% 通過，確保卡片結構、直連按鈕、零額度浪費與文案精準度。
+
+### v0.1.283 (2026-10-09)
+- **Google Drive 相片上傳回傳欄位與直連 CDN 格式修復**:
+  - **修復 GAS Thin Worker 回傳欄位結構與 CDN 轉換 ([src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js))**:
+    - 在 `_handleUploadDriveFiles` 中，將建立之 Google Drive 檔案 ID 自動轉換為標準直連 CDN 網址格式（`https://lh3.googleusercontent.com/d/{fileId}=s0`），避免 WebKit 跨網域重導向失敗與破圖。
+    - 補齊回傳物件欄位，同時輸出 `urls`、`uploadedUrls`、`imageUrl` 與 `message`，達成 100% 向下相容。
+    - 於 `doGet` 中加入相片上傳與刪除動作放行，防止 iOS WebKit 302 重導向將 POST 降級為 GET 時被拒絕。
+  - **增強前端接收端點容錯解析 ([src/pages/Register.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Register.tsx), [src/pages/Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx), [src/pages/Achievements.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Achievements.tsx), [src/pages/web-admin/WebAdminEvents.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/web-admin/WebAdminEvents.tsx))**:
+    - 全面改採 `validUrls = uploadResult.urls || uploadResult.uploadedUrls || (uploadResult.imageUrl ? [uploadResult.imageUrl] : [])` 容錯解析機制，徹底消除「未回傳有效連結」誤判。
+  - **新增自動化單元測試 ([test/108_drive_photo_upload_compatibility.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/108_drive_photo_upload_compatibility.test.mjs))**:
+    - 驗證後端回傳結構、CDN 轉換、GET 放行與前端多頁面容錯解析，保障未來重構不退化。
+
+### v0.1.282 (2026-10-09)
+- **前端推播全面微服務化與去 GAS 化**:
+  - 移除所有前端對舊版 GAS 訊息推播的後備呼叫，全數統一走 Supabase `notify-dispatcher` Edge Function。
 
 ### v0.1.281 (2026-10-09)
 - **GAS Thin Worker 前端相片上傳權限分流修復**:

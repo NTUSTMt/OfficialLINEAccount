@@ -111,6 +111,127 @@ async function handleNotifyOfficersLoan(json: Record<string, any>) {
     }
   }
 
+  const liffChannelId = Deno.env.get("LIFF_CHANNEL_ID") || "2009217429";
+  const loanAdminUrl = `https://liff.line.me/${liffChannelId}-jvj3ydDT?liff.state=%2Fadmin%2Floans`;
+
+  const loanFlex = {
+    type: "bubble",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      contents: [
+        {
+          type: "text",
+          text: "【🎒 幹部通知：新裝備租借申請】",
+          weight: "bold",
+          color: "#ffffff",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "訂單編號", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: loanId, weight: "bold", color: "#2563eb", size: "sm", flex: 5, wrap: true },
+          ],
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "申請人", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: `${borrowerName} (${identityDesc})`, weight: "bold", color: "#0f172a", size: "sm", flex: 5, wrap: true },
+          ],
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "LINE ID", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: borrowerLineId, color: "#0f172a", size: "sm", flex: 5 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "聯絡電話", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: borrowerPhone, color: "#0f172a", size: "sm", flex: 5 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "出隊天數", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: `${days} 天 (${details.pickupDate || ""} ~ ${details.returnDate || ""})`, color: "#0f172a", size: "xs", flex: 5, wrap: true },
+          ],
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "租借用途", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: purpose, color: "#0f172a", size: "sm", flex: 5, wrap: true },
+          ],
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "預估總租金", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: `$${totalRent} 元`, weight: "bold", color: "#059669", size: "md", flex: 5 },
+          ],
+        },
+        { type: "separator", margin: "md", color: "#e2e8f0" },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "sm",
+          spacing: "xs",
+          contents: [
+            { type: "text", text: "📦 借用裝備明細：", color: "#64748b", size: "xs", weight: "bold" },
+            ...(itemsSummary.length > 0
+              ? itemsSummary.map((it) => ({ type: "text", text: it, color: "#334155", size: "xs", wrap: true }))
+              : [{ type: "text", text: "• 無品項", color: "#94a3b8", size: "xs" }]),
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "進入幹部租借管理系統",
+            uri: loanAdminUrl,
+          },
+        },
+      ],
+    },
+  };
+
   const msg =
     "【🎒 幹部通知：新裝備租借申請】\n" +
     "─────────────\n" +
@@ -126,7 +247,7 @@ async function handleNotifyOfficersLoan(json: Record<string, any>) {
     "\n\n⚡ 本資料已安全寫入 Supabase，請至幹部後台確認備用！";
 
   const loanSubject = `【台科登山社】新裝備租借申請 - ${loanId} (${borrowerName})`;
-  await pushAdminMessage(msg, loanSubject);
+  await pushAdminMessage(msg, loanSubject, { flexContents: loanFlex, altText: loanSubject });
 
   return successResponse({ message: "幹部推播已成功送出" });
 }
@@ -219,6 +340,117 @@ async function handleNotifyOfficersPayment(json: Record<string, any>) {
     ? `${frontendWebUrl}/confirm-payment?paymentId=${encodeURIComponent(paymentId)}${verifyToken ? `&token=${encodeURIComponent(verifyToken)}` : ""}`
     : "";
 
+  const paymentFlex = {
+    type: "bubble",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#065f46",
+      contents: [
+        {
+          type: "text",
+          text: "【💳 幹部通知：新繳費申報】",
+          weight: "bold",
+          color: "#ffffff",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      margin: "sm",
+      spacing: "sm",
+      contents: [
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "申報人", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: userName || userId, weight: "bold", color: "#0f172a", size: "sm", flex: 5, wrap: true },
+          ],
+        },
+        ...(paymentId ? [{
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "單號", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: paymentId, color: "#2563eb", size: "xs", flex: 5, wrap: true, weight: "bold" },
+          ],
+        }] : []),
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "末五碼", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: last5Digits, weight: "bold", color: "#0f172a", size: "sm", flex: 5 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "baseline",
+          spacing: "sm",
+          contents: [
+            { type: "text", text: "申報金額", color: "#64748b", size: "sm", flex: 2 },
+            { type: "text", text: `$${totalAmount} 元`, weight: "bold", color: "#059669", size: "lg", flex: 5 },
+          ],
+        },
+        { type: "separator", margin: "md", color: "#e2e8f0" },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "sm",
+          spacing: "xs",
+          contents: [
+            { type: "text", text: "申報項目：", color: "#64748b", size: "xs", weight: "bold" },
+            ...(selectedNames.length > 0
+              ? selectedNames.map((n: string) => ({ type: "text", text: `• ${n}`, color: "#334155", size: "xs", wrap: true }))
+              : [{ type: "text", text: "• 無項目", color: "#94a3b8", size: "xs" }]),
+          ],
+        },
+        ...(details.note ? [{
+          type: "box",
+          layout: "vertical",
+          margin: "xs",
+          contents: [
+            { type: "text", text: `備註：${details.note}`, color: "#64748b", size: "xs", wrap: true },
+          ],
+        }] : []),
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        ...(verifyLink ? [{
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "確認無誤（一鍵核銷）",
+            uri: verifyLink,
+          },
+        }] : []),
+        ...(proofImageUrl ? [{
+          type: "button",
+          style: "secondary",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "查看匯款證明照片",
+            uri: proofImageUrl,
+          },
+        }] : []),
+      ],
+    },
+  };
+
   const adminMsg =
     "【幹部通知：新繳費申報】\n\n" +
     (userName ? `申報人：${userName}\n` : "") +
@@ -233,32 +465,10 @@ async function handleNotifyOfficersPayment(json: Record<string, any>) {
     "\n資料已安全記錄於 Supabase，請幹部核對網銀後核銷！";
 
   const paymentSubject = `【台科登山社】新繳費申報 - $${totalAmount} (${userName || "未知社員"}，末5碼 ${last5Digits})`;
-  await pushAdminMessage(adminMsg, paymentSubject);
+  await pushAdminMessage(adminMsg, paymentSubject, { flexContents: paymentFlex, altText: paymentSubject });
 
-  if (userId && userId !== "TEST_USER_ID") {
-    const userMsg =
-      "【繳費申報已成功送出】\n\n" +
-      `您好${userName ? ` ${userName}` : ""}！系統已成功收到您的繳費申報資訊：\n\n` +
-      (paymentId ? `• 繳費單號：${paymentId}\n` : "") +
-      `• 申報金額：$${totalAmount} 元\n` +
-      `• 帳號末五碼：${last5Digits}\n` +
-      `• 申報項目：\n${itemsZh}` +
-      `${noteZh}\n\n` +
-      "幹部會於核對款項後自動更新您的繳費狀態。謝謝！\n" +
-      "─────────────\n" +
-      "【💳 Payment Report Submitted】\n\n" +
-      `Hello${userName ? ` ${userName}` : ""}! Your payment report has been submitted:\n\n` +
-      (paymentId ? `• Payment ID: ${paymentId}\n` : "") +
-      `• Amount: $${totalAmount} TWD\n` +
-      `• Last 5 Digits: ${last5Digits}\n` +
-      `• Items:\n${itemsEn}` +
-      `${noteEn}\n\n` +
-      "Officers will verify your payment and update your status soon. Thank you!";
-
-    await pushMessage(userId, [{ type: "text", text: userMsg }]);
-  }
-
-  return successResponse({ message: "繳費申報幹部與個人推播已成功送出" });
+  // 停用個人 pushMessage 以節省 LINE Messaging API 每月免費額度 (前端已透過 liff.sendMessages 發送 0 額度發話憑證)
+  return successResponse({ message: "繳費申報幹部推播已成功送出" });
 }
 
 // 4. 繳費單核銷完成推播

@@ -70,54 +70,58 @@ export const messages = {
     en: "There are currently no scheduled events for this semester! Stay tuned 🏔️",
   }),
 
-  signupEventClosed: (): BilingualText => ({
-    zh: "⚠️ 報名失敗：該活動報名已截止或已關閉。",
-    en: "⚠️ Registration Failed: This event has closed or reached its deadline.",
+  signupEventClosed: (title?: string, deadline?: string): BilingualText => ({
+    zh: `⚠️ 報名失敗：【${title || "該活動"}】已於 ${deadline || "日前"} 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️`,
+    en: `⚠️ Registration Closed: [${title || "Event"}] registration is closed.`,
   }),
 
-  signupEventNotFound: (): BilingualText => ({
-    zh: "⚠️ 報名失敗：找不到該活動資料，請重新查詢最新活動列表。",
-    en: "⚠️ Registration Failed: Event not found. Please refresh the latest events list.",
+  signupEventNotFound: (eventId?: string): BilingualText => ({
+    zh: `⚠️ 報名失敗：查無活動代號【${eventId || "未知"}】，請確認活動代號是否正確！`,
+    en: `⚠️ Event not found for code: ${eventId || "unknown"}`,
   }),
 
-  signupMemberNotFound: (frontendUrl: string): BilingualText => ({
+  signupMemberNotFound: (liffUrl?: string): BilingualText => ({
     zh:
-      "⚠️ 報名失敗：尚未建立社員個人資料！\n" +
-      "為了您的入山保險與安全，請先前往個人中心完成基本資料填寫：\n" +
-      `👉 ${frontendUrl}/profile`,
+      "⚠️ 報名失敗：系統找不到您的社員資料！\n" +
+      "請先點選單中的「填寫資料」完成註冊後再報名。\n" +
+      (liffUrl ? `👉 ${liffUrl}` : ""),
     en:
       "⚠️ Registration Failed: Member profile not found!\n" +
-      "For mountain insurance and safety, please complete your profile first:\n" +
-      `👉 ${frontendUrl}/profile`,
+      "Please click 'Register' in the menu to complete your profile first.\n" +
+      (liffUrl ? `👉 ${liffUrl}` : ""),
   }),
 
-  signupProfileIncomplete: (missingFieldsStr: string, frontendUrl: string): BilingualText => ({
+  signupProfileIncomplete: (missingFieldsStr: string, liffUrl?: string): BilingualText => ({
     zh:
-      "⚠️ 報名失敗：個人資料尚未填寫完整！\n" +
-      `缺少必填欄位：${missingFieldsStr}\n\n` +
-      "請前往個人中心補齊資料後再進行報名：\n" +
-      `👉 ${frontendUrl}/profile`,
+      "⚠️ 報名失敗：您的個人資料尚不完整！\n\n" +
+      "為了辦理平安保險與確保戶外活動安全，請先點擊選單的「填寫資料」，補齊以下必填資訊：\n\n" +
+      `${missingFieldsStr}\n\n` +
+      "完成資料更新後，再回來點擊一鍵報名喔！🏕️\n" +
+      (liffUrl ? `👉 ${liffUrl}` : ""),
     en:
-      "⚠️ Registration Failed: Profile incomplete!\n" +
-      `Missing required fields: ${missingFieldsStr}\n\n` +
-      "Please complete your profile before registering:\n" +
-      `👉 ${frontendUrl}/profile`,
+      "⚠️ Registration Failed: Incomplete member profile!\n\n" +
+      "For insurance coverage and outdoor activity safety, please click 'Register' in the menu to complete the following required fields:\n\n" +
+      `${missingFieldsStr}\n\n` +
+      "Once your profile is updated, return here to sign up with one click! 🏕️\n" +
+      (liffUrl ? `👉 ${liffUrl}` : ""),
   }),
 
-  signupProfileExpired: (reason: string, frontendUrl: string): BilingualText => ({
+  signupProfileExpired: (reason: string, liffUrl?: string): BilingualText => ({
     zh:
-      `⚠️ 報名失敗：個人資料校驗未通過（${reason}）！\n` +
-      "為確保入山保險、緊急聯絡人與體能狀態之即時正確性，請至個人中心確認並點擊【儲存個人資料】以更新時效：\n" +
-      `👉 ${frontendUrl}/profile`,
+      `⚠️ 報名提醒：${reason}！\n\n` +
+      "社團出團活動將依據您的「爬山經歷」與「體能狀況」進行審查與篩選。為了維護出隊安全並增加您的錄取機會，若近期有更豐富的登山紀錄或更佳的體能表現，請先前往更新個人資料後，再回到此處報名活動喔！\n\n" +
+      "👉 立即前往更新個人資料：\n" +
+      (liffUrl || "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard"),
     en:
-      `⚠️ Registration Failed: Profile verification expired (${reason})!\n` +
-      "To ensure accurate insurance and emergency details, please confirm and save your profile to refresh validity:\n" +
-      `👉 ${frontendUrl}/profile`,
+      `⚠️ Registration Notice: ${reason}!\n\n` +
+      "Club outings evaluate applications based on your hiking experience and fitness status. To ensure safety and boost your admission chances, please update your profile with your latest records before signing up!\n\n" +
+      "👉 Update Your Profile Now:\n" +
+      (liffUrl || "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard"),
   }),
 
   signupDuplicate: (title: string): BilingualText => ({
-    zh: `⚠️ 您已經報名過【${title}】囉！請勿重複報名。若欲查詢報名狀態，請至個人中心查看。`,
-    en: `⚠️ You have already registered for [${title}]! Please do not register repeatedly. You can check your status in the dashboard.`,
+    zh: `⚠️ 您已經報名過【${title}】囉！\n請耐心等候幹部審核，或是至個人主頁查詢進度。`,
+    en: `⚠️ You have already registered for [${title}]!\nPlease wait for officer review.`,
   }),
 
   signupSuccessReceipt: (

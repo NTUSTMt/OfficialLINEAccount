@@ -683,8 +683,9 @@ function Register({ userId }: { userId: string }) {
               }))
             });
             const uploadResult = await uploadRes.json();
-            if (uploadResult.status === 'success' && Array.isArray(uploadResult.urls) && uploadResult.urls.length > 0) {
-              uploadedUrls.push(...uploadResult.urls);
+            const validUrls = uploadResult.urls || uploadResult.uploadedUrls || (uploadResult.imageUrl ? [uploadResult.imageUrl] : []);
+            if (uploadResult.status === 'success' && Array.isArray(validUrls) && validUrls.length > 0) {
+              uploadedUrls.push(...validUrls);
             } else {
               throw new Error(uploadResult.message || uploadResult.error || 'Google Drive 照片上傳未回傳有效連結');
             }

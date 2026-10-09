@@ -450,8 +450,9 @@ export const WebAdminEvents: React.FC = () => {
           }
 
           const gasData = await gasRes.json();
-          if (gasData.status === 'success' && Array.isArray(gasData.urls) && gasData.urls.length > 0) {
-            finalCoverUrl = gasData.urls[0];
+          const validUrls = gasData.urls || gasData.uploadedUrls || (gasData.imageUrl ? [gasData.imageUrl] : []);
+          if (gasData.status === 'success' && Array.isArray(validUrls) && validUrls.length > 0) {
+            finalCoverUrl = validUrls[0];
           } else {
             throw new Error(`[封面圖片上傳失敗]: ${gasData.message || '無法從 Google Drive 取得檔案直連網址'}`);
           }

@@ -67,9 +67,15 @@ function doGet(e) {
       return _workerSuccess({ message: 'GAS Thin Worker is running actively', timestamp: new Date().toISOString() });
     }
 
-    // 幹部前端建立/同步活動試算表
+    // 幹部前端建立/同步活動試算表與公開相片動作
     if (action === 'create_event_sheet') {
       return _handleCreateEventSheet(e && e.parameter ? e.parameter : {});
+    }
+    if (action === 'upload_drive_files' || action === 'upload_drive_file' || action === 'upload_image_to_drive') {
+      return _handleUploadDriveFiles(e && e.parameter ? e.parameter : {});
+    }
+    if (action === 'delete_drive_file' || action === 'delete_drive_files') {
+      return _handleDeleteDriveFiles(e && e.parameter ? e.parameter : {});
     }
 
     // 後端內部任務（讀取規章知識庫等）需校驗密鑰
@@ -267,6 +273,14 @@ function _handleDeleteDriveFiles(json) {
 function _handleUploadDriveFiles(json) {
   try {
     var files = json.files || [];
+    if (!files.length && (json.base64Data || json.base64 || json.data)) {
+      files = [{
+        name: json.fileName || json.name || ('upload_' + Date.now() + '.jpg'),
+        base64: json.base64Data || json.base64 || json.data,
+        mimeType: json.mimeType || json.type || 'image/jpeg'
+      }];
+    }
+
     var folderType = json.folderType || 'general';
     var uploadedUrls = [];
 
@@ -274,20 +288,28 @@ function _handleUploadDriveFiles(json) {
 
     for (var i = 0; i < files.length; i++) {
       var f = files[i];
-      var name = f.name || ('upload_' + Date.now() + '.jpg');
-      var base64Data = f.base64 || f.base64Data || '';
-      var mimeType = f.mimeType || 'image/jpeg';
+      var name = (f.name || ('upload_' + Date.now() + '_' + i + '.jpg')).replace(/[^a-zA-Z0-9._-]/g, '_');
+      var base64Data = f.base64 || f.base64Data || f.data || '';
+      var mimeType = f.mimeType || f.type || 'image/jpeg';
 
       if (base64Data) {
         var decoded = Utilities.base64Decode(base64Data.replace(/^data:.*?;base64,/, ''));
         var blob = Utilities.newBlob(decoded, mimeType, name);
         var createdFile = targetFolder.createFile(blob);
         createdFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        uploadedUrls.push(createdFile.getUrl());
+        
+        var fileId = createdFile.getId();
+        var cdnUrl = 'https://lh3.googleusercontent.com/d/' + fileId + '=s0';
+        uploadedUrls.push(cdnUrl);
       }
     }
 
-    return _workerSuccess({ uploadedUrls: uploadedUrls });
+    return _workerSuccess({
+      urls: uploadedUrls,
+      uploadedUrls: uploadedUrls,
+      imageUrl: uploadedUrls.length > 0 ? uploadedUrls[0] : '',
+      message: '成功上傳 ' + uploadedUrls.length + ' 個檔案至 Google Drive！'
+    });
   } catch (err) {
     return _workerError('Upload drive files failed: ' + err.toString(), 500);
   }

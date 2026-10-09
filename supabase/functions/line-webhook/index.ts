@@ -25,6 +25,9 @@ import {
   buildAiGuideFlex,
   buildMemberGuideFlex,
   buildFeedbackFlex,
+  buildMemberNotFoundFlex,
+  buildProfileIncompleteFlex,
+  buildProfileExpiredFlex,
 } from "./flexTemplates.ts";
 
 function maskString(str: string, keepStart = 2, keepEnd = 2): string {
@@ -352,9 +355,11 @@ async function handleSignup(
   }
 
   if (status === "closed") {
+    const evTitle = result.event_title || "該活動";
+    const evDeadline = result.deadline || "";
     await replyMessage(replyToken, [{
       type: "text",
-      text: render(messages.signupEventClosed(), prefLang),
+      text: render(messages.signupEventClosed(evTitle, evDeadline), prefLang),
     }]);
     return;
   }
@@ -362,26 +367,31 @@ async function handleSignup(
   if (status === "not_found") {
     await replyMessage(replyToken, [{
       type: "text",
-      text: render(messages.signupEventNotFound(), prefLang),
+      text: render(messages.signupEventNotFound(eventId), prefLang),
     }]);
     return;
   }
 
+  const registerLiffUrl = "https://liff.line.me/2009217429-AhPRqAHg";
+  const dashboardLiffUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard";
+
   if (status === "not_found_member") {
     await replyMessage(replyToken, [{
-      type: "text",
-      text: render(messages.signupMemberNotFound(frontendUrl), prefLang),
+      type: "flex",
+      altText: "⚠️ 報名失敗：尚未建立社員資料 / Member Profile Not Found",
+      contents: buildMemberNotFoundFlex(registerLiffUrl),
     }]);
     return;
   }
 
   if (status === "profile_incomplete") {
-    const missingStr = Array.isArray(result.missing_fields)
-      ? result.missing_fields.join("、")
-      : "必填資料未完整";
+    const missingArr = Array.isArray(result.missing_fields)
+      ? result.missing_fields
+      : [];
     await replyMessage(replyToken, [{
-      type: "text",
-      text: render(messages.signupProfileIncomplete(missingStr, frontendUrl), prefLang),
+      type: "flex",
+      altText: "⚠️ 報名失敗：個人資料未完整 / Incomplete Profile",
+      contents: buildProfileIncompleteFlex(missingArr, registerLiffUrl),
     }]);
     return;
   }
@@ -389,8 +399,9 @@ async function handleSignup(
   if (status === "profile_expired") {
     const reason = result.reason || "已超過 6 個月未更新";
     await replyMessage(replyToken, [{
-      type: "text",
-      text: render(messages.signupProfileExpired(reason, frontendUrl), prefLang),
+      type: "flex",
+      altText: "⚠️ 報名提醒：個人資料時效校驗 / Profile Validity Notice",
+      contents: buildProfileExpiredFlex(reason, dashboardLiffUrl),
     }]);
     return;
   }

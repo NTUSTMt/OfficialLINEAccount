@@ -970,3 +970,307 @@ export function buildFeedbackFlex(prefLang: PreferredLanguage) {
     },
   };
 }
+
+const FIELD_EN_MAP: Record<string, string> = {
+  "姓名": "Full Name",
+  "性別": "Gender",
+  "身分證字號/居留證號": "ID / ARC / Passport Number",
+  "身分證/護照": "ID / ARC / Passport Number",
+  "生日": "Date of Birth (Birthday)",
+  "聯絡電話": "Phone Number",
+  "系所": "Department",
+  "學號": "Student ID",
+  "身分別": "Identity Status",
+  "現居地址": "Current Residential Address",
+  "電子郵件": "Email Address",
+  "真實 LINE ID": "LINE ID",
+  "緊急聯絡人姓名": "Emergency Contact Name",
+  "與緊急聯絡人關係": "Relationship with Emergency Contact",
+  "緊急聯絡人電話": "Emergency Contact Phone",
+  "緊急聯絡人現居地址": "Emergency Contact Address",
+  "爬山經歷": "Hiking Experience",
+  "體能自評": "Fitness Self-Assessment",
+  "體能證明": "Fitness Proof",
+};
+
+export function buildMemberNotFoundFlex(liffUrl: string) {
+  const targetUrl = liffUrl || "https://liff.line.me/2009217429-AhPRqAHg";
+  const bubbleZh = {
+    type: "bubble",
+    size: "kilo",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#EA580C",
+      paddingTop: "12px",
+      paddingBottom: "12px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        { type: "text", text: "⚠️ 報名失敗 / 需填寫資料", color: "#FFFFFF", weight: "bold", size: "sm" },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      paddingAll: "16px",
+      contents: [
+        { type: "text", text: "系統找不到您的社員資料！", weight: "bold", size: "md", color: "#0F172A", wrap: true },
+        { type: "text", text: "請先點選單中的「填寫資料」完成註冊登記後再報名喔！🏕️\n（為了辦理入山平安保險與確保出隊安全）", size: "xs", color: "#475569", wrap: true },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#16A34A",
+          height: "sm",
+          action: { type: "uri", label: "前往填寫資料 (Register)", uri: targetUrl },
+        },
+      ],
+    },
+  };
+
+  const bubbleEn = {
+    type: "bubble",
+    size: "kilo",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#EA580C",
+      paddingTop: "12px",
+      paddingBottom: "12px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        { type: "text", text: "⚠️ Registration Failed", color: "#FFFFFF", weight: "bold", size: "sm" },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      paddingAll: "16px",
+      contents: [
+        { type: "text", text: "Member Profile Not Found!", weight: "bold", size: "md", color: "#0F172A", wrap: true },
+        { type: "text", text: "Please click 'Register' in the menu or tap the button below to complete your profile for mountain insurance and safety clearance! 🏕️", size: "xs", color: "#475569", wrap: true },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#0284C7",
+          height: "sm",
+          action: { type: "uri", label: "Complete Profile Now", uri: targetUrl },
+        },
+      ],
+    },
+  };
+
+  return {
+    type: "carousel",
+    contents: [bubbleZh, bubbleEn],
+  };
+}
+
+export function buildProfileIncompleteFlex(missingFields: string[], liffUrl: string) {
+  const targetUrl = liffUrl || "https://liff.line.me/2009217429-AhPRqAHg";
+  const missingZh = (missingFields || []).map(f => `👉 ${f} (${FIELD_EN_MAP[f] || f})`).join("\n");
+  const missingEn = (missingFields || []).map(f => `👉 ${FIELD_EN_MAP[f] || f}`).join("\n");
+
+  const bubbleZh = {
+    type: "bubble",
+    size: "kilo",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#DC2626",
+      paddingTop: "12px",
+      paddingBottom: "12px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        { type: "text", text: "⚠️ 報名失敗 / 資料未完整", color: "#FFFFFF", weight: "bold", size: "sm" },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        { type: "text", text: "您的個人資料尚不完整！", weight: "bold", size: "md", color: "#0F172A", wrap: true },
+        { type: "text", text: "為了辦理平安保險與確保戶外活動安全，請先點擊下方按鈕補齊以下必填資訊：", size: "xs", color: "#475569", wrap: true },
+        { type: "separator", margin: "sm" },
+        { type: "text", text: missingZh || "👉 必填資料未完整", size: "xs", color: "#DC2626", wrap: true, margin: "sm" },
+        { type: "text", text: "完成資料更新後，再回來點擊一鍵報名喔！🏕️", size: "xxs", color: "#64748B", wrap: true, margin: "sm" },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#16A34A",
+          height: "sm",
+          action: { type: "uri", label: "前往補齊資料 (Update Profile)", uri: targetUrl },
+        },
+      ],
+    },
+  };
+
+  const bubbleEn = {
+    type: "bubble",
+    size: "kilo",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#DC2626",
+      paddingTop: "12px",
+      paddingBottom: "12px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        { type: "text", text: "⚠️ Incomplete Member Profile", color: "#FFFFFF", weight: "bold", size: "sm" },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        { type: "text", text: "Required Fields Missing", weight: "bold", size: "md", color: "#0F172A", wrap: true },
+        { type: "text", text: "For insurance coverage and outdoor activity safety, please complete the following required fields:", size: "xs", color: "#475569", wrap: true },
+        { type: "separator", margin: "sm" },
+        { type: "text", text: missingEn || "👉 Incomplete Profile Fields", size: "xs", color: "#DC2626", wrap: true, margin: "sm" },
+        { type: "text", text: "Once your profile is updated, return here to sign up with one click! 🏕️", size: "xxs", color: "#64748B", wrap: true, margin: "sm" },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#0284C7",
+          height: "sm",
+          action: { type: "uri", label: "Update Profile Now", uri: targetUrl },
+        },
+      ],
+    },
+  };
+
+  return {
+    type: "carousel",
+    contents: [bubbleZh, bubbleEn],
+  };
+}
+
+export function buildProfileExpiredFlex(reason: string, liffUrl: string) {
+  const targetUrl = liffUrl || "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fdashboard";
+  const isUnverified = reason.includes("未校驗") || reason.includes("unverified");
+  const reasonZh = isUnverified
+    ? "您的個人資料與體能紀錄尚未完成時效校驗（或查無最近更新紀錄）"
+    : "您的個人資料與體能紀錄已超過 6 個月未更新";
+  const reasonEn = isUnverified
+    ? "Your profile and fitness records have an unverified update time or no recent records found"
+    : "Your profile and fitness records have not been updated for over 6 months";
+
+  const bubbleZh = {
+    type: "bubble",
+    size: "kilo",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#D97706",
+      paddingTop: "12px",
+      paddingBottom: "12px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        { type: "text", text: "⚠️ 報名提醒 / 經歷時效更新", color: "#FFFFFF", weight: "bold", size: "sm" },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        { type: "text", text: `${reasonZh}！`, weight: "bold", size: "sm", color: "#D97706", wrap: true },
+        { type: "text", text: "社團出團活動將依據您的「爬山經歷」與「體能狀況」進行審查與篩選。為了維護出隊安全並增加您的錄取機會，若近期有更豐富的登山紀錄或更佳的體能表現，請先前往更新個人資料後，再回到此處報名活動喔！", size: "xs", color: "#475569", wrap: true },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#16A34A",
+          height: "sm",
+          action: { type: "uri", label: "立即前往更新個人資料", uri: targetUrl },
+        },
+      ],
+    },
+  };
+
+  const bubbleEn = {
+    type: "bubble",
+    size: "kilo",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#D97706",
+      paddingTop: "12px",
+      paddingBottom: "12px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        { type: "text", text: "⚠️ Registration Notice / Fitness Update", color: "#FFFFFF", weight: "bold", size: "sm" },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        { type: "text", text: `${reasonEn}!`, weight: "bold", size: "sm", color: "#D97706", wrap: true },
+        { type: "text", text: "Club outings evaluate applications based on your hiking experience and fitness status. To ensure safety and boost your admission chances, please update your profile with your latest records before signing up!", size: "xs", color: "#475569", wrap: true },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#0284C7",
+          height: "sm",
+          action: { type: "uri", label: "Update Your Profile Now", uri: targetUrl },
+        },
+      ],
+    },
+  };
+
+  return {
+    type: "carousel",
+    contents: [bubbleZh, bubbleEn],
+  };
+}
+
