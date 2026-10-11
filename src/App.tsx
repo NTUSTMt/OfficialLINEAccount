@@ -649,7 +649,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
               <Payment userId={liffInit.userId} />
             </ProfileCheck>
           } />
-          <Route path="/register" element={<Register userId={liffInit.userId} />} />
+          <Route path="/register" element={<Register userId={liffInit.userId} jwtReady={liffInit.jwtReady} />} />
           <Route path="/dashboard" element={<Dashboard userId={liffInit.userId} />} />
           <Route path="/history" element={
             <ProfileCheck userId={liffInit.userId}>
@@ -710,12 +710,14 @@ function App() {
     userId: string;
     displayName: string;
     pictureUrl: string;
+    jwtReady: boolean;
   }>({
     loading: true,
     error: null,
     userId: '',
     displayName: '',
-    pictureUrl: ''
+    pictureUrl: '',
+    jwtReady: false
   });
 
   useEffect(() => {
@@ -768,6 +770,7 @@ function App() {
           pictureUrl = profile.pictureUrl || '';
 
           // 核心鑑權加固：向 line-auth 交換 Custom JWT 注入 Supabase Client 以達成端到端 RLS
+          // jwtReady 在 JWT 交換完成（成功或失敗）後才設為 true，避免 Register.tsx race condition
           try {
             const idToken = liff.getIDToken();
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -789,6 +792,9 @@ function App() {
             }
           } catch (jwtErr) {
             console.warn('[App] LIFF JWT 交換異常:', jwtErr);
+          } finally {
+            // JWT 就緒旗標：不論成功或失敗，Register 等此旗標後才 fetch 資料
+            setLiffInit((prev) => ({ ...prev, jwtReady: true }));
           }
 
           if (userId && pictureUrl && userId !== 'TEST_USER_ID') {
@@ -811,7 +817,7 @@ function App() {
           }
         }
 
-        setLiffInit({ loading: false, error: null, userId, displayName, pictureUrl });
+        setLiffInit((prev) => ({ ...prev, loading: false, error: null, userId, displayName, pictureUrl }));
       } catch (err: unknown) {
         console.error('LIFF 初始化失敗:', err);
         setLiffInit({ loading: false, error: err, userId: 'TEST_USER_ID', displayName: '測試山友', pictureUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=150' });

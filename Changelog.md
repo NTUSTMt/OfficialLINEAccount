@@ -2,7 +2,21 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.294] - 2026-10-11
+
+### 錯誤修復：資料填寫頁空白問題 (JWT Race Condition Fix)
+
+- 根本原因：phase2 安全加固後，`get_member_profile` RPC 在無 JWT 時回傳 `{error: 'Unauthorized'}` 物件而非 `NULL`，導致前端初始化時因 `line-auth` JWT 交換尚未完成即發起 RPC 呼叫，資料填寫頁看不到任何已儲存的個人資料。
+- 後端修復 (supabase/migrations/20261011_fix_get_member_profile_null_on_no_jwt.sql)：
+  - `get_member_profile` 在 JWT 缺失時改回傳 `NULL`（而非 error object），讓前端得以重試而非永久放棄。
+  - IDOR/BOLA 守衛保留：持有 JWT 但試圖讀取他人資料仍回傳 `Forbidden` 錯誤。
+  - 匿名安全性由既有的 `REVOKE anon EXECUTE` 在 PostgREST 呼叫層把關，函式本身無需額外防禦。
+- 前端修復 (src/App.tsx + src/pages/Register.tsx)：
+  - `App.tsx`：`liffInit` state 新增 `jwtReady: boolean` 旗標；JWT 交換完成（成功或失敗）後統一在 `finally` 區塊設為 `true`，確保 Register 得知 JWT 已就緒。
+  - `Register.tsx`：接收 `jwtReady` prop，`useEffect` 依賴陣列加入 `jwtReady`，在 JWT 尚未就緒時提前返回，等旗標為 `true` 後才發起 `fetchMemberProfileFromSupabase`。
+
 ## [0.1.293] - 2026-10-11
+
 
 ### 安全性修復與雲端部署 (Custom JWT Integration & Cloud Deployment)
 - 前端 LIFF 整合 Custom JWT 身分鑑權機制 (C-2)：

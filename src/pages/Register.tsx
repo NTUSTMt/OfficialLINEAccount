@@ -205,7 +205,7 @@ function buildProfileDiffFlex(
 
 type ProfileIntent = 'activity' | 'gear' | 'payment' | 'browse';
 
-function Register({ userId }: { userId: string }) {
+function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: boolean }) {
   const { t, i18n } = useTranslation();
   const [step, setStep] = useState(0);
   const [selectedIntents, setSelectedIntents] = useState<ProfileIntent[]>(['activity']);
@@ -310,7 +310,11 @@ function Register({ userId }: { userId: string }) {
   const isBrowse = selectedIntents.includes('browse');
 
   // 載入 LINE Profile 與 Supabase/GAS 社員資料
+  // jwtReady: 等待 App.tsx 的 line-auth JWT 交換就緒後才發起，避免 race condition
   useEffect(() => {
+    // JWT 尚未就緒（即 line-auth 尚未回應），尚不發起 fetch 避免以 anon 身份呼叫 RPC
+    if (!jwtReady) return;
+
     const fetchProfileData = async () => {
       setLoading(true);
       let memberFound = false;
@@ -400,7 +404,7 @@ function Register({ userId }: { userId: string }) {
     document.body.appendChild(script);
 
     fetchProfileData();
-  }, [userId]);
+  }, [userId, jwtReady]);
 
   // 自動暫存表單草稿至 localStorage (排除身分證字號與病史等敏感 PII 以防共用設備外洩)
   useEffect(() => {
