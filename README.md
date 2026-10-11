@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.295-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.296-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.295)](#7-最新版本異動紀錄-changelog-v01295)
+- [7. 最新版本異動紀錄 (Changelog v0.1.296)](#7-最新版本異動紀錄-changelog-v01296)
 
 ---
 
@@ -2579,3 +2579,14 @@ pnpm test
     - 宣告統一介面 `interface LiffInitState`，明確包含 `jwtReady: boolean`。
     - `AppContent` 與 `useState` 初始化宣告全數對齊 `LiffInitState`。
     - 補齊免登入直通路徑 (`/confirm-payment`, `/admin-web`)、外部瀏覽器阻擋頁面、以及例外捕獲 fallback 中的 `setLiffInit` 之 `jwtReady` 屬性。
+
+### v0.1.296 (2026-10-11)
+- CORS 來源白名單修復與鑑權錯誤透明化 (Fix CORS Allowed Origins & Auth Error Transparency)：
+  - 根本原因：專案生產網域 `https://equipments-seven.vercel.app` 未列於 `line-auth` 與 `notify-dispatcher` Edge Functions 之預設 CORS 白名單，導致瀏覽器阻斷 OPTIONS Preflight 請求，前端無法取得 Custom JWT。無 JWT 時 `get_member_profile` 與 `get_my_dashboard` 拒絕存取，引發資料填寫頁空白及主頁載入失敗。
+  - 後端修復與部署：
+    - `line-auth` 與 `notify-dispatcher` 加入 `https://equipments-seven.vercel.app` 與 `isOriginAllowed` 支援 `*.vercel.app`。
+    - 成功部署 `line-auth` (v23) 與 `notify-dispatcher` (v21) 至 Supabase 正式專案，實機驗證 OPTIONS CORS 標頭通過。
+  - 前端加固：
+    - `App.tsx`：完整記錄 `line-auth` 請求失敗之 HTTP 狀態碼與錯誤訊息至 `setLastSupabaseError`。
+    - `supabaseClient.ts`：檢查 RPC 業務錯誤 (`data.status === 'error'` 與 `data.error`) 並如實記錄。
+    - `Dashboard.tsx` 與 `Register.tsx`：落實錯誤透明化規範，直接顯示具體錯誤原因。

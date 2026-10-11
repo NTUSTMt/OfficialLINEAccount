@@ -6,7 +6,7 @@ import { SystemGuideModal } from './components/common/SystemGuideModal';
 import liff from '@line/liff';
 import { getCache, setCache } from './utils/cacheUtils';
 import { LIFF_URLS } from './constants/liff';
-import { fetchMemberProfileFromSupabase, checkOfficerStatusFromSupabase, supabase, setSupabaseAuthToken } from './utils/supabaseClient';
+import { fetchMemberProfileFromSupabase, checkOfficerStatusFromSupabase, supabase, setSupabaseAuthToken, setLastSupabaseError } from './utils/supabaseClient';
 import './App.css';
 
 const Borrow = lazy(() => import('./pages/Borrow'));
@@ -789,11 +789,26 @@ function App() {
                 const authData = await authRes.json();
                 if (authData.jwt) {
                   setSupabaseAuthToken(authData.jwt);
+                } else {
+                  const noJwtErr = authData?.error || 'line-auth 未回傳 JWT token';
+                  console.error('[App] line-auth 缺少 JWT:', noJwtErr);
+                  setLastSupabaseError(`line-auth 鑑權失敗: ${noJwtErr}`);
                 }
+              } else {
+                const errText = await authRes.text();
+                console.error(`[App] line-auth 請求失敗 (${authRes.status}):`, errText);
+                setLastSupabaseError(`line-auth 鑑權連線失敗 (${authRes.status}): ${errText}`);
+              }
+            } else {
+              if (!idToken) {
+                console.warn('[App] liff.getIDToken() 為空，無法取得 Custom JWT');
+                setLastSupabaseError('LIFF ID Token 為空，無法完成登入身分鑑權');
               }
             }
-          } catch (jwtErr) {
-            console.warn('[App] LIFF JWT 交換異常:', jwtErr);
+          } catch (jwtErr: any) {
+            const msg = jwtErr?.message || String(jwtErr);
+            console.error('[App] LIFF JWT 交換異常:', jwtErr);
+            setLastSupabaseError(`JWT 交換異常 (${msg})`);
           } finally {
             // JWT 就緒旗標：不論成功或失敗，Register 等此旗標後才 fetch 資料
             setLiffInit((prev) => ({ ...prev, jwtReady: true }));

@@ -5,7 +5,7 @@ import { ShieldCheck, Info, Plus, X } from 'lucide-react';
 import { withAuthPayload, notifyDispatcher } from '../utils/api';
 import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
-import { fetchMemberProfileFromSupabase, saveMemberProfileToSupabase } from '../utils/supabaseClient';
+import { fetchMemberProfileFromSupabase, saveMemberProfileToSupabase, getLastSupabaseError } from '../utils/supabaseClient';
 import { NATIONALITY_LIST } from '../constants/nationalities';
 import { SystemGuideModal } from '../components/common/SystemGuideModal';
 import '../App.css';
@@ -369,6 +369,10 @@ function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: bool
             }
             setPrivacyAgreed(true);
           }
+        }
+
+        if (!memberFound && getLastSupabaseError()) {
+          console.warn('[Register] 查詢社員資料未能取得紀錄，原因:', getLastSupabaseError());
         }
 
         // 3. 若為新註冊或尚未有線上會員紀錄，檢查是否有本機草稿可自動還原

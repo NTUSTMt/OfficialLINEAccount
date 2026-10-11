@@ -144,7 +144,7 @@ function Dashboard({ userId }: { userId: string }) {
                 }
               }
             } else {
-              const sbErrorDetail = getLastSupabaseError() || '找不到社員個人資料，請先前往註冊';
+              const sbErrorDetail = getLastSupabaseError() || (sbData as any)?.message || '找不到社員個人資料，請先前往註冊';
               setError(`[Supabase 載入失敗]: ${sbErrorDetail}`);
             }
           }

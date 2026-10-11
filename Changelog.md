@@ -2,6 +2,23 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.296] - 2026-10-11
+
+### 錯誤修復與雲端部署：CORS 來源白名單修復與鑑權錯誤透明化 (Fix CORS Allowed Origins & Auth Error Transparency)
+
+- 根本原因：
+  - 專案生產環境網域 `https://equipments-seven.vercel.app` 未列於 `line-auth` 與 `notify-dispatcher` Edge Functions 之預設 CORS 白名單，導致 LINE WebKit 瀏覽器阻斷 Preflight OPTIONS 請求，前端無法向 `line-auth` 交換 Custom JWT。
+  - 缺少有效 JWT 時，後端 `get_member_profile` 回傳 `NULL`、`get_my_dashboard` 回傳 `Unauthorized`，造成資料填寫頁空白、個人主頁報錯「找不到社員個人資料，請先前往註冊」。
+  - 錯誤處理未落實透明化規範，前端吞沒或退回空泛錯誤字串。
+- 後端修復與雲端部署 (supabase/functions/line-auth 與 notify-dispatcher)：
+  - `line-auth` 與 `notify-dispatcher` 新增 `https://equipments-seven.vercel.app` 至預設白名單，並加入 `isOriginAllowed` 支援 `*.vercel.app` 預覽網址。
+  - 成功透過 `npx supabase functions deploy` 重新部署至雲端 (v23 與 v21)，實機測試 OPTIONS 跨來源標頭已正確回傳 `access-control-allow-origin: https://equipments-seven.vercel.app`。
+- 前端加固 (src/App.tsx, src/utils/supabaseClient.ts, src/pages/Dashboard.tsx, src/pages/Register.tsx)：
+  - `App.tsx`：`line-auth` 交換失敗時如實記錄 HTTP 狀態碼與具體錯誤訊息至 `setLastSupabaseError`。
+  - `supabaseClient.ts`：`fetchDashboardFromSupabase` 檢查 RPC 業務錯誤 (`data.status === 'error'`) 並記錄 `lastSupabaseError`；`fetchMemberProfileFromSupabase` 檢查 `data.error` 並如實記錄。
+  - `Dashboard.tsx`：嚴格遵循錯誤透明化規範，直接顯示具體錯誤原因 (`getLastSupabaseError()`)。
+  - `Register.tsx`：讀取社員個人資料未取得紀錄時輸出完整診斷訊息。
+
 ## [0.1.295] - 2026-10-11
 
 ### 錯誤修復：TypeScript 建置型別錯誤修復 (Fix LiffInitState jwtReady TS Errors)

@@ -319,6 +319,13 @@ export const fetchDashboardFromSupabase = async (userId: string): Promise<Supaba
 
     if (!data) return null;
 
+    if (data.status === 'error') {
+      const errMsg = data.message || 'Supabase 儀表板 RPC 鑑權失敗';
+      console.warn('[Supabase] 讀取個人主頁失敗 (業務錯誤):', errMsg);
+      lastSupabaseError = errMsg;
+      return null;
+    }
+
     lastSupabaseError = null;
     console.log('%c[DataSource: Supabase] 個人主頁資料讀取成功！(連線延遲 < 100ms)', 'color: #10b981; font-weight: bold;', data);
     return data as SupabaseDashboardData;
@@ -342,10 +349,17 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
 
     if (error) {
       console.warn('[Supabase] 讀取社員資料失敗，轉向 fallback:', error.message);
+      lastSupabaseError = error.message;
       return null;
     }
 
     if (!data) return null;
+
+    if (data.error) {
+      console.warn('[Supabase] 讀取社員資料拒絕:', data.error);
+      lastSupabaseError = data.error;
+      return null;
+    }
 
     let proofsStr = '';
     if (Array.isArray(data.proof_urls)) {
@@ -384,8 +398,10 @@ export const fetchMemberProfileFromSupabase = async (userId: string): Promise<Pr
 
     console.log('%c[DataSource: Supabase] 社員個人資料預填讀取成功！(連線延遲 < 50ms)', 'color: #10b981; font-weight: bold;', profile);
     return profile;
-  } catch (err) {
-    console.warn('[Supabase] 讀取社員個人資料例外，啟用 GAS fallback:', err);
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.warn('[Supabase] 讀取社員個人資料例外，啟用 GAS fallback:', errMsg);
+    lastSupabaseError = errMsg;
     return null;
   }
 };

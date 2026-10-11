@@ -21,10 +21,19 @@ function getLiffChannelId(): string {
 }
 
 const DEFAULT_ALLOWED_ORIGINS = [
+  "https://equipments-seven.vercel.app",
   "https://official-line-account.vercel.app",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ];
+
+function isOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
+  if (!origin) return false;
+  if (allowedOrigins.includes(origin)) return true;
+  if (/^https:\/\/[a-zA-Z0-9_-]+\.vercel\.app$/.test(origin)) return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return false;
+}
 
 function getCorsHeaders(): Record<string, string> {
   const envOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "")
@@ -33,7 +42,7 @@ function getCorsHeaders(): Record<string, string> {
     .filter(Boolean);
   const allowedOrigins = envOrigins.length > 0 ? envOrigins : DEFAULT_ALLOWED_ORIGINS;
   const origin = activeOrigin || "";
-  const matchedOrigin = (origin && allowedOrigins.includes(origin)) ? origin : (allowedOrigins[0] || "null");
+  const matchedOrigin = isOriginAllowed(origin, allowedOrigins) ? origin : (allowedOrigins[0] || "null");
   return {
     "Access-Control-Allow-Origin": matchedOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-line-id-token",
