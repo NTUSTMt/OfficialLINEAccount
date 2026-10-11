@@ -6,7 +6,7 @@ import { SystemGuideModal } from './components/common/SystemGuideModal';
 import liff from '@line/liff';
 import { getCache, setCache } from './utils/cacheUtils';
 import { LIFF_URLS } from './constants/liff';
-import { fetchMemberProfileFromSupabase, checkOfficerStatusFromSupabase, supabase } from './utils/supabaseClient';
+import { fetchMemberProfileFromSupabase, checkOfficerStatusFromSupabase, supabase, setSupabaseAuthToken } from './utils/supabaseClient';
 import './App.css';
 
 const Borrow = lazy(() => import('./pages/Borrow'));
@@ -766,6 +766,30 @@ function App() {
           userId = profile.userId;
           displayName = profile.displayName;
           pictureUrl = profile.pictureUrl || '';
+
+          // 核心鑑權加固：向 line-auth 交換 Custom JWT 注入 Supabase Client 以達成端到端 RLS
+          try {
+            const idToken = liff.getIDToken();
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            if (idToken && supabaseUrl) {
+              const authRes = await fetch(`${supabaseUrl}/functions/v1/line-auth`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  idToken,
+                  clientId: liffId.includes('-') ? liffId.split('-')[0] : undefined,
+                }),
+              });
+              if (authRes.ok) {
+                const authData = await authRes.json();
+                if (authData.jwt) {
+                  setSupabaseAuthToken(authData.jwt);
+                }
+              }
+            }
+          } catch (jwtErr) {
+            console.warn('[App] LIFF JWT 交換異常:', jwtErr);
+          }
 
           if (userId && pictureUrl && userId !== 'TEST_USER_ID') {
             (async () => {

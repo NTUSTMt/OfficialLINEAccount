@@ -7,6 +7,17 @@ interface TokenCacheItem {
 
 const idTokenCache = new Map<string, TokenCacheItem>();
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 export async function validateSignature(
   rawBody: string,
   signature: string | null,
@@ -39,7 +50,7 @@ export async function validateSignature(
     const hashArray = Array.from(new Uint8Array(signatureBuffer));
     const computedSignature = btoa(String.fromCharCode(...hashArray));
 
-    if (computedSignature !== cleanSig) {
+    if (!timingSafeEqual(computedSignature, cleanSig)) {
       console.warn(`[validateSignature] 簽章不符: computed=${computedSignature.slice(0, 10)}... vs received=${cleanSig.slice(0, 10)}... (secret長度=${cleanSecret.length})`);
       return false;
     }

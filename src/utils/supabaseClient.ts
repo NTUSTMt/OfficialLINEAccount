@@ -19,8 +19,40 @@ export const isSupabaseConfigured = (): boolean => {
   return Boolean(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http'));
 };
 
+let activeUserJwt: string | null = null;
+
+export const setSupabaseAuthToken = (token: string | null): void => {
+  activeUserJwt = token;
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    if (token) {
+      sessionStorage.setItem('club_user_jwt', token);
+    } else {
+      sessionStorage.removeItem('club_user_jwt');
+    }
+  }
+};
+
+export const getSupabaseAuthToken = (): string | null => {
+  if (!activeUserJwt && typeof window !== 'undefined' && window.sessionStorage) {
+    activeUserJwt = sessionStorage.getItem('club_user_jwt');
+  }
+  return activeUserJwt;
+};
+
 export const supabase: SupabaseClient | null = isSupabaseConfigured()
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        fetch: (url, options = {}) => {
+          const token = getSupabaseAuthToken();
+          if (token) {
+            const headers = new Headers(options.headers || {});
+            headers.set('Authorization', `Bearer ${token}`);
+            options.headers = headers;
+          }
+          return fetch(url, options);
+        },
+      },
+    })
   : null;
 
 let lastSupabaseError: string | null = null;

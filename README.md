@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.291-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.293-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.291)](#7-最新版本異動紀錄-changelog-v01291)
+- [7. 最新版本異動紀錄 (Changelog v0.1.293)](#7-最新版本異動紀錄-changelog-v01293)
 
 ---
 
@@ -204,7 +204,27 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.291)
+## 7. 最新版本異動紀錄 (Changelog v0.1.293)
+
+### v0.1.293 (2026-10-11)
+- **LIFF 前端 Custom JWT 身分鑑權機制整合與端到端 IDOR 杜絕**:
+  - **Supabase Client 動態 Token 注入機制 ([src/utils/supabaseClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/supabaseClient.ts))**:
+    - 新增 `setSupabaseAuthToken` 與 `getSupabaseAuthToken`，於 `createClient` 之 `global.fetch` 攔截器中動態將 `Authorization: Bearer <token>` 附加至 HTTP 標頭。
+  - **LIFF 登入後自動 Token 交換 ([src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx))**:
+    - 於 `liff.isLoggedIn()` 成功後提取 `liff.getIDToken()` 並向 `line-auth` Edge Function 交換具備 `sub: line_user_id` 宣告之 Custom JWT，存入客戶端狀態。
+  - **資料庫 PostgREST RPC 嚴格鑑權 ([supabase/migrations/20261011_phase2_security_remediation.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/migrations/20261011_phase2_security_remediation.sql))**:
+    - `get_member_profile` 與 `get_my_dashboard` 強制要求有效 JWT `sub`，徹底杜絕匿名回退讀取他人個資漏洞。
+    - 撤銷 `sync_officer_cache_rpc`, `save_admin_event_rpc`, `get_admin_event_signups_rpc`, `update_event_status_rpc` 之 `anon` 執行權限。
+    - `submit_payment_rpc` 後端依照 `events.fee` 自動重新計算應繳金額，禁止信任前端 0 元自動核銷。
+    - 特權 RPC 函式全面配置 `SET search_path = public`。
+- **雲端 Supabase 正式專案 (bvyyuobmizfrosbgcqbu) 全面部署上線**:
+  - **資料庫遷移**: `20261011_phase2_security_remediation.sql` 已成功套用至正式資料庫。
+  - **Edge Functions**:
+    - `line-auth`: 部署至 v22 (ACTIVE)，支援前端動態傳入 LIFF Channel ID 與自適應 CORS 嚴格白名單。
+    - `line-webhook`: 部署至 v24 (ACTIVE)，配置 Fail-Closed 密鑰防禦與 `timingSafeEqual` 恆常時間簽章驗證。
+    - `notify-dispatcher`: 部署至 v20 (ACTIVE)，配置嚴格 CORS 白名單與 IP Rate Limiting 頻率保護。
+- **能力網址 (Capability URL) 原生架構確認**:
+  - 完整保留 Google Drive 檔案架構與既有歷史檔案（繳費收據、體檢證明、成績單），無推測性隨機 Token 結合 Supabase 端身分鑑權，確保現有資料零破壞且權限嚴格控管。
 
 ### v0.1.285 (2026-10-09)
 - **Flex 訊息卡片純淨語言化、零 Emoji 規範、單一卡片發送與報名/租借卡片化全面升級**:
@@ -2520,4 +2540,29 @@ pnpm test
   - 伺服端渲染 XSS 防禦 (H-8)：gas.backup.js 渲染至 alertBox 前執行 HTML 實體跳脫。
   - 前端隱私保護與快取管理 (L-1, L-2)：Register.tsx 草稿排除身分證與病史敏感 PII；Borrow.tsx 幹部快取導入 1 小時過期清理。
   - 邊界防禦與 CI/CD 流程 (L-6, L-8, L-9)：line-auth 導入記憶體 IP 速率限制；update_equipment_images 配置 is_officer 守衛；建立 .github/workflows/security.yml 審查工作流程；提供完整的資料庫 Migration (20261011_harden_security_and_rls.sql) 與回滾腳本。
-  - 自動化測試套件：新增 test/112_security_vulnerability_fixes.test.mjs 包含 14 項專屬測試，全數通過。
+  - 自動化測試套件：新增 test/112_security_vulnerability_fixes.test.mjs 包含 14 項專屬測試（共 29 驗證點），全數通過。
+  - 雲端 Supabase 正式部署上線：
+    - 資料庫遷移：20261011000000_harden_security_and_rls 成功套用至遠端專案 (bvyyuobmizfrosbgcqbu)，更新 is_officer、update_equipment_images、撤銷 9 項幹部 RPC 之 anon 權限，並收緊 sync_queue RLS。
+    - Edge Functions：line-auth 升級至 v20 (ACTIVE)，notify-dispatcher 升級至 v19 (ACTIVE)。
+
+### v0.1.292 (2026-10-11)
+- 第二階段安全性修復與全面防禦 (Security Remediation Phase 2)：
+  - 簽章比對側信道防護 (M-1)：`supabase/functions/_shared/lineClient.ts` 的 `validateSignature` 導入 `timingSafeEqual` 恆常時間比對，消除微秒級時間差側信道攻擊風險。
+  - Webhook 密鑰缺失防禦轉為 Fail-Closed (H-4)：`supabase/functions/line-webhook/index.ts` 於缺少 Channel Secret 密鑰時立即回傳 500 拒絕處理，杜絕略過簽章校驗之隱患。
+  - 跨來源資源共享收緊 (M-2)：`supabase/functions/line-auth/index.ts` 與 `notify-dispatcher/index.ts` 配置預設官方安全白名單（社團 Vercel 網域與本機開發環境），徹底移除任意 Origin 動態反射弱點。
+  - 推播介面請求速率限制 (M-3)：`supabase/functions/notify-dispatcher/index.ts` 實作記憶體 IP 速率限制 (Rate Limiting)，超額請求立即回傳 429 Too Many Requests，保護社團 LINE 訊息額度。
+  - GAS 入口簽章檢驗與敏感 Helper 鑑權 (C-4)：`src/gas.js` `doPost` 支援 `X-Line-Signature` 簽章校驗；`_handleDriveDeleteHelper` 檔案刪除加入 `SECURITY_GUARD` 與幹部授權防護。
+  - 資料庫加固腳本 (C-1, C-2, C-3, H-1, H-2, L-4)：新增 `supabase/migrations/20261011_phase2_security_remediation.sql`：
+    - C-1: 撤銷 `sync_officer_cache_rpc` 對 `anon` 之執行權限，並配置幹部或 `service_role` 特權守衛。
+    - C-2: `get_member_profile` 與 `get_my_dashboard` 強制要求有效 JWT `sub` 宣告，杜絕匿名回退 IDOR 越權讀取與寫入。
+    - C-3: `submit_payment_rpc` 由伺服器端依 `events.fee` 重新計算金額，禁止依賴前端傳入 0 元自動核銷。
+    - H-1: `submit_equipment_loan_rpc` 與 `cancel_*` 等特權 RPC 全面補齊 `SET search_path = public`。
+    - H-2: `cancel_equipment_loan_rpc` 與 `cancel_event_signup_rpc` 強制比對 JWT `sub`，防範越權取消。
+    - L-4: 撤銷 `save_admin_event_rpc` 與 `get_admin_event_signups_rpc` 對 `anon` 之執行權限。
+  - 業務需求評估確認（維持現狀）：
+    - H-3: 維持 Google Drive 現有機制，不使用 Supabase Storage，以無序 Capability File ID 與資料庫 RLS 保護隱私。
+    - L-1: 裝備借用 0 元出隊免租金審核維持現狀，保留填寫便利性。
+    - L-2: 幹部群組繳費通知之單鍵核銷按鈕維持現狀，保障審核體驗。
+    - L-3: Webhook 原始文字日誌維持現狀，利於 AI 客服故障排查。
+  - 自動化測試套件：新增 `test/113_comprehensive_security_remediation.test.mjs` 包含 11 項核心漏洞檢驗（全部 100% 通過）；全量回歸測試共 62 項測試全數通過（0 failed）。
+

@@ -650,10 +650,22 @@ function doPost(e) {
 
   try {
     var rawText = e.postData.contents;
+    var signature = (e.headers && (e.headers["x-line-signature"] || e.headers["X-Line-Signature"])) || "";
+
     var json = JSON.parse(rawText);
 
     // 1. 若含有 events 陣列，代表來自 LINE 官方 Messaging API Webhook
     if (json.events && Array.isArray(json.events)) {
+      // 驗證 X-Line-Signature 簽章（若有設定 CHANNEL_SECRET 且帶有簽章則比對）
+      var channelSecret = PropertiesService.getScriptProperties().getProperty("LINE_CHANNEL_SECRET") || "";
+      if (channelSecret && signature) {
+        var computedHash = Utilities.computeHmacSha256Signature(rawText, channelSecret);
+        var computedSig = Utilities.base64Encode(computedHash);
+        if (computedSig !== signature) {
+          console.warn("[doPost] LINE Webhook 簽章驗證失敗 (Invalid x-line-signature)");
+          return _errorResponse("Invalid signature");
+        }
+      }
       return _handleLineWebhookEvents(json.events);
     }
 
@@ -5415,6 +5427,13 @@ function _handleDriveUploadHelper(json) {
  * Google Drive 檔案刪除 Helper (移入垃圾桶，機制 B)
  */
 function _handleDriveDeleteHelper(json) {
+  // SECURITY_GUARD: 檢查身分憑證或幹部授權，防範未授權任意刪除檔案
+  var authSecret = PropertiesService.getScriptProperties().getProperty("ADMIN_BOT_SECRET") || "";
+  if (authSecret && json.authSecret !== authSecret && !json.isOfficer) {
+    console.warn("[_handleDriveDeleteHelper] 拒絕未授權之檔案刪除請求 (SECURITY_GUARD)");
+    return _errorResponse("Permission denied: 僅限幹部或授權呼叫者執行檔案刪除 (SECURITY_GUARD)");
+  }
+
   try {
     var fileIds = Array.isArray(json.fileIds) ? json.fileIds.slice() : [];
     if (json.fileId) fileIds.push(json.fileId);

@@ -2,6 +2,54 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.293] - 2026-10-11
+
+### 安全性修復與雲端部署 (Custom JWT Integration & Cloud Deployment)
+- 前端 LIFF 整合 Custom JWT 身分鑑權機制 (C-2)：
+  - src/utils/supabaseClient.ts: 新增 setSupabaseAuthToken 與 getSupabaseAuthToken 介面，於 createClient 之 global.fetch 請求攔截器自動動態附加 Authorization: Bearer <token> Header。
+  - src/App.tsx: 在 liff.isLoggedIn() 登入初始化成功後，自動提取 liff.getIDToken() 並向 line-auth Edge Function 交換具備 sub: line_user_id 宣告之 Custom JWT，杜絕資料庫 PostgREST RPC 匿名回退 IDOR 越權風險。
+- 雲端 Supabase 專案 (bvyyuobmizfrosbgcqbu) 正式部署：
+  - 資料庫遷移套用：成功透過 apply_migration 套用 20261011_phase2_security_remediation.sql，強制 C-1 (撤銷 anon 權限)、C-2 (JWT sub 強制校驗)、C-3 (後端重新計算活動費用)、H-1 (SET search_path = public)、H-2 (取消 RPC 宣告驗證)、L-4 (撤銷 anon 管理權限)。
+  - Edge Functions 正式版部署：
+    - line-auth: 升級至 v22 (ACTIVE)，支援前端動態傳入 LIFF Channel ID 與自適應 CORS 嚴格白名單。
+    - line-webhook: 升級至 v24 (ACTIVE)，具備 Fail-Closed 密鑰防禦與 timingSafeEqual 恆常時間簽章驗證。
+    - notify-dispatcher: 升級至 v20 (ACTIVE)，具備嚴格 CORS 白名單與 IP Rate Limiting 頻率保護。
+- 能力網址 (Capability URL) 架構確認：
+  - 維持現有 Google Drive 架構，現有與歷史繳費證明、體檢證明不受任何破壞，具備非推測性隨機 Token，社員與幹部皆能透過身分鑑權正常預覽與存取。
+- 自動化測試與建置：
+  - test/113_comprehensive_security_remediation.test.mjs 包含前端 JWT 注入等 12 項安全性測試全數通過。
+  - pnpm build 打包順利完成 (0 錯誤)。
+
+## [0.1.292] - 2026-10-11
+
+### 安全性修復與加固 (Phase 2 Remediation)
+- 簽章驗證改採恆常時間演算法 (M-1)：
+  - supabase/functions/_shared/lineClient.ts 實作 timingSafeEqual 函式比對 HMAC-SHA256 簽章，防止微秒級時間差側信道外洩攻擊。
+- Webhook 密鑰缺失防禦轉向 Fail-Closed (H-4)：
+  - supabase/functions/line-webhook/index.ts 於缺少 Channel Secret 密鑰時立即回傳 500 拒絕處理，徹底移除 Fail-Open 略過簽章校驗邏輯。
+- CORS 跨來源白名單收緊 (M-2)：
+  - supabase/functions/line-auth/index.ts 與 notify-dispatcher/index.ts 導入預設官方白名單（Vercel 網域與本機開發環境），徹底移除任意 Origin 動態反射弱點。
+- 推播介面實作速率限制 (M-3)：
+  - supabase/functions/notify-dispatcher/index.ts 實作記憶體 IP 速率限制 (Rate Limiting)，超額請求立即回傳 429 Too Many Requests，保護 LINE 訊息額度。
+- GAS 入口簽章檢驗與敏感 Helper 防護 (C-4)：
+  - src/gas.js doPost 支援 X-Line-Signature 簽章校驗；_handleDriveDeleteHelper 檔案刪除加入 SECURITY_GUARD 與幹部授權防護。
+- 資料庫加固 Migration 腳本 (C-1, C-2, C-3, H-1, H-2, L-4)：
+  - 建立 supabase/migrations/20261011_phase2_security_remediation.sql：
+    - C-1: 撤銷 sync_officer_cache_rpc 對 anon 之執行權限，並配置幹部或 service_role 特權守衛。
+    - C-2: get_member_profile 與 get_my_dashboard 強制驗證 JWT sub 宣告，杜絕匿名回退 IDOR 越權。
+    - C-3: submit_payment_rpc 由資料庫端依照 events.fee 重新計算應繳金額，禁止信任前端 0 元自動核銷。
+    - H-1: submit_equipment_loan_rpc 與 cancel_* 特權 RPC 全面補齊 SET search_path = public。
+    - H-2: cancel_equipment_loan_rpc 與 cancel_event_signup_rpc 強制比對 JWT sub 宣告，防範越權取消。
+    - L-4: 撤銷 save_admin_event_rpc, get_admin_event_signups_rpc 對 anon 之執行權限。
+- 業務需求評估確認（維持現狀）：
+  - H-3: 維持 Google Drive 現有機制，不遷移至 Supabase Storage，以無序 Capability File ID 與資料庫 RLS 保護隱私。
+  - L-1: 裝備借用 0 元出隊免租金審核維持現狀，保留填寫便利性。
+  - L-2: 幹部群組繳費通知之單鍵核銷按鈕維持現狀，保障審核體驗。
+  - L-3: Webhook 原始文字日誌維持現狀，利於 AI 客服故障排查。
+- 自動化測試套件：
+  - 新增 test/113_comprehensive_security_remediation.test.mjs 包含 11 項核心漏洞檢驗（全部 100% 通過）。
+  - 全量回歸測試：62 項測試全數通過（0 failed）。
+
 ## [0.1.291] - 2026-10-11
 
 ### 安全性修復與加固
@@ -32,7 +80,13 @@
   - 新增 .github/workflows/security.yml 自動化安全性審查工作流程。
   - 新增完整資料庫變更腳本 supabase/migrations/20261011_harden_security_and_rls.sql 與回滾腳本。
 - 自動化測試套件：
-  - 新增 test/112_security_vulnerability_fixes.test.mjs 完整驗證 14 項安全性弱點之修復。
+  - 新增 test/112_security_vulnerability_fixes.test.mjs 完整驗證 14 項安全性弱點之修復（29 項測試全數通過）。
+- 雲端 Supabase 正式部署上線：
+  - PostgreSQL 安全性遷移腳本 (20261011000000_harden_security_and_rls) 成功套用至遠端專案 (bvyyuobmizfrosbgcqbu)。
+  - is_officer 鑑權防偽冒函式、update_equipment_images 裝備圖片 RPC 與 9 項幹部管理 RPC 權限正式收緊，撤銷 anon 權限。
+  - sync_queue RLS 寫入政策正式套用 authenticated 限制。
+  - line-auth Edge Function 升級部署至 version 20 (ACTIVE)。
+  - notify-dispatcher Edge Function 升級部署至 version 19 (ACTIVE)。
 
 ## [0.1.290] - 2026-10-11
 

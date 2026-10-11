@@ -680,20 +680,21 @@ Deno.serve(async (req: Request) => {
 
   const rawBody = await req.text();
 
-  if (availableSecrets.length > 0) {
-    let isValid = false;
-    for (const secret of availableSecrets) {
-      if (await validateSignature(rawBody, signature, secret)) {
-        isValid = true;
-        break;
-      }
+  if (availableSecrets.length === 0) {
+    console.error("[line-webhook] 500 伺服器配置錯誤：缺少 LINE Webhook Channel Secret (MEMBER_BOT_SECRET / ADMIN_BOT_SECRET / LINE_CHANNEL_SECRET)，拒絕處理未經校驗之請求。");
+    return new Response("Server configuration error: missing webhook secrets", { status: 500 });
+  }
+
+  let isValid = false;
+  for (const secret of availableSecrets) {
+    if (await validateSignature(rawBody, signature, secret)) {
+      isValid = true;
+      break;
     }
-    if (!isValid) {
-      console.warn("[line-webhook] 401 拒絕存取：LINE Webhook 簽章驗證未通過。請確認 Supabase Secrets 中的 MEMBER_BOT_SECRET / ADMIN_BOT_SECRET 是否與 LINE 頻道 Channel secret 一致。");
-      return new Response("Unauthorized", { status: 401 });
-    }
-  } else {
-    console.warn("[line-webhook] 警告：MEMBER_BOT_SECRET 與 ADMIN_BOT_SECRET 均未設定，暫時略過簽章校驗。");
+  }
+  if (!isValid) {
+    console.warn("[line-webhook] 401 拒絕存取：LINE Webhook 簽章驗證未通過。請確認 Supabase Secrets 中的 MEMBER_BOT_SECRET / ADMIN_BOT_SECRET 是否與 LINE 頻道 Channel secret 一致。");
+    return new Response("Unauthorized", { status: 401 });
   }
 
   let payload: LineWebhookPayload;

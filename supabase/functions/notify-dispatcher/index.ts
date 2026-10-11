@@ -20,25 +20,41 @@ function getLiffChannelId(): string {
   return channelId;
 }
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://official-line-account.vercel.app",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+
 function getCorsHeaders(): Record<string, string> {
-  const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "")
+  const envOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const allowedOrigins = envOrigins.length > 0 ? envOrigins : DEFAULT_ALLOWED_ORIGINS;
   const origin = activeOrigin || "";
-  let allowOrigin = "";
-  if (allowedOrigins.length > 0) {
-    allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-  } else if (origin) {
-    allowOrigin = origin;
-  } else {
-    allowOrigin = "null";
-  }
+  const matchedOrigin = (origin && allowedOrigins.includes(origin)) ? origin : (allowedOrigins[0] || "null");
   return {
-    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Origin": matchedOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-line-id-token",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
+}
+
+// 簡易記憶體速率限制 (Rate Limiting: 60 秒內最多 30 次請求)
+const ipRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = ipRateLimitMap.get(ip);
+  if (!record || now > record.resetAt) {
+    ipRateLimitMap.set(ip, { count: 1, resetAt: now + 60000 });
+    return true;
+  }
+  if (record.count >= 30) {
+    return false;
+  }
+  record.count += 1;
+  return true;
 }
 
 function jsonResponse(data: unknown, status = 200) {
@@ -1801,6 +1817,15 @@ Deno.serve(async (req: Request) => {
 
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: getCorsHeaders() });
+  }
+
+  const clientIp =
+    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+    req.headers.get("cf-connecting-ip") ||
+    "unknown";
+
+  if (!checkRateLimit(clientIp)) {
+    return errorResponse("Too many requests. Please try again later.", 429);
   }
 
   if (req.method !== "POST") {

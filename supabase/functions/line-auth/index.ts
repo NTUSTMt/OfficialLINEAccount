@@ -3,22 +3,22 @@ import { SignJWT } from 'https://deno.land/x/jose@v4.14.4/index.ts';
 
 let activeOrigin: string | null = null;
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://official-line-account.vercel.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
+
 function getCorsHeaders(): Record<string, string> {
-  const allowedOrigins = (Deno.env.get('ALLOWED_ORIGINS') || '')
+  const envOrigins = (Deno.env.get('ALLOWED_ORIGINS') || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  const allowedOrigins = envOrigins.length > 0 ? envOrigins : DEFAULT_ALLOWED_ORIGINS;
   const origin = activeOrigin || '';
-  let allowOrigin = '';
-  if (allowedOrigins.length > 0) {
-    allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-  } else if (origin) {
-    allowOrigin = origin;
-  } else {
-    allowOrigin = 'null';
-  }
+  const matchedOrigin = (origin && allowedOrigins.includes(origin)) ? origin : (allowedOrigins[0] || 'null');
   return {
-    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Origin': matchedOrigin,
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
@@ -80,7 +80,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const channelId = Deno.env.get('LINE_CHANNEL_ID') || Deno.env.get('LIFF_CHANNEL_ID');
+    const channelId =
+      (body.clientId && String(body.clientId).trim()) ||
+      Deno.env.get('LINE_CHANNEL_ID') ||
+      Deno.env.get('LIFF_CHANNEL_ID');
     if (!channelId) {
       return new Response(
         JSON.stringify({ error: 'Server configuration error: missing LINE_CHANNEL_ID or LIFF_CHANNEL_ID env var' }),
