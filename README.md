@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.293-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.295-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.293)](#7-最新版本異動紀錄-changelog-v01293)
+- [7. 最新版本異動紀錄 (Changelog v0.1.295)](#7-最新版本異動紀錄-changelog-v01295)
 
 ---
 
@@ -2566,3 +2566,16 @@ pnpm test
     - L-3: Webhook 原始文字日誌維持現狀，利於 AI 客服故障排查。
   - 自動化測試套件：新增 `test/113_comprehensive_security_remediation.test.mjs` 包含 11 項核心漏洞檢驗（全部 100% 通過）；全量回歸測試共 62 項測試全數通過（0 failed）。
 
+### v0.1.294 (2026-10-11)
+- 資料填寫頁空白問題修復 (JWT Race Condition Fix)：
+  - 根本原因：安全加固後 `get_member_profile` RPC 在無 JWT 時回傳 `{error: 'Unauthorized'}` 物件而非 `NULL`，導致前端尚未取得 JWT 時發起 RPC 失敗且不重試。
+  - 後端修復：`get_member_profile` 在 JWT 缺失時改回傳 `NULL`，讓前端安全重試，並維持 IDOR/BOLA 跨用戶防護。
+  - 前端加固：`App.tsx` 新增 `jwtReady` 狀態旗標；`Register.tsx` 接收 `jwtReady` prop 並等待旗標就緒後才請求社員資料。
+
+### v0.1.295 (2026-10-11)
+- 建置階段 TypeScript 型別檢查錯誤修復 (Fix LiffInitState jwtReady TS Errors)：
+  - 根本原因：v0.1.294 於 `App.tsx` 傳入 `jwtReady` 至 `Register` 時，`AppContent` 元件之 props 未宣告 `jwtReady: boolean` (TS2339)，且三處 `setLiffInit` 呼叫點缺少該屬性 (TS2345)。
+  - 修復方案：
+    - 宣告統一介面 `interface LiffInitState`，明確包含 `jwtReady: boolean`。
+    - `AppContent` 與 `useState` 初始化宣告全數對齊 `LiffInitState`。
+    - 補齊免登入直通路徑 (`/confirm-payment`, `/admin-web`)、外部瀏覽器阻擋頁面、以及例外捕獲 fallback 中的 `setLiffInit` 之 `jwtReady` 屬性。

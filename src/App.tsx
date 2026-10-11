@@ -566,7 +566,16 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
   return <>{children}</>;
 }
 
-function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown; userId: string; displayName: string; pictureUrl: string } }) {
+interface LiffInitState {
+  loading: boolean;
+  error: unknown;
+  userId: string;
+  displayName: string;
+  pictureUrl: string;
+  jwtReady: boolean;
+}
+
+function AppContent({ liffInit }: { liffInit: LiffInitState }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -704,14 +713,7 @@ function AppContent({ liffInit }: { liffInit: { loading: boolean; error: unknown
 
 function App() {
   const [isBlocked, setIsBlocked] = useState(false);
-  const [liffInit, setLiffInit] = useState<{
-    loading: boolean;
-    error: unknown;
-    userId: string;
-    displayName: string;
-    pictureUrl: string;
-    jwtReady: boolean;
-  }>({
+  const [liffInit, setLiffInit] = useState<LiffInitState>({
     loading: true,
     error: null,
     userId: '',
@@ -735,7 +737,7 @@ function App() {
 
         // 核銷與電腦版幹部工作站專用直通通道：完全免連線 LINE LIFF，秒開渲染 (電腦、手機外部瀏覽器暢通無阻)
         if (path.includes('/confirm-payment') || statePath.includes('/confirm-payment') || path.startsWith('/admin-web') || statePath.startsWith('/admin-web')) {
-          setLiffInit({ loading: false, error: null, userId: '', displayName: '', pictureUrl: '' });
+          setLiffInit({ loading: false, error: null, userId: '', displayName: '', pictureUrl: '', jwtReady: true });
           return;
         }
 
@@ -755,7 +757,7 @@ function App() {
 
         if (!liff.isInClient() && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
           setIsBlocked(true);
-          setLiffInit({ loading: false, error: null, userId: '', displayName: '', pictureUrl: '' });
+          setLiffInit({ loading: false, error: null, userId: '', displayName: '', pictureUrl: '', jwtReady: false });
           return;
         }
 
@@ -820,7 +822,7 @@ function App() {
         setLiffInit((prev) => ({ ...prev, loading: false, error: null, userId, displayName, pictureUrl }));
       } catch (err: unknown) {
         console.error('LIFF 初始化失敗:', err);
-        setLiffInit({ loading: false, error: err, userId: 'TEST_USER_ID', displayName: '測試山友', pictureUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=150' });
+        setLiffInit({ loading: false, error: err, userId: 'TEST_USER_ID', displayName: '測試山友', pictureUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=150', jwtReady: true });
       }
     };
 

@@ -2,6 +2,16 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.295] - 2026-10-11
+
+### 錯誤修復：TypeScript 建置型別錯誤修復 (Fix LiffInitState jwtReady TS Errors)
+
+- 根本原因：0.1.294 於 App.tsx 引入 `jwtReady` 旗標以解決 JWT Race Condition，但 `AppContent` 元件之 props 型別宣告未同步加入 `jwtReady: boolean`，且三處 `setLiffInit` 呼叫點缺少該屬性，導致 Vercel build 階段 TypeScript 編譯報錯 (TS2339 與 TS2345)。
+- 前端修復 (src/App.tsx)：
+  - 宣告統一介面 `interface LiffInitState`，明確包含 `jwtReady: boolean`。
+  - 將 `AppContent` 傳入型別與 `useState` 初始化宣告全面對齊 `LiffInitState`。
+  - 補齊免登入直通路徑 (`/confirm-payment`, `/admin-web`)、外部瀏覽器阻擋頁面、以及例外捕獲 fallback 中的 `setLiffInit` 呼叫之 `jwtReady` 屬性。
+
 ## [0.1.294] - 2026-10-11
 
 ### 錯誤修復：資料填寫頁空白問題 (JWT Race Condition Fix)
