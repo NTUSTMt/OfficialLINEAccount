@@ -81,9 +81,10 @@ Deno.serve(async (req: Request) => {
     const code = body.code;
     const redirectUri = body.redirectUri;
     const idToken = body.idToken || body.id_token;
+    const accessToken = body.accessToken || body.access_token;
 
-    if (!idToken && (!code || !redirectUri)) {
-      return new Response(JSON.stringify({ error: 'Missing code/redirectUri or idToken parameter' }), {
+    if (!idToken && !accessToken && (!code || !redirectUri)) {
+      return new Response(JSON.stringify({ error: 'Missing code/redirectUri, idToken, or accessToken parameter' }), {
         status: 400,
         headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
       });
@@ -126,34 +127,55 @@ Deno.serve(async (req: Request) => {
     let displayName = '';
     let pictureUrl = '';
 
+    // 1-A. 若提供 idToken，優先驗證 LINE ID Token
     if (idToken) {
-      // 1-A. LIFF 端：驗證 LINE ID Token
-      const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          id_token: idToken,
-          client_id: channelId,
-        }),
-      });
+      try {
+        const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            id_token: idToken,
+            client_id: channelId,
+          }),
+        });
 
-      if (!verifyRes.ok) {
-        const errText = await verifyRes.text();
-        return new Response(
-          JSON.stringify({ error: `LINE ID Token verification failed (${verifyRes.status}): ${errText}` }),
-          {
-            status: 400,
-            headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
-          }
-        );
+        if (verifyRes.ok) {
+          const idTokenData = await verifyRes.json();
+          userId = idTokenData.sub;
+          displayName = idTokenData.name || '';
+          pictureUrl = idTokenData.picture || '';
+        } else {
+          const errText = await verifyRes.text();
+          console.warn(`[line-auth] ID Token 驗證未通過 (${verifyRes.status}):`, errText);
+        }
+      } catch (tokenErr: any) {
+        console.warn('[line-auth] ID Token 驗證連線例外:', tokenErr?.message || tokenErr);
       }
+    }
 
-      const idTokenData = await verifyRes.json();
-      userId = idTokenData.sub;
-      displayName = idTokenData.name || '';
-      pictureUrl = idTokenData.picture || '';
-    } else {
-      // 1-B. Web Admin 端：向 LINE OAuth2 Token API 交換 access_token
+    // 1-B. 若 ID Token 未通過或未提供，但有 accessToken，以 LINE 官方 Profile API 驗證身分
+    if (!userId && accessToken) {
+      try {
+        const profileRes = await fetch('https://api.line.me/v2/profile', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          userId = profileData.userId;
+          displayName = profileData.displayName || '';
+          pictureUrl = profileData.pictureUrl || '';
+        } else {
+          const errText = await profileRes.text();
+          console.warn(`[line-auth] Access Token 驗證未通過 (${profileRes.status}):`, errText);
+        }
+      } catch (profileErr: any) {
+        console.warn('[line-auth] Access Token Profile 驗證連線例外:', profileErr?.message || profileErr);
+      }
+    }
+
+    // 1-C. Web Admin 端：向 LINE OAuth2 Token API 交換 access_token
+    if (!userId && code && redirectUri) {
       if (!channelSecret) {
         return new Response(
           JSON.stringify({ error: 'Server configuration error: missing LINE_CHANNEL_SECRET for code flow' }),
@@ -188,11 +210,11 @@ Deno.serve(async (req: Request) => {
       }
 
       const tokenData = await tokenRes.json();
-      const accessToken = tokenData.access_token;
+      const codeAccessToken = tokenData.access_token;
 
       // 向 LINE Profile API 取得使用者資料 (userId, displayName, pictureUrl)
       const profileRes = await fetch('https://api.line.me/v2/profile', {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: `Bearer ${codeAccessToken}` },
       });
 
       if (!profileRes.ok) {
@@ -210,6 +232,16 @@ Deno.serve(async (req: Request) => {
       userId = profileData.userId;
       displayName = profileData.displayName || '';
       pictureUrl = profileData.pictureUrl || '';
+    }
+
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: 'LINE 身分驗證失敗：無法解析有效的 LINE 使用者身分憑證，請確認已登入或重新整理' }),
+        {
+          status: 401,
+          headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     // 3. 連線 Supabase 雙軌查驗幹部身分 (members 表與 officers 表)

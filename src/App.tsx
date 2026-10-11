@@ -440,12 +440,18 @@ function GlobalHeader({ pictureUrl, displayName, isOfficer }: { pictureUrl: stri
 }
 
 // 檢查個人必填項目是否已填寫的包裹組件
-function ProfileCheck({ userId, children }: { userId: string; children: ReactNode }) {
+function ProfileCheck({ userId, jwtReady, children }: { userId: string; jwtReady?: boolean; children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isComplete, setIsComplete] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
+    // 若 jwtReady 明確為 false，等待 JWT 就緒
+    if (jwtReady === false) {
+      setLoading(true);
+      return;
+    }
+
     const checkProfile = async () => {
       // 本地開發與測試環境直接跳過檢查，不阻擋
       if (!userId || userId === 'TEST_USER_ID') {
@@ -495,7 +501,7 @@ function ProfileCheck({ userId, children }: { userId: string; children: ReactNod
     };
 
     checkProfile();
-  }, [userId]);
+  }, [userId, jwtReady]);
 
   if (loading) {
     return (
@@ -649,34 +655,34 @@ function AppContent({ liffInit }: { liffInit: LiffInitState }) {
           <Route path="/" element={<Navigate to={redirectPath} replace />} />
           <Route path="/index.html" element={<Navigate to={redirectPath} replace />} />
           <Route path="/borrow" element={
-            <ProfileCheck userId={liffInit.userId}>
+            <ProfileCheck userId={liffInit.userId} jwtReady={liffInit.jwtReady}>
               <Borrow userId={liffInit.userId} isOfficer={isOfficer} />
             </ProfileCheck>
           } />
           <Route path="/payment" element={
-            <ProfileCheck userId={liffInit.userId}>
+            <ProfileCheck userId={liffInit.userId} jwtReady={liffInit.jwtReady}>
               <Payment userId={liffInit.userId} />
             </ProfileCheck>
           } />
           <Route path="/register" element={<Register userId={liffInit.userId} jwtReady={liffInit.jwtReady} />} />
-          <Route path="/dashboard" element={<Dashboard userId={liffInit.userId} />} />
+          <Route path="/dashboard" element={<Dashboard userId={liffInit.userId} jwtReady={liffInit.jwtReady} />} />
           <Route path="/history" element={
-            <ProfileCheck userId={liffInit.userId}>
+            <ProfileCheck userId={liffInit.userId} jwtReady={liffInit.jwtReady}>
               <History userId={liffInit.userId} />
             </ProfileCheck>
           } />
           <Route path="/payment/history" element={
-            <ProfileCheck userId={liffInit.userId}>
+            <ProfileCheck userId={liffInit.userId} jwtReady={liffInit.jwtReady}>
               <History userId={liffInit.userId} />
             </ProfileCheck>
           } />
           <Route path="/achievements" element={
-            <ProfileCheck userId={liffInit.userId}>
+            <ProfileCheck userId={liffInit.userId} jwtReady={liffInit.jwtReady}>
               <Achievements userId={liffInit.userId} />
             </ProfileCheck>
           } />
           <Route path="/dashboard/achievements" element={
-            <ProfileCheck userId={liffInit.userId}>
+            <ProfileCheck userId={liffInit.userId} jwtReady={liffInit.jwtReady}>
               <Achievements userId={liffInit.userId} />
             </ProfileCheck>
           } />
@@ -775,13 +781,15 @@ function App() {
           // jwtReady 在 JWT 交換完成（成功或失敗）後才設為 true，避免 Register.tsx race condition
           try {
             const idToken = liff.getIDToken();
+            const accessToken = liff.getAccessToken();
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            if (idToken && supabaseUrl) {
+            if ((idToken || accessToken) && supabaseUrl) {
               const authRes = await fetch(`${supabaseUrl}/functions/v1/line-auth`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  idToken,
+                  idToken: idToken || undefined,
+                  accessToken: accessToken || undefined,
                   clientId: liffId.includes('-') ? liffId.split('-')[0] : undefined,
                 }),
               });
@@ -800,9 +808,9 @@ function App() {
                 setLastSupabaseError(`line-auth 鑑權連線失敗 (${authRes.status}): ${errText}`);
               }
             } else {
-              if (!idToken) {
-                console.warn('[App] liff.getIDToken() 為空，無法取得 Custom JWT');
-                setLastSupabaseError('LIFF ID Token 為空，無法完成登入身分鑑權');
+              if (!idToken && !accessToken) {
+                console.warn('[App] liff.getIDToken() 與 liff.getAccessToken() 皆為空，無法取得 Custom JWT');
+                setLastSupabaseError('LIFF Token 為空，無法完成登入身分鑑權');
               }
             }
           } catch (jwtErr: any) {
@@ -834,7 +842,7 @@ function App() {
           }
         }
 
-        setLiffInit((prev) => ({ ...prev, loading: false, error: null, userId, displayName, pictureUrl }));
+        setLiffInit((prev) => ({ ...prev, loading: false, error: null, userId, displayName, pictureUrl, jwtReady: true }));
       } catch (err: unknown) {
         console.error('LIFF 初始化失敗:', err);
         setLiffInit({ loading: false, error: err, userId: 'TEST_USER_ID', displayName: '測試山友', pictureUrl: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=150', jwtReady: true });

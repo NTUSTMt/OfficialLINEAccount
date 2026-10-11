@@ -2,6 +2,24 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.297] - 2026-10-11
+
+### 錯誤修復與雲端部署：LIFF 雙軌鑑權、CSP 白名單擴充與競態條件排除 (Fix LIFF Dual Auth, CSP Connect-Src & Race Condition)
+
+- 根本原因分析：
+  - `vercel.json` 標頭中的 `Content-Security-Policy` 限制 `connect-src` 僅允許 `api.line.me`，封鎖了 LINE LIFF 內部連線必備的 `access.line.me`、`*.line.me` 以及 Google Apps Script 網域，導致 WebKit 與瀏覽器阻斷 LIFF 初始化與鑑權網路請求。
+  - LINE LIFF 在未啟用 `openid` scope 或歷史授權狀態下，`liff.getIDToken()` 會回傳 `null`。舊版 `line-auth` 與 `App.tsx` 僅接受 `idToken`，導致完全略過 Custom JWT 簽發流程。
+  - `ProfileCheck` 與 `Dashboard.tsx` 於組件掛載時未等待 `jwtReady` 旗標，產生競態條件，在 JWT 尚未注入前即向 Supabase 發起 RPC 查詢，被後端資料庫拒絕並回傳缺少身分憑證或空值，導致資料顯示空白或誤判未註冊。
+- 後端修復與雲端部署 (supabase/functions/line-auth)：
+  - `line-auth` 升級為雙軌驗證機制：優先驗證 `idToken`；若 `idToken` 不存在或驗證失敗，自動採用 `accessToken` 向 LINE 官方 Profile API 驗證使用者身分並回傳使用者資料，確保 100% 簽發 Supabase Custom JWT。
+  - 成功重新部署 `line-auth` 至 Supabase 雲端專案 (`bvyyuobmizfrosbgcqbu`)。
+- 前端加固與安全性防護：
+  - `vercel.json`：擴充 CSP `connect-src` 與 `script-src`，納入 `https://*.line.me`、`https://*.line-apps.com`、`https://*.line-scdn.net`、`https://script.google.com`、`https://script.googleusercontent.com`。
+  - `src/App.tsx`：呼叫 `line-auth` 時同時帶入 `idToken` 與 `accessToken` (`liff.getAccessToken()`)；`ProfileCheck` 接收並監聽 `jwtReady` 旗標，於 JWT 就緒前維持載入狀態；所有受保護路由與 `Dashboard` 皆綁定 `jwtReady={liffInit.jwtReady}`。
+  - `src/pages/Dashboard.tsx`：接收 `jwtReady` 屬性，等待 JWT 就緒後才執行 `fetchDashboardFromSupabase`，徹底排除匿名查詢報錯問題。
+- 自動化測試套件：
+  - 新增 `test/114_liff_dual_auth_and_csp.test.mjs`，全數通過 CSP 規則、雙軌鑑權支援與競態條件防禦檢驗。
+
 ## [0.1.296] - 2026-10-11
 
 ### 錯誤修復與雲端部署：CORS 來源白名單修復與鑑權錯誤透明化 (Fix CORS Allowed Origins & Auth Error Transparency)

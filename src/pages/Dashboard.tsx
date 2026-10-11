@@ -58,7 +58,7 @@ interface DashboardData {
   equipments: EquipmentData[];
 }
 
-function Dashboard({ userId }: { userId: string }) {
+function Dashboard({ userId, jwtReady }: { userId: string; jwtReady?: boolean }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -112,6 +112,12 @@ function Dashboard({ userId }: { userId: string }) {
 
   useEffect(() => {
     let ignore = false;
+
+    // 若 jwtReady 明確為 false，等待 JWT 交換就緒
+    if (jwtReady === false) {
+      setLoading(true);
+      return;
+    }
 
     let loadedFromSupabase = false;
     const loadDashboard = async () => {
@@ -171,7 +177,7 @@ function Dashboard({ userId }: { userId: string }) {
     return () => {
       ignore = true;
     };
-  }, [userId, refreshKey, t]);
+  }, [userId, jwtReady, refreshKey, t]);
 
   // 取消裝備預約
   const handleCancelLoan = async (orderId: string) => {

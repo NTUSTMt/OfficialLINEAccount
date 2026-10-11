@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.296-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.297-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.296)](#7-最新版本異動紀錄-changelog-v01296)
+- [7. 最新版本異動紀錄 (Changelog v0.1.297)](#7-最新版本異動紀錄-changelog-v01297)
 
 ---
 
@@ -204,7 +204,23 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.293)
+## 7. 最新版本異動紀錄 (Changelog v0.1.297)
+
+### v0.1.297 (2026-10-11)
+- **LIFF 雙軌身分鑑權、CSP 白名單放寬與前端競態條件排除**:
+  - **CSP 白名單擴充 ([vercel.json](file:///Users/brianhung/Documents/OfficialLINEAccount/vercel.json))**:
+    - `connect-src` 與 `script-src` 納入 `https://*.line.me`, `https://*.line-apps.com`, `https://*.line-scdn.net`, `https://script.google.com`, `https://script.googleusercontent.com`，杜絕 WebKit 阻斷 LIFF 初始化與網路連線。
+  - **雙軌身分鑑權 ([supabase/functions/line-auth/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-auth/index.ts))**:
+    - `line-auth` 升級為優先驗證 `idToken`，未帶或失敗時自動以 `accessToken` 經 LINE Profile API 驗證使用者身分，確保 100% 簽發 Supabase Custom JWT。
+  - **前端競態條件排除 ([src/App.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/App.tsx), [src/pages/Dashboard.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Dashboard.tsx))**:
+    - `ProfileCheck` 與 `Dashboard` 全面接收並等待 `jwtReady` 旗標，消除掛載時以匿名身分呼叫 RPC 導致被資料庫拒絕的 Race Condition。
+  - **自動化測試 ([test/114_liff_dual_auth_and_csp.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/114_liff_dual_auth_and_csp.test.mjs))**:
+    - 新增測試套件，涵蓋 CSP 白名單、雙軌驗證、路由參數與組件守衛。
+
+### v0.1.296 (2026-10-11)
+- **CORS 來源白名單修復與鑑權錯誤透明化**:
+  - `line-auth` 與 `notify-dispatcher` 新增 `https://equipments-seven.vercel.app` 預設白名單。
+  - 錯誤處理落實直接顯示具體技術細節。
 
 ### v0.1.293 (2026-10-11)
 - **LIFF 前端 Custom JWT 身分鑑權機制整合與端到端 IDOR 杜絕**:
