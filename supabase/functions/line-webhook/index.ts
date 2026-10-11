@@ -29,116 +29,11 @@ import {
   buildProfileIncompleteFlex,
   buildProfileExpiredFlex,
   buildSignupSuccessFlex,
+  buildEventClosedFlex,
+  buildWaitlistConfirmedFlex,
+  buildWaitlistFailedFlex,
+  buildAdminAssistantGuideFlex,
 } from "./flexTemplates.ts";
-
-function maskString(str: string, keepStart = 2, keepEnd = 2): string {
-  if (!str) return "";
-  const s = String(str).trim();
-  if (s.length <= keepStart + keepEnd) return s;
-  return s.slice(0, keepStart) + "*".repeat(s.length - keepStart - keepEnd) + s.slice(-keepEnd);
-}
-
-async function handleMemberProfileNoticeReply(
-  replyToken: string,
-  userId: string,
-  text: string
-): Promise<void> {
-  try {
-    const isNew = text.includes("完成") || text.includes("completed");
-    const client = getSupabaseAdminClient();
-    const { data: member } = await client
-      .from("members")
-      .select("*")
-      .eq("line_user_id", userId)
-      .maybeSingle();
-
-    if (!member) {
-      await replyMessage(replyToken, [{
-        type: "text",
-        text: "【個人資料填寫完成】\n感謝您的填寫！系統已收到您的個人資料。",
-      }]);
-      return;
-    }
-
-    const name = member.name || "社員";
-    const dept = member.department || "未填寫";
-    const studentId = member.student_id ? maskString(member.student_id, 2, 2) : "未填寫";
-    const phone = member.phone ? maskString(member.phone, 4, 3) : "未填寫";
-    const nationality = member.nationality || "未填寫";
-    const emerName = member.emergency_contact_name || "未填寫";
-    const emerRel = member.emergency_contact_rel || "未填寫";
-    const offIntent = member.join_membership_intent || "未填寫";
-    const prefLang: PreferredLanguage = (member.preferred_language || "zh").toLowerCase() as PreferredLanguage;
-
-    const titleZh = isNew ? "【歡迎加入！基本資料註冊成功】" : "【基本資料已成功更新】";
-    const titleEn = isNew ? "【Welcome! Registration Success】" : "【Profile Updated Successfully】";
-
-    const introZh = isNew
-      ? `您好 ${name}！感謝您完成台科登山社社團系統個人資料註冊：`
-      : `您好 ${name}！您已於系統中成功更新個人檔案：`;
-    const introEn = isNew
-      ? `Hello ${name}! Thank you for registering your profile with the NTUST Mountaineering Club:`
-      : `Hello ${name}! You have successfully updated your profile:`;
-
-    const detailsZh = [
-      `• 姓名：${name}`,
-      `• 國籍：${nationality}`,
-      `• 系所 / 學號：${dept} (${studentId})`,
-      `• 聯絡電話：${phone}`,
-      `• 緊急聯絡人：${emerName} (${emerRel})`,
-      `• 加入社員意願：${offIntent}`,
-    ];
-
-    const detailsEn = [
-      `• Name: ${name}`,
-      `• Nationality: ${nationality}`,
-      `• Dept / Student ID: ${dept} (${studentId})`,
-      `• Phone Number: ${phone}`,
-      `• Emergency Contact: ${emerName} (${emerRel})`,
-      `• Club Membership Intent: ${offIntent}`,
-    ];
-
-    const activityMissing = [];
-    if (!String(member.name || "").trim()) activityMissing.push("姓名");
-    if (!String(member.gender || "").trim()) activityMissing.push("性別");
-    if (!String(member.phone || "").trim()) activityMissing.push("聯絡電話");
-    if (!String(member.birthday || "").trim()) activityMissing.push("生日");
-    if (!String(member.id_card || "").trim()) activityMissing.push("身分證/護照");
-    if (!String(member.address || "").trim()) activityMissing.push("通訊地址");
-    if (!String(member.emergency_contact_name || "").trim()) activityMissing.push("緊急聯絡人姓名");
-    if (!String(member.emergency_contact_rel || "").trim()) activityMissing.push("與緊急聯絡人關係");
-    if (!String(member.emergency_contact_address || "").trim()) activityMissing.push("緊急聯絡人地址");
-    if (!String(member.emergency_contact_phone || "").trim()) activityMissing.push("緊急聯絡人電話");
-    if (!String(member.fitness_desc || "").trim()) activityMissing.push("體能自評");
-    if (!member.proof_urls || member.proof_urls.length === 0) activityMissing.push("體能證明");
-    if (!String(member.outdoor_experience || "").trim()) activityMissing.push("爬山經驗");
-
-    const isActivityReady = activityMissing.length === 0;
-    let footerZh = "";
-    let footerEn = "";
-
-    if (isActivityReady) {
-      footerZh = "[提示] 您的出隊保險與資料已完整，隨時可於 LINE 選單點擊「最新活動」報名出隊行程，或至「裝備租借」預約出隊器材！";
-      footerEn = "[Notice] Your trip insurance and safety verification details are fully completed. You are eligible to sign up for upcoming club events via \"Activities\", or reserve gear via \"Equipment Loan\" anytime!";
-    } else {
-      const missingText = activityMissing.slice(0, 4).join("、") + (activityMissing.length > 4 ? ` 等 ${activityMissing.length} 項` : "");
-      footerZh = `[提示] 您可隨時至 LINE 選單「裝備租借」預約出隊器材！\n\n[提醒] 出隊活動需辦理平安保險與安全審核，目前尚缺少出隊必要資訊（${missingText}），如欲報名最新活動，記得至選單「填寫資料」補齊即可啟用一鍵報名喔！`;
-      footerEn = "[Notice] You can reserve outdoor gear anytime via \"Equipment Loan\"!\n\n[Trip Notice] Participating in hiking events requires safety insurance. Please update your profile via \"Register\" in the menu to enable one-click signup!";
-    }
-
-    const zhBlock = `${introZh}\n\n${detailsZh.join("\n")}\n\n${footerZh}`;
-    const enBlock = `${introEn}\n\n${detailsEn.join("\n")}\n\n${footerEn}`;
-    const fullMsg = prefLang === "en" ? `${titleEn}\n\n${enBlock}` : `${titleZh}\n\n${zhBlock}`;
-
-    await replyMessage(replyToken, [{ type: "text", text: fullMsg }]);
-  } catch (err) {
-    console.error("handleMemberProfileNoticeReply error:", err);
-    await replyMessage(replyToken, [{
-      type: "text",
-      text: "【個人資料填寫完成】\n您的個人資料已成功儲存！",
-    }]);
-  }
-}
 
 async function sendEventList(replyToken: string, userId: string): Promise<void> {
   const prefLang = await getUserPreferredLanguage(userId);
@@ -367,9 +262,11 @@ async function handleSignup(
       ? (result.event_title_en || result.event_title || "This event")
       : (result.event_title || "該活動");
     const evDeadline = formatTaipeiDate(result.deadline, "YYYY/MM/DD HH:mm") || result.deadline || "";
+    const altText = prefLang === "en" ? `Registration Closed: ${evTitle}` : `活動報名已截止: ${evTitle}`;
     await replyMessage(replyToken, [{
-      type: "text",
-      text: render(messages.signupEventClosed(evTitle, evDeadline), prefLang),
+      type: "flex",
+      altText,
+      contents: buildEventClosedFlex(evTitle, evDeadline, prefLang),
     }]);
     return;
   }
@@ -442,9 +339,12 @@ async function handleConfirmWaitlist(
   const eventId = params.eventId || params.id || "";
 
   if (!eventId) {
+    const errReason = prefLang === "en" ? "Missing Event ID" : "缺少活動代號";
+    const altText = prefLang === "en" ? "Registration Failed" : "登記失敗";
     await replyMessage(replyToken, [{
-      type: "text",
-      text: render(messages.waitlistFailed("缺少活動代號"), prefLang),
+      type: "flex",
+      altText,
+      contents: buildWaitlistFailedFlex(errReason, prefLang),
     }]);
     return;
   }
@@ -468,16 +368,20 @@ async function handleConfirmWaitlist(
     .eq("event_id", eventId);
 
   if (error) {
+    const altText = prefLang === "en" ? "Registration Failed" : "登記失敗";
     await replyMessage(replyToken, [{
-      type: "text",
-      text: render(messages.waitlistFailed(error.message), prefLang),
+      type: "flex",
+      altText,
+      contents: buildWaitlistFailedFlex(error.message, prefLang),
     }]);
     return;
   }
 
+  const altText = prefLang === "en" ? "Waitlist Interest Confirmed" : "備取意願已登記";
   await replyMessage(replyToken, [{
-    type: "text",
-    text: render(messages.waitlistConfirmed(title), prefLang),
+    type: "flex",
+    altText,
+    contents: buildWaitlistConfirmedFlex(title, prefLang),
   }]);
 }
 
@@ -602,8 +506,9 @@ async function handleTextMessage(
     (isAdminGroup && text.includes("幹部系統"))
   ) {
     await replyMessage(replyToken, [{
-      type: "text",
-      text: render(messages.adminAssistantCard(), "zh"),
+      type: "flex",
+      altText: "幹部專屬助理 小岳使用指南",
+      contents: buildAdminAssistantGuideFlex(),
     }], true);
     return;
   }
@@ -684,20 +589,7 @@ async function handleTextMessage(
     return;
   }
 
-  // 9. 社員完成/更新個人資料破冰發話
-  if (
-    text === "我已完成個人資料填寫" ||
-    text === "我已更新個人資料" ||
-    text.includes("我已完成個人資料填寫") ||
-    text.includes("我已更新個人資料") ||
-    lowerText === "i have completed my registration" ||
-    lowerText === "i have updated my profile"
-  ) {
-    await handleMemberProfileNoticeReply(replyToken, userId, text);
-    return;
-  }
-
-  // 10. Gemini AI 客服
+  // 9. Gemini AI 客服
   if (isYueMentioned) {
     const prefLang = await getUserPreferredLanguage(userId);
     if (!cleanText) {

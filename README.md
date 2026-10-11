@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.288-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.289-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.288)](#7-最新版本異動紀錄-changelog-v01288)
+- [7. 最新版本異動紀錄 (Changelog v0.1.289)](#7-最新版本異動紀錄-changelog-v01289)
 
 ---
 
@@ -204,7 +204,7 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.285)
+## 7. 最新版本異動紀錄 (Changelog v0.1.289)
 
 ### v0.1.285 (2026-10-09)
 - **Flex 訊息卡片純淨語言化、零 Emoji 規範、單一卡片發送與報名/租借卡片化全面升級**:
@@ -2486,17 +2486,24 @@ pnpm test
   - 自動化單元測試建立：
     - 新增 test/110_taiwan_deadline_time.test.mjs 完整驗證時區工具、前後端表單與卡片結構。
 
-### v0.1.288 (2026-10-11)
-- Supabase Edge Functions 後端全面支援台灣截止時間 (UTC+8) 時分呈現與部署上線：
-  - 共用時區工具強化 (supabase/functions/_shared/dateUtils.ts)：
-    - 強化 parseTaipeiDate 函式，支援帶時分但未標示時區之日期字串，預設補齊 +08:00 台灣時區，確保與資料庫及前端完全一致。
-  - LINE Webhook 活動卡片與逾期訊息升級 (supabase/functions/line-webhook)：
-    - flexTemplates.ts：活動清單輪播卡片與活動詳情卡片之報名截止日期格式化為帶有時分的台灣時間 (YYYY/MM/DD HH:mm)。
-    - index.ts：活動截止 (status === "closed") 時的文字回覆，將截止時間以台灣時區精確格式化為 YYYY/MM/DD HH:mm。
-  - 幹部群組推播通知升級 (supabase/functions/notify-dispatcher/index.ts)：
-    - 新活動發布或資訊更新推播至幹部群組時，報名截止時間統一格式化為 YYYY/MM/DD HH:mm 台灣時間。
-  - 雲端 Edge Functions 部署：
-    - 透過 Supabase CLI 正式部署 line-webhook (v22) 與 notify-dispatcher (v17) 至 Supabase 正式環境。
-    - 確保全功能完整保留，狀態均為 ACTIVE。
+### v0.1.289 (2026-10-11)
+- 訊息卡片化全面升級與過時通知清理：
+  - 移除過時通知與純文字破冰：
+    - 移除「我已完成個人資料填寫」文字破冰回覆：因社員填寫個人資料完成時，前端 LIFF 已直接傳送卡片 diff 訊息，後端不再回覆純文字訊息。
+    - 徹底移除「幹部群組：心得感想發表通知」：前端 src/pages/Achievements.tsx 移除 notifyDispatcher('notify_reflection_submitted') 呼叫；後端 notify-dispatcher 移除 handleNotifyReflectionSubmitted 路由與實作。
+  - 8 項核心互動訊息全面升級為 LINE Flex Message 卡片：
+    - 活動報名已截止通知：line-webhook (buildEventClosedFlex) 採用警示橘紅主題卡片，清晰標示活動名稱與截止時間。
+    - 備取意願確認回覆：line-webhook (buildWaitlistConfirmedFlex / buildWaitlistFailedFlex) 成功採用森林綠主題、失敗採用深灰警示卡片。
+    - 幹部專屬助理小岳使用指南：line-webhook (buildAdminAssistantGuideFlex) 採用深藍管理員主題卡片，列舉常用指令並提供「進入幹部管理後台」按鈕。
+    - 個人繳費核銷成功推播：notify-dispatcher (buildPaymentVerifiedPersonalFlex) 採用森林綠主題與金牌核銷標籤，清楚列出活動名稱、對帳後五碼與金額。
+    - 幹部群組：裝備預約取消通知：notify-dispatcher (buildLoanCancelledAdminFlex) 採用警示橘紅主題，列明借用人、裝備清單、原借還日期，並提供「前往裝備管理」按鈕。
+    - 幹部群組：繳費核銷完成通知：notify-dispatcher (buildPaymentConfirmedAdminFlex) 採用藍綠主題，列明活動、社員、末五碼、金額、核銷人與時間，並提供「查看財務管理」按鈕。
+    - 幹部群組：新幹部意願登記通知：notify-dispatcher (buildOfficerIntentAdminFlex) 採用紫靛色主題，列明申請人、系級、意願組別與自我介紹，並提供「前往社員管理」按鈕。
+    - 幹部群組：正取社員取消報名緊急通知：notify-dispatcher (buildEventCancelledAdminFlex) 採用緊急朱紅主題，列明活動名稱、社員資訊、空出名額，並提供「前往活動名冊」按鈕。
+  - 雲端 Edge Functions 正式部署：
+    - 正式部署 line-webhook (v23) 與 notify-dispatcher (v18) 至 Supabase 正式環境。
+  - 自動化測試套件：
+    - 新增 test/111_flex_card_upgrades.test.mjs 完整驗證 9 款 Flex 卡片模板結構與欄位完整性。
+
 
 

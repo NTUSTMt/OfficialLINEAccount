@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Award, Star, Edit3, Globe, Lock, ChevronRight } from 'lucide-react';
-import { withAuthPayload, notifyDispatcher } from '../utils/api';
+import { withAuthPayload } from '../utils/api';
 import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { GAS_API_URL } from '../constants/api';
 import { fetchAchievementsFromSupabase, saveReflectionToSupabase, getLastSupabaseError } from '../utils/supabaseClient';
@@ -340,26 +340,6 @@ function Achievements({ userId }: { userId: string }) {
         }
 
         if (sbSuccess) {
-          // 僅首次提交時發送心得推播通知給幹部群組，編輯更新不重複發送通知
-          if (!isEditing) {
-            try {
-              const photoList = combinedImageUrl
-                ? combinedImageUrl.split(/[\n,]/).map(u => u.trim()).filter(Boolean)
-                : [];
-              await notifyDispatcher('notify_reflection_submitted', {
-                userId: userId,
-                userName: '社員',
-                eventName: selectedActivity.title,
-                difficulty: difficulty,
-                beauty: beauty,
-                content: content,
-                photoUrls: photoList
-              });
-            } catch (notifErr) {
-              console.warn('發送心得推播例外:', notifErr);
-            }
-          }
-
           alert(isEditing ? (t('achievements.alert.updateSuccess') || '心得與評分已成功更新！') : t('achievements.alert.submitSuccess'));
           setIsEditing(false);
           closeForm();

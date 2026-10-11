@@ -1847,3 +1847,344 @@ export function buildLoanStatusUpdatedFlex(
   };
 }
 
+export function buildEventClosedFlex(
+  eventName: string,
+  deadline: string,
+  prefLang?: PreferredLanguage
+) {
+  const isEn = prefLang === "en";
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#D97706",
+      paddingTop: "12px",
+      paddingBottom: "12px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: isEn ? "Registration Closed" : "活動報名已截止",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "text",
+          text: eventName,
+          weight: "bold",
+          size: "sm",
+          color: "#0F172A",
+          wrap: true,
+        },
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            {
+              type: "text",
+              text: isEn ? "Cutoff Time:" : "截止時間：",
+              size: "xs",
+              color: "#64748B",
+              flex: 3,
+            },
+            {
+              type: "text",
+              text: deadline || (isEn ? "Closed" : "已截止"),
+              size: "xs",
+              color: "#D97706",
+              weight: "bold",
+              flex: 7,
+              wrap: true,
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: isEn
+            ? "Thank you for your interest! Registration for this event has officially closed. For inquiries, please contact club officers."
+            : "感謝您的關注！本活動報名已正式截止。如有特殊需求或候補諮詢，請隨時洽詢社團幹部。",
+          size: "xxs",
+          color: "#475569",
+          wrap: true,
+        },
+      ],
+    },
+  };
+}
+
+export function buildWaitlistConfirmedFlex(
+  eventName: string,
+  prefLang?: PreferredLanguage
+) {
+  const isEn = prefLang === "en";
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "12px",
+      paddingBottom: "12px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: isEn ? "Waitlist Interest Confirmed" : "備取意願已登記",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "text",
+          text: eventName,
+          weight: "bold",
+          size: "sm",
+          color: "#0F172A",
+          wrap: true,
+        },
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            {
+              type: "text",
+              text: isEn ? "Status:" : "登記狀態：",
+              size: "xs",
+              color: "#64748B",
+              flex: 3,
+            },
+            {
+              type: "text",
+              text: isEn ? "Waitlisted (Interested)" : "已排入候補名單",
+              size: "xs",
+              color: "#059669",
+              weight: "bold",
+              flex: 7,
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: isEn
+            ? "You have been added to the waitlist. If a spot opens up, officers will contact you directly for admission."
+            : "我們已為您排入候補名單。後續若有正取缺額釋出，幹部將主動依序通知您遞補出隊事宜！",
+          size: "xxs",
+          color: "#475569",
+          wrap: true,
+        },
+      ],
+    },
+  };
+}
+
+export function buildWaitlistFailedFlex(
+  reason: string,
+  prefLang?: PreferredLanguage
+) {
+  const isEn = prefLang === "en";
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#DC2626",
+      paddingTop: "12px",
+      paddingBottom: "12px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: isEn ? "Registration Failed" : "登記失敗",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            {
+              type: "text",
+              text: isEn ? "Reason:" : "失敗原因：",
+              size: "xs",
+              color: "#64748B",
+              flex: 3,
+            },
+            {
+              type: "text",
+              text: reason || (isEn ? "Unknown error" : "未知原因"),
+              size: "xs",
+              color: "#DC2626",
+              weight: "bold",
+              flex: 7,
+              wrap: true,
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: isEn
+            ? "Failed to confirm waitlist interest. Please try again later or contact club officers."
+            : "備取意願登記暫時無法完成，請稍候再試或直接聯絡社團幹部協助處理。",
+          size: "xxs",
+          color: "#475569",
+          wrap: true,
+        },
+      ],
+    },
+  };
+}
+
+export function buildAdminAssistantGuideFlex() {
+  const adminEventsUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents";
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#4F46E5",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "幹部專屬助理 小岳使用指南",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: "幹部系統指令",
+              weight: "bold",
+              size: "xs",
+              color: "#4F46E5",
+            },
+            {
+              type: "text",
+              text: "輸入「@小岳助理 幹部系統」或點擊下方按鈕，即可直接進入活動發布、審核名冊、租借審核與財務核銷後台。",
+              size: "xxs",
+              color: "#334155",
+              wrap: true,
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: "綁定群組指令",
+              weight: "bold",
+              size: "xs",
+              color: "#4F46E5",
+            },
+            {
+              type: "text",
+              text: "輸入「@小岳助理 綁定幹部群組」，即可將此群組設定為官方推播群組，接收裝備申請、繳費核銷與重要警報。",
+              size: "xxs",
+              color: "#334155",
+              wrap: true,
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            {
+              type: "text",
+              text: "社務與登山諮詢",
+              weight: "bold",
+              size: "xs",
+              color: "#4F46E5",
+            },
+            {
+              type: "text",
+              text: "在群組中 @小岳助理 加上問題內容，小岳將即時提供登山知識與社務指引。",
+              size: "xxs",
+              color: "#334155",
+              wrap: true,
+            },
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#4F46E5",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "進入幹部管理系統",
+            uri: adminEventsUrl,
+          },
+        },
+      ],
+    },
+  };
+}
+

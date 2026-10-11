@@ -124,7 +124,7 @@ async function handleNotifyOfficersLoan(json: Record<string, any>) {
       contents: [
         {
           type: "text",
-          text: "【🎒 幹部通知：新裝備租借申請】",
+          text: "【幹部通知：新裝備租借申請】",
           weight: "bold",
           color: "#ffffff",
           size: "sm",
@@ -206,7 +206,7 @@ async function handleNotifyOfficersLoan(json: Record<string, any>) {
           margin: "sm",
           spacing: "xs",
           contents: [
-            { type: "text", text: "📦 借用裝備明細：", color: "#64748b", size: "xs", weight: "bold" },
+            { type: "text", text: "借用裝備明細：", color: "#64748b", size: "xs", weight: "bold" },
             ...(itemsSummary.length > 0
               ? itemsSummary.map((it) => ({ type: "text", text: it, color: "#334155", size: "xs", wrap: true }))
               : [{ type: "text", text: "• 無品項", color: "#94a3b8", size: "xs" }]),
@@ -234,7 +234,7 @@ async function handleNotifyOfficersLoan(json: Record<string, any>) {
   };
 
   const msg =
-    "【🎒 幹部通知：新裝備租借申請】\n" +
+    "【幹部通知：新裝備租借申請】\n" +
     "─────────────\n" +
     `• 訂單編號：${loanId}\n` +
     `• 申請人：${borrowerName} (${identityDesc})\n` +
@@ -243,9 +243,9 @@ async function handleNotifyOfficersLoan(json: Record<string, any>) {
     `• 出隊天數：${days} 天 (${details.pickupDate || ""} ~ ${details.returnDate || ""})\n` +
     `• 租借用途：${purpose}\n` +
     `• 預估總租金：$${totalRent} 元\n\n` +
-    "📦 借用裝備明細：\n" +
+    "借用裝備明細：\n" +
     (itemsSummary.length > 0 ? itemsSummary.join("\n") : "• 無品項") +
-    "\n\n⚡ 本資料已安全寫入 Supabase，請至幹部後台確認備用！";
+    "\n\n本資料已安全寫入 Supabase，請至幹部後台確認備用！";
 
   const loanSubject = `【台科登山社】新裝備租借申請 - ${loanId} (${borrowerName})`;
   await pushAdminMessage(msg, loanSubject, { flexContents: loanFlex, altText: loanSubject });
@@ -270,28 +270,39 @@ async function handleNotifyLoanCancelled(json: Record<string, any>) {
   let adminBody = "";
 
   if (isPaid) {
-    adminSubject = `【台科登山社】裝備預約取消（⚠️需安排退款）- ${loanId} (${borrowerName})`;
+    adminSubject = `【台科登山社】裝備預約取消 (需安排退款) - ${loanId} (${borrowerName})`;
     adminBody =
-      "🔔 【幹部通知：裝備預約取消（需安排退款）】\n" +
+      "【幹部通知：裝備預約取消（需安排退款）】\n" +
       "─────────────\n" +
       `• 訂單編號：${loanId}\n` +
       `• 申請人：${borrowerName}\n` +
       (borrowerLineId ? `• LINE ID：${borrowerLineId}\n` : "") +
       `• 取消裝備品項：\n${itemsText}\n\n` +
-      "⚠️ 該租借預約已繳費／待確認，請幹部依社團退費規範安排退款事宜！（庫存已由 Supabase 自動釋放回補）";
+      "該租借預約已繳費／待確認，請幹部依社團退費規範安排退款事宜！（庫存已由 Supabase 自動釋放回補）";
   } else {
     adminSubject = `【台科登山社】裝備預約取消通知 - ${loanId} (${borrowerName})`;
     adminBody =
-      "【🎒 幹部通知：裝備預約取消】\n" +
+      "【幹部通知：裝備預約取消】\n" +
       "─────────────\n" +
       `• 訂單編號：${loanId}\n` +
       `• 申請人：${borrowerName}\n` +
       (borrowerLineId ? `• LINE ID：${borrowerLineId}\n` : "") +
       `• 取消裝備品項：\n${itemsText}\n\n` +
-      "⚡ 裝備庫存已由 Supabase 自動釋放回補！";
+      "裝備庫存已由 Supabase 自動釋放回補。";
   }
 
-  await pushAdminMessage(adminBody, adminSubject);
+  const loanCancelledFlex = buildLoanCancelledAdminFlex({
+    loanId,
+    borrowerName,
+    borrowerLineId,
+    itemsText,
+    isPaid,
+  });
+
+  await pushAdminMessage(adminBody, adminSubject, {
+    flexContents: loanCancelledFlex,
+    altText: adminSubject,
+  });
   return successResponse({ message: "裝備取消幹部推播已成功送出" });
 }
 
@@ -350,7 +361,7 @@ async function handleNotifyOfficersPayment(json: Record<string, any>) {
       contents: [
         {
           type: "text",
-          text: "【💳 幹部通知：新繳費申報】",
+          text: "【幹部通知：新繳費申報】",
           weight: "bold",
           color: "#ffffff",
           size: "sm",
@@ -542,36 +553,23 @@ async function handleNotifyPaymentConfirmed(json: Record<string, any>) {
 
   // 2. 社員個人 LINE 推播
   if (lineUserId && lineUserId.startsWith("U")) {
-    const successMsg = isEn
-      ? "🎉 Payment Confirmed\n\n" +
-        `Dear ${userName},\n` +
-        "Officers have confirmed your payment!\n\n" +
-        `• Payment ID: ${paymentId}\n` +
-        `• Amount: $${amount} TWD\n` +
-        `• Items: ${items}\n` +
-        "• Status: Confirmed\n\n" +
-        "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!"
-      : "🎉 繳費成功通知 / Payment Confirmed\n\n" +
-        `親愛的 ${userName} 您好：\n` +
-        "幹部已確認收到您的款項囉！\nOfficer has confirmed your payment!\n\n" +
-        `• 繳費單號：${paymentId}\n` +
-        `• 核銷金額：$${amount} 元\n` +
-        `• 核銷項目：${items}\n\n` +
-        "感謝您的配合，您的帳務狀態已經更新為【已核銷 Confirmed】！期待在山林活動中與您相見！🏔️✨\n" +
-        "─────────────\n" +
-        `Dear ${userName},\n` +
-        "Your payment has been successfully confirmed by the officers!\n\n" +
-        `• Payment ID: ${paymentId}\n` +
-        `• Amount: $${amount} TWD\n` +
-        `• Items: ${items}\n\n` +
-        "Thank you for your prompt payment. Your account status is now updated to [Confirmed]!";
-
-    await pushMessage(lineUserId, [{ type: "text", text: successMsg }]);
+    const personalFlex = buildPaymentVerifiedPersonalFlex({
+      userName,
+      paymentId,
+      amount,
+      items,
+    });
+    const altPersonalText = `繳費核銷完成: ${items} (NT$ ${amount})`;
+    await pushMessage(lineUserId, [{
+      type: "flex",
+      altText: altPersonalText,
+      contents: personalFlex,
+    }]);
   }
 
   // 3. 幹部管理群組推播
   const adminMsg =
-    "【💳 幹部通知：繳費單已完成核銷】\n" +
+    "【幹部通知：繳費單已完成核銷】\n" +
     "─────────────\n" +
     `• 繳費單號：${paymentId}\n` +
     `• 申報人：${userName}\n` +
@@ -581,9 +579,520 @@ async function handleNotifyPaymentConfirmed(json: Record<string, any>) {
     "• 系統狀態：已成功更新 Supabase 資料庫";
 
   const adminSubject = `【台科登山社】繳費單已完成核銷 - ${paymentId} (${userName})`;
-  await pushAdminMessage(adminMsg, adminSubject);
+  const paymentAdminFlex = buildPaymentConfirmedAdminFlex({
+    paymentId,
+    userName,
+    amount,
+    items,
+    confirmedBy,
+  });
+  await pushAdminMessage(adminMsg, adminSubject, {
+    flexContents: paymentAdminFlex,
+    altText: adminSubject,
+  });
 
   return successResponse({ message: "核銷通知推播與確認信已成功送出" });
+}
+
+function buildLoanCancelledAdminFlex(params: {
+  loanId: string;
+  borrowerName: string;
+  borrowerLineId?: string;
+  itemsText: string;
+  isPaid: boolean;
+}) {
+  const adminLoansUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Floans";
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: params.isPaid ? "#DC2626" : "#E11D48",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: params.isPaid ? "幹部通知：裝備預約取消 (需安排退款)" : "幹部通知：裝備預約取消",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "訂單編號：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.loanId, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "申請人：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.borrowerName, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        ...(params.borrowerLineId ? [{
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "LINE ID：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.borrowerLineId, size: "xs", color: "#0F172A", flex: 7 },
+          ],
+        }] : []),
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            { type: "text", text: "取消裝備品項：", weight: "bold", size: "xs", color: "#0F172A" },
+            { type: "text", text: params.itemsText || "無品項", size: "xs", color: "#475569", wrap: true },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: params.isPaid
+            ? "該預約已繳費／待確認，請幹部安排退款事宜。（庫存已自動回補）"
+            : "裝備庫存已由 Supabase 自動釋放回補。",
+          size: "xxs",
+          color: params.isPaid ? "#DC2626" : "#64748B",
+          wrap: true,
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: params.isPaid ? "#DC2626" : "#E11D48",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "進入幹部租借管理系統",
+            uri: adminLoansUrl,
+          },
+        },
+      ],
+    },
+  };
+}
+
+function buildPaymentVerifiedPersonalFlex(params: {
+  userName: string;
+  paymentId: string;
+  amount: number | string;
+  items: string;
+}) {
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "繳費核銷完成 / Payment Confirmed",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "申報社員：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.userName, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "繳費單號：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.paymentId, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "核銷金額：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: `NT$ ${params.amount}`, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "核銷項目：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.items, size: "xs", color: "#0F172A", flex: 7, wrap: true },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "帳務狀態：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: "已核銷 Confirmed", size: "xs", color: "#059669", weight: "bold", flex: 7 },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: "感謝您的配合！您的款項已完成核銷並入帳，期待在山林活動中與您相見！",
+          size: "xxs",
+          color: "#64748B",
+          wrap: true,
+        },
+      ],
+    },
+  };
+}
+
+function buildPaymentConfirmedAdminFlex(params: {
+  paymentId: string;
+  userName: string;
+  amount: number | string;
+  items: string;
+  confirmedBy: string;
+}) {
+  const adminFinanceUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Ffinance";
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#0284C7",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "幹部通知：繳費單已完成核銷",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "繳費單號：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.paymentId, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "申報人：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.userName, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "核銷金額：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: `NT$ ${params.amount}`, size: "xs", color: "#0284C7", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "核銷項目：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.items, size: "xs", color: "#0F172A", flex: 7, wrap: true },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "核銷途徑：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.confirmedBy, size: "xs", color: "#475569", flex: 7 },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: "該筆款項已確認入帳，系統資料庫已即時同步更新完成。",
+          size: "xxs",
+          color: "#64748B",
+          wrap: true,
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#0284C7",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "進入幹部財務系統",
+            uri: adminFinanceUrl,
+          },
+        },
+      ],
+    },
+  };
+}
+
+function buildOfficerIntentAdminFlex(params: {
+  name: string;
+  deptAndId: string;
+  phone: string;
+  intentRole: string;
+  wantToSay: string;
+}) {
+  const adminMembersUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fmembers";
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#7C3AED",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "幹部通知：新幹部意願登記",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "社員姓名：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.name, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "系所學號：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.deptAndId || "未填寫", size: "xs", color: "#0F172A", flex: 7 },
+          ],
+        },
+        ...(params.phone ? [{
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "聯絡電話：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.phone, size: "xs", color: "#0F172A", flex: 7 },
+          ],
+        }] : []),
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "意向組別：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.intentRole, size: "xs", color: "#7C3AED", weight: "bold", flex: 7 },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            { type: "text", text: "想對社團說的話：", weight: "bold", size: "xs", color: "#0F172A" },
+            { type: "text", text: params.wantToSay || "(無留言)", size: "xs", color: "#475569", wrap: true },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: "新幹部意願已送達，請幹部們多加留意與主動破冰認識！",
+          size: "xxs",
+          color: "#64748B",
+          wrap: true,
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#7C3AED",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "查看社員名冊",
+            uri: adminMembersUrl,
+          },
+        },
+      ],
+    },
+  };
+}
+
+function buildEventCancelledAdminFlex(params: {
+  eventName: string;
+  eventId: string;
+  userName: string;
+  cancelReason: string;
+  isPaid: boolean;
+}) {
+  const adminEventsUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents";
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#DC2626",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: params.isPaid
+            ? "幹部緊急通知：正取取消 (需替補與退費)"
+            : "幹部通知：正取取消 (需安排遞補)",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "活動名稱：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: `${params.eventName} (${params.eventId})`, size: "xs", color: "#0F172A", weight: "bold", flex: 7, wrap: true },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "棄權社員：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.userName, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "審核狀態：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: "正取 (棄權)", size: "xs", color: "#DC2626", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "取消原因：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.cancelReason, size: "xs", color: "#475569", flex: 7, wrap: true },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: params.isPaid
+            ? "該正取者已完成繳費／待對帳，請幹部安排備取遞補與退費事宜！"
+            : "正取名額已釋出，請幹部儘速檢視備取名單，聯繫有遞補意願之社員！",
+          size: "xxs",
+          color: "#DC2626",
+          weight: "bold",
+          wrap: true,
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#DC2626",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "查看活動名冊",
+            uri: adminEventsUrl,
+          },
+        },
+      ],
+    },
+  };
 }
 
 function buildLoanStatusUpdatedFlex(
@@ -909,16 +1418,28 @@ async function handleNotifyProfileSaved(json: Record<string, any>) {
 
   if (member && member.officer_intent && member.officer_intent !== "無意願" && member.officer_intent !== "None") {
     const adminMsg =
-      "【🌟 幹部通知：新幹部意願登記】\n" +
+      "【幹部通知：新幹部意願登記】\n" +
       "─────────────\n" +
       `• 社員姓名：${member.name || "未填寫"}\n` +
       `• 系所學號：${member.department || ""} (${member.student_id || ""})\n` +
       `• 聯絡電話：${member.phone || ""}\n` +
       `• 意向組別：${member.officer_intent}\n` +
       (member.want_to_say ? `• 想對社團說的話：${member.want_to_say}\n\n` : "\n") +
-      "熱騰騰的新幹部意願已送達，請幹部們多加留意與主動破冰認識！";
+      "新幹部意願已送達，請幹部們多加留意與主動破冰認識！";
 
-    await pushAdminMessage(adminMsg, `【台科登山社】新幹部意願登記 - ${member.name}`);
+    const adminSubject = `【台科登山社】新幹部意願登記 - ${member.name}`;
+    const officerIntentFlex = buildOfficerIntentAdminFlex({
+      name: member.name || "未填寫",
+      deptAndId: `${member.department || ""} (${member.student_id || ""})`,
+      phone: member.phone || "",
+      intentRole: member.officer_intent,
+      wantToSay: member.want_to_say || "",
+    });
+
+    await pushAdminMessage(adminMsg, adminSubject, {
+      flexContents: officerIntentFlex,
+      altText: adminSubject,
+    });
   }
 
   return successResponse({ message: "個人資料通知處理完成" });
@@ -938,48 +1459,31 @@ async function handleNotifyEventCancelled(json: Record<string, any>) {
   if (isConfirmedUser) {
     const adminSubject = `【台科登山社】正取棄權緊急通知 - ${eventName} (${userName})`;
     const adminBody =
-      `🔔 【幹部通知：正取取消（${isPaid ? "需安排替補與退費" : "需安排備取遞補"}）】\n` +
+      `【幹部通知：正取取消（${isPaid ? "需安排替補與退費" : "需安排備取遞補"}）】\n` +
       "─────────────\n" +
       `• 活動名稱：${eventName} (${eventId})\n` +
       `• 棄權社員：${userName}\n` +
       "• 審核狀態：正取 (棄權)\n" +
       `• 取消原因：${cancelReason}\n\n` +
       (isPaid
-        ? "⚠️ 該正取者已完成繳費／待對帳，請幹部安排備取遞補與退費事宜！"
-        : "⚡ 正取名額已釋出，請幹部儘速檢視備取名單，聯繫有遞補意願之社員！");
+        ? "該正取者已完成繳費／待對帳，請幹部安排備取遞補與退費事宜！"
+        : "正取名額已釋出，請幹部儘速檢視備取名單，聯繫有遞補意願之社員！");
 
-    await pushAdminMessage(adminBody, adminSubject);
+    const eventCancelledFlex = buildEventCancelledAdminFlex({
+      eventName,
+      eventId,
+      userName,
+      cancelReason,
+      isPaid,
+    });
+
+    await pushAdminMessage(adminBody, adminSubject, {
+      flexContents: eventCancelledFlex,
+      altText: adminSubject,
+    });
   }
 
   return successResponse({ message: "活動取消推播已成功送出" });
-}
-
-// 9. 心得評分提交推播
-async function handleNotifyReflectionSubmitted(json: Record<string, any>) {
-  const userName = json.userName || "社員";
-  const eventName = json.eventName || "社團活動";
-  const difficulty = Math.min(5, Math.max(1, parseInt(json.difficulty, 10) || 3));
-  const beauty = Math.min(5, Math.max(1, parseInt(json.beauty, 10) || 5));
-  const content = json.content || "";
-  const photoUrls = json.photoUrls || [];
-  const photosText = Array.isArray(photoUrls) ? photoUrls.join("\n• ") : String(photoUrls || "");
-
-  const diffStars = "★".repeat(difficulty);
-  const beautyStars = "★".repeat(beauty);
-
-  const adminSubject = `【台科登山社】新活動心得分享 - ${eventName} (${userName})`;
-  const adminBody =
-    "【📝 幹部通知：社員活動心得回饋】\n" +
-    "─────────────\n" +
-    `• 發表社員：${userName}\n` +
-    `• 活動名稱：${eventName}\n` +
-    `• 路線難度：${diffStars} (${difficulty}/5)\n` +
-    `• 風景推薦：${beautyStars} (${beauty}/5)\n\n` +
-    `💬 心得內容：\n${content || "(無文字心得)"}` +
-    (photosText ? `\n\n📷 登頂相片：\n• ${photosText}` : "");
-
-  await pushAdminMessage(adminBody, adminSubject);
-  return successResponse({ message: "心得提交推播已成功送出" });
 }
 
 // 10. 發送審核結果推播通知 (send_event_notifications)
@@ -1327,9 +1831,6 @@ Deno.serve(async (req: Request) => {
 
     case "notify_event_cancelled":
       return await handleNotifyEventCancelled(payload);
-
-    case "notify_reflection_submitted":
-      return await handleNotifyReflectionSubmitted(payload);
 
     case "send_event_notifications":
       return await handleSendEventNotifications(payload);
