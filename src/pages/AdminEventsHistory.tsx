@@ -14,6 +14,7 @@ import { AdminHistoryEventCard } from '../components/admin/AdminHistoryEventCard
 import { ApplicantModals } from '../components/admin/ApplicantModals';
 import { isEventArchived, getEventYear } from '../utils/eventArchiveUtils';
 import { safeNavigateBack } from '../utils/navigationUtils';
+import { getTaiwanDateParts } from '../utils/dateUtils';
 
 interface AdminEventsHistoryProps {
   userId: string;
@@ -230,9 +231,9 @@ export default function AdminEventsHistory({ userId }: AdminEventsHistoryProps) 
         const timeB = b.startDate ? new Date(b.startDate.replace(/\./g, '/')).getTime() : 0;
         comparison = (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
       } else if (eventSortBy === 'deadline') {
-        const timeA = a.deadline ? new Date(a.deadline.replace(/\./g, '/')).getTime() : 0;
-        const timeB = b.deadline ? new Date(b.deadline.replace(/\./g, '/')).getTime() : 0;
-        comparison = (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+        const timeA = a.deadline ? (getTaiwanDateParts(a.deadline)?.timestamp || 0) : 0;
+        const timeB = b.deadline ? (getTaiwanDateParts(b.deadline)?.timestamp || 0) : 0;
+        comparison = timeA - timeB;
       }
       return eventSortOrder === 'asc' ? comparison : -comparison;
     });

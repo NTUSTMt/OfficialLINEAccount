@@ -99,7 +99,7 @@ export function buildEventListFlex(
         : ev.summary || "";
 
     const dateDisplay = formatEventDate(ev.start_date, ev.end_date);
-    const deadlineFormatted = formatTaipeiDate(ev.deadline, "YYYY/MM/DD");
+    const deadlineFormatted = formatTaipeiDate(ev.deadline, "YYYY/MM/DD HH:mm");
 
     const bubble: Record<string, unknown> = {
       type: "bubble",
@@ -277,7 +277,7 @@ export function buildEventDetailFlex(
       : "免費 Free";
 
   const dateDisplay = formatEventDate(ev.start_date, ev.end_date);
-  const deadlineFormatted = formatTaipeiDate(ev.deadline, "YYYY/MM/DD");
+  const deadlineFormatted = formatTaipeiDate(ev.deadline, "YYYY/MM/DD HH:mm");
 
   const costLabel = prefLang === "en" ? "Cost: " : prefLang === "zh" ? "費用: " : "費用 Cost: ";
   const dateLabel = prefLang === "en" ? "Event Date: " : prefLang === "zh" ? "活動時間: " : "活動時間 Event Date: ";

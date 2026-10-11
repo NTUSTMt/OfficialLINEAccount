@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { AdminEvent } from '../../types/event';
 import { getDirectImageUrl } from '../../utils/image';
+import { formatTaiwanDateTime, isTaiwanDeadlinePassed } from '../../utils/dateUtils';
 
 interface AdminEventCardProps {
   evt: AdminEvent;
@@ -41,29 +42,11 @@ export const AdminEventCard: React.FC<AdminEventCardProps> = ({
   const hasPending = evt.stats.pending > 0;
 
   const formattedDeadline = useMemo(() => {
-    if (!evt.deadline) return '';
-    const str = evt.deadline.trim();
-    const m = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-    if (m) {
-      const pad = (n: string) => (n.length < 2 ? '0' + n : n);
-      return `${m[1]}/${pad(m[2])}/${pad(m[3])}`;
-    }
-    return str.split('T')[0];
+    return formatTaiwanDateTime(evt.deadline, true);
   }, [evt.deadline]);
 
   const isDeadlinePassed = useMemo(() => {
-    if (!evt.deadline) return false;
-    try {
-      const clean = evt.deadline.replace(/\//g, '-').trim();
-      const m = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-      if (m) {
-        const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 23, 59, 59, 999);
-        return !isNaN(d.getTime()) && now > d.getTime();
-      }
-    } catch {
-      return false;
-    }
-    return false;
+    return isTaiwanDeadlinePassed(evt.deadline, now);
   }, [evt.deadline, now]);
 
   const isActuallyOpen = evt.status === '開放' && !isDeadlinePassed;

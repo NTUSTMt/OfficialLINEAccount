@@ -9,6 +9,7 @@ export interface AdminEventFormData {
   startDate: string;
   endDate: string;
   deadline: string;
+  deadlineTime?: string;
   cost: string;
   status: string;
   shortDesc: string;
@@ -259,11 +260,11 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
           </div>
         </div>
 
-        {/* 報名截止日與費用 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '12px', textAlign: 'left' }}>
+        {/* 報名截止日、時間與費用 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', textAlign: 'left' }}>
           <div style={{ minWidth: 0 }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
-              {t('adminEvents.deadlineLabel')}
+              {t('adminEvents.deadlineDateLabel', '報名截止日期 *')}
             </label>
             <input
               type="date"
@@ -289,6 +290,36 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
               }}
             />
           </div>
+
+          <div style={{ minWidth: 0 }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left', whiteSpace: 'nowrap' }}>
+              {t('adminEvents.deadlineTimeLabel', '截止時間 (台灣時間) *')}
+            </label>
+            <input
+              type="time"
+              required
+              value={formData.deadlineTime || '23:59'}
+              onChange={(e) => setFormData({ ...formData, deadlineTime: e.target.value })}
+              style={{
+                display: 'block',
+                width: '100%',
+                maxWidth: '100%',
+                minWidth: 0,
+                minHeight: '42px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1.5px solid #cbd5e1',
+                fontSize: '13px',
+                backgroundColor: '#ffffff',
+                color: '#1e293b',
+                WebkitAppearance: 'none',
+                appearance: 'none',
+                boxSizing: 'border-box',
+                textAlign: 'left'
+              }}
+            />
+          </div>
+
           <div style={{ minWidth: 0 }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px', textAlign: 'left' }}>
               {t('adminEvents.costLabel')}
@@ -653,7 +684,7 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
               報名截止 Sign Up Deadline:
             </p>
             <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 'bold', color: '#E53935' }}>
-              {formData.deadline || 'YYYY/MM/DD'}
+              {formData.deadline ? `${formData.deadline.replace(/-/g, '/')} ${formData.deadlineTime || '23:59'} (台灣時間)` : 'YYYY/MM/DD 23:59'}
             </p>
 
             <p style={{ margin: '0', fontSize: '12px', color: '#777777', lineHeight: '1.4', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>

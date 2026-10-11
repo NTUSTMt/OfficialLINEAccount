@@ -22,6 +22,7 @@ import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditActi
 import { getDirectImageUrl, validateImageUploadFile } from '../../utils/image';
 import { GAS_API_URL } from '../../constants/api';
 import { withAuthPayload } from '../../utils/api';
+import { parseTaiwanDeadline, buildTaiwanIsoString, formatTaiwanDateTime, isTaiwanDeadlinePassed } from '../../utils/dateUtils';
 import './webAdmin.css';
 
 interface AdminEventRecord {
@@ -47,20 +48,9 @@ interface AdminEventRecord {
   sheet_id?: string;
 }
 
-// 判定截止日期是否已過
+// 判定截止日期是否已過 (以台灣時間為準)
 const isDeadlinePassed = (deadlineStr?: string): boolean => {
-  if (!deadlineStr) return false;
-  try {
-    const clean = deadlineStr.replace(/\//g, '-').trim();
-    const m = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (m) {
-      const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 23, 59, 59, 999);
-      return !isNaN(d.getTime()) && Date.now() > d.getTime();
-    }
-  } catch {
-    return false;
-  }
-  return false;
+  return isTaiwanDeadlinePassed(deadlineStr);
 };
 
 // 計算衍生狀態：開放、未來開放、關閉、已截止
@@ -137,6 +127,7 @@ export const WebAdminEvents: React.FC = () => {
     start_date: '',
     end_date: '',
     deadline: '',
+    deadline_time: '23:59',
     fee: '',
     line_group_url: '',
     cover_image_url: '',
@@ -273,6 +264,7 @@ export const WebAdminEvents: React.FC = () => {
       start_date: '',
       end_date: '',
       deadline: '',
+      deadline_time: '23:59',
       fee: '0',
       line_group_url: '',
       cover_image_url: '',
@@ -294,12 +286,14 @@ export const WebAdminEvents: React.FC = () => {
     setNotifyOfficerGroup(false);
     const existingImg = event.cover_image_url || event.cover_image || '';
     setPreviewImage(existingImg ? (getDirectImageUrl(existingImg, 600) || existingImg) : '');
+    const parsedDeadline = parseTaiwanDeadline(event.deadline);
     setFormData({
       id: event.id,
       status: event.status === '開放報名中' ? '開放' : event.status || '開放',
       start_date: event.start_date || '',
       end_date: event.end_date || '',
-      deadline: event.deadline ? event.deadline.split('T')[0] : '',
+      deadline: parsedDeadline.date,
+      deadline_time: parsedDeadline.time || '23:59',
       fee: event.fee !== undefined ? String(event.fee) : '0',
       line_group_url: event.line_group_url || '',
       cover_image_url: existingImg.startsWith('data:image/') ? '' : existingImg,
@@ -474,7 +468,9 @@ export const WebAdminEvents: React.FC = () => {
         nameEn: formData.title_en.trim(),
         startDate: formData.start_date,
         endDate: formData.end_date || formData.start_date,
-        deadline: formData.deadline ? `${formData.deadline} 23:59:59+08` : (formData.start_date ? `${formData.start_date} 23:59:59+08` : ''),
+        deadline: formData.deadline
+          ? buildTaiwanIsoString(formData.deadline, formData.deadline_time)
+          : (formData.start_date ? buildTaiwanIsoString(formData.start_date, '23:59') : ''),
         cost: String(formData.fee || 0),
         status: formData.status,
         shortDesc: formData.summary.trim(),
@@ -795,7 +791,7 @@ export const WebAdminEvents: React.FC = () => {
                       <div className="wa-event-card-meta-row">
                         <span className="wa-event-card-meta-label">截止日期：</span>
                         <span className="wa-event-card-meta-val">
-                          {event.deadline ? event.deadline.split('T')[0].replace(/-/g, '/') : '-'}
+                          {event.deadline ? formatTaiwanDateTime(event.deadline, true) : '-'}
                         </span>
                       </div>
 
@@ -927,7 +923,7 @@ export const WebAdminEvents: React.FC = () => {
                   </div>
 
                   {/* 第三列：報名截止日 與 預計費用 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
                     <div>
                       <label className="wa-form-label">報名截止日期 *</label>
                       <input
@@ -936,6 +932,18 @@ export const WebAdminEvents: React.FC = () => {
                         className="web-admin-input"
                         value={formData.deadline}
                         onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="wa-form-label">截止時間 (台灣時間) *</label>
+                      <input
+                        type="time"
+                        required
+                        className="web-admin-input"
+                        value={formData.deadline_time || '23:59'}
+                        onChange={(e) => setFormData({ ...formData, deadline_time: e.target.value })}
                         style={{ width: '100%' }}
                       />
                     </div>

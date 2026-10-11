@@ -6,7 +6,15 @@ export function formatTaipeiDate(
 ): string {
   if (!dateInput) return "";
 
-  const d = new Date(dateInput);
+  let d: Date;
+  if (dateInput instanceof Date) {
+    d = dateInput;
+  } else if (typeof dateInput === "number") {
+    d = new Date(dateInput);
+  } else {
+    const parsed = parseTaipeiDate(dateInput);
+    d = parsed || new Date(dateInput);
+  }
   if (isNaN(d.getTime())) return "";
 
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -48,12 +56,27 @@ export function parseTaipeiDate(dateStr: string): Date | null {
   if (!dateStr) return null;
 
   let cleaned = String(dateStr).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
-    cleaned = `${cleaned}T23:59:59+08:00`;
-  } else if (/^\d{4}\/\d{2}\/\d{2}$/.test(cleaned)) {
-    cleaned = `${cleaned.replace(/\//g, "-")}T23:59:59+08:00`;
-  } else if (cleaned.endsWith("23:59:59Z")) {
+  if (!cleaned) return null;
+
+  if (cleaned.endsWith("23:59:59Z")) {
     cleaned = cleaned.replace(/23:59:59Z$/, "23:59:59+08:00");
+  }
+
+  // 檢查是否已具備時區偏移 (+, -, Z)
+  const hasTz = /([+-]\d{2}(:?\d{2})?|Z)$/i.test(cleaned);
+  if (!hasTz) {
+    const clean = cleaned.replace(/\//g, "-");
+    if (clean.includes("T") || clean.includes(" ")) {
+      const parts = clean.split(/[T ]/);
+      const datePart = parts[0];
+      const timePart = parts[1] || "23:59:00";
+      const secPart = timePart.includes(":") ? (timePart.split(":").length === 2 ? `${timePart}:00` : timePart) : `${timePart}:00:00`;
+      cleaned = `${datePart}T${secPart}+08:00`;
+    } else {
+      cleaned = `${clean}T23:59:59+08:00`;
+    }
+  } else {
+    cleaned = cleaned.replace(" ", "T");
   }
 
   const parsed = new Date(cleaned);

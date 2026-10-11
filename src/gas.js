@@ -1499,16 +1499,27 @@ function _isEventExpired(deadlineVal) {
       }
     }
 
-    if (str.includes("T")) {
-      var isoDate = new Date(str);
+    var hasTz = /([+-]\d{2}(:?\d{2})?|Z)$/i.test(str);
+    if (hasTz) {
+      var isoDate = new Date(str.replace(" ", "T"));
       if (!isNaN(isoDate.getTime())) {
         return now.getTime() > isoDate.getTime();
       }
     }
 
-    var cleanStr = str.replace(/[\/\.]/g, "-");
-    var datePart = cleanStr.split("T")[0].split(" ")[0];
-    var parts = datePart.split("-");
+    var clean = str.replace(/[\/\.]/g, "-");
+    if (clean.includes("T") || clean.includes(" ")) {
+      var p = clean.split(/[T ]/);
+      var dP = p[0];
+      var tP = p[1] || "23:59:00";
+      var sP = tP.includes(":") ? (tP.split(":").length === 2 ? tP + ":00" : tP) : tP + ":00:00";
+      var parsedDate = new Date(dP + "T" + sP + "+08:00");
+      if (!isNaN(parsedDate.getTime())) {
+        return now.getTime() > parsedDate.getTime();
+      }
+    }
+
+    var parts = clean.split("-");
     if (parts.length >= 3) {
       var year = parseInt(parts[0], 10);
       var month = parseInt(parts[1], 10) - 1;
@@ -1600,6 +1611,39 @@ function _formatEventDate(dateVal) {
     return m[1] + '/' + padFn(m[2]) + '/' + padFn(m[3]);
   }
   return str.replace(/-/g, "/").substring(0, 10);
+}
+
+/**
+ * 輔助函式：日期與時間字串格式化 (依台灣時區轉換為 YYYY/MM/DD HH:mm)
+ */
+function _formatEventDateTime(dateVal) {
+  if (!dateVal) return "";
+  try {
+    var str = String(dateVal).trim();
+    if (!str) return "";
+    if (typeof Utilities !== "undefined" && Utilities.formatDate) {
+      var d;
+      var hasTz = /([+-]\d{2}(:?\d{2})?|Z)$/i.test(str);
+      if (!hasTz) {
+        var clean = str.replace(/\//g, "-");
+        if (clean.includes("T") || clean.includes(" ")) {
+          var parts = clean.split(/[T ]/);
+          var datePart = parts[0];
+          var timePart = parts[1] || "23:59:00";
+          var secPart = timePart.includes(":") ? (timePart.split(":").length === 2 ? timePart + ":00" : timePart) : timePart + ":00:00";
+          d = new Date(datePart + "T" + secPart + "+08:00");
+        } else {
+          d = new Date(clean + "T23:59:59+08:00");
+        }
+      } else {
+        d = new Date(str.replace(" ", "T"));
+      }
+      if (!isNaN(d.getTime())) {
+        return Utilities.formatDate(d, "Asia/Taipei", "yyyy/MM/dd HH:mm");
+      }
+    }
+  } catch (e) { }
+  return _formatEventDate(dateVal);
 }
 
 /**
@@ -1713,7 +1757,7 @@ function sendEventList(replyToken, userId) {
 
     var startFormatted = _formatEventDate(ev.start_date);
     var endFormatted = _formatEventDate(ev.end_date);
-    var deadlineFormatted = _formatEventDate(ev.deadline);
+    var deadlineFormatted = _formatEventDateTime(ev.deadline);
 
     var dateDisplay = startFormatted;
     if (endFormatted && endFormatted !== startFormatted) {
@@ -1897,7 +1941,7 @@ function sendEventDetail(replyToken, eventId, userId) {
     : ((prefLang === "en") ? "Free" : (prefLang === "zh" ? "免費" : "免費 Free"));
   var startFormatted = _formatEventDate(ev.start_date);
   var endFormatted = _formatEventDate(ev.end_date);
-  var deadlineFormatted = _formatEventDate(ev.deadline);
+  var deadlineFormatted = _formatEventDateTime(ev.deadline);
 
   var dateDisplay = startFormatted;
   if (endFormatted && endFormatted !== startFormatted) {
@@ -2818,7 +2862,8 @@ function handleSignup(replyToken, userId, eventId, ss) {
       if (ev.title_en) evNameEn = ev.title_en;
       var isEvExpired = _isEventExpired(ev.deadline);
       if (isEvExpired || ev.status === "關閉" || ev.status === "已截止") {
-        var closedReply = "⚠️ 報名失敗：【" + evName + "】已於 " + (ev.deadline || "日前") + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + (evNameEn || evName) + "] registration is closed.";
+        var deadStr = _formatEventDateTime(ev.deadline) || "日前";
+        var closedReply = "⚠️ 報名失敗：【" + evName + "】已於 " + deadStr + " 截止報名！\n感謝您的熱情關注，請期待下一次的精彩活動！🏕️\n─────────────\n⚠️ Registration Closed: [" + (evNameEn || evName) + "] registration closed at " + deadStr + ".";
         _replyMessage(replyToken, _splitBilingualMessage(closedReply, prefLang));
         return;
       }

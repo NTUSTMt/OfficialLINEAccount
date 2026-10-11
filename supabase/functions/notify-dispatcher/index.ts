@@ -8,6 +8,7 @@ import {
 import { pushAdminMessage } from "../_shared/pushAdminMessage.ts";
 import { getUserPreferredLanguage, render } from "../_shared/i18n.ts";
 import { PreferredLanguage } from "../_shared/types.ts";
+import { formatTaipeiDate } from "../_shared/dateUtils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -872,12 +873,13 @@ async function handleNotifyOfficerEvent(json: Record<string, any>) {
 
   const titleTag = isUpdate ? "【幹部通知：活動資訊更新】" : "【幹部通知：新活動發布】";
   const dateRange = startDate ? startDate + (endDate && endDate !== startDate ? ` ~ ${endDate}` : "") : "未定";
+  const deadlineDisplay = formatTaipeiDate(deadline, "YYYY/MM/DD HH:mm") || deadline || "無";
   const groupMsg =
     `${titleTag}\n\n` +
     `• 活動名稱：${name}\n` +
     `• 活動代號：${eventId}\n` +
     `• 出隊日期：${dateRange}\n` +
-    `• 報名截止：${deadline || "無"}\n` +
+    `• 報名截止：${deadlineDisplay}\n` +
     `• 預計費用：NT$ ${cost}\n` +
     `• 目前狀態：【${status}】\n\n` +
     (isUpdate ? "活動資訊已同步更新完成！" : "已上架完成，社員可在「最新活動」瀏覽與報名！");

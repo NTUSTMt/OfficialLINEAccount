@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.286-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.288-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.286)](#7-最新版本異動紀錄-changelog-v01286)
+- [7. 最新版本異動紀錄 (Changelog v0.1.288)](#7-最新版本異動紀錄-changelog-v01288)
 
 ---
 
@@ -2460,4 +2460,43 @@ pnpm test
   - 部署上線：
     - 已執行 SQL 更新 public.signup_rpc。
     - 已部署更新後的 line-webhook Edge Function 至 Supabase。
+
+### v0.1.287 (2026-10-10)
+- 報名截止加入時間，以台灣時間 (Asia/Taipei, UTC+8) 為準全面架構升級：
+  - 台灣時區工具模組建立 (src/utils/dateUtils.ts)：
+    - 新增 parseTaiwanDeadline：解析 Supabase UTC timestamptz 轉為台灣時區年月日 (YYYY-MM-DD) 與時分 (HH:mm)，杜絕跨日與時區飄移。
+    - 新增 formatTaiwanDateTime：將時間戳記統一格式化為台灣時間 (YYYY/MM/DD HH:mm 或 YYYY/MM/DD)。
+    - 新增 buildTaiwanIsoString：將表單選取的日期與時間結合成標準台灣 ISO 字串 (+08:00)。
+    - 新增 isTaiwanDeadlinePassed：以精確毫秒時間戳記即時判定是否逾期，不受訪客設備本機時區干擾。
+  - 幹部端活動表單升級 (AdminEventForm.tsx & WebAdminEvents.tsx)：
+    - 報名截止區塊加入「截止時間 (台灣時間) *」輸入框 (type="time")，預設 23:59，明確標註以台灣時間為準。
+    - 編輯現有活動時自動將 Supabase 儲存之 UTC 時間精確還原為台灣日期與時間欄位。
+    - 即時預覽卡片同步呈現精準截止日期、時分與台灣時間標示。
+  - 活動卡片與列表展示升級 (AdminEventCard.tsx & WebAdminEvents.tsx & AdminEventsHistory.tsx)：
+    - 活動卡片截止時間欄位呈現完整「YYYY/MM/DD HH:mm」，直觀呈現截稿時刻。
+    - 歷史活動依截止時間排序統一依台灣時間毫秒戳記精準排序。
+  - Supabase 預存程序 save_admin_event_rpc 強化：
+    - deadline 解析邏輯升級：若字串未明確指定時區偏移，一律強制附加 +08:00 台灣時區，保障資料庫層 timestamptz 轉換 100% 精準。
+  - GAS LINE Bot 後端訊息與逾期判定升級 (src/gas.js)：
+    - 新增 _formatEventDateTime 函式，以 Asia/Taipei 台灣時區輸出格式化字串。
+    - LINE Flex 活動卡片輪播與活動詳情展示之報名截止改為輸出帶有時分的台灣時間。
+    - 報名逾期回應文字改為顯示格式化後之台灣截止時分，消除原先 UTC 原始字串顯示問題。
+  - 多語系字典更新 (src/locales/zh.json & src/locales/en.json)：
+    - 補充 deadlineDateLabel 與 deadlineTimeLabel 鍵值。
+  - 自動化單元測試建立：
+    - 新增 test/110_taiwan_deadline_time.test.mjs 完整驗證時區工具、前後端表單與卡片結構。
+
+### v0.1.288 (2026-10-11)
+- Supabase Edge Functions 後端全面支援台灣截止時間 (UTC+8) 時分呈現與部署上線：
+  - 共用時區工具強化 (supabase/functions/_shared/dateUtils.ts)：
+    - 強化 parseTaipeiDate 函式，支援帶時分但未標示時區之日期字串，預設補齊 +08:00 台灣時區，確保與資料庫及前端完全一致。
+  - LINE Webhook 活動卡片與逾期訊息升級 (supabase/functions/line-webhook)：
+    - flexTemplates.ts：活動清單輪播卡片與活動詳情卡片之報名截止日期格式化為帶有時分的台灣時間 (YYYY/MM/DD HH:mm)。
+    - index.ts：活動截止 (status === "closed") 時的文字回覆，將截止時間以台灣時區精確格式化為 YYYY/MM/DD HH:mm。
+  - 幹部群組推播通知升級 (supabase/functions/notify-dispatcher/index.ts)：
+    - 新活動發布或資訊更新推播至幹部群組時，報名截止時間統一格式化為 YYYY/MM/DD HH:mm 台灣時間。
+  - 雲端 Edge Functions 部署：
+    - 透過 Supabase CLI 正式部署 line-webhook (v22) 與 notify-dispatcher (v17) 至 Supabase 正式環境。
+    - 確保全功能完整保留，狀態均為 ACTIVE。
+
 

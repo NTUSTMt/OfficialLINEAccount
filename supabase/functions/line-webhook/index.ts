@@ -15,7 +15,7 @@ import {
 } from "../_shared/supabaseClient.ts";
 import { render, getUserPreferredLanguage } from "../_shared/i18n.ts";
 import { messages } from "../_shared/messages.ts";
-import { generateSignupId } from "../_shared/dateUtils.ts";
+import { generateSignupId, formatTaipeiDate } from "../_shared/dateUtils.ts";
 import { handleGeminiChat } from "./geminiService.ts";
 import {
   buildEventListFlex,
@@ -366,7 +366,7 @@ async function handleSignup(
     const evTitle = prefLang === "en"
       ? (result.event_title_en || result.event_title || "This event")
       : (result.event_title || "該活動");
-    const evDeadline = result.deadline || "";
+    const evDeadline = formatTaipeiDate(result.deadline, "YYYY/MM/DD HH:mm") || result.deadline || "";
     await replyMessage(replyToken, [{
       type: "text",
       text: render(messages.signupEventClosed(evTitle, evDeadline), prefLang),

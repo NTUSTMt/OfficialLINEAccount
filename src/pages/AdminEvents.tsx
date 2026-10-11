@@ -20,6 +20,7 @@ import { AdminEventForm, type AdminEventFormData } from '../components/admin/Adm
 import { AdminSignupsModal } from '../components/admin/AdminSignupsModal';
 import { ApplicantModals } from '../components/admin/ApplicantModals';
 import { openExternalUrl, parseProofUrls } from '../utils/applicantUtils';
+import { parseTaiwanDeadline, buildTaiwanIsoString, getTaiwanDateParts } from '../utils/dateUtils';
 import { AdminSubNav } from '../components/admin/AdminSubNav';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
 import {
@@ -110,6 +111,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     startDate: '',
     endDate: '',
     deadline: '',
+    deadlineTime: '23:59',
     cost: '',
     status: '未來開放',
     shortDesc: '',
@@ -292,6 +294,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       startDate: '',
       endDate: '',
       deadline: '',
+      deadlineTime: '23:59',
       cost: '',
       status: '未來開放',
       shortDesc: '',
@@ -311,13 +314,15 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
   const handleStartEdit = (evt: AdminEvent) => {
     setIsEditing(true);
     setActiveLangTab('zh');
+    const parsedDeadline = parseTaiwanDeadline(evt.deadline);
     setFormData({
       eventId: evt.id,
       name: evt.name,
       nameEn: evt.nameEn || '',
       startDate: evt.startDate ? evt.startDate.replace(/\//g, '-') : '',
       endDate: evt.endDate ? evt.endDate.replace(/\//g, '-') : '',
-      deadline: evt.deadline ? evt.deadline.replace(/\//g, '-') : '',
+      deadline: parsedDeadline.date,
+      deadlineTime: parsedDeadline.time || '23:59',
       cost: evt.cost,
       status: evt.status,
       shortDesc: evt.shortDesc,
@@ -347,6 +352,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     try {
       const groupUrlTrimmed = (formData.lineGroupUrl || '').trim();
       const todayStr = new Date().toISOString().split('T')[0];
+      const draftDeadline = formData.deadline
+        ? buildTaiwanIsoString(formData.deadline, formData.deadlineTime)
+        : (todayStr ? `${todayStr}T23:59:59+08:00` : '');
 
       const res = await saveEventToSupabase(userId || 'TEST_USER_ID', {
         eventId: formData.eventId,
@@ -354,7 +362,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         nameEn: trimmedNameEn,
         startDate: formData.startDate || todayStr,
         endDate: formData.endDate || formData.startDate || todayStr,
-        deadline: formData.deadline || todayStr,
+        deadline: draftDeadline,
         cost: formData.cost.trim() || '0',
         status: formData.status || '關閉',
         shortDesc: formData.shortDesc.trim(),
@@ -430,6 +438,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
     setSubmittingForm(true);
     try {
       const finalImageUrl = selectedFile ? selectedFile.base64 : formData.imageUrl;
+      const finalDeadline = buildTaiwanIsoString(formData.deadline, formData.deadlineTime);
 
       // 1. 直通 Supabase 儲存 (透過 save_admin_event_rpc 具備原子性與即時反應 < 50ms)
       const res = await saveEventToSupabase(userId || 'TEST_USER_ID', {
@@ -438,7 +447,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         nameEn: formData.nameEn.trim(),
         startDate: formData.startDate,
         endDate: formData.endDate || formData.startDate,
-        deadline: formData.deadline,
+        deadline: finalDeadline,
         cost: formData.cost.trim(),
         status: formData.status,
         shortDesc: formData.shortDesc.trim(),
@@ -463,7 +472,7 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
           name: formData.name.trim(),
           startDate: formData.startDate || '',
           endDate: formData.endDate || formData.startDate || '',
-          deadline: formData.deadline || '',
+          deadline: finalDeadline,
           cost: formData.cost.trim() || '0',
           status: formData.status,
           isUpdate: String(!!formData.eventId)
@@ -819,9 +828,9 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
         const timeB = b.startDate ? new Date(b.startDate.replace(/\./g, '/')).getTime() : 0;
         comparison = (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
       } else if (eventSortBy === 'deadline') {
-        const timeA = a.deadline ? new Date(a.deadline.replace(/\./g, '/')).getTime() : 0;
-        const timeB = b.deadline ? new Date(b.deadline.replace(/\./g, '/')).getTime() : 0;
-        comparison = (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+        const timeA = a.deadline ? (getTaiwanDateParts(a.deadline)?.timestamp || 0) : 0;
+        const timeB = b.deadline ? (getTaiwanDateParts(b.deadline)?.timestamp || 0) : 0;
+        comparison = timeA - timeB;
       } else if (eventSortBy === 'status') {
         const getStatusWeight = (st: string) => {
           if (st.includes('開放報名') || st === '開放') return 1;
