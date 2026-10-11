@@ -62,12 +62,21 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  // 幹部身分狀態
+  // 幹部身分狀態 (具備過期時效校驗與安全性清理)
   const officerStatus = useMemo(() => {
     if (isOfficer) return true;
     try {
       const cached = localStorage.getItem('officer_status_cache');
-      return cached !== null ? JSON.parse(cached) : false;
+      if (!cached) return false;
+      const parsed = JSON.parse(cached);
+      if (typeof parsed === 'object' && parsed !== null && parsed.timestamp) {
+        if (Date.now() - parsed.timestamp > 3600 * 1000) {
+          localStorage.removeItem('officer_status_cache');
+          return false;
+        }
+        return Boolean(parsed.isOfficer);
+      }
+      return Boolean(parsed);
     } catch {
       return false;
     }

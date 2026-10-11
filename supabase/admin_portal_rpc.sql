@@ -34,7 +34,19 @@ DECLARE
     v_jwt_officer BOOLEAN;
     v_target_id TEXT;
 BEGIN
-    -- 1. 提取 JWT 宣告 (若呼叫者持有 Supabase Auth JWT)
+    -- 1. 服務端角色 (service_role) 具備完整管理權限
+    IF auth.role() = 'service_role' THEN
+        IF p_line_user_id IS NOT NULL AND trim(p_line_user_id) != '' THEN
+            RETURN EXISTS (
+                SELECT 1 FROM officers WHERE line_user_id = trim(p_line_user_id)
+                UNION
+                SELECT 1 FROM members WHERE line_user_id = trim(p_line_user_id) AND (is_officer = TRUE OR officer_role IS NOT NULL)
+            );
+        END IF;
+        RETURN TRUE;
+    END IF;
+
+    -- 2. 提取 JWT 宣告 (若呼叫者持有 Supabase Auth JWT)
     BEGIN
         v_jwt_sub := auth.jwt() ->> 'sub';
         v_jwt_officer := (auth.jwt() ->> 'is_officer')::boolean;
@@ -43,7 +55,13 @@ BEGIN
         v_jwt_officer := NULL;
     END;
 
-    -- 若持有合法幹部 JWT 且未指定 ID 或 ID 相符，直接核准
+    -- 3. 嚴格阻絕匿名呼叫與偽冒 (Anti-Spoofing & Unauthenticated Rejection)
+    -- 若呼叫者缺少有效 JWT 宣告，禁止存取幹部權限，防範匿名傳入幹部 ID 進行偽冒
+    IF v_jwt_sub IS NULL OR trim(v_jwt_sub) = '' THEN
+        RETURN FALSE;
+    END IF;
+
+    -- 若持有合法幹部 JWT 且未指定 ID 或 ID 為本人，直接核准
     IF v_jwt_officer IS TRUE THEN
         IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' OR trim(p_line_user_id) = v_jwt_sub THEN
             RETURN TRUE;
@@ -51,18 +69,16 @@ BEGIN
     END IF;
 
     -- 若持有非幹部 JWT 但意圖傳入他人幹部 ID 進行偽冒，直接拒絕 (Anti-Spoofing)
-    IF v_jwt_sub IS NOT NULL AND trim(v_jwt_sub) != '' AND v_jwt_officer IS NOT TRUE THEN
-        IF p_line_user_id IS NOT NULL AND trim(p_line_user_id) != '' AND trim(p_line_user_id) != v_jwt_sub THEN
-            RETURN FALSE;
-        END IF;
-    END IF;
-
-    v_target_id := COALESCE(NULLIF(trim(p_line_user_id), ''), v_jwt_sub);
-    IF v_target_id IS NULL OR v_target_id = '' OR v_target_id = 'TEST_USER_ID' THEN
+    IF v_jwt_officer IS NOT TRUE OR (p_line_user_id IS NOT NULL AND trim(p_line_user_id) != '' AND trim(p_line_user_id) != v_jwt_sub) THEN
         RETURN FALSE;
     END IF;
 
-    -- 2. 雙軌資料表查核
+    v_target_id := trim(v_jwt_sub);
+    IF v_target_id = '' OR v_target_id = 'TEST_USER_ID' THEN
+        RETURN FALSE;
+    END IF;
+
+    -- 4. 雙軌資料表查核
     RETURN EXISTS (
         SELECT 1 FROM officers WHERE line_user_id = v_target_id
         UNION
@@ -897,13 +913,30 @@ CREATE POLICY "Allow anon update loan_items" ON loan_items FOR UPDATE USING (tru
 DROP POLICY IF EXISTS "Allow anon insert loan_items" ON loan_items;
 CREATE POLICY "Allow anon insert loan_items" ON loan_items FOR INSERT WITH CHECK (true);
 
--- 授權 RPC 函式執行權限予 anon, authenticated, service_role
-GRANT EXECUTE ON FUNCTION is_officer(TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION get_admin_members_rpc(TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION get_admin_member_detail_rpc(TEXT, TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION get_admin_member_records_rpc(TEXT, TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION update_admin_member_rpc(TEXT, TEXT, JSONB) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION get_admin_finance_rpc(TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION get_admin_loans_rpc(TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION update_admin_payment_status_rpc(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION update_admin_loan_status_rpc(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+-- 授權 RPC 函式執行權限予 authenticated, service_role (撤銷 anon 權限以防未鑑權存取)
+REVOKE EXECUTE ON FUNCTION is_officer(TEXT) FROM anon, public;
+GRANT EXECUTE ON FUNCTION is_officer(TEXT) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION get_admin_members_rpc(TEXT) FROM anon, public;
+GRANT EXECUTE ON FUNCTION get_admin_members_rpc(TEXT) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION get_admin_member_detail_rpc(TEXT, TEXT) FROM anon, public;
+GRANT EXECUTE ON FUNCTION get_admin_member_detail_rpc(TEXT, TEXT) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION get_admin_member_records_rpc(TEXT, TEXT) FROM anon, public;
+GRANT EXECUTE ON FUNCTION get_admin_member_records_rpc(TEXT, TEXT) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION update_admin_member_rpc(TEXT, TEXT, JSONB) FROM anon, public;
+GRANT EXECUTE ON FUNCTION update_admin_member_rpc(TEXT, TEXT, JSONB) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION get_admin_finance_rpc(TEXT) FROM anon, public;
+GRANT EXECUTE ON FUNCTION get_admin_finance_rpc(TEXT) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION get_admin_loans_rpc(TEXT) FROM anon, public;
+GRANT EXECUTE ON FUNCTION get_admin_loans_rpc(TEXT) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION update_admin_payment_status_rpc(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM anon, public;
+GRANT EXECUTE ON FUNCTION update_admin_payment_status_rpc(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
+
+REVOKE EXECUTE ON FUNCTION update_admin_loan_status_rpc(TEXT, TEXT, TEXT, TEXT) FROM anon, public;
+GRANT EXECUTE ON FUNCTION update_admin_loan_status_rpc(TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;

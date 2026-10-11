@@ -31,7 +31,10 @@ let lastHandledCode: string | null = null;
  * 發起 LINE Login OAuth2 流程並重導向至 LINE 登入頁
  */
 export const initiateLineLogin = (channelIdOverride?: string) => {
-  const channelId = channelIdOverride || import.meta.env.VITE_LINE_CHANNEL_ID || '2009217429';
+  const channelId = channelIdOverride || import.meta.env.VITE_LINE_CHANNEL_ID;
+  if (!channelId) {
+    throw new Error('[系統配置錯誤]: 缺少 VITE_LINE_CHANNEL_ID 環境變數');
+  }
   const state = generateSecureState();
   sessionStorage.setItem(STATE_STORAGE_KEY, state);
   try {

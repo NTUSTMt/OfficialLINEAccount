@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.289-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.291-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.289)](#7-最新版本異動紀錄-changelog-v01289)
+- [7. 最新版本異動紀錄 (Changelog v0.1.291)](#7-最新版本異動紀錄-changelog-v01291)
 
 ---
 
@@ -204,7 +204,7 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.289)
+## 7. 最新版本異動紀錄 (Changelog v0.1.291)
 
 ### v0.1.285 (2026-10-09)
 - **Flex 訊息卡片純淨語言化、零 Emoji 規範、單一卡片發送與報名/租借卡片化全面升級**:
@@ -2502,8 +2502,22 @@ pnpm test
     - 幹部群組：正取社員取消報名緊急通知：notify-dispatcher (buildEventCancelledAdminFlex) 採用緊急朱紅主題，列明活動名稱、社員資訊、空出名額，並提供「前往活動名冊」按鈕。
   - 雲端 Edge Functions 正式部署：
     - 正式部署 line-webhook (v23) 與 notify-dispatcher (v18) 至 Supabase 正式環境。
-  - 自動化測試套件：
-    - 新增 test/111_flex_card_upgrades.test.mjs 完整驗證 9 款 Flex 卡片模板結構與欄位完整性。
+### v0.1.290 (2026-10-11)
+- 系統分頁圖示 (Favicon) 與標題全新更換：
+  - 將官方登山社標誌 (登山社logo.png) 整合進前端公開資源庫 (public/logo.png 與 public/favicon.png)。
+  - 更新 index.html 中的分頁圖示連結 (<link rel="icon" type="image/png" href="/logo.png" /> 與 <link rel="apple-touch-icon" href="/logo.png" />)。
+  - 更新預設網頁標題為「國立臺灣科技大學登山社」，並將語言屬性設定為繁體中文 (zh-Hant-TW)。
 
-
-
+### v0.1.291 (2026-10-11)
+- 全面安全性審計與架構加固 (Security Audit & Hardening)：
+  - 機密防護 (C-1, C-2)：.env.example 移除真實 Supabase 金鑰與 SUPABASE_SERVICE_ROLE_KEY，全面改用佔位符。
+  - 身分鑑權強制化 (C-3)：notify-dispatcher 移除可選之 ENFORCE_ID_TOKEN 開關，改為預設強制校驗 ID Token，無 Token 直接回傳 401。
+  - RPC 權限加固與防偽冒 (C-4, H-7, H-9)：重構 is_officer 鑑權邏輯，未攜帶有效 JWT 宣告時直接拒絕，根絕匿名偽冒幹部 ID 查表之漏洞；撤銷所有幹部 RPC 之 anon 權限，僅授權 authenticated 與 service_role。
+  - CORS 限制 (H-1)：line-auth 與 notify-dispatcher 移除全開萬用字元 Access-Control-Allow-Origin: *，改為動態限制。
+  - 移除硬編碼 Channel ID 與後門 (H-2, L-4)：移除 2009217429 硬編碼 fallback；徹底清除 lineClient.ts 中的 TEST_USER_ID 後門邏輯。
+  - HTTP 安全標頭與點擊劫持防護 (H-3, L-5)：vercel.json 配置 X-Content-Type-Options、CSP frame-ancestors、Referrer-Policy 與 Permissions-Policy。
+  - 佇列 RLS 收緊 (H-5)：sync_queue 移除 WITH CHECK (true)，僅限 authenticated 角色寫入。
+  - 伺服端渲染 XSS 防禦 (H-8)：gas.backup.js 渲染至 alertBox 前執行 HTML 實體跳脫。
+  - 前端隱私保護與快取管理 (L-1, L-2)：Register.tsx 草稿排除身分證與病史敏感 PII；Borrow.tsx 幹部快取導入 1 小時過期清理。
+  - 邊界防禦與 CI/CD 流程 (L-6, L-8, L-9)：line-auth 導入記憶體 IP 速率限制；update_equipment_images 配置 is_officer 守衛；建立 .github/workflows/security.yml 審查工作流程；提供完整的資料庫 Migration (20261011_harden_security_and_rls.sql) 與回滾腳本。
+  - 自動化測試套件：新增 test/112_security_vulnerability_fixes.test.mjs 包含 14 項專屬測試，全數通過。

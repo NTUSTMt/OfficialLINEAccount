@@ -51,7 +51,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 2. 為 sync_queue 補充 INSERT 政策，確保系統觸發與業務寫入不受阻
+-- 2. 為 sync_queue 補充 INSERT 政策，確保僅授權已鑑權身分寫入 (Triggers 為 SECURITY DEFINER 具備全權)
 DROP POLICY IF EXISTS "Allow insert to sync_queue" ON sync_queue;
 CREATE POLICY "Allow insert to sync_queue" ON sync_queue
-    FOR INSERT WITH CHECK (true);
+    FOR INSERT TO authenticated WITH CHECK (auth.role() = 'authenticated');

@@ -2,6 +2,46 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.291] - 2026-10-11
+
+### 安全性修復與加固
+- 機密脫敏防護 (C-1, C-2)：
+  - 清理 .env.example，移除真實 Supabase 金鑰與 SUPABASE_SERVICE_ROLE_KEY，替換為安全佔位符。
+- 身分驗證強制執行 (C-3)：
+  - notify-dispatcher Edge Function 移除可選之 ENFORCE_ID_TOKEN 開關，改為預設強制校驗 ID Token，無 Token 直接回傳 401 Unauthorized。
+- 資料庫 RPC 權限收緊與防偽冒 (C-4, H-7, H-9)：
+  - 重構 is_officer 鑑權邏輯，未攜帶有效 JWT 宣告時直接拒絕，徹底根絕匿名傳入他人幹部 ID 查表偽冒之重大漏洞。
+  - 撤銷所有幹部管理與敏感 RPC 對 anon 角色的 EXECUTE 授權，僅限 authenticated 與 service_role。
+- 跨來源資源共享限制 (H-1)：
+  - line-auth 與 notify-dispatcher 移除無條件萬用字元 Access-Control-Allow-Origin: *，改為依據 ALLOWED_ORIGINS 與請求來源動態驗證。
+- 移除硬編碼 Channel ID 與測試後門 (H-2, L-4)：
+  - 移除 Edge Functions 與前端原始碼中 2009217429 之硬編碼 fallback，全面由環境變數讀取。
+  - 徹底移除 lineClient.ts 中的 TEST_USER_ID 測試後門繞過邏輯。
+- HTTP 安全標頭與點擊劫持防護 (H-3, L-5)：
+  - 在 vercel.json 中配置 X-Content-Type-Options: nosniff、Referrer-Policy、Permissions-Policy 以及具備 frame-ancestors 守衛之 Content-Security-Policy。
+- 佇列資料庫 RLS 收緊 (H-5)：
+  - 收緊 sync_queue RLS 寫入政策，移除 WITH CHECK (true)，僅允許 authenticated 角色或系統觸發器寫入。
+- 伺服端渲染 XSS 防禦 (H-8)：
+  - gas.backup.js 在將訊息寫入 alertBox innerHTML 前進行完整 HTML 實體跳脫。
+- 前端隱私保護與快取管理 (L-1, L-2)：
+  - Register.tsx 本地表單草稿自動過濾身分證字號與病史欄位。
+  - Borrow.tsx 幹部身分快取導入時效性驗證與自動清理。
+- 邊界防禦與 CI/CD 流程 (L-6, L-8, L-9)：
+  - line-auth 導入記憶體 IP 速率限制 (Rate Limiting)。
+  - update_equipment_images RPC 配置 is_officer 守衛與固定 search_path = public。
+  - 新增 .github/workflows/security.yml 自動化安全性審查工作流程。
+  - 新增完整資料庫變更腳本 supabase/migrations/20261011_harden_security_and_rls.sql 與回滾腳本。
+- 自動化測試套件：
+  - 新增 test/112_security_vulnerability_fixes.test.mjs 完整驗證 14 項安全性弱點之修復。
+
+## [0.1.290] - 2026-10-11
+
+### 新增與變更
+- 系統分頁圖示 (Favicon) 與標題全新更換：
+  - 將官方登山社標誌 (登山社logo.png) 整合進前端公開資源庫 (public/logo.png 與 public/favicon.png)。
+  - 更新 index.html 中的分頁圖示連結 (<link rel="icon" type="image/png" href="/logo.png" /> 與 <link rel="apple-touch-icon" href="/logo.png" />)。
+  - 更新預設網頁標題為「國立臺灣科技大學登山社」，並將語言屬性設定為繁體中文 (zh-Hant-TW)。
+
 ## [0.1.289] - 2026-10-11
 
 ### 新增與變更

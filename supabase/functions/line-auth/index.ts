@@ -1,22 +1,69 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SignJWT } from 'https://deno.land/x/jose@v4.14.4/index.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+let activeOrigin: string | null = null;
+
+function getCorsHeaders(): Record<string, string> {
+  const allowedOrigins = (Deno.env.get('ALLOWED_ORIGINS') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const origin = activeOrigin || '';
+  let allowOrigin = '';
+  if (allowedOrigins.length > 0) {
+    allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  } else if (origin) {
+    allowOrigin = origin;
+  } else {
+    allowOrigin = 'null';
+  }
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
+
+// 簡易記憶體速率限制 (Rate Limiting: 60 秒內最多 30 次請求)
+const ipRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = ipRateLimitMap.get(ip);
+  if (!record || now > record.resetAt) {
+    ipRateLimitMap.set(ip, { count: 1, resetAt: now + 60000 });
+    return true;
+  }
+  if (record.count >= 30) {
+    return false;
+  }
+  record.count += 1;
+  return true;
+}
 
 Deno.serve(async (req: Request) => {
+  activeOrigin = req.headers.get('origin');
+
   // 處理 CORS preflight OPTIONS 請求
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: getCorsHeaders() });
+  }
+
+  const clientIp =
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+    req.headers.get('cf-connecting-ip') ||
+    'unknown';
+
+  if (!checkRateLimit(clientIp)) {
+    return new Response(JSON.stringify({ error: 'Too many requests. Please try again later.' }), {
+      status: 429,
+      headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
+    });
   }
 
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
     });
   }
 
@@ -29,11 +76,20 @@ Deno.serve(async (req: Request) => {
     if (!idToken && (!code || !redirectUri)) {
       return new Response(JSON.stringify({ error: 'Missing code/redirectUri or idToken parameter' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
       });
     }
 
-    const channelId = Deno.env.get('LINE_CHANNEL_ID') || Deno.env.get('LIFF_CHANNEL_ID') || '2009217429';
+    const channelId = Deno.env.get('LINE_CHANNEL_ID') || Deno.env.get('LIFF_CHANNEL_ID');
+    if (!channelId) {
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error: missing LINE_CHANNEL_ID or LIFF_CHANNEL_ID env var' }),
+        {
+          status: 500,
+          headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
+        }
+      );
+    }
     const channelSecret = Deno.env.get('LINE_CHANNEL_SECRET');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -49,7 +105,7 @@ Deno.serve(async (req: Request) => {
         }),
         {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
         }
       );
     }
@@ -75,7 +131,7 @@ Deno.serve(async (req: Request) => {
           JSON.stringify({ error: `LINE ID Token verification failed (${verifyRes.status}): ${errText}` }),
           {
             status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
           }
         );
       }
@@ -91,7 +147,7 @@ Deno.serve(async (req: Request) => {
           JSON.stringify({ error: 'Server configuration error: missing LINE_CHANNEL_SECRET for code flow' }),
           {
             status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
           }
         );
       }
@@ -114,7 +170,7 @@ Deno.serve(async (req: Request) => {
           JSON.stringify({ error: `LINE token exchange failed (${tokenRes.status}): ${errText}` }),
           {
             status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
           }
         );
       }
@@ -133,7 +189,7 @@ Deno.serve(async (req: Request) => {
           JSON.stringify({ error: `LINE profile query failed (${profileRes.status}): ${errText}` }),
           {
             status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
           }
         );
       }
@@ -253,7 +309,7 @@ Deno.serve(async (req: Request) => {
       }),
       {
         status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
       }
     );
   } catch (err: any) {
@@ -262,7 +318,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ error: `Server exception: ${err.message || String(err)}` }),
       {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...getCorsHeaders(), 'Content-Type': 'application/json' },
       }
     );
   }

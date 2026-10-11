@@ -59,12 +59,15 @@ export async function verifyLineIdToken(
     return { success: false, error: "缺少身分驗證 Token (Missing ID Token)" };
   }
 
-  const liffChannelId = Deno.env.get("LIFF_CHANNEL_ID") || "2009217429";
+  const liffChannelId = Deno.env.get("LIFF_CHANNEL_ID") || Deno.env.get("LINE_CHANNEL_ID");
+  if (!liffChannelId) {
+    return { success: false, error: "缺少 LIFF_CHANNEL_ID 環境變數 (Missing LIFF_CHANNEL_ID env var)" };
+  }
   const now = Date.now();
 
   const cached = idTokenCache.get(idToken);
   if (cached && cached.expiresAt > now) {
-    if (expectedUserId && expectedUserId !== "TEST_USER_ID" && cached.userId !== expectedUserId) {
+    if (expectedUserId && cached.userId !== expectedUserId) {
       return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
     }
     return { success: true, userId: cached.userId };
@@ -96,7 +99,7 @@ export async function verifyLineIdToken(
         expiresAt: now + 600 * 1000,
       });
 
-      if (expectedUserId && expectedUserId !== "TEST_USER_ID" && verifiedUserId !== expectedUserId) {
+      if (expectedUserId && verifiedUserId !== expectedUserId) {
         return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
       }
       return { success: true, userId: verifiedUserId };

@@ -402,14 +402,19 @@ function Register({ userId }: { userId: string }) {
     fetchProfileData();
   }, [userId]);
 
-  // 自動暫存表單草稿至 localStorage
+  // 自動暫存表單草稿至 localStorage (排除身分證字號與病史等敏感 PII 以防共用設備外洩)
   useEffect(() => {
     if (!isInitialLoadDone.current || loading || isSubmitting) return;
     try {
       const draftKey = 'register_draft_' + (userId || 'guest');
       const hasContent = Object.values(formData).some(v => typeof v === 'string' && v.trim() !== '');
       if (hasContent) {
-        localStorage.setItem(draftKey, JSON.stringify(formData));
+        const sanitizedDraft = {
+          ...formData,
+          idNumber: '',
+          medicalHistory: ''
+        };
+        localStorage.setItem(draftKey, JSON.stringify(sanitizedDraft));
       }
     } catch (e) {
       console.warn('暫存草稿失敗:', e);

@@ -9495,7 +9495,8 @@ function _getMainSyncSidebarHtml() {
     '  if(res.status === "error"){' +
     '    document.getElementById("sheetBadge").innerText = "無法比對";' +
     '    document.getElementById("contentArea").innerHTML = "";' +
-    '    document.getElementById("alertBox").innerHTML = \'<div class="alert-err">\' + res.message.replace(/\\n/g, "<br>") + \'</div>\';' +
+    '    var safeMsg = String(res.message || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\'/g, "&#39;");' +
+    '    document.getElementById("alertBox").innerHTML = \'<div class="alert-err">\' + safeMsg.replace(/\\n/g, "<br>") + \'</div>\';' +
     '    return;' +
     '  }' +
     '  currentDiffs = res.diffs || [];' +

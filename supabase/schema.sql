@@ -338,8 +338,17 @@ CREATE OR REPLACE FUNCTION update_equipment_images(
     p_equip_id TEXT,
     p_images JSONB
 )
-RETURNS JSONB AS $$
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
+    -- 幹部身分守衛
+    IF NOT is_officer(auth.jwt() ->> 'sub') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Permission denied: 權限不足，非幹部無法變更裝備圖片');
+    END IF;
+
     UPDATE equipments
     SET images = p_images,
         updated_at = NOW()
@@ -347,7 +356,10 @@ BEGIN
 
     RETURN jsonb_build_object('success', true, 'id', p_equip_id);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
+
+REVOKE EXECUTE ON FUNCTION update_equipment_images(TEXT, JSONB) FROM anon, public;
+GRANT EXECUTE ON FUNCTION update_equipment_images(TEXT, JSONB) TO authenticated, service_role;
 
 DROP POLICY IF EXISTS "Public read events" ON events;
 CREATE POLICY "Public read events" ON events
@@ -384,4 +396,4 @@ CREATE POLICY "Service role full access sync_queue" ON sync_queue
 
 DROP POLICY IF EXISTS "Allow insert to sync_queue" ON sync_queue;
 CREATE POLICY "Allow insert to sync_queue" ON sync_queue
-    FOR INSERT WITH CHECK (true);
+    FOR INSERT TO authenticated WITH CHECK (auth.role() = 'authenticated');

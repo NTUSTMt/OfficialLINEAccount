@@ -1,0 +1,34 @@
+name: Security Audit & Automated Regression Suite
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Dependency Audit
+        run: pnpm audit --audit-level=high || echo "Audit completed with warnings"
+
+      - name: Execute Security & AppSec Regression Test Suite
+        run: node --test test/105_*.test.mjs test/106_*.test.mjs test/107_*.test.mjs test/112_*.test.mjs

@@ -10,16 +10,41 @@ import { getUserPreferredLanguage, render } from "../_shared/i18n.ts";
 import { PreferredLanguage } from "../_shared/types.ts";
 import { formatTaipeiDate } from "../_shared/dateUtils.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-line-id-token",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+let activeOrigin: string | null = null;
+
+function getLiffChannelId(): string {
+  const channelId = Deno.env.get("LIFF_CHANNEL_ID") || Deno.env.get("LINE_CHANNEL_ID");
+  if (!channelId) {
+    throw new Error("Missing LIFF_CHANNEL_ID / LINE_CHANNEL_ID environment variable");
+  }
+  return channelId;
+}
+
+function getCorsHeaders(): Record<string, string> {
+  const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const origin = activeOrigin || "";
+  let allowOrigin = "";
+  if (allowedOrigins.length > 0) {
+    allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  } else if (origin) {
+    allowOrigin = origin;
+  } else {
+    allowOrigin = "null";
+  }
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-line-id-token",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...getCorsHeaders(), "Content-Type": "application/json" },
   });
 }
 
@@ -112,7 +137,7 @@ async function handleNotifyOfficersLoan(json: Record<string, any>) {
     }
   }
 
-  const liffChannelId = Deno.env.get("LIFF_CHANNEL_ID") || "2009217429";
+  const liffChannelId = getLiffChannelId();
   const loanAdminUrl = `https://liff.line.me/${liffChannelId}-jvj3ydDT?liff.state=%2Fadmin%2Floans`;
 
   const loanFlex = {
@@ -601,7 +626,7 @@ function buildLoanCancelledAdminFlex(params: {
   itemsText: string;
   isPaid: boolean;
 }) {
-  const adminLoansUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Floans";
+  const adminLoansUrl = `https://liff.line.me/${getLiffChannelId()}-jvj3ydDT?liff.state=%2Fadmin%2Floans`;
   return {
     type: "bubble",
     size: "mega",
@@ -788,7 +813,7 @@ function buildPaymentConfirmedAdminFlex(params: {
   items: string;
   confirmedBy: string;
 }) {
-  const adminFinanceUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Ffinance";
+  const adminFinanceUrl = `https://liff.line.me/${getLiffChannelId()}-jvj3ydDT?liff.state=%2Fadmin%2Ffinance`;
   return {
     type: "bubble",
     size: "mega",
@@ -893,7 +918,7 @@ function buildOfficerIntentAdminFlex(params: {
   intentRole: string;
   wantToSay: string;
 }) {
-  const adminMembersUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fmembers";
+  const adminMembersUrl = `https://liff.line.me/${getLiffChannelId()}-jvj3ydDT?liff.state=%2Fadmin%2Fmembers`;
   return {
     type: "bubble",
     size: "mega",
@@ -1000,7 +1025,7 @@ function buildEventCancelledAdminFlex(params: {
   cancelReason: string;
   isPaid: boolean;
 }) {
-  const adminEventsUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents";
+  const adminEventsUrl = `https://liff.line.me/${getLiffChannelId()}-jvj3ydDT?liff.state=%2Fadmin%2Fevents`;
   return {
     type: "bubble",
     size: "mega",
@@ -1567,7 +1592,7 @@ async function handleSendEventNotifications(json: Record<string, any>) {
   }
 
   let notifiedCount = 0;
-  const liffChannelId = Deno.env.get("LIFF_CHANNEL_ID") || "2009217429";
+  const liffChannelId = getLiffChannelId();
 
   for (const sItem of signups) {
     const statusStr = String(sItem.status || "").trim();
@@ -1772,16 +1797,20 @@ async function handleSendEventNotifications(json: Record<string, any>) {
 }
 
 Deno.serve(async (req: Request) => {
+  activeOrigin = req.headers.get("origin");
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders() });
   }
 
   if (req.method !== "POST") {
     return errorResponse("Method Not Allowed", 405);
   }
 
-  const enforceToken = Deno.env.get("ENFORCE_ID_TOKEN") === "true";
   const authHeader = req.headers.get("x-line-id-token") || req.headers.get("authorization");
+  if (!authHeader) {
+    return errorResponse("缺少身分驗證 Token (Unauthorized: Missing ID Token)", 401);
+  }
 
   let payload: Record<string, any>;
   try {
@@ -1795,16 +1824,14 @@ Deno.serve(async (req: Request) => {
     return errorResponse("Missing action parameter", 400);
   }
 
-  // 身分驗證 (若提供 Token 或啟用 ENFORCE_ID_TOKEN)
-  if (authHeader) {
-    const idToken = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const verifyRes = await verifyLineIdToken(idToken);
-    if (!verifyRes.success && enforceToken) {
-      return errorResponse(`身分驗證失敗: ${verifyRes.error}`, 401);
-    }
-    if (verifyRes.success && verifyRes.userId) {
-      payload.verifiedUserId = verifyRes.userId;
-    }
+  // 強制驗證身分 Token (杜絕無效或偽冒 Token)
+  const idToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const verifyRes = await verifyLineIdToken(idToken);
+  if (!verifyRes.success) {
+    return errorResponse(`身分驗證失敗: ${verifyRes.error}`, 401);
+  }
+  if (verifyRes.userId) {
+    payload.verifiedUserId = verifyRes.userId;
   }
 
   switch (action) {
