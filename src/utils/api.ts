@@ -93,6 +93,38 @@ export const gasPost = async <T = unknown>(payload: Record<string, unknown>): Pr
 };
 
 /**
+ * 取得當前 LIFF 登入之 Access Token
+ */
+export const getAccessToken = (): string => {
+  try {
+    if (liff && typeof liff.getAccessToken === 'function') {
+      return liff.getAccessToken() || '';
+    }
+  } catch (e) {
+    console.warn('無法獲取 LIFF Access Token:', e);
+  }
+  return '';
+};
+
+/**
+ * 取得當前階段簽發之 Supabase Custom JWT
+ */
+export const getCustomJwt = (): string => {
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      return (
+        sessionStorage.getItem('club_user_jwt') ||
+        sessionStorage.getItem('web_admin_jwt') ||
+        ''
+      );
+    }
+  } catch (e) {
+    console.warn('無法讀取 sessionStorage JWT:', e);
+  }
+  return '';
+};
+
+/**
  * 調用 Supabase 通知調度中心 (notify-dispatcher)
  */
 export const notifyDispatcher = async (
@@ -100,14 +132,30 @@ export const notifyDispatcher = async (
   payload: Record<string, unknown>
 ): Promise<{ success: boolean; message?: string }> => {
   try {
-    const bodyWithAuth = withAuthPayload({ action, ...payload });
     const idToken = getIdToken();
+    const accessToken = getAccessToken();
+    const customJwt = getCustomJwt();
+
+    const bodyWithAuth: Record<string, unknown> = {
+      action,
+      ...payload,
+      ...(idToken ? { idToken } : {}),
+      ...(accessToken ? { accessToken } : {}),
+      ...(customJwt ? { customJwt } : {})
+    };
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     };
     if (idToken) {
       headers['x-line-id-token'] = idToken;
-      headers['Authorization'] = `Bearer ${idToken}`;
+    }
+    if (accessToken) {
+      headers['x-line-access-token'] = accessToken;
+    }
+    const bearerToken = customJwt || idToken || accessToken;
+    if (bearerToken) {
+      headers['Authorization'] = `Bearer ${bearerToken}`;
     }
 
     const res = await fetch(NOTIFY_DISPATCHER_URL, {

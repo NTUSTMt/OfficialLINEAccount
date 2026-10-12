@@ -526,7 +526,7 @@ function Payment({ userId }: { userId: string }) {
         // 2. 發送 LINE 幹部審核推播 (若非 0 元且有費用需對帳才發送；0 元申報完全略過，不推播幹部群組、不消耗 Push 額度)
         if (!isZeroAmount) {
           try {
-            await notifyDispatcher('notify_officers_payment', {
+            const notifyRes = await notifyDispatcher('notify_officers_payment', {
               userId,
               paymentId: sbResult.paymentId,
               verifyToken: sbResult.verifyToken,
@@ -538,6 +538,9 @@ function Payment({ userId }: { userId: string }) {
                 proofImageUrl: uploadedProofUrl || undefined
               }
             });
+            if (!notifyRes.success) {
+              console.warn('[Payment] 幹部推播通知回傳失敗:', notifyRes.message);
+            }
           } catch (err) {
             console.warn('[Payment] 幹部推播通知發送例外:', err);
           }
@@ -688,39 +691,200 @@ function Payment({ userId }: { userId: string }) {
 
             alert(isEn ? 'Free item(s) registration completed! Confirmation card sent to your LINE chat.' : '0元免費項目已成功登記並自動核銷！核銷確認卡片已同步發送至您的 LINE 聊天室。');
           } else {
-            // 有金額之繳費申報：發送文字明細收據
-            const msgTextZh = `【繳費申報完成】\n\n` +
-              `您好！已成功收到您的繳費申報資訊：\n` +
-              `• 申報金額：$${totalAmount}\n` +
-              `• 帳號末5碼：${finalDigits}\n` +
-              (note.trim() ? `• 備註：${note.trim()}\n` : '') +
-              (uploadedProofUrl ? `• 匯款證明：已成功上傳雲端憑證\n` : '') +
-              `• 申報項目：\n` +
-              selectedNamesZh.map(n => `  - ${n}`).join('\n') + `\n\n` +
-              `幹部會於核對款項後自動更新您的狀態。謝謝！`;
+            // 有金額之繳費申報：發送結構化 Flex 卡片明細收據
+            const displayName = userName || (isEn ? 'Member' : '社員');
+            const displayPaymentId = sbResult.paymentId || 'PAY_SUBMITTED';
+            const titleText = isEn ? 'Payment Submitted' : '繳費申報完成';
+            const subtitleText = isEn
+              ? 'Your payment submission has been received!'
+              : '已成功收到您的繳費申報資訊！';
+            const labelName = isEn ? 'Name' : '申報人';
+            const labelId = isEn ? 'Payment ID' : '單號';
+            const labelAmount = isEn ? 'Amount' : '申報金額';
+            const labelDigits = isEn ? 'Last 5 Digits' : '帳號末5碼';
+            const labelProof = isEn ? 'Proof' : '匯款證明';
+            const labelNote = isEn ? 'Note' : '備註';
+            const labelItems = isEn ? 'Items' : '申報項目';
+            const labelStatus = isEn ? 'Status' : '狀態';
+            const statusText = isEn ? 'Checking' : '待確認 Checking';
+            const amountText = isEn ? `$${totalAmount} TWD` : `$${totalAmount} 元`;
+            const proofText = uploadedProofUrl
+              ? (isEn ? 'Successfully uploaded' : '已成功上傳雲端憑證')
+              : (isEn ? 'None' : '未附圖');
+            const itemList = isEn ? selectedNamesEn : selectedNamesZh;
+            const footerText = isEn
+              ? 'Officers will update your status after verifying the transaction. Thank you!'
+              : '幹部會於核對款項後自動更新您的狀態。謝謝！';
+            const proofBtnLabel = isEn ? 'View Receipt Proof' : '查看匯款證明照片';
 
-            const msgTextEn = `【Payment Submitted】\n\n` +
-              `Hello! Your payment submission has been received successfully:\n` +
-              `• Amount: $${totalAmount}\n` +
-              `• Last 5 Digits: ${finalDigits}\n` +
-              (note.trim() ? `• Note: ${note.trim()}\n` : '') +
-              (uploadedProofUrl ? `• Proof: Successfully uploaded\n` : '') +
-              `• Items:\n` +
-              selectedNamesEn.map(n => `  - ${n}`).join('\n') + `\n\n` +
-              `Officers will update your status after verifying the transaction. Thank you!`;
-
-            const msgText = isEn ? msgTextEn : msgTextZh;
+            const paymentReceiptFlexMessage: Record<string, unknown> = {
+              type: 'flex',
+              altText: isEn
+                ? `【Payment Submitted】$${totalAmount} (${finalDigits})`
+                : `【繳費申報完成】$${totalAmount} 元 (${finalDigits})`,
+              contents: {
+                type: 'bubble',
+                size: 'mega',
+                header: {
+                  type: 'box',
+                  layout: 'vertical',
+                  backgroundColor: '#065f46',
+                  paddingTop: '14px',
+                  paddingBottom: '14px',
+                  paddingStart: '16px',
+                  paddingEnd: '16px',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: titleText,
+                      color: '#ffffff',
+                      weight: 'bold',
+                      size: 'md'
+                    },
+                    {
+                      type: 'text',
+                      text: subtitleText,
+                      color: '#d1fae5',
+                      size: 'xxs',
+                      margin: 'xs'
+                    }
+                  ]
+                },
+                body: {
+                  type: 'box',
+                  layout: 'vertical',
+                  paddingAll: '16px',
+                  contents: [
+                    {
+                      type: 'box',
+                      layout: 'vertical',
+                      spacing: 'sm',
+                      contents: [
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelName, color: '#64748b', size: 'sm', flex: 3 },
+                            { type: 'text', text: displayName, weight: 'bold', color: '#0f172a', size: 'sm', flex: 5, wrap: true }
+                          ]
+                        },
+                        ...(sbResult.paymentId ? [{
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelId, color: '#64748b', size: 'sm', flex: 3 },
+                            { type: 'text', text: displayPaymentId, color: '#2563eb', size: 'xs', flex: 5, wrap: true, weight: 'bold' }
+                          ]
+                        }] : []),
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelAmount, color: '#64748b', size: 'sm', flex: 3 },
+                            { type: 'text', text: amountText, weight: 'bold', color: '#059669', size: 'md', flex: 5 }
+                          ]
+                        },
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelDigits, color: '#64748b', size: 'sm', flex: 3 },
+                            { type: 'text', text: finalDigits, weight: 'bold', color: '#0f172a', size: 'sm', flex: 5 }
+                          ]
+                        },
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelProof, color: '#64748b', size: 'sm', flex: 3 },
+                            { type: 'text', text: proofText, color: '#334155', size: 'xs', flex: 5, wrap: true }
+                          ]
+                        },
+                        ...(note.trim() ? [{
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelNote, color: '#64748b', size: 'sm', flex: 3 },
+                            { type: 'text', text: note.trim(), color: '#334155', size: 'xs', flex: 5, wrap: true }
+                          ]
+                        }] : []),
+                        {
+                          type: 'box',
+                          layout: 'baseline',
+                          spacing: 'sm',
+                          contents: [
+                            { type: 'text', text: labelStatus, color: '#64748b', size: 'sm', flex: 3 },
+                            { type: 'text', text: statusText, weight: 'bold', color: '#d97706', size: 'xs', flex: 5 }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      type: 'separator',
+                      margin: 'md',
+                      color: '#e2e8f0'
+                    },
+                    {
+                      type: 'box',
+                      layout: 'vertical',
+                      margin: 'md',
+                      spacing: 'xs',
+                      contents: [
+                        { type: 'text', text: `${labelItems}:`, color: '#64748b', size: 'xs', weight: 'bold' },
+                        ...(itemList.length > 0
+                          ? itemList.map(n => ({ type: 'text', text: `• ${n}`, color: '#334155', size: 'xs', wrap: true }))
+                          : [{ type: 'text', text: isEn ? '• None' : '• 無項目', color: '#94a3b8', size: 'xs' }])
+                      ]
+                    },
+                    {
+                      type: 'separator',
+                      margin: 'md',
+                      color: '#e2e8f0'
+                    },
+                    {
+                      type: 'text',
+                      text: footerText,
+                      size: 'xxs',
+                      color: '#64748b',
+                      wrap: true,
+                      margin: 'md'
+                    }
+                  ]
+                },
+                ...(uploadedProofUrl ? {
+                  footer: {
+                    type: 'box',
+                    layout: 'vertical',
+                    contents: [
+                      {
+                        type: 'button',
+                        style: 'secondary',
+                        height: 'sm',
+                        action: {
+                          type: 'uri',
+                          label: proofBtnLabel,
+                          uri: uploadedProofUrl
+                        }
+                      }
+                    ]
+                  }
+                } : {})
+              }
+            };
 
             try {
-              await liff.sendMessages([{
-                type: 'text',
-                text: msgText
-              }]);
+              await liff.sendMessages([paymentReceiptFlexMessage as any]);
             } catch (liffErr) {
               console.warn('liff.sendMessages 略過 (逾時或未開通發話權限):', liffErr);
             }
 
-            alert(isEn ? 'Payment submission sent! Receipt sent to your LINE chat.' : '繳費申報已成功送出！申報收據已同步發送至您的 LINE 聊天室與幹部群組。');
+            alert(isEn ? 'Payment submission sent! Receipt card sent to your LINE chat.' : '繳費申報已成功送出！申報收據卡片已同步發送至您的 LINE 聊天室與幹部群組。');
           }
 
           try {

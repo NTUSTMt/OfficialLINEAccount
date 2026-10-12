@@ -222,6 +222,158 @@ export async function pushMessage(
   return { success: false, error: firstTry.text };
 }
 
+export async function verifyLineAccessToken(
+  accessToken: string,
+  expectedUserId?: string
+): Promise<{ success: boolean; userId?: string; error?: string }> {
+  if (!accessToken) {
+    return { success: false, error: "缺少 Access Token (Missing Access Token)" };
+  }
+
+  const now = Date.now();
+  const cached = idTokenCache.get(`acc:${accessToken}`);
+  if (cached && cached.expiresAt > now) {
+    if (expectedUserId && cached.userId !== expectedUserId) {
+      return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
+    }
+    return { success: true, userId: cached.userId };
+  }
+
+  try {
+    const response = await fetch("https://api.line.me/v2/profile", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const resText = await response.text();
+    let data: { userId?: string; message?: string } = {};
+    try {
+      data = JSON.parse(resText);
+    } catch {
+      return { success: false, error: "LINE Profile 驗證端點回應格式異常: " + resText };
+    }
+
+    if (response.ok && data.userId) {
+      const verifiedUserId = data.userId;
+      idTokenCache.set(`acc:${accessToken}`, {
+        userId: verifiedUserId,
+        expiresAt: now + 600 * 1000,
+      });
+
+      if (expectedUserId && verifiedUserId !== expectedUserId) {
+        return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
+      }
+      return { success: true, userId: verifiedUserId };
+    } else {
+      return { success: false, error: data.message || "無效或過期的 Access Token" };
+    }
+  } catch (err: unknown) {
+    const errString = err instanceof Error ? err.message : String(err);
+    console.error("verifyLineAccessToken execution error:", err);
+    return { success: false, error: "Access Token 驗證系統異常: " + errString };
+  }
+}
+
+function base64UrlToUint8Array(base64Url: string): Uint8Array {
+  const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = base64.length % 4;
+  const padded = pad ? base64 + "=".repeat(4 - pad) : base64;
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export async function verifyCustomJwt(
+  jwtToken: string,
+  expectedUserId?: string
+): Promise<{ success: boolean; userId?: string; error?: string }> {
+  if (!jwtToken || jwtToken.split(".").length !== 3) {
+    return { success: false, error: "Invalid JWT format" };
+  }
+
+  const secret =
+    Deno.env.get("JWT_SECRET") ||
+    Deno.env.get("CUSTOM_JWT_SECRET") ||
+    Deno.env.get("SUPABASE_JWT_SECRET");
+
+  if (!secret) {
+    return { success: false, error: "Missing JWT_SECRET environment variable" };
+  }
+
+  try {
+    const [headerB64, payloadB64, sigB64] = jwtToken.split(".");
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+
+    const data = encoder.encode(`${headerB64}.${payloadB64}`);
+    const signature = base64UrlToUint8Array(sigB64);
+    const isValid = await crypto.subtle.verify("HMAC", key, signature, data);
+    if (!isValid) {
+      return { success: false, error: "Custom JWT signature verification failed" };
+    }
+
+    const payloadJson = new TextDecoder().decode(base64UrlToUint8Array(payloadB64));
+    const payload = JSON.parse(payloadJson);
+
+    if (payload.exp && Date.now() / 1000 > payload.exp) {
+      return { success: false, error: "Custom JWT expired" };
+    }
+
+    const sub = payload.sub ? String(payload.sub).trim() : "";
+    if (!sub || !sub.startsWith("U")) {
+      return { success: false, error: "Custom JWT missing valid LINE user sub" };
+    }
+
+    if (expectedUserId && sub !== expectedUserId) {
+      return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
+    }
+
+    return { success: true, userId: sub };
+  } catch (err: unknown) {
+    const errString = err instanceof Error ? err.message : String(err);
+    return { success: false, error: "Custom JWT verification error: " + errString };
+  }
+}
+
+export async function getLineUserProfile(
+  userId: string
+): Promise<{ userId?: string; displayName?: string; pictureUrl?: string; language?: string } | null> {
+  if (!userId || !userId.startsWith("U")) {
+    return null;
+  }
+
+  const memberToken = Deno.env.get("MEMBER_BOT_TOKEN") || "";
+  const adminToken = Deno.env.get("ADMIN_BOT_TOKEN") || "";
+  const tokens = [memberToken, adminToken].filter(Boolean);
+
+  for (const token of tokens) {
+    try {
+      const response = await fetch(
+        `https://api.line.me/v2/bot/profile/${encodeURIComponent(userId)}`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.warn(`[getLineUserProfile] 查詢失敗 (${userId}):`, err);
+    }
+  }
+  return null;
+}
+
 let cachedAdminGroupId: { value: string | null; expireAt: number } = {
   value: null,
   expireAt: 0,

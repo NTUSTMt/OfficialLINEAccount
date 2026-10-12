@@ -61,7 +61,8 @@ export default function ConfirmPayment() {
           // 2. 非同步推播 LINE 通知 (社員個人 + 幹部管理群組) (透過 Supabase notify-dispatcher)
           try {
             await notifyDispatcher('notify_payment_confirmed', {
-              paymentId: res.paymentId,
+              paymentId: res.paymentId || paymentId,
+              verifyToken: token,
               userName: res.userName,
               userEmail: res.userEmail,
               userLanguage: res.userLanguage,

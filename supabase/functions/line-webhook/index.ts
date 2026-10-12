@@ -7,6 +7,7 @@ import {
 import {
   validateSignature,
   replyMessage,
+  getLineUserProfile,
 } from "../_shared/lineClient.ts";
 import {
   getSupabaseAdminClient,
@@ -160,7 +161,61 @@ async function sendOfficerMenu(replyToken: string): Promise<void> {
       return;
     }
 
-    const bubbles = buildOfficerMenuFlex(officers);
+    const lineIds = officers
+      .map((o) => String(o.line_user_id || "").trim())
+      .filter((id) => id.startsWith("U"));
+
+    const memberAvatarMap: Record<string, string> = {};
+    if (lineIds.length > 0) {
+      const { data: memberRows } = await client
+        .from("members")
+        .select("line_user_id,avatar_url")
+        .in("line_user_id", lineIds);
+      if (memberRows) {
+        for (const m of memberRows) {
+          if (m.line_user_id && m.avatar_url) {
+            memberAvatarMap[m.line_user_id] = m.avatar_url;
+          }
+        }
+      }
+    }
+
+    const enrichedOfficers = await Promise.all(
+      officers.map(async (off) => {
+        const uid = String(off.line_user_id || "").trim();
+        const profile = uid ? await getLineUserProfile(uid) : null;
+        const livePictureUrl = profile?.pictureUrl ? String(profile.pictureUrl).trim() : "";
+        const memberAvatar = uid ? (memberAvatarMap[uid] || "") : "";
+        const rawPhotoUrl = String(off.photo_url || "").trim();
+        const validStoredPhoto =
+          rawPhotoUrl && !rawPhotoUrl.includes("ysnp.gov.tw") ? rawPhotoUrl : "";
+
+        const finalPhotoUrl = livePictureUrl || memberAvatar || validStoredPhoto || null;
+
+        if (uid && livePictureUrl && livePictureUrl !== rawPhotoUrl) {
+          client
+            .from("officers")
+            .update({ photo_url: livePictureUrl, updated_at: new Date().toISOString() })
+            .eq("line_user_id", uid)
+            .then(() => {});
+          if (livePictureUrl !== memberAvatar) {
+            client
+              .from("members")
+              .update({ avatar_url: livePictureUrl, updated_at: new Date().toISOString() })
+              .eq("line_user_id", uid)
+              .then(() => {});
+          }
+        }
+
+        return {
+          ...off,
+          name: off.name || profile?.displayName || "幹部",
+          photo_url: finalPhotoUrl,
+        };
+      })
+    );
+
+    const bubbles = buildOfficerMenuFlex(enrichedOfficers);
     if (bubbles.length > 0) {
       await replyMessage(replyToken, [{
         type: "flex",

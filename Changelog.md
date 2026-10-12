@@ -2,6 +2,25 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.298] - 2026-10-12
+
+### 新增與修復：繳費申報個人訊息 Flex 卡片化、幹部群組推播多軌鑑權修復與幹部真實 LINE 頭貼同步
+
+- 社員繳費申報個人收據升級為 Flex Message 卡片 (src/pages/Payment.tsx)：
+  - 將一般有金額之繳費申報完成後的個人 LINE 聊天室憑證訊息（原為純文字 `type: 'text'`）全面升級為 `type: 'flex'` 結構化卡片（`paymentReceiptFlexMessage`，支援中英雙語切換）。
+  - 卡片完整呈現申報人姓名、繳費單號、申報金額、匯款帳號末五碼、匯款證明上傳狀態、備註、狀態與申報項目清單；若有上傳匯款證明相片，卡片底部自動附帶「查看匯款證明照片 / View Receipt Proof」按鈕。
+- 幹部群組繳費申報推播遺漏修復与多軌身分鑑權升級 (src/utils/api.ts, src/pages/ConfirmPayment.tsx, supabase/functions/_shared/lineClient.ts, supabase/functions/notify-dispatcher/index.ts)：
+  - 根本原因：LIFF 環境中當 `liff.getIDToken()` 回傳 `null` 或過期時，舊版 `notifyDispatcher` 未傳遞 `liff.getAccessToken()` 與 `getSupabaseAuthToken()`，且後端 `notify-dispatcher` 僅支援 `verifyLineIdToken` 單一驗證，導致回傳 `401 Unauthorized` 而未能推播至幹部群組。
+  - 前端 `src/utils/api.ts`：新增 `getAccessToken` 與 `getCustomJwt`，呼叫 `notifyDispatcher` 時同時附帶 `idToken`、`accessToken` 與 `customJwt`；`ConfirmPayment.tsx` 單鍵核銷時同步附帶 `verifyToken`。
+  - 後端 `lineClient.ts` 與 `notify-dispatcher/index.ts`：實作四軌身分驗證機制（1. Supabase Custom JWT 驗證、2. LINE ID Token 驗證、3. LINE Access Token Profile API 驗證、4. 繳費申報/核銷之 `payments.verify_token` 資料庫比對驗證）。
+  - 重新部署 `notify-dispatcher` Edge Function 至雲端，並為 `PAY_20261012_9280` (`Anatolii Tverdovskyi`) 成功補發幹部群組繳費申報卡片通知。
+- 「幹部是誰」卡片頭貼改為幹部本人真實 LINE 帳號頭貼 (supabase/functions/_shared/lineClient.ts, supabase/functions/line-webhook/index.ts, supabase/member_officer_sync.sql)：
+  - 根本原因：`officers` 表中部分幹部之 `photo_url` 仍保留舊試算表預設圖片 (`ysnp.gov.tw`) 或為 `null`，且 `line-webhook` 的 `sendOfficerMenu` 未即時向 LINE Messaging API 抓取幹部本人 LINE 帳號頭貼。
+  - 後端 `lineClient.ts` 新增 `getLineUserProfile(userId)` 查詢 LINE Profile API；`line-webhook/index.ts` 之 `sendOfficerMenu` 優先取用幹部即時 LINE `pictureUrl` 與 `members.avatar_url`，排除舊預設圖片並自動回寫同步至資料庫。
+  - 已將全體 6 位幹部之真實 LINE 頭貼網址同步更新至 `officers.photo_url` 與 `members.avatar_url`，並重新部署 `line-webhook` Edge Function。
+- 自動化測試套件：
+  - 新增 `test/115_payment_flex_and_officer_avatar_fix.test.mjs`，全數通過測試與 `tsc -b && vite build` 驗證。
+
 ## [0.1.297] - 2026-10-11
 
 ### 錯誤修復與雲端部署：LIFF 雙軌鑑權、CSP 白名單擴充與競態條件排除 (Fix LIFF Dual Auth, CSP Connect-Src & Race Condition)

@@ -72,27 +72,33 @@ SET role = COALESCE(NULLIF(role, ''), NULLIF(title, ''), '幹部'),
 
 -- 3. 自動連動觸發函式
 CREATE OR REPLACE FUNCTION trg_fn_sync_officer_from_member()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
-    -- 🛡️ 關鍵防遞迴守衛：避免與 trg_fn_sync_member_from_officer 形成雙向互相更新的無窮遞迴 (stack depth limit exceeded)
+    -- 關鍵防遞迴守衛：避免與 trg_fn_sync_member_from_officer 形成雙向互相更新的無窮遞迴 (stack depth limit exceeded)
     IF pg_trigger_depth() > 1 THEN
         RETURN NEW;
     END IF;
 
     -- 當 is_officer 被設為 TRUE 且有有效 line_user_id
     IF NEW.is_officer IS TRUE AND NEW.line_user_id IS NOT NULL AND trim(NEW.line_user_id) != '' THEN
-        INSERT INTO officers (line_user_id, name, role, title, updated_at)
+        INSERT INTO officers (line_user_id, name, role, title, photo_url, updated_at)
         VALUES (
             trim(NEW.line_user_id),
             COALESCE(NULLIF(NEW.name, ''), '幹部'),
             COALESCE(NULLIF(NEW.officer_role, ''), '幹部'),
             COALESCE(NULLIF(NEW.officer_role, ''), '幹部'),
+            NULLIF(trim(COALESCE(NEW.avatar_url, '')), ''),
             NOW()
         )
         ON CONFLICT (line_user_id) DO UPDATE
         SET name = EXCLUDED.name,
             role = EXCLUDED.role,
             title = EXCLUDED.title,
+            photo_url = COALESCE(EXCLUDED.photo_url, officers.photo_url),
             updated_at = NOW();
 
     -- 當原本是幹部，被改為 FALSE 時，自 officers 表移除
@@ -102,12 +108,12 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 -- 重新掛載 Trigger
 DROP TRIGGER IF EXISTS trg_member_officer_sync ON members;
 CREATE TRIGGER trg_member_officer_sync
-AFTER INSERT OR UPDATE OF is_officer, officer_role, name ON members
+AFTER INSERT OR UPDATE OF is_officer, officer_role, name, avatar_url ON members
 FOR EACH ROW EXECUTE FUNCTION trg_fn_sync_officer_from_member();
 
 -- 4. 歷史既有幹部資料回填 members.is_officer = TRUE

@@ -3,6 +3,8 @@ import {
 } from "../_shared/supabaseClient.ts";
 import {
   verifyLineIdToken,
+  verifyLineAccessToken,
+  verifyCustomJwt,
   pushMessage,
 } from "../_shared/lineClient.ts";
 import { pushAdminMessage } from "../_shared/pushAdminMessage.ts";
@@ -45,7 +47,7 @@ function getCorsHeaders(): Record<string, string> {
   const matchedOrigin = isOriginAllowed(origin, allowedOrigins) ? origin : (allowedOrigins[0] || "null");
   return {
     "Access-Control-Allow-Origin": matchedOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-line-id-token",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-line-id-token, x-line-access-token",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 }
@@ -1841,11 +1843,6 @@ Deno.serve(async (req: Request) => {
     return errorResponse("Method Not Allowed", 405);
   }
 
-  const authHeader = req.headers.get("x-line-id-token") || req.headers.get("authorization");
-  if (!authHeader) {
-    return errorResponse("缺少身分驗證 Token (Unauthorized: Missing ID Token)", 401);
-  }
-
   let payload: Record<string, any>;
   try {
     payload = await req.json();
@@ -1858,15 +1855,92 @@ Deno.serve(async (req: Request) => {
     return errorResponse("Missing action parameter", 400);
   }
 
-  // 強制驗證身分 Token (杜絕無效或偽冒 Token)
-  const idToken = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const verifyRes = await verifyLineIdToken(idToken);
-  if (!verifyRes.success) {
-    return errorResponse(`身分驗證失敗: ${verifyRes.error}`, 401);
+  const rawIdTokenHeader = req.headers.get("x-line-id-token") || "";
+  const rawAccessTokenHeader = req.headers.get("x-line-access-token") || "";
+  const rawAuthHeader = req.headers.get("authorization") || "";
+  const bearerToken = rawAuthHeader.replace(/^Bearer\s+/i, "").trim();
+
+  const candidateIdToken = (rawIdTokenHeader || payload.idToken || "").trim();
+  const candidateAccessToken = (rawAccessTokenHeader || payload.accessToken || "").trim();
+  const candidateCustomJwt = (payload.customJwt || "").trim();
+
+  const paymentIdForToken = String(payload.paymentId || payload.details?.paymentId || "").trim();
+  const verifyTokenForPayment = String(payload.verifyToken || payload.details?.verifyToken || "").trim();
+  const hasPaymentVerifyToken =
+    (action === "notify_officers_payment" || action === "notify_payment_confirmed") &&
+    Boolean(paymentIdForToken && verifyTokenForPayment);
+
+  if (
+    !bearerToken &&
+    !candidateIdToken &&
+    !candidateAccessToken &&
+    !candidateCustomJwt &&
+    !hasPaymentVerifyToken
+  ) {
+    return errorResponse("缺少身分驗證 Token (Unauthorized: Missing ID Token)", 401);
   }
-  if (verifyRes.userId) {
-    payload.verifiedUserId = verifyRes.userId;
+
+  let verifiedUserId = "";
+  const authErrors: string[] = [];
+
+  // 軌道 1: 驗證 Supabase Custom JWT (由 line-auth 簽發)
+  for (const jwtCandidate of [candidateCustomJwt, bearerToken].filter(Boolean)) {
+    if (jwtCandidate.split(".").length === 3) {
+      const jwtRes = await verifyCustomJwt(jwtCandidate);
+      if (jwtRes.success && jwtRes.userId) {
+        verifiedUserId = jwtRes.userId;
+        break;
+      }
+      if (jwtRes.error) authErrors.push(jwtRes.error);
+    }
   }
+
+  // 軌道 2: 驗證 LINE ID Token
+  if (!verifiedUserId) {
+    for (const idCandidate of [candidateIdToken, bearerToken].filter(Boolean)) {
+      const idRes = await verifyLineIdToken(idCandidate);
+      if (idRes.success && idRes.userId) {
+        verifiedUserId = idRes.userId;
+        break;
+      }
+      if (idRes.error) authErrors.push(idRes.error);
+    }
+  }
+
+  // 軌道 3: 驗證 LINE Access Token (透過 LINE Profile API)
+  if (!verifiedUserId) {
+    for (const accCandidate of [candidateAccessToken, bearerToken].filter(Boolean)) {
+      const accRes = await verifyLineAccessToken(accCandidate);
+      if (accRes.success && accRes.userId) {
+        verifiedUserId = accRes.userId;
+        break;
+      }
+      if (accRes.error) authErrors.push(accRes.error);
+    }
+  }
+
+  // 軌道 4: 針對繳費申報與單鍵核銷通知，支援以資料庫 payments.verify_token 進行安全憑證核驗
+  if (!verifiedUserId && hasPaymentVerifyToken) {
+    const client = getSupabaseAdminClient();
+    const { data: payRow } = await client
+      .from("payments")
+      .select("id,line_user_id,verify_token")
+      .eq("id", paymentIdForToken)
+      .maybeSingle();
+
+    if (payRow && payRow.verify_token && payRow.verify_token === verifyTokenForPayment) {
+      verifiedUserId = payRow.line_user_id || payload.userId || "VERIFIED_PAYMENT_TOKEN";
+    } else {
+      authErrors.push("Invalid payment verifyToken");
+    }
+  }
+
+  if (!verifiedUserId) {
+    const lastErr = authErrors[0] || "無效或過期的 Token";
+    return errorResponse(`身分驗證失敗: ${lastErr}`, 401);
+  }
+
+  payload.verifiedUserId = verifiedUserId;
 
   switch (action) {
     case "notify_officers_loan":

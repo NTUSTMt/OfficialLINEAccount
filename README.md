@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.297-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.298-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.297)](#7-最新版本異動紀錄-changelog-v01297)
+- [7. 最新版本異動紀錄 (Changelog v0.1.298)](#7-最新版本異動紀錄-changelog-v01298)
 
 ---
 
@@ -204,7 +204,18 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.297)
+## 7. 最新版本異動紀錄 (Changelog v0.1.298)
+
+### v0.1.298 (2026-10-12)
+- **社員繳費申報個人收據 Flex 卡片化、幹部群組推播多軌鑑權修復與幹部真實 LINE 頭貼同步**:
+  - **個人繳費申報收據升級 Flex 卡片 ([src/pages/Payment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/Payment.tsx))**:
+    - 一般有金額之繳費申報完成後，透過 `liff.sendMessages` 發送結構化 Flex 卡片（`paymentReceiptFlexMessage`），支援中英雙語，列出申報人、單號、申報金額、帳號末五碼、匯款證明狀態、備註、狀態與申報項目清單，並於有上傳憑證時提供「查看匯款證明照片 / View Receipt Proof」按鈕。
+  - **幹部群組推播多軌身分鑑權 ([src/utils/api.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/api.ts), [src/pages/ConfirmPayment.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/ConfirmPayment.tsx), [supabase/functions/_shared/lineClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/_shared/lineClient.ts), [supabase/functions/notify-dispatcher/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/notify-dispatcher/index.ts))**:
+    - `notifyDispatcher` 同步附帶 `idToken`、`accessToken` 與 `customJwt`；後端 `notify-dispatcher` 支援 Custom JWT、LINE ID Token、LINE Access Token Profile API 與 `payments.verify_token` 四軌驗證，徹底修復 `liff.getIDToken()` 為 `null` 或過期時推播遭 401 阻斷的問題，並已完成雲端部署與 `PAY_20261012_9280` 幹部通知補發。
+  - **「幹部是誰」頭貼改為幹部本人 LINE 帳號頭貼 ([supabase/functions/_shared/lineClient.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/_shared/lineClient.ts), [supabase/functions/line-webhook/index.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/functions/line-webhook/index.ts), [supabase/member_officer_sync.sql](file:///Users/brianhung/Documents/OfficialLINEAccount/supabase/member_officer_sync.sql))**:
+    - 新增 `getLineUserProfile` 向 LINE Profile API 取得幹部即時 `pictureUrl`，取代舊預設圖片 (`ysnp.gov.tw`)，並將全體 6 位幹部真實 LINE 頭貼同步寫入 `officers.photo_url` 與 `members.avatar_url`，完成 `line-webhook` 雲端部署。
+  - **自動化測試 ([test/115_payment_flex_and_officer_avatar_fix.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/115_payment_flex_and_officer_avatar_fix.test.mjs))**:
+    - 新增回歸測試套件，全數通過。
 
 ### v0.1.297 (2026-10-11)
 - **LIFF 雙軌身分鑑權、CSP 白名單放寬與前端競態條件排除**:
