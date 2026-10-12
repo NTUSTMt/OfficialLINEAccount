@@ -87,4 +87,27 @@ describe('115. 繳費申報個人 Flex 卡片化、推播多軌鑑權與幹部�
       'line-webhook/index.ts sendOfficerMenu 必須呼叫 getLineUserProfile 並過濾 ysnp.gov.tw 預設圖'
     );
   });
+
+  it('4. webAuth.ts 與 WebAdminLogin.tsx: 支援從 LIFF_URLS 解析公開 Channel ID 並直接顯示登入啟動錯誤', () => {
+    const webAuthSrc = fs.readFileSync(
+      path.join(rootDir, 'src/utils/webAuth.ts'),
+      'utf8'
+    );
+    const webLoginSrc = fs.readFileSync(
+      path.join(rootDir, 'src/pages/web-admin/WebAdminLogin.tsx'),
+      'utf8'
+    );
+
+    assert.ok(
+      webAuthSrc.includes('export const resolveLineChannelId') &&
+        webAuthSrc.includes('LIFF_URLS.ADMIN_EVENTS'),
+      'webAuth.ts 必須具備 resolveLineChannelId 並支援由 LIFF_URLS 解析預設 Channel ID'
+    );
+
+    assert.ok(
+      webLoginSrc.includes('setLoginError') &&
+        webLoginSrc.includes('LINE 登入啟動失敗'),
+      'WebAdminLogin.tsx 必須捕捉 initiateLineLogin 例外並於錯誤橫幅直接顯示原因'
+    );
+  });
 });

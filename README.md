@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.298-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.299-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -204,7 +204,14 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.298)
+## 7. 最新版本異動紀錄 (Changelog v0.1.299)
+
+### v0.1.299 (2026-10-12)
+- **電腦版幹部後台 LINE 帳號登入按鈕修復與錯誤透明化**:
+  - **自動解析預設 Channel ID ([src/utils/webAuth.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/utils/webAuth.ts))**:
+    - 新增 `resolveLineChannelId` 輔助函式，優先讀取 `VITE_LINE_CHANNEL_ID` 環境變數；當雲端建置環境未注入該變數時，自動由 [src/constants/liff.ts](file:///Users/brianhung/Documents/OfficialLINEAccount/src/constants/liff.ts) (`LIFF_URLS.ADMIN_EVENTS`) 解析出公開之 LINE Login Channel ID，並於 `handleLineCallback` 換票時同步帶入 `clientId`。
+  - **登入啟動錯誤直接顯示 ([src/pages/web-admin/WebAdminLogin.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/web-admin/WebAdminLogin.tsx))**:
+    - 點擊「使用 LINE 帳號登入」時新增 `try / catch` 與 `loginError` 橫幅顯示，確保任何設定或跳轉例外皆直接於畫面印出完整原因。
 
 ### v0.1.298 (2026-10-12)
 - **社員繳費申報個人收據 Flex 卡片化、幹部群組推播多軌鑑權修復與幹部真實 LINE 頭貼同步**:

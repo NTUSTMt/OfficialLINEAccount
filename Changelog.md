@@ -2,6 +2,19 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.299] - 2026-10-12
+
+### 修復：電腦版幹部後台 LINE 帳號登入按鈕失效與錯誤透明化 (Fix Web Admin LINE Login Button & Error Display)
+
+- 根本原因：
+  - 生產環境 (Vercel) 未注入 `VITE_LINE_CHANNEL_ID` 建置環境變數，導致 `src/utils/webAuth.ts` 的 `initiateLineLogin` 取得 `undefined` 並拋出 `[系統配置錯誤]: 缺少 VITE_LINE_CHANNEL_ID 環境變數`。
+  - `src/pages/web-admin/WebAdminLogin.tsx` 點擊按鈕時未捕捉例外並顯示於畫面上，造成點擊「使用 LINE 帳號登入」無反應。
+- 前端修復 (src/utils/webAuth.ts, src/pages/web-admin/WebAdminLogin.tsx)：
+  - `src/utils/webAuth.ts` 新增 `resolveLineChannelId`，優先讀取 `VITE_LINE_CHANNEL_ID` 環境變數，若建置環境未注入則自動自 `LIFF_URLS.ADMIN_EVENTS` 解析公開之 LINE Login Channel ID，並於 `handleLineCallback` 換票時同步帶入 `clientId`。
+  - `src/pages/web-admin/WebAdminLogin.tsx` 新增 `handleLoginClick` 與 `loginError` 錯誤橫幅狀態，當登入啟動發生例外時直接於畫面印出完整錯誤原因。
+- 自動化測試：
+  - 擴充 `test/115_payment_flex_and_officer_avatar_fix.test.mjs` 驗證 `resolveLineChannelId` 與 `WebAdminLogin.tsx` 錯誤橫幅機制。
+
 ## [0.1.298] - 2026-10-12
 
 ### 新增與修復：繳費申報個人訊息 Flex 卡片化、幹部群組推播多軌鑑權修復與幹部真實 LINE 頭貼同步

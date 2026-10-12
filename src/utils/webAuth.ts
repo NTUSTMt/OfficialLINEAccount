@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { LIFF_URLS } from '../constants/liff';
 
 export interface WebAuthSession {
   jwt: string;
@@ -13,6 +14,19 @@ export interface WebAuthSession {
 const LINE_AUTH_URL = 'https://access.line.me/oauth2/v2.1/authorize';
 const SESSION_STORAGE_KEY = 'web_admin_session';
 const STATE_STORAGE_KEY = 'line_login_state';
+
+/**
+ * 解析 LINE Login Channel ID：優先讀取覆寫參數與 VITE_LINE_CHANNEL_ID，
+ * 若雲端建置環境未注入則自動自 LIFF_URLS 解析公開之 Channel ID
+ */
+export const resolveLineChannelId = (channelIdOverride?: string): string => {
+  const envChannelId = channelIdOverride || import.meta.env.VITE_LINE_CHANNEL_ID;
+  if (envChannelId && String(envChannelId).trim()) {
+    return String(envChannelId).trim();
+  }
+  const liffSlug = LIFF_URLS.ADMIN_EVENTS.split('/').pop() || '';
+  return liffSlug.includes('-') ? liffSlug.split('-')[0].trim() : '';
+};
 
 /**
  * 產生安全的隨機防偽權杖 (CSRF State Token)
@@ -31,9 +45,9 @@ let lastHandledCode: string | null = null;
  * 發起 LINE Login OAuth2 流程並重導向至 LINE 登入頁
  */
 export const initiateLineLogin = (channelIdOverride?: string) => {
-  const channelId = channelIdOverride || import.meta.env.VITE_LINE_CHANNEL_ID;
+  const channelId = resolveLineChannelId(channelIdOverride);
   if (!channelId) {
-    throw new Error('[系統配置錯誤]: 缺少 VITE_LINE_CHANNEL_ID 環境變數');
+    throw new Error('[系統配置錯誤]: 缺少 VITE_LINE_CHANNEL_ID 環境變數且無法自 LIFF_URLS 解析 Channel ID');
   }
   const state = generateSecureState();
   sessionStorage.setItem(STATE_STORAGE_KEY, state);
@@ -87,6 +101,7 @@ export const handleLineCallback = async (
 
       const edgeFnUrl = `${supabaseUrl}/functions/v1/line-auth`;
       const redirectUri = `${window.location.origin}/admin-web/callback`;
+      const clientId = resolveLineChannelId();
 
       const res = await fetch(edgeFnUrl, {
         method: 'POST',
@@ -97,6 +112,7 @@ export const handleLineCallback = async (
         body: JSON.stringify({
           code,
           redirectUri,
+          clientId: clientId || undefined,
         }),
       });
 

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Mountain, ShieldCheck, AlertCircle, ExternalLink } from 'lucide-react';
 import { getWebSession, initiateLineLogin } from '../../utils/webAuth';
@@ -8,6 +8,7 @@ export const WebAdminLogin: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isUnauthorized = searchParams.get('unauthorized') === 'true';
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     const session = getWebSession();
@@ -15,6 +16,17 @@ export const WebAdminLogin: React.FC = () => {
       navigate('/admin-web/events', { replace: true });
     }
   }, [navigate]);
+
+  const handleLoginClick = () => {
+    try {
+      setLoginError(null);
+      initiateLineLogin();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[WebAdminLogin] LINE 登入啟動失敗:', err);
+      setLoginError(msg);
+    }
+  };
 
   return (
     <div className="web-admin-wrapper" style={{ justifyContent: 'center', alignItems: 'center' }}>
@@ -45,6 +57,19 @@ export const WebAdminLogin: React.FC = () => {
           </div>
         )}
 
+        {loginError && (
+          <div
+            className="web-admin-error-banner"
+            style={{ marginBottom: 20, textAlign: 'left' }}
+          >
+            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <strong>LINE 登入啟動失敗</strong>
+              <div style={{ marginTop: 4 }}>{loginError}</div>
+            </div>
+          </div>
+        )}
+
         <div style={{ textAlign: 'left', background: 'var(--wa-bg)', padding: '16px', borderRadius: '8px', fontSize: '0.84rem', color: 'var(--wa-text-muted)', marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--wa-text)', fontWeight: 600, marginBottom: 8 }}>
             <ShieldCheck size={16} color="var(--wa-primary)" />
@@ -60,7 +85,7 @@ export const WebAdminLogin: React.FC = () => {
         <button
           type="button"
           className="web-admin-line-login-btn"
-          onClick={() => initiateLineLogin()}
+          onClick={handleLoginClick}
         >
           <span>使用 LINE 帳號登入</span>
           <ExternalLink size={18} />
