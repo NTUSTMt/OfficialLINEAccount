@@ -538,11 +538,9 @@ async function handleNotifyOfficersPayment(json: Record<string, any>) {
 // 4. 繳費單核銷完成推播
 async function handleNotifyPaymentConfirmed(json: Record<string, any>) {
   const paymentId = json.paymentId || "";
-  const userName = json.userName || "社員";
   let userEmail = json.userEmail || "";
   let userLanguage = json.userLanguage || json.lang || json.preferredLanguage || "";
   const amount = json.amount || 0;
-  const items = json.items || json.type || "社團活動/裝備費用";
   const lineUserId = json.lineUserId || "";
   const confirmedBy = json.confirmedBy || "單鍵快速核銷";
 
@@ -561,6 +559,8 @@ async function handleNotifyPaymentConfirmed(json: Record<string, any>) {
   }
 
   const isEn = userLanguage === "en" || userLanguage === "en-US";
+  const userName = json.userName || (isEn ? "Member" : "社員");
+  const items = json.items || json.type || (isEn ? "Club Event / Gear Fee" : "社團活動/裝備費用");
 
   // 1. Email 發送 (GAS Worker)
   const workerUrl = Deno.env.get("GAS_WORKER_URL");
@@ -603,15 +603,18 @@ async function handleNotifyPaymentConfirmed(json: Record<string, any>) {
     }).catch((err) => console.warn("GAS send_user_email failed:", err));
   }
 
-  // 2. 社員個人 LINE 推播
+  // 2. 社員個人 LINE 推播 (依語系發送英文版或中文版 Flex 卡片)
   if (lineUserId && lineUserId.startsWith("U")) {
     const personalFlex = buildPaymentVerifiedPersonalFlex({
       userName,
       paymentId,
       amount,
       items,
+      isEn,
     });
-    const altPersonalText = `繳費核銷完成: ${items} (NT$ ${amount})`;
+    const altPersonalText = isEn
+      ? `Payment Confirmed: ${items} (NT$ ${amount})`
+      : `繳費核銷完成: ${items} (NT$ ${amount})`;
     await pushMessage(lineUserId, [{
       type: "flex",
       altText: altPersonalText,
@@ -752,7 +755,24 @@ function buildPaymentVerifiedPersonalFlex(params: {
   paymentId: string;
   amount: number | string;
   items: string;
+  isEn?: boolean;
 }) {
+  const isEn = Boolean(params.isEn);
+  const titleText = isEn ? "Payment Confirmed" : "繳費核銷完成";
+  const subtitleText = isEn
+    ? "Officers have verified and confirmed your payment!"
+    : "社團幹部已確認收到您的款項並完成核銷！";
+  const labelName = isEn ? "Member:" : "申報社員：";
+  const labelId = isEn ? "Payment ID:" : "繳費單號：";
+  const labelAmount = isEn ? "Amount:" : "核銷金額：";
+  const labelItems = isEn ? "Items:" : "核銷項目：";
+  const labelStatus = isEn ? "Status:" : "帳務狀態：";
+  const statusText = isEn ? "Confirmed" : "已核銷 Confirmed";
+  const amountText = isEn ? `NT$ ${params.amount} TWD` : `NT$ ${params.amount}`;
+  const footerText = isEn
+    ? "Your event registration and gear rental status have been updated. You can check your status anytime on your LINE Dashboard!"
+    : "感謝您的配合！您的款項已完成核銷並入帳，相關活動與裝備狀態已同步更新，期待在山林活動中與您相見！";
+
   return {
     type: "bubble",
     size: "mega",
@@ -767,10 +787,18 @@ function buildPaymentVerifiedPersonalFlex(params: {
       contents: [
         {
           type: "text",
-          text: "繳費核銷完成 / Payment Confirmed",
+          text: titleText,
           color: "#FFFFFF",
           weight: "bold",
-          size: "sm",
+          size: "md",
+        },
+        {
+          type: "text",
+          text: subtitleText,
+          color: "#D1FAE5",
+          size: "xxs",
+          margin: "xs",
+          wrap: true,
         },
       ],
     },
@@ -784,7 +812,7 @@ function buildPaymentVerifiedPersonalFlex(params: {
           type: "box",
           layout: "horizontal",
           contents: [
-            { type: "text", text: "申報社員：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: labelName, size: "xs", color: "#64748B", flex: 3 },
             { type: "text", text: params.userName, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
           ],
         },
@@ -792,7 +820,7 @@ function buildPaymentVerifiedPersonalFlex(params: {
           type: "box",
           layout: "horizontal",
           contents: [
-            { type: "text", text: "繳費單號：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: labelId, size: "xs", color: "#64748B", flex: 3 },
             { type: "text", text: params.paymentId, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
           ],
         },
@@ -800,15 +828,15 @@ function buildPaymentVerifiedPersonalFlex(params: {
           type: "box",
           layout: "horizontal",
           contents: [
-            { type: "text", text: "核銷金額：", size: "xs", color: "#64748B", flex: 3 },
-            { type: "text", text: `NT$ ${params.amount}`, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+            { type: "text", text: labelAmount, size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: amountText, size: "xs", color: "#059669", weight: "bold", flex: 7 },
           ],
         },
         {
           type: "box",
           layout: "horizontal",
           contents: [
-            { type: "text", text: "核銷項目：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: labelItems, size: "xs", color: "#64748B", flex: 3 },
             { type: "text", text: params.items, size: "xs", color: "#0F172A", flex: 7, wrap: true },
           ],
         },
@@ -816,14 +844,14 @@ function buildPaymentVerifiedPersonalFlex(params: {
           type: "box",
           layout: "horizontal",
           contents: [
-            { type: "text", text: "帳務狀態：", size: "xs", color: "#64748B", flex: 3 },
-            { type: "text", text: "已核銷 Confirmed", size: "xs", color: "#059669", weight: "bold", flex: 7 },
+            { type: "text", text: labelStatus, size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: statusText, size: "xs", color: "#059669", weight: "bold", flex: 7 },
           ],
         },
         { type: "separator" },
         {
           type: "text",
-          text: "感謝您的配合！您的款項已完成核銷並入帳，期待在山林活動中與您相見！",
+          text: footerText,
           size: "xxs",
           color: "#64748B",
           wrap: true,
@@ -1160,6 +1188,31 @@ function buildLoanStatusUpdatedFlex(
 ) {
   const isEn = prefLang === "en";
 
+  const rawStatus = String(params.newStatus || "").trim();
+  const statusMapEn: Record<string, string> = {
+    "待領取 To Be Collected": "To Be Collected",
+    "待領取": "To Be Collected",
+    "租借中 Borrowed": "Borrowed",
+    "租借中": "Borrowed",
+    "使用中 Using": "Using",
+    "使用中": "Using",
+    "已歸還 Returned": "Returned",
+    "已歸還": "Returned",
+    "已取消 Cancelled": "Cancelled",
+    "已取消": "Cancelled",
+    "已取消 (待退款)": "Cancelled (Refund Pending)",
+  };
+  const statusMapZh: Record<string, string> = {
+    "待領取 To Be Collected": "待領取",
+    "租借中 Borrowed": "租借中",
+    "使用中 Using": "使用中",
+    "已歸還 Returned": "已歸還",
+    "已取消 Cancelled": "已取消",
+    "已取消 (待退款)": "已取消 (待退款)",
+  };
+  const statusTextEn = statusMapEn[rawStatus] || rawStatus.replace(/^[\u4e00-\u9fa5\s（）()]+/, "").trim() || rawStatus;
+  const statusTextZh = statusMapZh[rawStatus] || rawStatus.split(" ")[0] || rawStatus;
+
   let itemsTextZh = "";
   let itemsTextEn = "";
   if (Array.isArray(params.itemsSummary)) {
@@ -1231,7 +1284,7 @@ function buildLoanStatusUpdatedFlex(
                 layout: "horizontal",
                 contents: [
                   { type: "text", text: "Status:", size: "xs", color: "#64748B", flex: 3 },
-                  { type: "text", text: params.newStatus, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+                  { type: "text", text: statusTextEn, size: "xs", color: "#059669", weight: "bold", flex: 7 },
                 ],
               },
               {
@@ -1332,7 +1385,7 @@ function buildLoanStatusUpdatedFlex(
               layout: "horizontal",
               contents: [
                 { type: "text", text: "最新租借狀態：", size: "xs", color: "#64748B", flex: 3 },
-                { type: "text", text: `【${params.newStatus}】`, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+                { type: "text", text: `【${statusTextZh}】`, size: "xs", color: "#059669", weight: "bold", flex: 7 },
               ],
             },
             {

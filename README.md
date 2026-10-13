@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.299-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.301-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.298)](#7-最新版本異動紀錄-changelog-v01298)
+- [7. 最新版本異動紀錄 (Changelog v0.1.301)](#7-最新版本異動紀錄-changelog-v01301)
 
 ---
 
@@ -2624,3 +2624,26 @@ pnpm test
     - `App.tsx`：完整記錄 `line-auth` 請求失敗之 HTTP 狀態碼與錯誤訊息至 `setLastSupabaseError`。
     - `supabaseClient.ts`：檢查 RPC 業務錯誤 (`data.status === 'error'` 與 `data.error`) 並如實記錄。
     - `Dashboard.tsx` 與 `Register.tsx`：落實錯誤透明化規範，直接顯示具體錯誤原因。
+
+### v0.1.300 (2026-10-13)
+- 社員個人繳費核銷通知補齊中英兩版與全系統社員通知雙語盤點：
+  - 後端推播升級 (`supabase/functions/notify-dispatcher/index.ts`)：
+    - `handleNotifyPaymentConfirmed` 依據社員偏好語系 (`isEn`) 將語系旗標傳入 `buildPaymentVerifiedPersonalFlex`，並同步切換推播替代文字 (`altPersonalText`) 與預設名稱、項目文字。
+    - `buildPaymentVerifiedPersonalFlex` 完整支援中英兩版（英文版顯示 `Payment Confirmed` 標題、英文副標題、`Member:` / `Payment ID:` / `Amount:` / `Items:` / `Status:` 欄位標籤與英文底部說明；中文版顯示繁體中文標題、副標題、欄位標籤與底部說明）。
+  - 自動化測試：
+    - 擴充 `test/115_payment_flex_and_officer_avatar_fix.test.mjs` 驗證 `buildPaymentVerifiedPersonalFlex` 與 `handleNotifyPaymentConfirmed` 之中英雙版本切換邏輯。
+
+### v0.1.301 (2026-10-13)
+- 補齊裝備租借確認訊息、備取確認活動名稱與租借狀態更新中英兩版通知：
+  - 裝備租借申請送出後之聊天室確認訊息 (`src/pages/Borrow.tsx`)：
+    - 預載社員 `preferredLanguage` 並結合 `i18n.language` 判斷語系 (`isEn`)。
+    - 將原本中英混排之純文字確認訊息全面升級為依語系獨立顯示之中英兩版 `type: 'flex'` 結構化卡片 (`loanOrderFlexMessage`)，完整呈現訂單編號、借用人與折扣身分、領取/歸還日期、租借用途、預約裝備清單、預估總租金與提醒事項。
+  - 備取意願確認成功卡片之活動名稱 (`supabase/functions/line-webhook/index.ts`)：
+    - `handleConfirmWaitlist` 改為同時查詢 `events` 資料表之 `title,title_en`，當 `prefLang === 'en'` 時優先顯示 `title_en`（預設回退 `'Event'`），中文版維持顯示 `title`（預設回退 `'活動'`）。
+  - 裝備租借狀態更新之狀態值顯示與電腦版後台推播 (`supabase/functions/notify-dispatcher/index.ts`, `supabase/functions/line-webhook/flexTemplates.ts`, `src/pages/web-admin/WebAdminLoans.tsx`)：
+    - `buildLoanStatusUpdatedFlex` 新增 `statusMapEn` 與 `statusMapZh` 對照與正規化邏輯，英文版卡片之 `Status:` 欄位純粹顯示英文狀態值（如 `To Be Collected`、`Borrowed`、`Returned`、`Cancelled`），中文版顯示純中文狀態值（如 `【待領取】`、`【租借中】`、`【已歸還】`、`【已取消】`）。
+    - `src/pages/web-admin/WebAdminLoans.tsx` 於 `handleSaveStatus` 狀態儲存成功後，同步呼叫 `notifyDispatcher('notify_loan_status_updated', ...)` 發送社員個人雙語 LINE 通知，與手機版幹部後台行為完全對齊。
+  - 自動化測試：
+    - 擴充 `test/115_payment_flex_and_officer_avatar_fix.test.mjs` 新增第 6、7、8 項測試驗證上述三項通知雙語化與推播觸發。
+
+

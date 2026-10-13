@@ -36,7 +36,7 @@ const CACHE_KEY_EQUIPMENTS = 'borrow_equipments_list';
 const CACHE_KEY_OFFICIAL = 'user_is_official_';
 
 function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boolean }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // ==========================================
   // 2. 狀態管理 (State Management)
@@ -95,7 +95,8 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
     name: string;
     phone: string;
     realLineId: string;
-  }>({ name: '', phone: '', realLineId: '' });
+    preferredLanguage: string;
+  }>({ name: '', phone: '', realLineId: '', preferredLanguage: '' });
 
   // 外部瀏覽器阻擋防護狀態
   const isLocalhost = typeof window !== 'undefined' && (
@@ -128,13 +129,14 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
       }
 
       if (userId && userId !== 'TEST_USER_ID') {
-        // 預載社員姓名、LINE ID 與電話 (用於訂單明細與推播)
+        // 預載社員姓名、LINE ID、電話與語系偏好 (用於訂單明細與推播)
         fetchMemberProfileFromSupabase(userId).then(p => {
           if (p && !ignore) {
             setUserProfile({
               name: p.name || '',
               phone: p.phone || '',
-              realLineId: p.realLineId || ''
+              realLineId: p.realLineId || '',
+              preferredLanguage: p.preferredLanguage || ''
             });
           }
         }).catch(err => console.warn('[Borrow] 社員資料載入略過:', err));
@@ -388,49 +390,180 @@ function Borrow({ userId, isOfficer = false }: { userId: string; isOfficer?: boo
         otherPurpose: ''
       });
 
-      // 4. 傳送結構化確認訊息給使用者 (透過 liff.sendMessages，0 額度消耗)
-      const identityText = form.purpose === '社團出隊'
-        ? '社團出隊 (免租金) / Club Trip (Free)'
-        : (isOfficial ? '社員個人 (享5折) / Member (50% Off)' : '非社員 (原價) / Non-member (Regular)');
-      const itemsListText = selectedCartItems.map(item => `• ${item.name} x ${item.quantity}`).join('\n');
+      // 4. 傳送結構化確認 Flex 卡片給使用者 (透過 liff.sendMessages，0 額度消耗，支援中英雙語切換)
+      const isEn = userProfile.preferredLanguage === 'en' || i18n.language === 'en' || Boolean(i18n.language?.startsWith('en'));
+      const identityText = isEn
+        ? (form.purpose === '社團出隊' ? 'Club Trip (Free)' : (isOfficial ? 'Official Member (50% Off)' : 'Non-member (Regular)'))
+        : (form.purpose === '社團出隊' ? '社團出隊 (免租金)' : (isOfficial ? '社員個人 (享5折)' : '非社員 (原價)'));
+      const purposeDisplay = isEn
+        ? (form.purpose === '社團出隊'
+          ? 'Club Trip'
+          : form.purpose === '個人使用'
+          ? 'Personal Use'
+          : `Other Purpose${form.otherPurpose ? ` (${form.otherPurpose})` : ''}`)
+        : `${form.purpose}${form.purpose === '其他用途' && form.otherPurpose ? ` (${form.otherPurpose})` : ''}`;
 
-      const userMessageText =
-        `【🎒 我的裝備租借預訂單 / Equipment Loan Order】\n` +
-        `─────────────\n` +
-        `• 訂單編號 (Order ID)：${result.loanId || '已建立 Created'}\n` +
-        `• 借用人 (Borrower)：${userProfile.name || '社員'} (${identityText})\n` +
-        `• 預計領取 (Pickup Date)：${form.pickupDate}\n` +
-        `• 預計歸還 (Return Date)：${form.returnDate} (共 ${days} 天 / ${days} days)\n` +
-        `• 租借用途 (Purpose)：${form.purpose}${form.purpose === '其他用途' && form.otherPurpose ? ` (${form.otherPurpose})` : ''}\n\n` +
-        `📦 預約裝備清單 (Items)：\n` +
-        `${itemsListText}\n\n` +
-        `💰 預估總租金 (Estimated Total)：$${totalRentValue} 元\n` +
-        `─────────────\n` +
-        `📌 提醒事項 / Important Notes：\n` +
-        `1. 幹部已收到您的預約申請，將為您備齊裝備。\n` +
-        `   Officers have received your request and will prepare the gear.\n` +
-        `2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n` +
-        `   If fees apply, please complete payment in "Payment Center" before pickup.\n` +
-        `3. 將有幹部主動聯繫你，確認領取時間以及地點。\n` +
-        `   An officer will contact you to confirm pickup time and location.`;
+      const orderIdText = result.loanId || (isEn ? 'Created' : '已建立');
+      const borrowerText = `${userProfile.name || (isEn ? 'Member' : '社員')} (${identityText})`;
+      const returnPeriodText = isEn
+        ? `${form.returnDate} (${days} days)`
+        : `${form.returnDate} (共 ${days} 天)`;
+
+      const loanOrderFlexMessage: Record<string, unknown> = {
+        type: 'flex',
+        altText: isEn
+          ? `[Equipment Loan Order] ${orderIdText} ($${totalRentValue})`
+          : `【我的裝備租借預訂單】${orderIdText} ($${totalRentValue} 元)`,
+        contents: {
+          type: 'bubble',
+          size: 'mega',
+          header: {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#059669',
+            paddingTop: '14px',
+            paddingBottom: '14px',
+            paddingStart: '16px',
+            paddingEnd: '16px',
+            contents: [
+              {
+                type: 'text',
+                text: isEn ? 'Equipment Loan Order Submitted' : '我的裝備租借預訂單',
+                color: '#ffffff',
+                weight: 'bold',
+                size: 'md'
+              },
+              {
+                type: 'text',
+                text: isEn ? 'NTUST Mountaineering Club' : '台科登山社・裝備預約確認',
+                color: '#d1fae5',
+                size: 'xxs',
+                margin: 'xs'
+              }
+            ]
+          },
+          body: {
+            type: 'box',
+            layout: 'vertical',
+            paddingAll: '16px',
+            spacing: 'sm',
+            contents: [
+              {
+                type: 'box',
+                layout: 'baseline',
+                spacing: 'sm',
+                contents: [
+                  { type: 'text', text: isEn ? 'Order ID' : '訂單編號', color: '#64748b', size: 'xs', flex: 3 },
+                  { type: 'text', text: orderIdText, weight: 'bold', color: '#0f172a', size: 'xs', flex: 5, wrap: true }
+                ]
+              },
+              {
+                type: 'box',
+                layout: 'baseline',
+                spacing: 'sm',
+                contents: [
+                  { type: 'text', text: isEn ? 'Borrower' : '借用人', color: '#64748b', size: 'xs', flex: 3 },
+                  { type: 'text', text: borrowerText, weight: 'bold', color: '#0f172a', size: 'xs', flex: 5, wrap: true }
+                ]
+              },
+              {
+                type: 'box',
+                layout: 'baseline',
+                spacing: 'sm',
+                contents: [
+                  { type: 'text', text: isEn ? 'Pickup Date' : '預計領取', color: '#64748b', size: 'xs', flex: 3 },
+                  { type: 'text', text: form.pickupDate, color: '#0f172a', size: 'xs', flex: 5, wrap: true }
+                ]
+              },
+              {
+                type: 'box',
+                layout: 'baseline',
+                spacing: 'sm',
+                contents: [
+                  { type: 'text', text: isEn ? 'Return Date' : '預計歸還', color: '#64748b', size: 'xs', flex: 3 },
+                  { type: 'text', text: returnPeriodText, color: '#0f172a', size: 'xs', flex: 5, wrap: true }
+                ]
+              },
+              {
+                type: 'box',
+                layout: 'baseline',
+                spacing: 'sm',
+                contents: [
+                  { type: 'text', text: isEn ? 'Purpose' : '租借用途', color: '#64748b', size: 'xs', flex: 3 },
+                  { type: 'text', text: purposeDisplay, color: '#0f172a', size: 'xs', flex: 5, wrap: true }
+                ]
+              },
+              {
+                type: 'box',
+                layout: 'baseline',
+                spacing: 'sm',
+                contents: [
+                  { type: 'text', text: isEn ? 'Est. Total' : '預估總租金', color: '#64748b', size: 'xs', flex: 3 },
+                  {
+                    type: 'text',
+                    text: isEn ? `NT$ ${totalRentValue}` : `$${totalRentValue} 元`,
+                    weight: 'bold',
+                    color: '#059669',
+                    size: 'sm',
+                    flex: 5
+                  }
+                ]
+              },
+              { type: 'separator', margin: 'md', color: '#e2e8f0' },
+              {
+                type: 'box',
+                layout: 'vertical',
+                margin: 'md',
+                spacing: 'xs',
+                contents: [
+                  { type: 'text', text: isEn ? 'Reserved Items:' : '預約裝備清單：', color: '#0f172a', size: 'xs', weight: 'bold' },
+                  ...selectedCartItems.map(item => ({
+                    type: 'text',
+                    text: `• ${item.name} x ${item.quantity}`,
+                    color: '#334155',
+                    size: 'xs',
+                    wrap: true
+                  }))
+                ]
+              },
+              { type: 'separator', margin: 'md', color: '#e2e8f0' },
+              {
+                type: 'box',
+                layout: 'vertical',
+                margin: 'md',
+                spacing: 'xs',
+                contents: [
+                  { type: 'text', text: isEn ? 'Important Notes:' : '提醒事項：', color: '#0f172a', size: 'xxs', weight: 'bold' },
+                  {
+                    type: 'text',
+                    text: isEn
+                      ? '1. Officers have received your request and will prepare the gear.\n2. If fees apply, please complete payment in "Payment Center" before pickup.\n3. An officer will contact you to confirm pickup time and location.'
+                      : '1. 幹部已收到您的預約申請，將為您備齊裝備。\n2. 若有租金費用，請於領取前至「繳費申報」完成匯款並上傳憑證。\n3. 將有幹部主動聯繫您，確認領取時間以及地點。',
+                    color: '#64748b',
+                    size: 'xxs',
+                    wrap: true
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      };
 
       if (liff.isInClient()) {
         try {
-          await liff.sendMessages([{
-            type: 'text',
-            text: userMessageText
-          }]);
+          await liff.sendMessages([loanOrderFlexMessage as any]);
         } catch (liffErr) {
           console.warn('liff.sendMessages 略過:', liffErr);
         }
-        alert(t('borrow.alert.submitSuccess', '🎉 裝備租借申請已成功送出！訂單明細已同步發送至您的 LINE 聊天室與幹部群組。'));
+        alert(t('borrow.alert.submitSuccess', '裝備租借申請已成功送出！訂單明細已同步發送至您的 LINE 聊天室與幹部群組。'));
         try {
           liff.closeWindow();
         } catch (e) {
           console.warn('liff.closeWindow 略過:', e);
         }
       } else {
-        alert(t('borrow.alert.submitSuccessBrowser', '🎉 裝備租借預約成功！訂單編號：' + (result.loanId || '')));
+        alert(t('borrow.alert.submitSuccessBrowser', '裝備租借預約成功！訂單編號：' + (result.loanId || '')));
       }
     } catch (error) {
       console.error('API 請求失敗:', error);

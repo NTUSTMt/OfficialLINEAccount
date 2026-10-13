@@ -407,11 +407,13 @@ async function handleConfirmWaitlist(
   const client = getSupabaseAdminClient();
   const { data: event } = await client
     .from("events")
-    .select("title")
+    .select("title,title_en")
     .eq("id", eventId)
     .maybeSingle();
 
-  const title = event ? event.title : "活動";
+  const title = event
+    ? (prefLang === "en" ? (event.title_en || event.title || "Event") : (event.title || "活動"))
+    : (prefLang === "en" ? "Event" : "活動");
 
   const { error } = await client
     .from("event_signups")

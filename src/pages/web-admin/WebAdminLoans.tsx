@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import { fetchAllLoansFromSupabase, updateLoanStatusInSupabase } from '../../utils/supabaseClient';
+import { notifyDispatcher } from '../../utils/api';
 import type { AdminLoanItem } from '../../types/admin';
 import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
 import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
@@ -192,6 +193,18 @@ export const WebAdminLoans: React.FC = () => {
 
       if (!res.success) {
         throw new Error(res.error || '更新租借狀態失敗');
+      }
+
+      if (selectedLoan.line_user_id) {
+        notifyDispatcher('notify_loan_status_updated', {
+          loanId: selectedLoan.id,
+          userId: selectedLoan.line_user_id,
+          borrowerName: selectedLoan.name,
+          newStatus: targetStatus,
+          pickupDate: selectedLoan.start_date,
+          returnDate: selectedLoan.end_date,
+          itemsSummary: selectedLoan.items,
+        }).catch(err => console.warn('[WebAdminLoans] 裝備狀態更新推播略過:', err));
       }
 
       await logWebAuditAction(

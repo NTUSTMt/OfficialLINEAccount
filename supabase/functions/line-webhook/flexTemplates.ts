@@ -1627,6 +1627,31 @@ export function buildLoanStatusUpdatedFlex(
 ) {
   const isEn = prefLang === "en";
 
+  const rawStatus = String(params.newStatus || "").trim();
+  const statusMapEn: Record<string, string> = {
+    "待領取 To Be Collected": "To Be Collected",
+    "待領取": "To Be Collected",
+    "租借中 Borrowed": "Borrowed",
+    "租借中": "Borrowed",
+    "使用中 Using": "Using",
+    "使用中": "Using",
+    "已歸還 Returned": "Returned",
+    "已歸還": "Returned",
+    "已取消 Cancelled": "Cancelled",
+    "已取消": "Cancelled",
+    "已取消 (待退款)": "Cancelled (Refund Pending)",
+  };
+  const statusMapZh: Record<string, string> = {
+    "待領取 To Be Collected": "待領取",
+    "租借中 Borrowed": "租借中",
+    "使用中 Using": "使用中",
+    "已歸還 Returned": "已歸還",
+    "已取消 Cancelled": "已取消",
+    "已取消 (待退款)": "已取消 (待退款)",
+  };
+  const statusTextEn = statusMapEn[rawStatus] || rawStatus.replace(/^[\u4e00-\u9fa5\s（）()]+/, "").trim() || rawStatus;
+  const statusTextZh = statusMapZh[rawStatus] || rawStatus.split(" ")[0] || rawStatus;
+
   let itemsTextZh = "";
   let itemsTextEn = "";
   if (Array.isArray(params.itemsSummary)) {
@@ -1698,7 +1723,7 @@ export function buildLoanStatusUpdatedFlex(
                 layout: "horizontal",
                 contents: [
                   { type: "text", text: "Status:", size: "xs", color: "#64748B", flex: 3 },
-                  { type: "text", text: params.newStatus, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+                  { type: "text", text: statusTextEn, size: "xs", color: "#059669", weight: "bold", flex: 7 },
                 ],
               },
               {
@@ -1799,7 +1824,7 @@ export function buildLoanStatusUpdatedFlex(
               layout: "horizontal",
               contents: [
                 { type: "text", text: "最新租借狀態：", size: "xs", color: "#64748B", flex: 3 },
-                { type: "text", text: `【${params.newStatus}】`, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+                { type: "text", text: `【${statusTextZh}】`, size: "xs", color: "#059669", weight: "bold", flex: 7 },
               ],
             },
             {

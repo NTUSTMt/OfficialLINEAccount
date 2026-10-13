@@ -2,6 +2,31 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.301] - 2026-10-13
+
+### 新增：補齊裝備租借確認訊息、備取確認活動名稱與租借狀態更新中英兩版通知 (Complete Bilingual Member Notifications)
+
+- 裝備租借申請送出後之聊天室確認訊息 (`src/pages/Borrow.tsx`)：
+  - 預載社員 `preferredLanguage` 並結合 `i18n.language` 判斷語系 (`isEn`)。
+  - 將原本中英混排之純文字確認訊息全面升級為依語系獨立顯示之中英兩版 `type: 'flex'` 結構化卡片 (`loanOrderFlexMessage`)，完整呈現訂單編號、借用人與折扣身分、領取/歸還日期、租借用途、預約裝備清單、預估總租金與提醒事項。
+- 備取意願確認成功卡片之活動名稱 (`supabase/functions/line-webhook/index.ts`)：
+  - `handleConfirmWaitlist` 改為同時查詢 `events` 資料表之 `title,title_en`，當 `prefLang === 'en'` 時優先顯示 `title_en`（預設回退 `'Event'`），中文版維持顯示 `title`（預設回退 `'活動'`）。
+- 裝備租借狀態更新之狀態值顯示與電腦版後台推播 (`supabase/functions/notify-dispatcher/index.ts`, `supabase/functions/line-webhook/flexTemplates.ts`, `src/pages/web-admin/WebAdminLoans.tsx`)：
+  - `buildLoanStatusUpdatedFlex` 新增 `statusMapEn` 與 `statusMapZh` 對照與正規化邏輯，英文版卡片之 `Status:` 欄位純粹顯示英文狀態值（如 `To Be Collected`、`Borrowed`、`Returned`、`Cancelled`），中文版顯示純中文狀態值（如 `【待領取】`、`【租借中】`、`【已歸還】`、`【已取消】`）。
+  - `src/pages/web-admin/WebAdminLoans.tsx` 於 `handleSaveStatus` 狀態儲存成功後，同步呼叫 `notifyDispatcher('notify_loan_status_updated', ...)` 發送社員個人雙語 LINE 通知，與手機版幹部後台行為完全對齊。
+- 自動化測試：
+  - 擴充 `test/115_payment_flex_and_officer_avatar_fix.test.mjs` 新增第 6、7、8 項測試驗證上述三項通知雙語化與推播觸發。
+
+## [0.1.300] - 2026-10-13
+
+### 新增：社員個人繳費核銷通知 LINE Flex 卡片補齊中英兩版 (Bilingual Payment Verification Personal Flex Card)
+
+- 後端推播升級 (supabase/functions/notify-dispatcher/index.ts)：
+  - `handleNotifyPaymentConfirmed` 依據社員偏好語系 (`isEn`) 將語系旗標傳入 `buildPaymentVerifiedPersonalFlex`，並同步切換推播替代文字 (`altPersonalText`：`Payment Confirmed: ...` / `繳費核銷完成: ...`) 與預設名稱、項目文字。
+  - `buildPaymentVerifiedPersonalFlex` 完整支援中英兩版（英文版顯示 `Payment Confirmed` 標題、英文副標題、`Member:` / `Payment ID:` / `Amount:` / `Items:` / `Status:` 欄位標籤與英文底部說明；中文版顯示繁體中文標題、副標題、欄位標籤與底部說明）。
+- 自動化測試：
+  - 擴充 `test/115_payment_flex_and_officer_avatar_fix.test.mjs` 驗證 `buildPaymentVerifiedPersonalFlex` 與 `handleNotifyPaymentConfirmed` 之中英雙版本切換邏輯。
+
 ## [0.1.299] - 2026-10-12
 
 ### 修復：電腦版幹部後台 LINE 帳號登入按鈕失效與錯誤透明化 (Fix Web Admin LINE Login Button & Error Display)
