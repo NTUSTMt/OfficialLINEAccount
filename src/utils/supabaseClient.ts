@@ -976,6 +976,7 @@ export const fetchAdminEventSignupsFromSupabase = async (
         userId: String(item.userId || item.lineUserId || '').trim(),
         name: item.name || '未知報名者',
         gender: item.gender || '',
+        nationality: item.nationality || '',
         phone: item.phone || '',
         lineId: item.lineId || item.realLineId || '',
         email: item.email || '',
@@ -996,6 +997,7 @@ export const fetchAdminEventSignupsFromSupabase = async (
         reviewResult: item.reviewResult || item.status || '審核中 Checking',
         notifyStatus: item.notifyStatus || item.notification_status || '',
         payStatus: item.payStatus || '未繳費',
+        cancelReason: item.cancelReason || item.cancel_reason || '',
         remark: item.remark || item.notes || ''
       };
     });

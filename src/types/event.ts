@@ -31,6 +31,7 @@ export interface SignupApplicant {
   userId: string;
   name: string;
   gender: string;
+  nationality?: string;
   phone: string;
   lineId: string;
   email?: string;
@@ -51,6 +52,7 @@ export interface SignupApplicant {
   reviewResult: string;
   notifyStatus: string;
   payStatus: string;
+  cancelReason?: string;
   remark?: string;
 }
 

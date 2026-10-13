@@ -25,6 +25,7 @@ import { GAS_API_URL } from '../../constants/api';
 import { notifyDispatcher } from '../../utils/api';
 import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
 import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
+import { getNationalityLabel } from '../../constants/nationalities';
 import './webAdmin.css';
 
 interface EventItem {
@@ -42,6 +43,7 @@ interface EventItem {
 interface MemberInfo {
   name?: string;
   gender?: string;
+  nationality?: string;
   line_id?: string;
   email?: string;
   department?: string;
@@ -74,6 +76,7 @@ interface SignupRow {
   status: string;
   payment_status: string;
   notification_status?: string;
+  cancel_reason?: string;
   notes?: string;
   created_at: string;
   members?: MemberInfo | null;
@@ -124,6 +127,13 @@ const ALL_COLUMNS: ColumnDef[] = [
     defaultWidth: 70,
     getValue: (r) => r.members?.gender || '',
     formatText: (r) => r.members?.gender || '-',
+  },
+  {
+    key: 'nationality',
+    label: '國籍',
+    defaultWidth: 95,
+    getValue: (r) => getNationalityLabel(r.members?.nationality, 'zh'),
+    formatText: (r) => getNationalityLabel(r.members?.nationality, 'zh'),
   },
   {
     key: 'line_id',
@@ -183,8 +193,8 @@ const ALL_COLUMNS: ColumnDef[] = [
   },
   {
     key: 'id_card',
-    label: '證件號碼',
-    defaultWidth: 115,
+    label: '身分證字號 / 護照號碼',
+    defaultWidth: 165,
     getValue: (r) => r.members?.id_card || '',
     formatText: (r) => r.members?.id_card || '-',
   },
@@ -279,6 +289,13 @@ const ALL_COLUMNS: ColumnDef[] = [
     defaultWidth: 160,
     getValue: (r) => normalizeStatus(r.status),
     formatText: (r) => normalizeStatus(r.status),
+  },
+  {
+    key: 'cancel_reason',
+    label: '取消原因',
+    defaultWidth: 130,
+    getValue: (r) => r.cancel_reason || '',
+    formatText: (r) => r.cancel_reason || '-',
   },
   {
     key: 'notification_status',
@@ -569,6 +586,7 @@ export const WebAdminRoster: React.FC = () => {
           status,
           payment_status,
           notification_status,
+          cancel_reason,
           notes,
           created_at,
           members:line_user_id (
@@ -869,7 +887,9 @@ export const WebAdminRoster: React.FC = () => {
         phone.includes(searchKeyword) ||
         idCard.toLowerCase().includes(searchKeyword.toLowerCase()) ||
         studentId.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        lineId.toLowerCase().includes(searchKeyword.toLowerCase());
+        lineId.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        (m.nationality || '').toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        (s.cancel_reason || '').toLowerCase().includes(searchKeyword.toLowerCase());
 
       const normStatus = normalizeStatus(s.status);
       const matchStatus =

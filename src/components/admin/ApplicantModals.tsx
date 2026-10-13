@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { SignupApplicant } from '../../types/event';
 import { openExternalUrl, parseProofUrls } from '../../utils/applicantUtils';
+import { getNationalityLabel } from '../../constants/nationalities';
 
 interface ApplicantModalsProps {
   proofModalData: {
@@ -238,6 +239,7 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
                 <div><span style={{ color: '#64748b' }}>姓名：</span><span style={{ fontWeight: '600', color: '#0f172a' }}>{profileModalApplicant.name}</span></div>
                 <div><span style={{ color: '#64748b' }}>性別：</span><span style={{ color: '#0f172a' }}>{profileModalApplicant.gender || '未填'}</span></div>
+                <div><span style={{ color: '#64748b' }}>國籍：</span><span style={{ color: '#0f172a', fontWeight: '500' }}>{getNationalityLabel(profileModalApplicant.nationality, 'zh')}</span></div>
                 <div><span style={{ color: '#64748b' }}>身分：</span><span style={{ fontWeight: 'bold', color: ((profileModalApplicant as any).isOfficial === '是' || (profileModalApplicant as any).isOfficial === true || (profileModalApplicant as any).is_official_member === true) ? '#16a34a' : '#64748b' }}>{((profileModalApplicant as any).isOfficial === '是' || (profileModalApplicant as any).isOfficial === true || (profileModalApplicant as any).is_official_member === true) ? '正式社員' : '非社員'}</span></div>
                 <div><span style={{ color: '#64748b' }}>生日：</span><span style={{ color: '#0f172a' }}>{formatDateSlash(profileModalApplicant.birthday)}</span></div>
                 {profileModalApplicant.studentId && (
@@ -248,8 +250,14 @@ export const ApplicantModals: React.FC<ApplicantModalsProps> = ({
                 )}
                 {profileModalApplicant.idNumber && (
                   <div style={{ gridColumn: 'span 2' }}>
-                    <span style={{ color: '#64748b' }}>證件號碼：</span>
+                    <span style={{ color: '#64748b' }}>身分證字號 / 護照號碼：</span>
                     <span style={{ color: '#0f172a' }}>{profileModalApplicant.idNumber}</span>
+                  </div>
+                )}
+                {profileModalApplicant.cancelReason && (
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: '#dc2626', fontWeight: 'bold' }}>取消原因：</span>
+                    <span style={{ color: '#dc2626' }}>{profileModalApplicant.cancelReason}</span>
                   </div>
                 )}
               </div>

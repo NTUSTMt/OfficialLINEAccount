@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.301-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.302-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.301)](#7-最新版本異動紀錄-changelog-v01301)
+- [7. 最新版本異動紀錄 (Changelog v0.1.302)](#7-最新版本異動紀錄-changelog-v01302)
 
 ---
 
@@ -2645,5 +2645,21 @@ pnpm test
     - `src/pages/web-admin/WebAdminLoans.tsx` 於 `handleSaveStatus` 狀態儲存成功後，同步呼叫 `notifyDispatcher('notify_loan_status_updated', ...)` 發送社員個人雙語 LINE 通知，與手機版幹部後台行為完全對齊。
   - 自動化測試：
     - 擴充 `test/115_payment_flex_and_officer_avatar_fix.test.mjs` 新增第 6、7、8 項測試驗證上述三項通知雙語化與推播觸發。
+
+### v0.1.302 (2026-10-13)
+- 報名名冊表格擴充國籍、身分證字號/護照號碼與取消原因：
+  - 電腦版後台名冊表格升級 (`src/pages/web-admin/WebAdminRoster.tsx`)：
+    - `MemberInfo` 與 `SignupRow` 介面補齊 `nationality?: string;` 與 `cancel_reason?: string;`。
+    - `ALL_COLUMNS` 新增「國籍」欄位（使用 `getNationalityLabel` 正規化顯示繁體中文國籍名稱）與「取消原因」欄位（緊鄰審核結果欄位）。
+    - 將原「證件號碼」欄位標籤明確更新為「身分證字號 / 護照號碼」（預設欄寬適度加大以完整顯示）。
+    - `loadSignups` 查詢補充撈取 `event_signups.cancel_reason`。
+    - `filteredSignups` 關鍵字搜尋同步支援「國籍」與「取消原因」檢索。
+    - 一鍵複製名冊（TSV）自動涵蓋國籍、身分證字號/護照號碼與取消原因，大幅便利辦理入山申請與平安保險之資料複製貼上。
+  - 手機版 LIFF 報名名冊與個資彈窗同步升級 (`src/types/event.ts`, `src/utils/supabaseClient.ts`, `src/components/admin/ApplicantModals.tsx`)：
+    - `SignupApplicant` 型別介面與 `fetchAdminEventSignupsFromSupabase` 補齊 `nationality` 與 `cancelReason` 映射。
+    - `ApplicantModals.tsx` 基本資料彈窗新增「國籍」顯示，證件號碼標籤對齊更新為「身分證字號 / 護照號碼」，且若該報名者有取消原因時自動以顯眼提示列出「取消原因」。
+  - 自動化測試套件：
+    - 新增 `test/116_roster_table_fields_expansion.test.mjs` 全面驗證型別定義、欄位擴展、查詢欄位包含性、搜尋過濾與手機版彈窗呈現。
+
 
 

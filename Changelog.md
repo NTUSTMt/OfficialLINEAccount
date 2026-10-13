@@ -2,6 +2,23 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.302] - 2026-10-13
+
+### 新增：報名名冊表格擴充國籍、身分證字號/護照號碼與取消原因 (Expand Roster Table with Nationality, ID/Passport, and Cancel Reason)
+
+- 電腦版後台名冊表格升級 (`src/pages/web-admin/WebAdminRoster.tsx`)：
+  - `MemberInfo` 與 `SignupRow` 介面補齊 `nationality?: string;` 與 `cancel_reason?: string;`。
+  - `ALL_COLUMNS` 新增「國籍」欄位（使用 `getNationalityLabel` 正規化顯示繁體中文國籍名稱）與「取消原因」欄位（緊鄰審核結果欄位）。
+  - 將原「證件號碼」欄位標籤明確更新為「身分證字號 / 護照號碼」（預設欄寬適度加大以完整顯示）。
+  - `loadSignups` 查詢補充撈取 `event_signups.cancel_reason`。
+  - `filteredSignups` 關鍵字搜尋同步支援「國籍」與「取消原因」檢索。
+  - 一鍵複製名冊（TSV）自動涵蓋國籍、身分證字號/護照號碼與取消原因，大幅便利辦理入山申請與平安保險之資料複製貼上。
+- 手機版 LIFF 報名名冊與個資彈窗同步升級 (`src/types/event.ts`, `src/utils/supabaseClient.ts`, `src/components/admin/ApplicantModals.tsx`)：
+  - `SignupApplicant` 型別介面與 `fetchAdminEventSignupsFromSupabase` 補齊 `nationality` 與 `cancelReason` 映射。
+  - `ApplicantModals.tsx` 基本資料彈窗新增「國籍」顯示，證件號碼標籤對齊更新為「身分證字號 / 護照號碼」，且若該報名者有取消原因時自動以顯眼提示列出「取消原因」。
+- 自動化測試套件：
+  - 新增 `test/116_roster_table_fields_expansion.test.mjs` 全面驗證型別定義、欄位擴展、查詢欄位包含性、搜尋過濾與手機版彈窗呈現。
+
 ## [0.1.301] - 2026-10-13
 
 ### 新增：補齊裝備租借確認訊息、備取確認活動名稱與租借狀態更新中英兩版通知 (Complete Bilingual Member Notifications)
