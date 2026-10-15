@@ -71,6 +71,9 @@ function doGet(e) {
     if (action === 'create_event_sheet') {
       return _handleCreateEventSheet(e && e.parameter ? e.parameter : {});
     }
+    if (action === 'sync_event_sheet_signups' || action === 'sync_event_roster') {
+      return _handleSyncEventSheetSignups(e && e.parameter ? e.parameter : {});
+    }
     if (action === 'upload_drive_files' || action === 'upload_drive_file' || action === 'upload_image_to_drive') {
       return _handleUploadDriveFiles(e && e.parameter ? e.parameter : {});
     }
@@ -119,6 +122,9 @@ function doPost(e) {
     }
     if (action === 'create_event_sheet') {
       return _handleCreateEventSheet(json);
+    }
+    if (action === 'sync_event_sheet_signups' || action === 'sync_event_roster') {
+      return _handleSyncEventSheetSignups(json);
     }
 
     // 2. 後端專屬任務（郵件發送、試算表名冊操作等）強制校驗 x-worker-secret 密鑰
@@ -336,30 +342,155 @@ function _getOrCreateFolder(folderName) {
 function _handleCreateEventSheet(json) {
   try {
     var eventId = json.eventId || ('E' + Date.now());
-    var title = json.title || '社團活動';
+    var title = json.title || '';
+    var startDate = json.startDate || '';
 
+    // 1. 若缺少 title 或 startDate，從 Supabase 取得活動最新詳細資訊
+    var evt = _fetchSupabaseEvent(eventId);
+    if (evt) {
+      if (!title && evt.title) title = evt.title;
+      if (!startDate && evt.start_date) startDate = evt.start_date;
+    }
+    if (!title) title = '社團活動';
+
+    var rawDate = startDate || '';
+    var datePart = '';
+    if (rawDate) {
+      datePart = String(rawDate).trim().replace(/-/g, '/').split(' ')[0].split('T')[0];
+    }
+    if (!datePart) {
+      datePart = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd');
+    }
+
+    var eventName = title.trim();
+    var folderName = datePart + '_' + eventName;
+    var sheetName = folderName;
+
+    // 2. 建立活動專屬雲端資料夾
     var rootFolder = ROOT_DRIVE_FOLDER_ID ? DriveApp.getFolderById(ROOT_DRIVE_FOLDER_ID) : DriveApp.getRootFolder();
-    var eventFolder = rootFolder.createFolder('【活動】' + title + '_' + eventId);
+    var eventFolder = rootFolder.createFolder(folderName);
     eventFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    var newSs = SpreadsheetApp.create('【名冊】' + title + '_' + eventId);
-    var ssFile = DriveApp.getFileById(newSs.getId());
-    ssFile.moveTo(eventFolder);
+    // 3. 建立或複製活動專屬試算表 (優先從 SPREADSHEET_ID 或 EVENT_SHEET_TEMPLATE_ID 範本複製)
+    var templateId = SCRIPT_PROPERTIES.getProperty('SPREADSHEET_ID') ||
+                     SCRIPT_PROPERTIES.getProperty('EVENT_SHEET_TEMPLATE_ID') ||
+                     SPREADSHEET_ID || '';
+    var newSs = null;
 
-    var sheet = newSs.getActiveSheet();
-    sheet.setName('活動報名名冊');
-    sheet.appendRow([
-      '報名碼', '姓名', '審核狀態', '繳費狀態', '電話', 'LINE ID', '系所/學號',
-      '緊急聯絡人', '緊急聯絡電話', '體能證明', '登山經歷', '報名時間', '備註'
-    ]);
+    if (templateId) {
+      try {
+        var templateFile = DriveApp.getFileById(templateId.trim());
+        var copiedFile = templateFile.makeCopy(sheetName, eventFolder);
+        newSs = SpreadsheetApp.open(copiedFile);
+      } catch (tmplErr) {
+        console.warn('複製範本試算表失敗，切換為程式化動態生成:', tmplErr);
+      }
+    }
+
+    if (!newSs) {
+      newSs = SpreadsheetApp.create(sheetName);
+      var ssFile = DriveApp.getFileById(newSs.getId());
+      ssFile.moveTo(eventFolder);
+
+      var initSheet = newSs.getActiveSheet();
+      initSheet.setName('報名名冊');
+      var defaultHeaders = [
+        '系統識別碼', '專屬碼', '姓名', '性別', 'LINE ID', '聯絡信箱', '聯絡電話', '聯絡地址',
+        '生日', '證件號碼', '緊急聯絡人姓名', '緊急聯絡人電話', '緊急聯絡人聯絡地址', '緊急聯絡人關係',
+        '爬山經驗', '體能測驗', '體能證明', '是否為社員', '審核結果', '通知狀態', '繳費狀態', '備註', '想說的話', '擔任幹部意願',
+        '系所', '學號', '個人特殊病史', '身分', '加入社員意願'
+      ];
+      initSheet.appendRow(defaultHeaders);
+      var headerRange = initSheet.getRange(1, 1, 1, defaultHeaders.length);
+      headerRange.setFontWeight('bold');
+      headerRange.setBackground('#2563eb');
+      headerRange.setFontColor('#ffffff');
+      initSheet.setFrozenRows(1);
+    }
+
+    // 4. 初始化或更新 _CONFIG 工作表
+    var configSheet = newSs.getSheetByName('_CONFIG');
+    if (!configSheet) {
+      configSheet = newSs.insertSheet('_CONFIG');
+      configSheet.appendRow(['KEY', 'VALUE']);
+    }
+    _setOrUpdateConfigRow(configSheet, 'EVENT_ID', eventId);
+    _setOrUpdateConfigRow(configSheet, 'EVENT_NAME', eventName);
+    _setOrUpdateConfigRow(configSheet, 'FOLDER_ID', eventFolder.getId());
+    _setOrUpdateConfigRow(configSheet, 'CREATED_AT', new Date().toISOString());
+    _setOrUpdateConfigRow(configSheet, 'LAST_SYNCED_AT', new Date().toISOString());
+    if (SUPABASE_URL) _setOrUpdateConfigRow(configSheet, 'SUPABASE_URL', SUPABASE_URL);
+    if (SUPABASE_SERVICE_ROLE_KEY) _setOrUpdateConfigRow(configSheet, 'SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY);
+    configSheet.hideSheet();
+
+    // 5. 匯入既有報名名冊資料至「報名名冊」工作表 (動態對齊表頭)
+    var signupSheet = newSs.getSheetByName('報名名冊') || newSs.getSheetByName('活動報名名冊') || newSs.getSheets()[0];
+    var importedCount = 0;
+    if (signupSheet) {
+      importedCount = _importExistingSignupsToSheet(signupSheet, eventId, json.signups, false);
+    }
+
+    // 6. 將試算表與資料夾連結回寫至 Supabase events 表
+    _updateSupabaseEventDriveUrls(eventId, eventFolder.getUrl(), newSs.getUrl(), newSs.getId());
 
     return _workerSuccess({
       spreadsheet_id: newSs.getId(),
       spreadsheet_url: newSs.getUrl(),
-      drive_folder_url: eventFolder.getUrl()
+      drive_folder_url: eventFolder.getUrl(),
+      spreadsheetId: newSs.getId(),
+      spreadsheetUrl: newSs.getUrl(),
+      driveFolderUrl: eventFolder.getUrl(),
+      synced_count: importedCount,
+      message: '成功建立活動專屬資料夾與試算表'
     });
   } catch (err) {
     return _workerError('Create event sheet failed: ' + err.toString(), 500);
+  }
+}
+
+/**
+ * 全量同步活動報名名冊至 Google 試算表 (支援前端直接傳入完整 23 筆名冊或自 Supabase 備援讀取)
+ */
+function _handleSyncEventSheetSignups(json) {
+  try {
+    var eventId = json.eventId || json.event_id || '';
+    var spreadsheetId = json.spreadsheetId || json.spreadsheet_id || '';
+
+    if (!spreadsheetId && eventId) {
+      var evt = _fetchSupabaseEvent(eventId);
+      if (evt && evt.spreadsheet_id) {
+        spreadsheetId = evt.spreadsheet_id;
+      }
+    }
+
+    if (!spreadsheetId) {
+      return _workerError('Missing spreadsheetId or eventId', 400);
+    }
+
+    var ss = SpreadsheetApp.openById(spreadsheetId.trim());
+    var sheet = ss.getSheetByName('報名名冊') || ss.getSheetByName('活動報名名冊') || ss.getSheets()[0];
+    if (!sheet) {
+      return _workerError('Sheet not found in spreadsheet', 404);
+    }
+
+    var signups = Array.isArray(json.signups) ? json.signups : (eventId ? _fetchSupabaseSignups(eventId) : []);
+    var importedCount = _importExistingSignupsToSheet(sheet, eventId, signups, true);
+
+    var configSheet = ss.getSheetByName('_CONFIG');
+    if (configSheet) {
+      _setOrUpdateConfigRow(configSheet, 'LAST_SYNCED_AT', new Date().toISOString());
+    }
+
+    return _workerSuccess({
+      spreadsheet_id: spreadsheetId,
+      spreadsheet_url: ss.getUrl(),
+      spreadsheetId: spreadsheetId,
+      spreadsheetUrl: ss.getUrl(),
+      synced_count: importedCount,
+      message: '成功全量同步 ' + importedCount + ' 筆報名名冊至試算表'
+    });
+  } catch (err) {
+    return _workerError('Sync event sheet signups failed: ' + err.toString(), 500);
   }
 }
 
@@ -453,4 +584,233 @@ function _fetchSupabaseMember(lineUserId) {
     console.warn('fetchSupabaseMember failed:', e);
   }
   return {};
+}
+
+function _setOrUpdateConfigRow(configSheet, key, value) {
+  if (!configSheet) return;
+  var data = configSheet.getDataRange().getValues();
+  for (var r = 0; r < data.length; r++) {
+    if (String(data[r][0]).trim().toUpperCase() === String(key).trim().toUpperCase()) {
+      configSheet.getRange(r + 1, 2).setValue(String(value));
+      return;
+    }
+  }
+  configSheet.appendRow([key, String(value)]);
+}
+
+function _fetchSupabaseEvent(eventId) {
+  if (!eventId || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  try {
+    var url = SUPABASE_URL + '/rest/v1/events?id=eq.' + encodeURIComponent(eventId) + '&select=*';
+    var res = UrlFetchApp.fetch(url, {
+      method: 'GET',
+      headers: {
+        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY
+      },
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() === 200) {
+      var arr = JSON.parse(res.getContentText());
+      if (Array.isArray(arr) && arr.length > 0) return arr[0];
+    }
+  } catch (e) {
+    console.warn('fetchSupabaseEvent failed:', e);
+  }
+  return null;
+}
+
+function _fetchSupabaseSignups(eventId) {
+  if (!eventId || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
+  try {
+    var url = SUPABASE_URL + '/rest/v1/event_signups?event_id=eq.' + encodeURIComponent(eventId) + '&select=*&order=created_at.asc';
+    var res = UrlFetchApp.fetch(url, {
+      method: 'GET',
+      headers: {
+        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY
+      },
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() === 200) {
+      var arr = JSON.parse(res.getContentText());
+      if (Array.isArray(arr)) return arr;
+    }
+  } catch (e) {
+    console.warn('fetchSupabaseSignups failed:', e);
+  }
+  return [];
+}
+
+function _fetchSupabaseMembers(lineUserIds) {
+  var map = {};
+  if (!Array.isArray(lineUserIds) || lineUserIds.length === 0 || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return map;
+  }
+  try {
+    var inFilter = 'in.(' + lineUserIds.map(encodeURIComponent).join(',') + ')';
+    var url = SUPABASE_URL + '/rest/v1/members?line_user_id=' + inFilter + '&select=*';
+    var res = UrlFetchApp.fetch(url, {
+      method: 'GET',
+      headers: {
+        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY
+      },
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() === 200) {
+      var arr = JSON.parse(res.getContentText());
+      if (Array.isArray(arr)) {
+        arr.forEach(function (m) {
+          if (m.line_user_id) map[m.line_user_id] = m;
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('fetchSupabaseMembers failed:', e);
+  }
+  return map;
+}
+
+function _updateSupabaseEventDriveUrls(eventId, folderUrl, spreadsheetUrl, spreadsheetId) {
+  if (!eventId || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+  try {
+    var payload = {
+      updated_at: new Date().toISOString()
+    };
+    if (folderUrl) payload.drive_folder_url = folderUrl;
+    if (spreadsheetUrl) payload.spreadsheet_url = spreadsheetUrl;
+    if (spreadsheetId) payload.spreadsheet_id = spreadsheetId;
+
+    var url = SUPABASE_URL + '/rest/v1/events?id=eq.' + encodeURIComponent(eventId);
+    UrlFetchApp.fetch(url, {
+      method: 'PATCH',
+      contentType: 'application/json',
+      headers: {
+        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY,
+        'Prefer': 'return=minimal'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+  } catch (e) {
+    console.warn('updateSupabaseEventDriveUrls failed:', e);
+  }
+}
+
+function _importExistingSignupsToSheet(sheet, eventId, signupsList, clearExisting) {
+  try {
+    var signups = Array.isArray(signupsList) ? signupsList : _fetchSupabaseSignups(eventId);
+    if (!Array.isArray(signups) || signups.length === 0) return 0;
+
+    // 若 signups 項目本身未附帶 members 物件，才需要從 Supabase 補查 members
+    var needFetchMembers = false;
+    for (var k = 0; k < signups.length; k++) {
+      if (!signups[k].members && signups[k].line_user_id) {
+        needFetchMembers = true;
+        break;
+      }
+    }
+
+    var memberMap = {};
+    if (needFetchMembers) {
+      var userIds = signups.map(function (s) { return s.line_user_id; }).filter(Boolean);
+      memberMap = _fetchSupabaseMembers(userIds);
+    }
+
+    var sData = sheet.getDataRange().getValues();
+    var headers = sData.length > 0 ? sData[0] : [];
+    if (headers.length === 0) return 0;
+
+    // 取得現有名單的專屬碼 (防止重複追加，若 clearExisting 為 true 則直接略過過濾)
+    var codeCol = _findColIdx(headers, ['專屬碼', '報名專屬碼', '報名碼', '編號', 'id']);
+    var existingCodes = {};
+    if (!clearExisting && codeCol > -1) {
+      for (var r = 1; r < sData.length; r++) {
+        var c = String(sData[r][codeCol]).trim();
+        if (c) existingCodes[c] = true;
+      }
+    }
+
+    var rowsToAppend = [];
+    for (var i = 0; i < signups.length; i++) {
+      var s = signups[i];
+      if (!clearExisting && s.id && existingCodes[s.id]) continue;
+      var m = s.members || memberMap[s.line_user_id] || {};
+
+      var proofUrlsStr = '';
+      if (Array.isArray(m.proof_urls)) {
+        proofUrlsStr = m.proof_urls.join(', ');
+      } else if (m.proof_urls) {
+        proofUrlsStr = String(m.proof_urls);
+      }
+
+      var row = new Array(headers.length).fill('');
+      for (var c = 0; c < headers.length; c++) {
+        var h = String(headers[c]).trim();
+        if (_matchHeader(h, ['序號', '項次', 'no.', 'no'])) row[c] = i + 1;
+        else if (_matchHeader(h, ['系統識別碼', 'line_user_id', 'userid'])) row[c] = s.line_user_id || '';
+        else if (_matchHeader(h, ['專屬碼', '報名專屬碼', '報名碼', '編號'])) row[c] = s.id || '';
+        else if (_matchHeader(h, ['姓名', 'name'])) row[c] = m.name || s.name || '';
+        else if (_matchHeader(h, ['性別', 'gender'])) row[c] = m.gender || '';
+        else if (_matchHeader(h, ['LINE ID', 'line_id', 'lineid'])) row[c] = m.line_id || s.line_id || '';
+        else if (_matchHeader(h, ['聯絡信箱', 'email', '電子郵件', '信箱'])) row[c] = m.email || '';
+        else if (_matchHeader(h, ['聯絡電話', '電話', '手機電話', '手機', 'phone'])) row[c] = m.phone ? ("'" + String(m.phone)) : '';
+        else if (_matchHeader(h, ['聯絡地址', '地址', 'address'])) row[c] = m.address || '';
+        else if (_matchHeader(h, ['生日', '出生年月日', 'birthday'])) row[c] = m.birthday ? String(m.birthday).replace(/-/g, '/').slice(0, 10) : '';
+        else if (_matchHeader(h, ['證件號碼', '身分證字號', '身分證', 'id_card'])) row[c] = m.id_card ? ("'" + String(m.id_card)) : (m.id_number ? ("'" + String(m.id_number)) : '');
+        else if (_matchHeader(h, ['緊急聯絡人姓名', '緊急聯絡人', 'emer_name'])) row[c] = m.emergency_contact_name || '';
+        else if (_matchHeader(h, ['緊急聯絡人電話', '緊急聯絡電話', 'emer_phone'])) row[c] = m.emergency_contact_phone ? ("'" + String(m.emergency_contact_phone)) : '';
+        else if (_matchHeader(h, ['緊急聯絡人聯絡地址', '緊急聯絡人地址', 'emer_address'])) row[c] = m.emergency_contact_address || '';
+        else if (_matchHeader(h, ['緊急聯絡人關係', '關係', 'emer_rel'])) row[c] = m.emergency_contact_rel || m.emergency_contact_relationship || '';
+        else if (_matchHeader(h, ['爬山經驗', '登山經驗', '登山經歷', '經驗', 'outdoor_experience'])) row[c] = m.outdoor_experience || m.hiking_experience || '';
+        else if (_matchHeader(h, ['體能測驗', '體能自評', '體能狀況', 'fitness_desc'])) row[c] = m.fitness_desc || m.fitness_test || '';
+        else if (_matchHeader(h, ['體能證明', '證明文件', 'fitness_proof'])) row[c] = proofUrlsStr || m.fitness_proof_url || '';
+        else if (_matchHeader(h, ['是否為社員', '社員身分', '社員'])) row[c] = m.is_official_member ? '是' : (s.is_official_member_snapshot ? '是' : '否');
+        else if (_matchHeader(h, ['審核結果', '審核狀態', '狀態', 'status'])) row[c] = s.status || '審核中 Checking';
+        else if (_matchHeader(h, ['通知狀態', '錄取通知', 'notify_status'])) row[c] = s.notification_status || '未通知';
+        else if (_matchHeader(h, ['繳費狀態', '繳費', 'payment_status'])) row[c] = s.payment_status || '未繳費 Unpaid';
+        else if (_matchHeader(h, ['備註', '幹部備註', 'notes'])) row[c] = s.notes || '';
+        else if (_matchHeader(h, ['想說的話', '給幹部的話', 'want_to_say'])) row[c] = m.want_to_say || '';
+        else if (_matchHeader(h, ['擔任幹部意願', '幹部意願', 'officer_intent'])) row[c] = (m.officer_intent && (String(m.officer_intent).indexOf('意願') > -1 || m.officer_intent === '我有意願成為社團幹部' || m.officer_intent === '是' || m.officer_intent === true)) ? '是' : '否';
+        else if (_matchHeader(h, ['系所', '科系', '系級', 'department'])) row[c] = m.department || '';
+        else if (_matchHeader(h, ['學號', 'student_id'])) row[c] = m.student_id ? ("'" + String(m.student_id)) : '';
+        else if (_matchHeader(h, ['個人特殊病史', '特殊病史', '病史', 'medical_history'])) row[c] = m.medical_history || '';
+        else if (_matchHeader(h, ['身分', '身分狀態', '校內身分', 'identity_status'])) row[c] = m.identity_status || '';
+        else if (_matchHeader(h, ['加入社員意願', '入社意願', 'join_membership_intent'])) row[c] = (m.join_membership_intent && (String(m.join_membership_intent).indexOf('意願') > -1 || m.join_membership_intent === '我有意願成為社員' || m.join_membership_intent === '是' || m.join_membership_intent === true)) ? '是' : '否';
+      }
+      rowsToAppend.push(row);
+    }
+
+    if (rowsToAppend.length > 0) {
+      if (clearExisting && sheet.getLastRow() > 1) {
+        sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getMaxColumns()).clearContent();
+      }
+      var startRow = clearExisting ? 2 : (sheet.getLastRow() + 1);
+      sheet.getRange(startRow, 1, rowsToAppend.length, headers.length).setValues(rowsToAppend);
+      return rowsToAppend.length;
+    }
+    return 0;
+  } catch (err) {
+    console.warn('匯入既有名冊資料失敗:', err);
+    return 0;
+  }
+}
+
+function _matchHeader(header, candidates) {
+  var h = String(header).trim().toLowerCase();
+  for (var i = 0; i < candidates.length; i++) {
+    if (h === candidates[i].toLowerCase() || h.indexOf(candidates[i].toLowerCase()) > -1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function _findColIdx(headers, candidates) {
+  for (var i = 0; i < headers.length; i++) {
+    if (_matchHeader(headers[i], candidates)) return i;
+  }
+  return -1;
 }

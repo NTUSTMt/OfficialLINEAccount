@@ -7029,9 +7029,11 @@ function _createEventDriveFolderAndSheet(payload, eventId) {
     var folderUrl = folder.getUrl();
     var folderId = folder.getId();
 
-    // 2. 建立活動專屬報名試算表 (優先從 EVENT_SHEET_TEMPLATE_ID 範本自動複製)
-    var sheetName = folderName + "_報名名冊";
-    var templateId = PropertiesService.getScriptProperties().getProperty("EVENT_SHEET_TEMPLATE_ID");
+    // 2. 建立活動專屬報名試算表 (優先從 EVENT_SHEET_TEMPLATE_ID 或 SPREADSHEET_ID 範本自動複製)
+    var sheetName = folderName;
+    var templateId = PropertiesService.getScriptProperties().getProperty("EVENT_SHEET_TEMPLATE_ID") ||
+                     PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID") ||
+                     (typeof SPREADSHEET_ID !== "undefined" ? SPREADSHEET_ID : "");
     var newSS = null;
     var ssId = "";
     var ssUrl = "";
@@ -8452,6 +8454,8 @@ function _handleCreateEventSheet(json) {
 
     // 5. 將試算表與資料夾連結回寫至 Supabase events 資料表，並記錄同步時間
     _syncEventDriveUrlsToSupabase(eventId, folderUrl, ssUrl, ssId);
+    var eventSSForConfig = SpreadsheetApp.openById(ssId);
+    var configSheet = eventSSForConfig ? eventSSForConfig.getSheetByName("_CONFIG") : null;
     if (configSheet) {
       _setOrUpdateConfigRow(configSheet, "LAST_SYNCED_AT", new Date().toISOString());
     }

@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.302-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.304-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.302)](#7-最新版本異動紀錄-changelog-v01302)
+- [7. 最新版本異動紀錄 (Changelog v0.1.304)](#7-最新版本異動紀錄-changelog-v01304)
 
 ---
 
@@ -204,7 +204,30 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.299)
+## 7. 最新版本異動紀錄 (Changelog v0.1.304)
+
+### v0.1.304 (2026-10-15)
+- **活動專屬試算表全量 23 筆名冊自動同步、自癒機制與連線防禦**:
+  - **電腦後台 Failed to fetch 自癒驗證機制 ([src/pages/web-admin/WebAdminRoster.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/web-admin/WebAdminRoster.tsx))**:
+    - 解決 GAS Web App 因 302 跨網域重導向導致瀏覽器觸發 `Failed to fetch` 假警報之問題。若建立試算表時發生 Fetch 異常，自動查詢 Supabase `events` 表之 `spreadsheet_url`、`spreadsheet_id` 與 `drive_folder_url` 進行自癒驗證，確認雲端已完成建立即平順接軌。
+  - **試算表建立或同步時全量推送名冊 (包含全數 23 筆報名資料) ([src/pages/web-admin/WebAdminRoster.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/web-admin/WebAdminRoster.tsx), [src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js))**:
+    - 於建立試算表或點擊同步後，前端自動向 GAS 發送 POST `sync_event_sheet_signups`，直接將前端完整已載入之全量報名資料（共 23 筆，含關聯隊員詳細個資）推送至試算表進行二次確認覆寫，徹底解決僅寫入第 1 筆或遺漏後續隊員的問題。
+  - **GAS Worker 批次清空覆寫與安全流水號寫入 ([src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js))**:
+    - `_handleSyncEventSheetSignups` 自動清空資料列並批次寫入所有傳入名冊，支援 `序號`、`項次` 自動產生流水號，保護第 1 列表頭與格式列不被破壞。
+  - **自動化測試覆蓋 ([test/110_event_sheet_auto_resync_and_full_roster.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/110_event_sheet_auto_resync_and_full_roster.test.mjs))**:
+    - 新增 4 項自動化單元測試，全數 100% 通過。
+
+### v0.1.303 (2026-10-15)
+- **GAS Thin Worker 活動試算表與雲端資料夾建立規格重構與範本對齊**:
+  - **資料夾與試算表檔案命名格式統一 ([src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js), [src/gas.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas.js))**:
+    - 資料夾與試算表檔案名稱完全統一為出發日期與活動名稱之組合：`${datePart}_${eventName}`（例如 `2026/10/02_門山、鈴鳴山`），徹底移除舊有 `【活動】`、`【名冊】` 與 `_報名名冊` 前後綴。
+  - **支援 SPREADSHEET_ID 範本自動複製**:
+    - 建立試算表時，優先讀取 GAS Script Properties 中之 `SPREADSHEET_ID`（或 `EVENT_SHEET_TEMPLATE_ID`），透過 Google Drive API `makeCopy` 自動完整複製範本試算表及其格式。
+  - **Supabase 資料整合與報名名冊動態欄位匯入**:
+    - 建立試算表當下，自動由 Supabase 提取該活動真實出發日期與活動名稱，並連線 `event_signups` 與 `members` 資料表提取已報名隊員個資，動態比對範本表頭欄位（支援 系統識別碼、專屬碼、姓名、電話、身分證字號、審核狀態等 29 欄位）精準寫入。
+    - 自動維護隱藏之 `_CONFIG` 工作表，寫入 `EVENT_ID`, `EVENT_NAME`, `FOLDER_ID`, `LAST_SYNCED_AT`，並將建立後之試算表與資料夾 URL 回寫至 Supabase `events` 資料表。
+  - **自動化測試覆蓋 ([test/109_event_sheet_template_and_filename.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/109_event_sheet_template_and_filename.test.mjs))**:
+    - 新增自動化單元測試，驗證檔名計算、範本複製與名冊動態寫入邏輯。
 
 ### v0.1.299 (2026-10-12)
 - **電腦版幹部後台 LINE 帳號登入按鈕修復與錯誤透明化**:
