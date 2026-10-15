@@ -5,12 +5,10 @@ import path from 'node:path';
 
 describe('Payment Verification Exact Item Matching & Multi-Event Isolation', () => {
   const verifyRpcPath = path.resolve('supabase/verify_payment_rpc.sql');
-  const gasPath = path.resolve('src/gas.js');
-  const gasModuleWebhookPath = path.resolve('gas_modules/02_LineBot_Webhook.js');
+  const notifyDispatcherPath = path.resolve('supabase/functions/notify-dispatcher/index.ts');
 
   const verifyRpcContent = fs.readFileSync(verifyRpcPath, 'utf-8');
-  const gasContent = fs.readFileSync(gasPath, 'utf-8');
-  const gasWebhookContent = fs.readFileSync(gasModuleWebhookPath, 'utf-8');
+  const notifyDispatcherContent = fs.readFileSync(notifyDispatcherPath, 'utf-8');
 
   it('1. submit_payment_rpc 必須將 selected_ids 欄位寫入 payments 資料表', () => {
     assert.ok(
@@ -46,18 +44,14 @@ describe('Payment Verification Exact Item Matching & Multi-Event Isolation', () 
     );
   });
 
-  it('3. GAS _processPaymentVerification 必須依據 selected_ids 解析活動 ID 逐一精準更新', () => {
+  it('3. notify-dispatcher 必須支援 verifyToken 憑證核驗與單鍵核銷連結', () => {
     assert.ok(
-      gasContent.includes('var selIds = payment.selected_ids || [];'),
-      'gas.js 必須讀取 payment.selected_ids'
+      notifyDispatcherContent.includes('verifyToken'),
+      'notify-dispatcher 必須讀取與處理 verifyToken'
     );
     assert.ok(
-      gasContent.includes('event_id: "eq." + sEvtId'),
-      'gas.js 必須精確指定 event_id = sEvtId 進行查詢與更新'
-    );
-    assert.ok(
-      gasWebhookContent.includes('event_id: "eq." + sEvtId'),
-      'gas_modules/02_LineBot_Webhook.js 必須精確指定 event_id = sEvtId'
+      notifyDispatcherContent.includes('confirm-payment'),
+      'notify-dispatcher 必須包含 confirm-payment 單鍵核銷連結'
     );
   });
 

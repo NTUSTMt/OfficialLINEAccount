@@ -1075,8 +1075,9 @@ export const WebAdminRoster: React.FC = () => {
           const syncResult = await syncRes.json();
           if (syncResult && syncResult.status !== 'success') {
             console.warn('[WebAdminRoster] sync_event_sheet_signups returned non-success:', syncResult.message);
+            alert(`[試算表名冊同步警告]: ${syncResult.message || '名冊同步未完成'}`);
           }
-        } catch (syncErr) {
+        } catch (syncErr: any) {
           console.warn('[WebAdminRoster] sync_event_sheet_signups POST failed:', syncErr);
         }
       }

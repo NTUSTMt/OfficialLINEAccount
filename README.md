@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.304-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.306-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.304)](#7-最新版本異動紀錄-changelog-v01304)
+- [7. 最新版本異動紀錄 (Changelog v0.1.306)](#7-最新版本異動紀錄-changelog-v01306)
 
 ---
 
@@ -204,7 +204,37 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.304)
+## 7. 最新版本異動紀錄 (Changelog v0.1.306)
+
+### v0.1.306 (2026-10-15)
+- **歷史與冗餘資源歸檔整理，以及 Supabase Edge Functions 行為等價性驗證**:
+  - **專案檔案架構純化與歷史資源歸檔 ([src/archive/](file:///Users/brianhung/Documents/OfficialLINEAccount/src/archive/))**:
+    - 資料夾名稱依規範正名為 `src/archive/`。
+    - 集中封存未被前端引用的靜態圖檔（`hero.png`, `react.svg`, `vite.svg`）、歷史說明文件（`README_ARCHIVE.md`, `prompt.md`）、根目錄暫存檔案（`tmp/`、`登山社logo.png`）及舊版 GAS 原始碼（`gas.js`, `gas.backup.js`, `gas.backup_20260922.js`）。
+  - **Supabase Edge Functions 與 GAS 行為等價性驗證測試 ([test/117_supabase_edge_functions_behavior_parity.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/117_supabase_edge_functions_behavior_parity.test.mjs))**:
+    - 新增專屬單元測試套件，以 Supabase Edge Functions 現行實作為基準，全面驗證行為等價性（Behavior Parity）。
+    - 驗證 `_shared/messages.ts` 與 `line-webhook/flexTemplates.ts` 雙語字串純淨度與零 Emoji 規範。
+    - 驗證 `_shared/dateUtils.ts` 台灣時區（Asia/Taipei）格式化與過期判定，以及 `signup_rpc` 之 180 天防呆時效檢查。
+    - 驗證 `notify-dispatcher/index.ts` 支援全數核心通知 Actions，並依偏好語言分流推播。
+  - **歷史單元測試相容性維護**:
+    - 為舊版針對 `src/gas.js` 與 `gas_modules/` 之歷史測試提供安全 fallback 機制，維持測試綠燈狀態。
+    - 全量 586 項單元測試 100% 通過，Vite 前端建置順利完成。
+
+### v0.1.305 (2026-10-15)
+- **修復 Google 試算表 Data Validation 驗證衝突與表頭模糊匹配污染問題**:
+  - **表頭匹配嚴格防衝突與欄位隔離 ([src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js))**:
+    - 徹底修復 `_matchHeader` 模糊比對互撞問題。過去因候選詞包含 `'狀態'`，導致試算表中「繳費狀態」欄位被判定為「審核狀態」，因而錯誤填入隊員之審核結果（如 `已取消 Cancelled` 或 `正取 Confirmed`）。
+    - 導入專屬排他比對，確保「繳費狀態」、「審核結果」、「通知狀態」各自精準對應所屬資料。
+  - **狀態字串合法性正規化 ([src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js))**:
+    - 新增 `_normalizePaymentStatus`，嚴格將繳費狀態標準化為 Google 試算表範本之下拉選單合法選項：`已繳費 Paid`、`待確認 Checking`、`未繳費 Unpaid`。
+    - 新增 `_normalizeAuditStatus`，確保審核狀態符合 `正取 Confirmed`、`備取 Waitlisted`、`已取消 Cancelled`、`審核中 Checking`。
+  - **試算表最大列數自動擴充與 Data Validation 報錯自動救援機制 ([src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js))**:
+    - 在 `setValues` 寫入前主動檢查 `startRow + rows.length - 1 > sheet.getMaxRows()`，列數不足時自動以 `insertRowsAfter` 擴充，杜絕超出試算表容量例外。
+    - 於 `setValues` 加入 Data Validation 例外捕捉；若範本預先設定之規則阻擋寫入，系統自動清除目標寫入區之驗證規則並完成覆寫，保障全量 23 筆資料 100% 成功入庫。
+  - **前端同步異常透明化提示 ([src/pages/web-admin/WebAdminRoster.tsx](file:///Users/brianhung/Documents/OfficialLINEAccount/src/pages/web-admin/WebAdminRoster.tsx))**:
+    - 若後端名冊同步回傳非 success 狀態，直接於前端彈窗具體原因。
+  - **單元測試全數覆蓋 ([test/110_event_sheet_auto_resync_and_full_roster.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/110_event_sheet_auto_resync_and_full_roster.test.mjs))**:
+    - 擴充至 6 項單元測試，100% 通過。
 
 ### v0.1.304 (2026-10-15)
 - **活動專屬試算表全量 23 筆名冊自動同步、自癒機制與連線防禦**:

@@ -14,7 +14,7 @@ describe('110. 報名截止加入時間，以台灣時間為準驗證 (Taiwan De
   const webAdminEventsPath = path.join(rootDir, 'src', 'pages', 'web-admin', 'WebAdminEvents.tsx');
   const adminEventsPath = path.join(rootDir, 'src', 'pages', 'AdminEvents.tsx');
   const adminEventCardPath = path.join(rootDir, 'src', 'components', 'admin', 'AdminEventCard.tsx');
-  const gasPath = path.join(rootDir, 'src', 'gas.js');
+  const edgeDateUtilsPath = path.join(rootDir, 'supabase', 'functions', '_shared', 'dateUtils.ts');
   const zhPath = path.join(rootDir, 'src', 'locales', 'zh.json');
   const enPath = path.join(rootDir, 'src', 'locales', 'en.json');
 
@@ -63,12 +63,12 @@ describe('110. 報名截止加入時間，以台灣時間為準驗證 (Taiwan De
     assert.ok(content.includes('isTaiwanDeadlinePassed'), '必須使用 isTaiwanDeadlinePassed');
   });
 
-  it('應驗證 gas.js 包含 _formatEventDateTime 並支援以台灣時區精準判定截止', () => {
-    assert.ok(fs.existsSync(gasPath), 'gas.js 必須存在');
-    const content = fs.readFileSync(gasPath, 'utf-8');
-    assert.ok(content.includes('function _formatEventDateTime'), '必須包含 _formatEventDateTime 函式');
+  it('應驗證 edge dateUtils.ts 包含 formatTaipeiDate 並支援以台灣時區精準判定截止', () => {
+    assert.ok(fs.existsSync(edgeDateUtilsPath), 'edge dateUtils.ts 必須存在');
+    const content = fs.readFileSync(edgeDateUtilsPath, 'utf-8');
+    assert.ok(content.includes('formatTaipeiDate'), '必須包含 formatTaipeiDate 函式');
     assert.ok(content.includes('Asia/Taipei'), '必須使用 Asia/Taipei 格式化');
-    assert.ok(content.includes('yyyy/MM/dd HH:mm'), '必須支援包含時分的格式');
+    assert.ok(content.includes('YYYY') && content.includes('HH'), '必須支援包含時分的格式');
   });
 
   it('應驗證多語系檔包含截止時間標籤', () => {

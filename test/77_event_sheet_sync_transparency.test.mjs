@@ -5,9 +5,11 @@ import path from 'node:path';
 
 describe('77. 活動專屬試算表明冊同步透明度強化、智慧分頁與 Toast 通知測試 (v0.1.176)', () => {
   const rootDir = process.cwd();
+  const gasPath = fs.existsSync(path.join(rootDir, 'src', 'gas.js'))
+    ? path.join(rootDir, 'src', 'gas.js')
+    : path.join(rootDir, 'src', 'archive', 'gas.js');
 
   it('1. gas.js 必須實作 _findEventSignupSheet 且具備 _CONFIG 排除邏輯', () => {
-    const gasPath = path.join(rootDir, 'src', 'gas.js');
     const gasContent = fs.readFileSync(gasPath, 'utf8');
 
     assert.ok(
@@ -22,7 +24,6 @@ describe('77. 活動專屬試算表明冊同步透明度強化、智慧分頁與
   });
 
   it('2. _backfillEventSpreadsheetMemberInfo 必須具備安全欄位擴展與結構化回傳狀態物件', () => {
-    const gasPath = path.join(rootDir, 'src', 'gas.js');
     const gasContent = fs.readFileSync(gasPath, 'utf8');
 
     assert.ok(
@@ -45,7 +46,6 @@ describe('77. 活動專屬試算表明冊同步透明度強化、智慧分頁與
   });
 
   it('3. _handleCreateEventSheet 必須透傳回補失敗錯誤並回傳具體同步狀態文案', () => {
-    const gasPath = path.join(rootDir, 'src', 'gas.js');
     const gasContent = fs.readFileSync(gasPath, 'utf8');
 
     assert.ok(
@@ -87,7 +87,6 @@ describe('77. 活動專屬試算表明冊同步透明度強化、智慧分頁與
   });
 
   it('6. 必須支援 GET 模式同步試算表以根絕 iOS WebKit 302 POST 重導向之 Load failed 異常', () => {
-    const gasPath = path.join(rootDir, 'src', 'gas.js');
     const gasContent = fs.readFileSync(gasPath, 'utf8');
 
     assert.ok(
@@ -106,7 +105,6 @@ describe('77. 活動專屬試算表明冊同步透明度強化、智慧分頁與
   });
 
   it('7. 必須使用動態表頭定位 (Dynamic Header Mapping) 回補是否為社員、審核結果、通知狀態、繳費狀態等所有欄位', () => {
-    const gasPath = path.join(rootDir, 'src', 'gas.js');
     const gasContent = fs.readFileSync(gasPath, 'utf8');
 
     assert.ok(

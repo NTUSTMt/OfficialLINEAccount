@@ -29,10 +29,10 @@ describe('Unified Event ID and Activities Filter Unit Tests', () => {
   });
 
   it('should ensure GAS _handleSaveEvent uses E{yyMM}-{seq} format matching Supabase', () => {
-    const gasContent = fs.readFileSync(
-      path.join(rootDir, 'src/gas.js'),
-      'utf8'
-    );
+    const gasPath = fs.existsSync(path.join(rootDir, 'src/gas.js'))
+      ? path.join(rootDir, 'src/gas.js')
+      : path.join(rootDir, 'src/archive/gas.js');
+    const gasContent = fs.readFileSync(gasPath, 'utf8');
 
     assert.ok(
       gasContent.includes('Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "GMT+8", "yyMM")'),

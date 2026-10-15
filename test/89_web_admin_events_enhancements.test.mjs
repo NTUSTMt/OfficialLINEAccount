@@ -7,8 +7,8 @@ describe('89. WebAdminEvents 活動管理五大優化功能驗證', () => {
   const eventsFilePath = path.resolve('src/pages/web-admin/WebAdminEvents.tsx');
   const eventsContent = fs.readFileSync(eventsFilePath, 'utf8');
 
-  const gasFilePath = path.resolve('src/gas.js');
-  const gasContent = fs.readFileSync(gasFilePath, 'utf8');
+  const notifyDispatcherPath = path.resolve('supabase/functions/notify-dispatcher/index.ts');
+  const notifyDispatcherContent = fs.readFileSync(notifyDispatcherPath, 'utf8');
 
   it('1. 文案更名：發布新活動全面改為新增活動', () => {
     assert.ok(
@@ -142,18 +142,18 @@ describe('89. WebAdminEvents 活動管理五大優化功能驗證', () => {
     assert.ok(notifyBoxIdx > coverPhotoIdx, '推播勾選框必須位於活動封面照片下方');
   });
 
-  it('6. GAS 後端支援 notify_officer_event 路由與推播實作', () => {
+  it('6. 後端 notify-dispatcher 支援 notify_officer_event 路由與推播實作', () => {
     assert.ok(
-      gasContent.includes('action === "notify_officer_event"'),
-      'GAS 後端必須支援 notify_officer_event action'
+      notifyDispatcherContent.includes('notify_officer_event'),
+      'notify-dispatcher 後端必須支援 notify_officer_event action'
     );
     assert.ok(
-      gasContent.includes('function _handleNotifyOfficerEvent'),
-      'GAS 後端必須實作 _handleNotifyOfficerEvent 處理常式'
+      notifyDispatcherContent.includes('handleNotifyOfficerEvent'),
+      'notify-dispatcher 後端必須實作 handleNotifyOfficerEvent 處理常式'
     );
     assert.ok(
-      gasContent.includes('pushAdminMessage(groupMsg)'),
-      '_handleNotifyOfficerEvent 必須調用 pushAdminMessage 推播至幹部群組'
+      notifyDispatcherContent.includes('pushAdminMessage(groupMsg)'),
+      'handleNotifyOfficerEvent 必須調用 pushAdminMessage 推播至幹部群組'
     );
   });
 

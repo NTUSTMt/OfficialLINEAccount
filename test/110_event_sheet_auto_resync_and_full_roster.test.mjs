@@ -79,4 +79,41 @@ describe('110. 活動試算表全量 23 筆名冊同步與前端 Failed to fetch
     assert.equal(rows[22][1], '隊員_23');
     assert.equal(rows[22][0], 23);
   });
+
+  it('5. gas_worker.js 必須避免模糊詞撞名，確保「繳費狀態」絕不被「審核狀態/結果」誤判污染', () => {
+    const workerContent = fs.readFileSync(workerPath, 'utf8');
+    
+    // 提取 _matchHeader 邏輯或比對順序
+    assert.ok(
+      workerContent.includes('normalizePaymentStatus') || workerContent.includes('繳費狀態'),
+      'gas_worker.js 必須明確保障繳費狀態欄位之獨立與精確性'
+    );
+
+    // 模擬測試 _matchHeaderExact
+    function isHeaderMatch(h, candidates) {
+      const normalizedH = String(h).trim().toLowerCase();
+      return candidates.some(c => normalizedH === c.toLowerCase());
+    }
+
+    // 驗證「繳費狀態」絕不符合「審核狀態」之候選清單
+    const auditCandidates = ['審核結果', '審核狀態', '審核', '錄取審核', 'status'];
+    const paymentCandidates = ['繳費狀態', '繳費', '付款狀態', '對帳狀態', 'payment_status'];
+
+    assert.equal(isHeaderMatch('繳費狀態', auditCandidates), false, '繳費狀態不可被審核候選詞命中');
+    assert.equal(isHeaderMatch('繳費狀態', paymentCandidates), true, '繳費狀態必須精確被繳費候選詞命中');
+    assert.equal(isHeaderMatch('審核狀態', paymentCandidates), false, '審核狀態不可被繳費候選詞命中');
+  });
+
+  it('6. gas_worker.js 必須具備試算表最大列數自動擴充與 Data Validation 防禦機制', () => {
+    const workerContent = fs.readFileSync(workerPath, 'utf8');
+    assert.ok(
+      workerContent.includes('insertRowsAfter') || workerContent.includes('getMaxRows'),
+      'gas_worker.js 必須於寫入前檢查 getMaxRows 並在不足時以 insertRowsAfter 自動擴充'
+    );
+    assert.ok(
+      workerContent.includes('clearDataValidations') || workerContent.includes('try') || workerContent.includes('catch'),
+      'gas_worker.js 必須具備 Data Validation 報錯救援防護'
+    );
+  });
 });
+

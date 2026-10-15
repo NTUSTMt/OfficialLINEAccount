@@ -44,10 +44,10 @@ describe('108. 前端純 Supabase 架構與 GAS 唯讀降級備援全面移除�
     assert.ok(!code.includes('GAS_API_URL'), 'History.tsx 不得引入 GAS_API_URL');
   });
 
-  it('7. Achievements.tsx 歷史活動不得 fallback 至 GAS，且心得推播改用 notifyDispatcher', () => {
+  it('7. Achievements.tsx 歷史活動不得 fallback 至 GAS，且心得直存 Supabase', () => {
     const code = fs.readFileSync(path.join(rootDir, 'src', 'pages', 'Achievements.tsx'), 'utf8');
     assert.ok(!code.includes('action=get_past_activities'), 'Achievements.tsx 不得含有 GAS get_past_activities');
-    assert.ok(code.includes("notifyDispatcher('notify_reflection_submitted'"), 'Achievements.tsx 必須透過 notifyDispatcher 發送推播');
+    assert.ok(code.includes('saveReflectionToSupabase'), 'Achievements.tsx 必須透過 Supabase 儲存心得');
   });
 
   it('8. AdminEvents.tsx 與 AdminEventsHistory.tsx 必須徹底移除 GAS 活動清單與名冊備援', () => {

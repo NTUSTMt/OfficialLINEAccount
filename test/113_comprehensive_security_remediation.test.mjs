@@ -73,7 +73,10 @@ describe('113. 核心安全漏洞修復與防禦驗證套件 (Security Remediati
 
   // C-4: Google Apps Script Webhook 簽章與 Helper API 鑑權防護
   it('C-4: gas.js doPost 必須校驗 X-Line-Signature 且 handleLiffHelperApi 敏感操作需有身分安全守衛', () => {
-    const gasCode = fs.readFileSync(path.join(rootDir, 'src/gas.js'), 'utf8');
+    const gasPath = fs.existsSync(path.join(rootDir, 'src/gas.js'))
+      ? path.join(rootDir, 'src/gas.js')
+      : path.join(rootDir, 'src/archive/gas.js');
+    const gasCode = fs.readFileSync(gasPath, 'utf8');
 
     // 負面檢查：doPost 必須包含簽章校驗邏輯
     assert.ok(

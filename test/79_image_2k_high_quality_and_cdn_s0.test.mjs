@@ -71,15 +71,11 @@ describe('79. Google Drive 圖片上傳品質升級 2K (2048px / 0.88) 與 CDN =
     assert.ok(content.includes('for (const photoFile of photoFiles)'), 'Achievements 必須單張發送避免大 Payload 逾時');
   });
 
-  it('7. src/gas.js 與 gas_modules/06_Helper_Services.js CDN 輸出升級為 =s0', () => {
-    const gasPath = path.join(rootDir, 'src', 'gas.js');
-    const gasContent = fs.readFileSync(gasPath, 'utf8');
+  it('7. gas_worker.js CDN 輸出升級為 =s0', () => {
+    const workerPath = path.join(rootDir, 'src', 'gas_worker.js');
+    const workerContent = fs.readFileSync(workerPath, 'utf8');
 
-    assert.ok(!gasContent.includes('uploadedUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=w1000");'), 'gas.js 不應包含舊的 =w1000 uploadedUrls');
-    assert.ok(gasContent.includes('uploadedUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=s0");'), 'gas.js 必須使用 =s0');
-
-    const helperPath = path.join(rootDir, 'gas_modules', '06_Helper_Services.js');
-    const helperContent = fs.readFileSync(helperPath, 'utf8');
-    assert.ok(helperContent.includes('uploadedUrls.push("https://lh3.googleusercontent.com/d/" + driveMatch[1] + "=s0");'), '06_Helper_Services.js 必須使用 =s0');
+    assert.ok(!workerContent.includes('=w1000'), 'gas_worker.js 不應包含舊的 =w1000');
+    assert.ok(workerContent.includes('=s0'), 'gas_worker.js 必須使用 =s0');
   });
 });

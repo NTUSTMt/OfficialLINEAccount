@@ -4,9 +4,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('59. 活動截止時間時區、過期狀態與試算表欄位同步驗證 (v0.1.124)', () => {
-  const flexCode = fs.readFileSync(path.resolve('gas_modules/03_Flex_Templates.js'), 'utf8');
-  const syncCode = fs.readFileSync(path.resolve('gas_modules/05_Sync_Worker.js'), 'utf8');
-  const authCode = fs.readFileSync(path.resolve('gas_modules/01_Config_Auth.js'), 'utf8');
+  const gasPath = fs.existsSync(path.resolve('src/gas.js'))
+    ? path.resolve('src/gas.js')
+    : path.resolve('src/archive/gas.js');
+  const gasCode = fs.readFileSync(gasPath, 'utf8');
+  const flexCode = gasCode;
+  const syncCode = gasCode;
+  const authCode = gasCode;
   const rpcCode = fs.readFileSync(path.resolve('supabase/admin_events_rpc.sql'), 'utf8');
 
   test('1. _formatEventDate 日期格式化：台灣時區 9/22 截止日絕對不可跳至 9/23', () => {

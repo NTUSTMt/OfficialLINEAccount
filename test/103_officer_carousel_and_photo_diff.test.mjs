@@ -5,12 +5,16 @@ import path from 'node:path';
 
 describe('103. 體能證明照片 Diff 偵測與幹部名片 LINE 大頭貼輪播瀏覽', () => {
   const registerPath = path.resolve('src/pages/Register.tsx');
-  const gasPath = path.resolve('src/gas.js');
+  const gasPath = fs.existsSync(path.resolve('src/gas.js'))
+    ? path.resolve('src/gas.js')
+    : path.resolve('src/archive/gas.js');
   const gasTemplatesPath = path.resolve('gas_modules/03_Flex_Templates.js');
 
   const registerContent = fs.readFileSync(registerPath, 'utf-8');
   const gasContent = fs.readFileSync(gasPath, 'utf-8');
-  const gasTemplatesContent = fs.readFileSync(gasTemplatesPath, 'utf-8');
+  const gasTemplatesContent = fs.existsSync(gasTemplatesPath)
+    ? fs.readFileSync(gasTemplatesPath, 'utf-8')
+    : gasContent;
 
   it('1. 驗證 Register.tsx 包含體能證明照片 Diff 比對邏輯', () => {
     assert.ok(

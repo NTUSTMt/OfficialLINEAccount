@@ -3,85 +3,60 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-describe('82. 活動卡片已報名人數 (Registered Count Badge on Event Cards) 驗證', () => {
-  const gasPath = path.resolve('src/gas.js');
-  const gasContent = fs.readFileSync(gasPath, 'utf8');
+describe('82. 活動卡片已報名人數 (Registered Count Badge on Event Cards) 驗證 (Edge Functions v0.1.306)', () => {
+  const rootDir = process.cwd();
+  const webhookPath = path.join(rootDir, 'supabase', 'functions', 'line-webhook', 'index.ts');
+  const webhookContent = fs.readFileSync(webhookPath, 'utf8');
 
-  const flexPath = path.resolve('gas_modules/03_Flex_Templates.js');
+  const flexPath = path.join(rootDir, 'supabase', 'functions', 'line-webhook', 'flexTemplates.ts');
   const flexContent = fs.readFileSync(flexPath, 'utf8');
 
-  it('應驗證 sendEventList 具備批次查詢 event_signups 與排除取消狀態之計數邏輯', () => {
+  it('應驗證 line-webhook 具備批次查詢 event_signups 與排除取消狀態之計數邏輯', () => {
     assert.ok(
-      gasContent.includes('event_id: "in.(" + eventIds.join(",") + ")"'),
-      'sendEventList 必須使用 in.(...) 批次查詢 event_signups'
+      webhookContent.includes('.in("event_id", eventIds)'),
+      'line-webhook 必須使用 in("event_id", eventIds) 批次查詢 event_signups'
     );
     assert.ok(
-      gasContent.includes('sStatus.indexOf("取消") === -1 && sStatus.indexOf("cancel") === -1'),
-      'sendEventList 統計時必須嚴格排除取消狀態'
+      webhookContent.includes('!sStatus.includes("取消") && !sStatus.includes("cancel")'),
+      'line-webhook 統計時必須嚴格排除取消狀態'
     );
     assert.ok(
-      gasContent.includes('signupCounts[eid] = (signupCounts[eid] || 0) + 1;'),
-      'sendEventList 必須以 event_id 累計報名人數'
+      webhookContent.includes('signupCounts[su.event_id] = (signupCounts[su.event_id] || 0) + 1;'),
+      'line-webhook 必須以 event_id 累計報名人數'
     );
   });
 
-  it('應驗證 sendEventList 與 sendEventDetail 頂部包含淺天藍膠囊徽章 (#f0f9ff / #0284c7)', () => {
+  it('應驗證 flexTemplates.ts 頂部包含淺天藍膠囊徽章 (#f0f9ff / #0284c7)', () => {
     assert.ok(
-      gasContent.includes('"backgroundColor": "#f0f9ff"'),
+      flexContent.includes('backgroundColor: "#f0f9ff"'),
       '膠囊徽章背景色必須為 #f0f9ff'
     );
     assert.ok(
-      gasContent.includes('"color": "#0284c7"'),
+      flexContent.includes('color: "#0284c7"'),
       '膠囊徽章文字顏色必須為 #0284c7'
     );
     assert.ok(
-      gasContent.includes('"cornerRadius": "md"'),
+      flexContent.includes('cornerRadius: "md"'),
       '膠囊徽章必須為圓角 md'
     );
     assert.ok(
-      gasContent.includes('"justifyContent": "space-between"'),
+      flexContent.includes('justifyContent: "space-between"'),
       '狀態列佈局必須為 space-between 水平分開對齊'
     );
   });
 
-  it('應驗證 sendEventDetail 具備獨立查詢活動有效報名人數與膠囊徽章', () => {
+  it('應驗證 flexTemplates.ts 報名人數標籤支援中文、英文與雙語安全回退', () => {
     assert.ok(
-      gasContent.includes('event_id: "eq." + String(eventId).trim()'),
-      'sendEventDetail 必須查詢指定活動之 event_signups'
-    );
-    assert.ok(
-      gasContent.includes('dStatus.indexOf("取消") === -1 && dStatus.indexOf("cancel") === -1'),
-      'sendEventDetail 統計時必須排除取消狀態'
-    );
-  });
-
-  it('應驗證報名人數標籤支援中文、英文與雙語安全回退', () => {
-    assert.ok(
-      gasContent.includes('var regCountStrZh = "已報名：" + regCount + " 人";'),
+      flexContent.includes('const regCountStrZh = `已報名：${regCount} 人`;'),
       '必須支援繁體中文格式：已報名：X 人'
     );
     assert.ok(
-      gasContent.includes('var regCountStrEn = "Registered: " + regCount;'),
+      flexContent.includes('const regCountStrEn = `Registered: ${regCount}`;'),
       '必須支援英文格式：Registered: X'
     );
     assert.ok(
-      gasContent.includes('(regCountStrZh + " / " + regCountStrEn)'),
+      flexContent.includes('`${regCountStrZh} / ${regCountStrEn}`'),
       '無偏好語言時必須提供中英雙語安全回退'
-    );
-  });
-
-  it('應驗證 gas_modules/03_Flex_Templates.js 同步更新 sendEventList 與 sendEventDetail', () => {
-    assert.ok(
-      flexContent.includes('event_id: "in.(" + eventIds.join(",") + ")"'),
-      '03_Flex_Templates.js 必須具備批次查詢'
-    );
-    assert.ok(
-      flexContent.includes('"backgroundColor": "#f0f9ff"'),
-      '03_Flex_Templates.js 必須具備 #f0f9ff 膠囊徽章'
-    );
-    assert.ok(
-      flexContent.includes('"color": "#0284c7"'),
-      '03_Flex_Templates.js 必須具備 #0284c7 深藍文字'
     );
   });
 

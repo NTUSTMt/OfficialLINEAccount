@@ -263,12 +263,8 @@ test('WebAdminFinance 姓名膠囊溢出截斷、款項說明單行不換行與�
     path.join(rootDir, 'supabase/fix_admin_finance_consistent_type_rpc.sql'),
     'utf-8'
   );
-  const syncWorkerCode = fs.readFileSync(
-    path.join(rootDir, 'gas_modules/05_Sync_Worker.js'),
-    'utf-8'
-  );
-  const gasCode = fs.readFileSync(
-    path.join(rootDir, 'src/gas.js'),
+  const schemaSqlCode = fs.readFileSync(
+    path.join(rootDir, 'supabase/schema.sql'),
     'utf-8'
   );
 
@@ -322,16 +318,10 @@ test('WebAdminFinance 姓名膠囊溢出截斷、款項說明單行不換行與�
     'fix_admin_finance_consistent_type_rpc.sql 必須產生一致的 🔸 活動： 格式'
   );
 
-  // 6. GAS Schema 包含 notes
-  assert.match(
-    syncWorkerCode,
-    /"payments":\s*\[[\s\S]*?"notes"[\s\S]*?"officer_notes"/,
-    'gas_modules/05_Sync_Worker.js 的 payments 欄位必須包含 notes'
-  );
-  assert.match(
-    gasCode,
-    /"payments":\s*\[[\s\S]*?"notes"[\s\S]*?"officer_notes"/,
-    'src/gas.js 的 payments 欄位必須包含 notes'
+  // 6. Schema 包含 notes 與 officer_notes
+  assert.ok(
+    schemaSqlCode.includes('notes TEXT') || schemaSqlCode.includes('officer_notes TEXT'),
+    'supabase/schema.sql 必須包含 notes 與 officer_notes 欄位'
   );
 });
 

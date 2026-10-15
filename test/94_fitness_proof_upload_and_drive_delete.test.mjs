@@ -6,7 +6,7 @@ import path from 'node:path';
 describe('94. 體能證明上傳 UI 重構與 Google Drive 檔案連動刪除驗證 (Fitness Proof Upload Overhaul & Drive Deletion)', () => {
   const rootDir = process.cwd();
   const registerPath = path.join(rootDir, 'src/pages/Register.tsx');
-  const gasPath = path.join(rootDir, 'src/gas.js');
+  const gasPath = path.join(rootDir, 'src/gas_worker.js');
   const zhPath = path.join(rootDir, 'src/locales/zh.json');
   const enPath = path.join(rootDir, 'src/locales/en.json');
 
@@ -82,8 +82,8 @@ describe('94. 體能證明上傳 UI 重構與 Google Drive 檔案連動刪除驗
       'GAS 後端必須具備 delete_drive_files 路由支援'
     );
     assert.ok(
-      gasContent.includes('function _handleDriveDeleteHelper'),
-      'GAS 後端必須實作 _handleDriveDeleteHelper'
+      gasContent.includes('function _handleDeleteDriveFiles') || gasContent.includes('function _handleDriveDeleteHelper'),
+      'GAS 後端必須實作 _handleDeleteDriveFiles 或 _handleDriveDeleteHelper'
     );
     assert.ok(
       gasContent.includes('file.setTrashed(true)'),

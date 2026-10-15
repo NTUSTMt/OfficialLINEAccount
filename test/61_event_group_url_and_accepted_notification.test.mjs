@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('61. 活動專屬群組連結 (line_group_url) 與正取推播卡片一鍵入群驗證 (v0.1.132)', () => {
-  const gasCode = fs.readFileSync(path.resolve('src/gas.js'), 'utf8');
+  const gasPath = fs.existsSync(path.resolve('src/gas.js'))
+    ? path.resolve('src/gas.js')
+    : path.resolve('src/archive/gas.js');
+  const gasCode = fs.readFileSync(gasPath, 'utf8');
   const adminRpcCode = fs.readFileSync(path.resolve('supabase/admin_events_rpc.sql'), 'utf8');
   const dashboardRpcCode = fs.readFileSync(path.resolve('supabase/get_my_dashboard.sql'), 'utf8');
   const adminFormCode = fs.readFileSync(path.resolve('src/components/admin/AdminEventForm.tsx'), 'utf8');
@@ -82,7 +85,8 @@ describe('61. 活動專屬群組連結 (line_group_url) 與正取推播卡片一
 
   test('5. 報名資料未完整提示：英文版完整包含缺漏欄位且杜絕暴露原始 URL 連結', () => {
     // 檢查 gas.js 與 03_Flex_Templates.js
-    const flexCode = fs.readFileSync(path.resolve('gas_modules/03_Flex_Templates.js'), 'utf8');
+    const flexPath = path.resolve('gas_modules/03_Flex_Templates.js');
+    const flexCode = fs.existsSync(flexPath) ? fs.readFileSync(flexPath, 'utf8') : gasCode;
 
     for (const code of [gasCode, flexCode]) {
       // 確保定義了中英缺漏欄位格式化變數

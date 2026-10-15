@@ -6,17 +6,18 @@ import path from 'node:path';
 // Emoji Regex 檢驗工具
 const EMOJI_REGEX = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/u;
 
-describe('104. 社員指南、AI客服指南與意見回饋 Flex 卡片與雙語分流測試 (v0.1.262)', () => {
-  const gasContent = fs.readFileSync(path.resolve('src/gas.js'), 'utf8');
+describe('104. 社員指南、AI客服指南與意見回饋 Flex 卡片與雙語分流測試 (v0.1.262 / Edge Functions v0.1.306)', () => {
+  const flexContent = fs.readFileSync(path.resolve('supabase/functions/line-webhook/flexTemplates.ts'), 'utf8');
+  const webhookContent = fs.readFileSync(path.resolve('supabase/functions/line-webhook/index.ts'), 'utf8');
 
   // 1. 原始碼結構與函式定義驗證
-  it('1. src/gas.js 與 gas_modules 必須包含三大 Flex 卡片產生與發送函式', () => {
-    assert.ok(gasContent.includes('function _buildAiGuideBubble(lang)'), '必須定義 _buildAiGuideBubble');
-    assert.ok(gasContent.includes('function _buildMemberGuideBubble(lang)'), '必須定義 _buildMemberGuideBubble');
-    assert.ok(gasContent.includes('function _buildFeedbackBubble(lang)'), '必須定義 _buildFeedbackBubble');
-    assert.ok(gasContent.includes('function sendAiGuide(replyToken, userId)'), '必須定義 sendAiGuide');
-    assert.ok(gasContent.includes('function sendMemberGuide(replyToken, userId)'), '必須定義 sendMemberGuide');
-    assert.ok(gasContent.includes('function sendFeedbackLink(replyToken, userId)'), '必須定義 sendFeedbackLink(replyToken, userId)');
+  it('1. flexTemplates.ts 與 line-webhook 必須包含三大 Flex 卡片產生與發送邏輯', () => {
+    assert.ok(flexContent.includes('export function buildAiGuideFlex'), '必須定義 buildAiGuideFlex');
+    assert.ok(flexContent.includes('export function buildMemberGuideFlex'), '必須定義 buildMemberGuideFlex');
+    assert.ok(flexContent.includes('export function buildFeedbackFlex'), '必須定義 buildFeedbackFlex');
+    assert.ok(webhookContent.includes('buildAiGuideFlex'), 'line-webhook 必須調用 buildAiGuideFlex');
+    assert.ok(webhookContent.includes('buildMemberGuideFlex'), 'line-webhook 必須調用 buildMemberGuideFlex');
+    assert.ok(webhookContent.includes('buildFeedbackFlex'), 'line-webhook 必須調用 buildFeedbackFlex');
   });
 
   // 2. 小岳 AI 客服指南 Flex 卡片驗證

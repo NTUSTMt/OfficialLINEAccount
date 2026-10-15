@@ -5,7 +5,10 @@ import path from 'node:path';
 
 describe('Preferred Language Personalized Messaging Tests', () => {
   const rootDir = process.cwd();
-  const gasContent = fs.readFileSync(path.join(rootDir, 'src/gas.js'), 'utf8');
+  const gasPath = fs.existsSync(path.join(rootDir, 'src/gas.js'))
+    ? path.join(rootDir, 'src/gas.js')
+    : path.join(rootDir, 'src/archive/gas.js');
+  const gasContent = fs.readFileSync(gasPath, 'utf8');
 
   it('should ensure helper functions _getUserPreferredLanguage, _formatBilingualMessage, and _splitBilingualMessage exist', () => {
     assert.ok(

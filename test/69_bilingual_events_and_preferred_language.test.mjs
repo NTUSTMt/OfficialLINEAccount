@@ -189,10 +189,10 @@ describe('Bilingual Events and Preferred Language Tests', () => {
     });
 
     it('should verify gas.js supports bilingual event fields and respects user preferredLanguage in LINE messages', () => {
-      const gasContent = fs.readFileSync(
-        path.join(rootDir, 'src/gas.js'),
-        'utf8'
-      );
+      const gasPath = fs.existsSync(path.join(rootDir, 'src/gas.js'))
+        ? path.join(rootDir, 'src/gas.js')
+        : path.join(rootDir, 'src/archive/gas.js');
+      const gasContent = fs.readFileSync(gasPath, 'utf8');
 
       // 活動儲存與 Supabase 同步
       assert.ok(gasContent.includes('title_en: eventData.nameEn'), 'gas.js should pass title_en to Supabase');

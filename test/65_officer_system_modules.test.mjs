@@ -399,16 +399,14 @@ test('幹部系統模組測試：大頭貼選單圖示與名稱一致、歷史�
 test('幹部系統模組測試：修復 Drive 上傳 Action 名稱、移除輪播圖綠色+號與藍色新增按鈕 (v0.1.153)', async () => {
   const fs = await import('fs/promises');
   const inventoryCode = await fs.readFile('src/pages/AdminInventory.tsx', 'utf8');
-  const helperCode = await fs.readFile('gas_modules/06_Helper_Services.js', 'utf8');
-  const gasCode = await fs.readFile('src/gas.js', 'utf8');
+  const workerCode = await fs.readFile('src/gas_worker.js', 'utf8');
 
   // 1. GAS 上傳 Action 檢驗
   assert.ok(inventoryCode.includes("action: 'update_equipment_images'") || inventoryCode.includes("action: 'upload_drive_file'"), 'AdminInventory 必須傳送有效的 action');
   assert.ok(!inventoryCode.includes("action: 'upload_drive_files'"), 'AdminInventory 絕不可包含複數形 upload_drive_files');
 
   // 2. 後端 GAS 支援 upload_drive_file
-  assert.ok(helperCode.includes('action === "upload_drive_file"'), '06_Helper_Services 必須支援 upload_drive_file');
-  assert.ok(gasCode.includes('action === "upload_drive_file"'), 'gas.js 必須支援 upload_drive_file');
+  assert.ok(workerCode.includes("action === 'upload_drive_file'"), 'gas_worker.js 必須支援 upload_drive_file');
 
   // 3. 移除輪播圖圓點內之綠色+號按鈕 (防止手機端排版偏移)
   assert.ok(!inventoryCode.includes("backgroundColor: '#10b981'"), 'AdminInventory 輪播圖指示器內不得包含綠色按鈕');

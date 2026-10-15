@@ -194,9 +194,14 @@ test('驗證 v0.1.244: 國籍 Supabase 直更補底、請選擇與其他中英�
 
 test('驗證 v0.1.245: 國籍異動比對納入 changedFields，以及 LIFF Webhook replyToken 免費回覆通知', async () => {
   const registerCode = fs.readFileSync(path.join(rootDir, 'src/pages/Register.tsx'), 'utf-8');
-  const webhookCode = fs.readFileSync(path.join(rootDir, 'gas_modules/02_LineBot_Webhook.js'), 'utf-8');
-  const helperCode = fs.readFileSync(path.join(rootDir, 'gas_modules/06_Helper_Services.js'), 'utf-8');
-  const gasCode = fs.readFileSync(path.join(rootDir, 'src/gas.js'), 'utf-8');
+  const gasPath = fs.existsSync(path.join(rootDir, 'src/gas.js'))
+    ? path.join(rootDir, 'src/gas.js')
+    : path.join(rootDir, 'src/archive/gas.js');
+  const gasCode = fs.readFileSync(gasPath, 'utf-8');
+  const webhookPath = path.join(rootDir, 'gas_modules/02_LineBot_Webhook.js');
+  const webhookCode = fs.existsSync(webhookPath) ? fs.readFileSync(webhookPath, 'utf-8') : gasCode;
+  const helperPath = path.join(rootDir, 'gas_modules/06_Helper_Services.js');
+  const helperCode = fs.existsSync(helperPath) ? fs.readFileSync(helperPath, 'utf-8') : gasCode;
 
   // 1. Register.tsx 包含 nationality 比對
   assert.match(

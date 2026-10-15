@@ -5,16 +5,15 @@ import path from 'node:path';
 
 describe('100. 活動正取通知按鈕色彩優化與 0 元申報自動核銷驗證 (v0.1.256)', () => {
   const rootDir = process.cwd();
-  const gasJsPath = path.join(rootDir, 'src', 'gas.js');
-  const helperJsPath = path.join(rootDir, 'gas_modules', '06_Helper_Services.js');
+  const notifyDispatcherPath = path.join(rootDir, 'supabase', 'functions', 'notify-dispatcher', 'index.ts');
   const paymentRpcPath = path.join(rootDir, 'supabase', 'verify_payment_rpc.sql');
   const paymentTsxPath = path.join(rootDir, 'src', 'pages', 'Payment.tsx');
 
   it('1. 正取通知推播卡片「前往繳費系統」按鈕升級為 Primary 樣式且色彩為經典深藍 #0367D3', () => {
-    const gasJs = fs.readFileSync(gasJsPath, 'utf8');
+    const notifyDispatcherJs = fs.readFileSync(notifyDispatcherPath, 'utf8');
 
-    // 檢查 gas.js 中的按鈕宣告
-    [gasJs].forEach((code) => {
+    // 檢查 notify-dispatcher 中的按鈕宣告
+    [notifyDispatcherJs].forEach((code) => {
       assert.ok(code.includes('style: "primary"'), 'payBtn 必須使用 primary 樣式');
       assert.ok(code.includes('color: "#0367D3"'), 'payBtn 必須使用經典深藍 #0367D3 色彩');
       assert.ok(code.includes('label: payBtn'), '必須綁定 payBtn 標籤變數');

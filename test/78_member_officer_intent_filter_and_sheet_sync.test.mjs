@@ -85,7 +85,9 @@ describe('78. 社員幹部意願篩選、個人資料編輯元件與獨立試算
   });
 
   it('5. gas.js 必須支援獨立試算表自動擴充與回補擔任幹部意願欄位', () => {
-    const gasPath = path.join(rootDir, 'src', 'gas.js');
+    const gasPath = fs.existsSync(path.join(rootDir, 'src', 'gas.js'))
+      ? path.join(rootDir, 'src', 'gas.js')
+      : path.join(rootDir, 'src', 'archive', 'gas.js');
     const gasContent = fs.readFileSync(gasPath, 'utf8');
 
     assert.ok(

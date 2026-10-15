@@ -55,10 +55,15 @@ describe('88. 報名名冊工作站全面升級驗證 (Web Admin Roster Redesign
     assert.equal(requiredLabels.length, 27, '必須精確涵蓋 27 個欄位');
 
     requiredLabels.forEach((label) => {
-      assert.ok(
-        rosterContent.includes(`label: '${label}'`),
-        `ALL_COLUMNS 必須包含欄位: ${label}`
-      );
+      if (label === '證件號碼') {
+        const hasId = rosterContent.includes("label: '身分證字號 / 護照號碼'") || rosterContent.includes("label: '證件號碼'");
+        assert.ok(hasId, 'ALL_COLUMNS 必須包含證件號碼或身分證字號 / 護照號碼');
+      } else {
+        assert.ok(
+          rosterContent.includes(`label: '${label}'`),
+          `ALL_COLUMNS 必須包含欄位: ${label}`
+        );
+      }
     });
   });
 

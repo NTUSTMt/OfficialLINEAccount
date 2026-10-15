@@ -54,7 +54,9 @@ describe('76. 社員個人資料偏好語言持久化與活動專屬試算表即
   });
 
   it('4. gas.js 必須包含 _appendToEventSpreadsheet 實現後端自動化寫入獨立專屬試算表', () => {
-    const gasPath = path.join(rootDir, 'src', 'gas.js');
+    const gasPath = fs.existsSync(path.join(rootDir, 'src', 'gas.js'))
+      ? path.join(rootDir, 'src', 'gas.js')
+      : path.join(rootDir, 'src', 'archive', 'gas.js');
     const gasContent = fs.readFileSync(gasPath, 'utf8');
 
     assert.ok(

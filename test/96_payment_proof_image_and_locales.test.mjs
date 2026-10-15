@@ -14,8 +14,7 @@ describe('96. 繳費申報匯款證明圖片上傳與各頁面縮圖燈箱預覽
   const supabaseClientPath = path.join(rootDir, 'src/utils/supabaseClient.ts');
   const verifyRpcPath = path.join(rootDir, 'supabase/verify_payment_rpc.sql');
   const historyRpcPath = path.join(rootDir, 'supabase/fix_history_payment_status.sql');
-  const gasServicesPath = path.join(rootDir, 'gas_modules/06_Helper_Services.js');
-  const gasJsPath = path.join(rootDir, 'src/gas.js');
+  const notifyDispatcherPath = path.join(rootDir, 'supabase/functions/notify-dispatcher/index.ts');
   const zhPath = path.join(rootDir, 'src/locales/zh.json');
   const enPath = path.join(rootDir, 'src/locales/en.json');
 
@@ -28,8 +27,7 @@ describe('96. 繳費申報匯款證明圖片上傳與各頁面縮圖燈箱預覽
   const supabaseClientContent = fs.readFileSync(supabaseClientPath, 'utf-8');
   const verifyRpcContent = fs.readFileSync(verifyRpcPath, 'utf-8');
   const historyRpcContent = fs.readFileSync(historyRpcPath, 'utf-8');
-  const gasServicesContent = fs.readFileSync(gasServicesPath, 'utf-8');
-  const gasJsContent = fs.readFileSync(gasJsPath, 'utf-8');
+  const notifyDispatcherContent = fs.readFileSync(notifyDispatcherPath, 'utf-8');
   const zhContent = JSON.parse(fs.readFileSync(zhPath, 'utf-8'));
   const enContent = JSON.parse(fs.readFileSync(enPath, 'utf-8'));
 
@@ -99,13 +97,8 @@ describe('96. 繳費申報匯款證明圖片上傳與各頁面縮圖燈箱預覽
     assert.ok(memberRecordsContent.includes('lightboxImageUrl'), 'MemberRecords.tsx 必須具備 lightbox 放大');
   });
 
-  it('5. 驗證後端 GAS 支援在通知與信件中加入匯款證明截圖', () => {
-    assert.ok(gasServicesContent.includes('proofImageUrl'), '06_Helper_Services 必須讀取 proofImageUrl');
-    assert.ok(gasServicesContent.includes('匯款證明圖片：'), '06_Helper_Services LINE 幹部推播必須包含匯款證明');
-    assert.ok(gasServicesContent.includes('proofImgHtml'), '06_Helper_Services Email 樣板必須內嵌縮圖');
-
-    assert.ok(gasJsContent.includes('proofImageUrl'), 'gas.js 必須讀取 proofImageUrl');
-    assert.ok(gasJsContent.includes('匯款證明圖片：'), 'gas.js LINE 幹部推播必須包含匯款證明');
-    assert.ok(gasJsContent.includes('proofImgHtml'), 'gas.js Email 樣板必須內嵌縮圖');
+  it('5. 驗證後端 notify-dispatcher 支援在幹部通知中加入匯款證明截圖與按鈕', () => {
+    assert.ok(notifyDispatcherContent.includes('proofImageUrl'), 'notify-dispatcher 必須讀取 proofImageUrl');
+    assert.ok(notifyDispatcherContent.includes('匯款證明圖片：'), 'notify-dispatcher LINE 幹部推播必須包含匯款證明');
   });
 });

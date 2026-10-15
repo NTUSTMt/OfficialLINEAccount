@@ -49,9 +49,10 @@ describe('Fast Refresh and Reflection Edit Tests', () => {
     assert.ok(achievementsContent.includes('setExistingPhotos(prev => prev.filter((_, i) => i !== idx))'), 'Should allow removing individual existing photos');
     assert.ok(achievementsContent.includes('5 - existingPhotos.length - photoFiles.length'), 'Should compute remaining photo quota dynamically');
 
-    // 驗證更新送出不重複發送 LINE 推播
-    assert.ok(achievementsContent.includes('if (!isEditing) {'), 'Should only send notify_reflection_submitted when not editing');
-    assert.ok(achievementsContent.includes('action: \'notify_reflection_submitted\''), 'Should contain notify_reflection_submitted call');
+    // 驗證更新送出處理模式（編輯模式與新增模式區分，直寫 Supabase 不多發冗餘通知）
+    assert.ok(achievementsContent.includes('isEditing ? (t(\'achievements.alert.updateSuccess\')'), 'Should distinguish edit mode vs submit mode in alerts');
+    assert.ok(achievementsContent.includes('saveReflectionToSupabase'), 'Should save reflection directly to Supabase');
+    assert.ok(achievementsContent.includes('reflectionsCount: isEditing ? data.reflectionsCount : data.reflectionsCount + 1'), 'Should not increment reflections count on edit');
 
     // 驗證回饋提示
     assert.ok(achievementsContent.includes('t(\'achievements.alert.updateSuccess\')'), 'Should alert updateSuccess when updating');

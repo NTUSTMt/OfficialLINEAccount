@@ -83,7 +83,9 @@ describe('109. GAS Thin Worker (gas_worker.js) 活動專屬試算表檔名、SPR
   });
 
   it('5. gas.js 必須同步對齊 folderName 檔名、SPREADSHEET_ID 範本讀取與 configSheet 安全引用', () => {
-    const gasPath = path.join(rootDir, 'src', 'gas.js');
+    const gasPath = fs.existsSync(path.join(rootDir, 'src', 'gas.js'))
+      ? path.join(rootDir, 'src', 'gas.js')
+      : path.join(rootDir, 'src', 'archive', 'gas.js');
     const gasContent = fs.readFileSync(gasPath, 'utf8');
 
     assert.ok(
