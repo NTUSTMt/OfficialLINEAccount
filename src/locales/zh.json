@@ -406,7 +406,8 @@
     "type": {
       "equipment": "裝備租用",
       "membership": "社籍與社費",
-      "activity": "活動報名"
+      "activity": "活動報名",
+      "additional": "追加款項"
     },
     "membership": {
       "title": "社費說明：",

@@ -7,6 +7,7 @@ import type {
   MemberFullRecord,
   MemberActiveStats,
   AdminFinanceItem,
+  NewPaymentRequest,
   AdminLoanItem,
   AdminInventoryItem,
   MemberTimelineRecord
@@ -1605,10 +1606,10 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
           target_id: it.target_id,
           status: it.status === '已核銷 Confirmed'
             ? '已核銷 Confirmed'
-            : it.status === '待繳費 Unpaid'
+            : (it.status === '待繳費 Unpaid' || (typeof it.status === 'string' && it.status.includes('待繳費')))
               ? '待繳費 Unpaid'
               : '待確認 Checking',
-          payment_status: it.payment_status || (it.status === '已核銷 Confirmed' ? '已繳費 Paid' : (it.status === '待繳費 Unpaid' ? '未繳費 Unpaid' : '待確認 Checking')),
+          payment_status: it.payment_status || (it.status === '已核銷 Confirmed' ? '已繳費 Paid' : ((it.status === '待繳費 Unpaid' || (typeof it.status === 'string' && it.status.includes('待繳費'))) ? '未繳費 Unpaid' : '待確認 Checking')),
           officer_notes: it.officer_notes,
           notes: it.notes || it.member_notes || '',
           notification_status: it.notification_status || '未通知',
@@ -1651,6 +1652,19 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
           cat = 'membership';
         }
 
+        const isConfirmed = p.status === '已核銷 Confirmed';
+        const isUnpaid = p.status === '待繳費 Unpaid' || (typeof p.status === 'string' && p.status.includes('待繳費'));
+        const financeStatus: AdminFinanceItem['status'] = isConfirmed
+          ? '已核銷 Confirmed'
+          : isUnpaid
+            ? '待繳費 Unpaid'
+            : '待確認 Checking';
+        const financePaymentStatus: AdminFinanceItem['payment_status'] = isConfirmed
+          ? '已繳費 Paid'
+          : isUnpaid
+            ? '未繳費 Unpaid'
+            : '待確認 Checking';
+
         items.push({
           id: p.id,
           line_user_id: p.line_user_id,
@@ -1661,8 +1675,8 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
           proof_image_url: p.proof_image_url,
           target_type: p.target_type || (cat === 'membership' ? 'membership' : cat === 'activity' ? 'event' : cat === 'equipment' ? 'loan' : null),
           target_id: p.target_id,
-          status: p.status === '已核銷 Confirmed' ? '已核銷 Confirmed' : '待確認 Checking',
-          payment_status: p.status === '已核銷 Confirmed' ? '已繳費 Paid' : '待確認 Checking',
+          status: financeStatus,
+          payment_status: financePaymentStatus,
           officer_notes: p.officer_notes,
           notes: p.notes || '',
           notification_status: p.notification_status || '未通知',
@@ -1762,6 +1776,53 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
   } catch (err: any) {
     console.error('[Supabase] fetchFinanceItemsFromSupabase 例外:', err);
     throw err;
+  }
+};
+
+/**
+ * 幹部後台：手動批量建立待繳費通知/款項請求 (payments)
+ */
+export const createManualPaymentRequestsInSupabase = async (
+  requests: NewPaymentRequest[],
+  _officerUserId?: string
+): Promise<{ success: boolean; count: number; error?: string }> => {
+  if (!supabase) {
+    return { success: false, count: 0, error: '未初始化 Supabase Client' };
+  }
+  if (!requests || requests.length === 0) {
+    return { success: true, count: 0 };
+  }
+
+  try {
+    const rows = requests.map(req => ({
+      id: `PAY_${Date.now()}_${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
+      line_user_id: req.line_user_id,
+      name: req.name,
+      type: req.type,
+      amount: Number(req.amount) || 0,
+      target_type: req.target_type || null,
+      target_id: req.target_id || null,
+      status: '待繳費 Unpaid',
+      notes: req.notes || '',
+      notification_status: req.notification_status || '未通知',
+      created_at: new Date().toISOString()
+    }));
+
+    const { error: insertErr } = await supabase.from('payments').insert(rows);
+
+    if (insertErr) {
+      console.error('[Supabase] createManualPaymentRequestsInSupabase 失敗:', insertErr.message);
+      return {
+        success: false,
+        count: 0,
+        error: `[新增 payments 失敗]: ${insertErr.message} (代碼: ${insertErr.code || 'UNKNOWN'})`,
+      };
+    }
+
+    return { success: true, count: rows.length };
+  } catch (err: any) {
+    console.error('[Supabase] createManualPaymentRequestsInSupabase 例外:', err);
+    return { success: false, count: 0, error: err?.message || String(err) };
   }
 };
 

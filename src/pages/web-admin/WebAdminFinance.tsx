@@ -22,18 +22,27 @@ import {
   ChevronRight,
   GripVertical,
   Send,
-  Save
+  Save,
+  BarChart3,
+  Plus,
+  Bell
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import {
   fetchFinanceItemsFromSupabase,
   updatePaymentAndLinkedStatusInSupabase,
   fetchAllLoansFromSupabase,
-  updateLoanStatusInSupabase
+  updateLoanStatusInSupabase,
+  fetchEventsFromSupabase,
+  fetchAdminMembersFromSupabase
 } from '../../utils/supabaseClient';
-import type { AdminFinanceItem, AdminLoanItem } from '../../types/admin';
+import type { AdminFinanceItem, AdminLoanItem, AdminMemberListItem } from '../../types/admin';
+import type { AdminEvent } from '../../types/event';
 import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
 import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
+import { FinanceReportDrawer } from '../../components/admin/FinanceReportDrawer';
+import { AddPaymentDrawer } from '../../components/admin/AddPaymentDrawer';
+import { PaymentReminderModal } from '../../components/admin/PaymentReminderModal';
 import { useAdvancedTable, type AdvancedColumnDef } from '../../components/admin/useAdvancedTable';
 import { openExternalUrl } from '../../utils/applicantUtils';
 import { notifyDispatcher } from '../../utils/api';
@@ -50,7 +59,7 @@ const FINANCE_COLUMNS: AdvancedColumnDef[] = [
   { key: 'notification_status', label: '通知狀態', defaultWidth: 110, minWidth: 90 },
   { key: 'created_at', label: '時間戳記', defaultWidth: 160, minWidth: 120 },
   { key: 'notes', label: '備註說明', defaultWidth: 180, minWidth: 120 },
-  { key: 'actions', label: '操作', defaultWidth: 50, minWidth: 44 },
+  { key: 'actions', label: '操作', defaultWidth: 70, minWidth: 64 },
 ];
 
 export const WebAdminFinance: React.FC = () => {
@@ -66,8 +75,18 @@ export const WebAdminFinance: React.FC = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'CONFIRMED'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [selectedEventId, setSelectedEventId] = useState<string>('ALL');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // 活動與成員清單
+  const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [members, setMembers] = useState<AdminMemberListItem[]>([]);
+
+  // 財務分析報表與新增繳費抽屜、單筆催繳彈窗
+  const [reportDrawerOpen, setReportDrawerOpen] = useState(false);
+  const [addPaymentDrawerOpen, setAddPaymentDrawerOpen] = useState(false);
+  const [reminderModalItem, setReminderModalItem] = useState<AdminFinanceItem | null>(null);
 
   // 個人資料彈窗 (MemberProfileModal)
   const [profileModalUserId, setProfileModalUserId] = useState<string | null>(null);
@@ -145,13 +164,78 @@ export const WebAdminFinance: React.FC = () => {
     }
   };
 
+  const loadEventsAndMembers = async () => {
+    try {
+      const [evs, mems] = await Promise.all([
+        fetchEventsFromSupabase(),
+        fetchAdminMembersFromSupabase(session.userId)
+      ]);
+      if (evs) setEvents(evs);
+      if (mems) setMembers(mems);
+    } catch (err) {
+      console.warn('[WebAdminFinance] 載入活動或成員資料警告:', err);
+    }
+  };
+
+  const loadData = async () => {
+    await Promise.all([loadPayments(), loadEventsAndMembers()]);
+  };
+
   useEffect(() => {
-    loadPayments();
+    loadData();
   }, [session.userId]);
+
+  // 活動分組：進行中 / 報名中活動、籌備中 / 未來活動、已結束歷史活動
+  const { activeEvents, upcomingEvents, pastEvents } = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const active: AdminEvent[] = [];
+    const upcoming: AdminEvent[] = [];
+    const past: AdminEvent[] = [];
+
+    events.forEach((ev) => {
+      const st = ev.status || '';
+      const isFinished =
+        st === '關閉' ||
+        st === '已結束' ||
+        (ev.endDate && ev.endDate < today && st !== '開放' && st !== '報名中' && st !== '進行中');
+      const isUpcoming =
+        st === '未來開放' ||
+        st === '籌備中' ||
+        (ev.startDate && ev.startDate > today && st !== '開放' && st !== '報名中' && st !== '進行中');
+
+      if (isFinished) {
+        past.push(ev);
+      } else if (isUpcoming) {
+        upcoming.push(ev);
+      } else {
+        active.push(ev);
+      }
+    });
+
+    return { activeEvents: active, upcomingEvents: upcoming, pastEvents: past };
+  }, [events]);
+
+  const selectedEvent = useMemo(() => {
+    return events.find((e) => e.id === selectedEventId);
+  }, [events, selectedEventId]);
+
+  // 活動專案篩選之款項紀錄
+  const activityFilteredItems = useMemo(() => {
+    if (selectedEventId === 'ALL') return items;
+    return items.filter((p) => {
+      const isTargetIdMatch = p.target_id === selectedEventId;
+      const isNameMatch = Boolean(
+        selectedEvent &&
+        ((p.type && p.type.includes(selectedEvent.name)) || p.target_id === selectedEvent.name)
+      );
+      const isEventIdInType = Boolean(p.type && p.type.includes(selectedEventId));
+      return isTargetIdMatch || isNameMatch || isEventIdInType;
+    });
+  }, [items, selectedEventId, selectedEvent]);
 
   // 過濾清單
   const filteredItems = useMemo(() => {
-    return items.filter((p) => {
+    return activityFilteredItems.filter((p) => {
       const matchKeyword =
         !searchKeyword ||
         (p.name && p.name.toLowerCase().includes(searchKeyword.toLowerCase())) ||
@@ -186,7 +270,7 @@ export const WebAdminFinance: React.FC = () => {
 
       return matchKeyword && matchStatus && matchCategory;
     });
-  }, [items, searchKeyword, statusFilter, categoryFilter]);
+  }, [activityFilteredItems, searchKeyword, statusFilter, categoryFilter]);
 
   // 依排序方式進行排序
   const sortedFilteredItems = useMemo(() => {
@@ -248,14 +332,14 @@ export const WebAdminFinance: React.FC = () => {
     getItemId: (item) => item.id,
   });
 
-  // 統計金額與筆數
+  // 統計金額與筆數 (依據所選活動專案即時重新計算)
   const stats = useMemo(() => {
     let pendingCount = 0;
     let pendingAmount = 0;
     let confirmedCount = 0;
     let confirmedAmount = 0;
 
-    items.forEach((p) => {
+    activityFilteredItems.forEach((p) => {
       const isPending =
         p.status.includes('待確認') ||
         p.status.includes('Checking') ||
@@ -278,8 +362,14 @@ export const WebAdminFinance: React.FC = () => {
       }
     });
 
-    return { pendingCount, pendingAmount, confirmedCount, confirmedAmount, totalCount: items.length };
-  }, [items]);
+    return {
+      pendingCount,
+      pendingAmount,
+      confirmedCount,
+      confirmedAmount,
+      totalCount: activityFilteredItems.length
+    };
+  }, [activityFilteredItems]);
 
   // 單筆核銷
   const handleVerifyItem = async (item: AdminFinanceItem) => {
@@ -837,12 +927,14 @@ export const WebAdminFinance: React.FC = () => {
         </div>
 
         <div style={{ background: '#ffffff', border: '1px solid var(--wa-border)', borderRadius: 8, padding: 14, textAlign: 'left' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--wa-text-muted)', marginBottom: 4 }}>全部財務款項紀錄</div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--wa-text-muted)', marginBottom: 4 }}>
+            {selectedEventId === 'ALL' ? '全部財務款項紀錄' : `${selectedEvent?.name || '指定活動'} 款項紀錄`}
+          </div>
           <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--wa-primary)' }}>
             {stats.totalCount} 筆
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--wa-text-muted)', marginTop: 2 }}>
-            包含申報、活動與租借應收
+            {selectedEventId === 'ALL' ? '包含申報、活動與租借應收' : '本活動全部登記款項'}
           </div>
         </div>
       </div>
@@ -862,12 +954,50 @@ export const WebAdminFinance: React.FC = () => {
             />
           </div>
 
+          {/* 活動專屬篩選器 */}
+          <select
+            className="web-admin-select"
+            value={selectedEventId}
+            onChange={(e) => setSelectedEventId(e.target.value)}
+            title="活動專屬篩選器"
+            style={{ maxWidth: 220 }}
+          >
+            <option value="ALL">全部活動款項 (All Events)</option>
+            {activeEvents.length > 0 && (
+              <optgroup label="進行中 / 報名中活動">
+                {activeEvents.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.name} {ev.startDate ? `(${ev.startDate})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {upcomingEvents.length > 0 && (
+              <optgroup label="籌備中 / 未來活動">
+                {upcomingEvents.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.name} {ev.startDate ? `(${ev.startDate})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {pastEvents.length > 0 && (
+              <optgroup label="已結束歷史活動">
+                {pastEvents.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.name} {ev.startDate ? `(${ev.startDate})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+
           <select
             className="web-admin-select"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
           >
-            <option value="ALL">全部狀態 ({items.length})</option>
+            <option value="ALL">全部狀態 ({activityFilteredItems.length})</option>
             <option value="PENDING">待確認 / 待繳費 ({stats.pendingCount})</option>
             <option value="CONFIRMED">已核銷 ({stats.confirmedCount})</option>
           </select>
@@ -901,7 +1031,7 @@ export const WebAdminFinance: React.FC = () => {
           <button
             type="button"
             className="web-admin-btn web-admin-btn-secondary"
-            onClick={loadPayments}
+            onClick={loadData}
             disabled={loading}
             title="重新整理財務款項清單"
             aria-label="重新整理財務款項清單"
@@ -988,6 +1118,30 @@ export const WebAdminFinance: React.FC = () => {
         </div>
 
         <div className="web-admin-toolbar-right">
+          {/* 財務分析報表按鈕 */}
+          <button
+            type="button"
+            className="web-admin-btn web-admin-btn-secondary"
+            onClick={() => setReportDrawerOpen(true)}
+            title="開啟財務分析報表與視覺化圖表"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: '0.82rem' }}
+          >
+            <BarChart3 size={14} />
+            <span>財務分析報表</span>
+          </button>
+
+          {/* 新增繳費項目按鈕 */}
+          <button
+            type="button"
+            className="web-admin-btn web-admin-btn-primary"
+            onClick={() => setAddPaymentDrawerOpen(true)}
+            title="新增繳費項目或發布活動額外費用"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: '0.82rem' }}
+          >
+            <Plus size={14} />
+            <span>新增繳費項目</span>
+          </button>
+
           {/* 一鍵發送通知按鈕 */}
           <button
             type="button"
@@ -1558,15 +1712,26 @@ export const WebAdminFinance: React.FC = () => {
                                 textAlign: 'center',
                               }}
                             >
-                              <button
-                                type="button"
-                                className="wa-icon-action-btn"
-                                title="編輯此筆財務款項詳情"
-                                aria-label="編輯此筆財務款項詳情"
-                                onClick={() => handleOpenDrawer(item)}
-                              >
-                                <Pencil size={13} />
-                              </button>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                                <button
+                                  type="button"
+                                  className="wa-icon-action-btn"
+                                  title="編輯此筆財務款項詳情"
+                                  aria-label="編輯此筆財務款項詳情"
+                                  onClick={() => handleOpenDrawer(item)}
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="wa-icon-action-btn"
+                                  title="發送催繳/繳費通知"
+                                  aria-label="發送催繳/繳費通知"
+                                  onClick={() => setReminderModalItem(item)}
+                                >
+                                  <Bell size={13} />
+                                </button>
+                              </div>
                             </td>
                           );
 
@@ -1952,7 +2117,19 @@ export const WebAdminFinance: React.FC = () => {
 
               {/* 核銷與備註編輯 */}
               <div className="wa-form-section">
-                <div className="wa-form-section-title">幹部審核與狀態設定</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div className="wa-form-section-title" style={{ margin: 0 }}>幹部審核與狀態設定</div>
+                  <button
+                    type="button"
+                    className="web-admin-btn web-admin-btn-secondary"
+                    style={{ fontSize: '0.78rem', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => setReminderModalItem(editingItem)}
+                    title="發送個別 LINE 繳費/催繳通知"
+                  >
+                    <Bell size={12} />
+                    <span>催繳通知</span>
+                  </button>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--wa-text-muted)', marginBottom: 4 }}>
@@ -2057,6 +2234,39 @@ export const WebAdminFinance: React.FC = () => {
           </div>
         </div>
       )}
+      {/* 財務分析報表抽屜 */}
+      <FinanceReportDrawer
+        isOpen={reportDrawerOpen}
+        onClose={() => setReportDrawerOpen(false)}
+        items={items}
+        events={events}
+        selectedEventId={selectedEventId === 'ALL' ? '' : selectedEventId}
+        onSelectEvent={(eventId) => setSelectedEventId(eventId)}
+        onTriggerReminder={(item) => setReminderModalItem(item)}
+      />
+
+      {/* 新增繳費項目抽屜 */}
+      <AddPaymentDrawer
+        isOpen={addPaymentDrawerOpen}
+        onClose={() => setAddPaymentDrawerOpen(false)}
+        events={events}
+        members={members}
+        officerUserId={session.userId}
+        onSuccess={() => {
+          loadPayments();
+        }}
+      />
+
+      {/* 單筆催繳通知彈窗 */}
+      <PaymentReminderModal
+        isOpen={Boolean(reminderModalItem)}
+        onClose={() => setReminderModalItem(null)}
+        item={reminderModalItem}
+        onSuccess={() => {
+          setReminderModalItem(null);
+          loadPayments();
+        }}
+      />
     </>
   );
 };
