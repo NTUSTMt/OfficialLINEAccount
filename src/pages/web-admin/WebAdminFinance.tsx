@@ -59,7 +59,7 @@ const FINANCE_COLUMNS: AdvancedColumnDef[] = [
   { key: 'notification_status', label: '通知狀態', defaultWidth: 110, minWidth: 90 },
   { key: 'created_at', label: '時間戳記', defaultWidth: 160, minWidth: 120 },
   { key: 'notes', label: '備註說明', defaultWidth: 180, minWidth: 120 },
-  { key: 'actions', label: '操作', defaultWidth: 50, minWidth: 44 },
+  { key: 'actions', label: '操作', defaultWidth: 70, minWidth: 64 },
 ];
 
 export const WebAdminFinance: React.FC = () => {

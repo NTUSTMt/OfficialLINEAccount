@@ -7,6 +7,7 @@ import {
   Square,
   Trash2,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Bell,
   Calendar,
@@ -76,6 +77,7 @@ export const AddPaymentDrawer: React.FC<AddPaymentDrawerProps> = ({
   // 提交狀態
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // 當開啟或關聯活動變更時，若選了活動，載入活動成員
@@ -116,6 +118,7 @@ export const AddPaymentDrawer: React.FC<AddPaymentDrawerProps> = ({
     setSendNotification(true);
     setRosterSearch('');
     setErrorMessage(null);
+    setWarningMessage(null);
     setSuccessMessage(null);
   };
 
@@ -304,6 +307,7 @@ export const AddPaymentDrawer: React.FC<AddPaymentDrawerProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setWarningMessage(null);
     setSuccessMessage(null);
 
     const cleanTitle = title.trim();
@@ -371,6 +375,15 @@ export const AddPaymentDrawer: React.FC<AddPaymentDrawerProps> = ({
 
         if (notifyFailCount > 0) {
           console.warn(`[AddPaymentDrawer] 建立成功，但有 ${notifyFailCount} 筆 LINE 通知推播失敗`);
+          setWarningMessage(`成功建立 ${res.count} 筆款項請求（其中 ${notifyFailCount} 筆 LINE 通知推播失敗）`);
+          setTimeout(() => {
+            setIsSubmitting(false);
+            if (onSuccess) {
+              onSuccess();
+            }
+            handleClose();
+          }, 2500);
+          return;
         }
       }
 
@@ -428,6 +441,17 @@ export const AddPaymentDrawer: React.FC<AddPaymentDrawerProps> = ({
               <div className="wa-drawer-alert-content">
                 <div className="wa-drawer-alert-title">操作失敗</div>
                 <div className="wa-drawer-alert-desc">{errorMessage}</div>
+              </div>
+            </div>
+          )}
+
+          {/* 警告提示 (例如部分通知發送失敗) */}
+          {warningMessage && (
+            <div className="wa-drawer-alert wa-drawer-alert-warning">
+              <AlertTriangle size={18} />
+              <div className="wa-drawer-alert-content">
+                <div className="wa-drawer-alert-title">部分通知推播失敗</div>
+                <div className="wa-drawer-alert-desc">{warningMessage}</div>
               </div>
             </div>
           )}

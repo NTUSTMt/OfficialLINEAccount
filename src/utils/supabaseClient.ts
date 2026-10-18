@@ -1795,7 +1795,11 @@ export const createManualPaymentRequestsInSupabase = async (
 
     if (insertErr) {
       console.error('[Supabase] createManualPaymentRequestsInSupabase 失敗:', insertErr.message);
-      return { success: false, count: 0, error: insertErr.message };
+      return {
+        success: false,
+        count: 0,
+        error: `[新增 payments 失敗]: ${insertErr.message} (代碼: ${insertErr.code || 'UNKNOWN'})`,
+      };
     }
 
     return { success: true, count: rows.length };

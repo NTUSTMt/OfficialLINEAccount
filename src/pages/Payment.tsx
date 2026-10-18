@@ -59,7 +59,7 @@ function Payment({ userId }: { userId: string }) {
       if (!urlName) urlName = hashParams.get('title') || hashParams.get('name') || hashParams.get('item');
     }
 
-    const parsedAmount = urlAmount ? parseInt(urlAmount, 10) : undefined;
+    const parsedAmount = urlAmount ? Math.max(0, parseInt(urlAmount, 10)) : undefined;
 
     return {
       targetId: targetId ? targetId.trim() : null,

@@ -189,7 +189,7 @@ export const StatusDonutChart: React.FC<StatusDonutChartProps> = ({
                   strokeWidth={strokeWidth}
                   strokeDasharray={`${confirmedLen} ${circumference - confirmedLen}`}
                   strokeDashoffset={0}
-                  strokeLinecap="round"
+                  strokeLinecap="butt"
                 />
               )}
               {/* 待核帳 (橘黃) */}
@@ -203,7 +203,7 @@ export const StatusDonutChart: React.FC<StatusDonutChartProps> = ({
                   strokeWidth={strokeWidth}
                   strokeDasharray={`${checkingLen} ${circumference - checkingLen}`}
                   strokeDashoffset={-confirmedLen}
-                  strokeLinecap="round"
+                  strokeLinecap="butt"
                 />
               )}
               {/* 未繳費 (紅色) */}
@@ -217,7 +217,7 @@ export const StatusDonutChart: React.FC<StatusDonutChartProps> = ({
                   strokeWidth={strokeWidth}
                   strokeDasharray={`${unpaidLen} ${circumference - unpaidLen}`}
                   strokeDashoffset={-(confirmedLen + checkingLen)}
-                  strokeLinecap="round"
+                  strokeLinecap="butt"
                 />
               )}
             </g>
@@ -341,7 +341,7 @@ export const CategoryDonutChart: React.FC<CategoryDonutChartProps> = ({
                     strokeWidth={strokeWidth}
                     strokeDasharray={`${slice.len} ${circumference - slice.len}`}
                     strokeDashoffset={slice.offset}
-                    strokeLinecap="round"
+                    strokeLinecap="butt"
                   />
                 ) : null
               ))}
@@ -528,34 +528,39 @@ export const RevenueTrendChart: React.FC<RevenueTrendChartProps> = ({ data = [] 
                 >
                   {pt.label}
                 </text>
-
-                {/* 懸浮 Tooltip */}
-                {isHovered && (
-                  <g>
-                    <rect
-                      x={Math.max(10, Math.min(svgWidth - 110, pt.x - 50))}
-                      y={Math.max(5, pt.y - 32)}
-                      width="100"
-                      height="24"
-                      rx="4"
-                      fill="var(--wa-text, #0f172a)"
-                      className="wa-chart-tooltip-bg"
-                    />
-                    <text
-                      x={Math.max(10, Math.min(svgWidth - 110, pt.x - 50)) + 50}
-                      y={Math.max(5, pt.y - 32) + 16}
-                      textAnchor="middle"
-                      fill="#ffffff"
-                      fontSize="11"
-                      fontWeight="600"
-                    >
-                      NT$ {pt.amount.toLocaleString()}
-                    </text>
-                  </g>
-                )}
               </g>
             );
           })}
+
+          {/* 懸浮 Tooltip 覆蓋層 (置於所有點之後，確保不被後續點覆蓋) */}
+          {hoveredIdx !== null && points[hoveredIdx] && (() => {
+            const pt = points[hoveredIdx];
+            const tooltipX = Math.max(10, Math.min(svgWidth - 110, pt.x - 50));
+            const tooltipY = Math.max(5, pt.y - 32);
+            return (
+              <g pointerEvents="none">
+                <rect
+                  x={tooltipX}
+                  y={tooltipY}
+                  width="100"
+                  height="24"
+                  rx="4"
+                  fill="var(--wa-text, #0f172a)"
+                  className="wa-chart-tooltip-bg"
+                />
+                <text
+                  x={tooltipX + 50}
+                  y={tooltipY + 16}
+                  textAnchor="middle"
+                  fill="#ffffff"
+                  fontSize="11"
+                  fontWeight="600"
+                >
+                  NT$ {pt.amount.toLocaleString()}
+                </text>
+              </g>
+            );
+          })()}
         </svg>
       </div>
     </div>

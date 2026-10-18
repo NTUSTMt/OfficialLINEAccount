@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.312-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.313-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.312)](#7-最新版本異動紀錄-changelog-v01312)
+- [7. 最新版本異動紀錄 (Changelog v0.1.313)](#7-最新版本異動紀錄-changelog-v01313)
 
 ---
 
@@ -204,7 +204,24 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.312)
+## 7. 最新版本異動紀錄 (Changelog v0.1.313)
+
+### v0.1.313 (2026-10-18)
+- **財務對帳重構最終審查回饋優化與防禦加固 (Final Whole-Branch Review Fixes)**:
+  - **`AddPaymentDrawer.tsx` 推播失敗警示橫幅與訊息格式化**:
+    - 當勾選「立即透過 LINE 發送繳費通知卡片」且存在推播失敗時 (`notifyFailCount > 0`)，即時格式化提示文字為 `成功建立 ${res.count} 筆款項請求（其中 ${notifyFailCount} 筆 LINE 通知推播失敗）`。
+    - 導入琥珀色警示橫幅樣式 (`wa-drawer-alert-warning` 與 `AlertTriangle` 圖示)，明確提醒幹部部分社員通知未成功發送，提升後台推播狀態透明度。
+  - **`WebAdminFinance.tsx` 表格操作欄位寬度優化**:
+    - 於 `FINANCE_COLUMNS` 中將 `actions` 欄位調整為 `{ key: 'actions', label: '操作', defaultWidth: 70, minWidth: 64 }`，為編輯筆與催繳鈴鐺雙圖示按鈕提供舒適的排列空間。
+  - **`Payment.tsx` 網址金額參數防禦性清洗**:
+    - 於解析 URL / Hash 傳入之 `urlAmount` 時，使用 `Math.max(0, parseInt(urlAmount, 10))` 嚴格防止負數金額注入。
+  - **`FinanceReportCharts.tsx` 視覺化圖表渲染細節優化**:
+    - 在 `RevenueTrendChart` 趨勢走勢圖中，將懸浮 Tooltip 改為在所有數據點 `points.map` 渲染完成後以覆蓋層 `<g pointerEvents="none">` 呈現於 SVG 最上層，確保絕不被後續數據點遮蔽。
+    - 在 `StatusDonutChart` 與 `CategoryDonutChart` 甜甜圈圓環圖中，將切片圓弧 `strokeLinecap` 由 `"round"` 修正為 `"butt"`，消除相鄰切片間的突起重疊接縫。
+  - **`supabaseClient.ts` 手動建立款項錯誤代碼透明化**:
+    - 在 `createManualPaymentRequestsInSupabase` 寫入失敗時，格式化錯誤訊息為 `[新增 payments 失敗]: ${insertErr.message} (代碼: ${insertErr.code || 'UNKNOWN'})`，嚴格落實專案錯誤透明度規範。
+  - **自動化測試套件**:
+    - 新增 `test/126_finance_redesign_final_fixes.test.mjs`，全面驗證通知失敗提醒格式、操作欄寬度、負數金額過濾、圖表覆蓋層與 butt 圓環切片、資料庫錯誤代碼透明化與嚴格零 Emoji 規範。
 
 ### v0.1.312 (2026-10-18)
 - **財務對帳後台主頁面深度整合 (WebAdminFinance.tsx 全域狀態與連動)**:

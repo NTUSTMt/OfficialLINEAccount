@@ -2884,6 +2884,12 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   color: #991b1b;
 }
 
+.wa-drawer-alert-warning {
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
 .wa-drawer-alert-success {
   background-color: #f0fdf4;
   border: 1px solid #bbf7d0;
