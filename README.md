@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.311-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.312-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.311)](#7-最新版本異動紀錄-changelog-v01311)
+- [7. 最新版本異動紀錄 (Changelog v0.1.312)](#7-最新版本異動紀錄-changelog-v01312)
 
 ---
 
@@ -204,7 +204,33 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.311)
+## 7. 最新版本異動紀錄 (Changelog v0.1.312)
+
+### v0.1.312 (2026-10-18)
+- **財務對帳後台主頁面深度整合 (WebAdminFinance.tsx 全域狀態與連動)**:
+  - **工具列活動專屬篩選器與層級分組**:
+    - 工具列新增活動下拉選單，依狀態與時限動態分組：
+      - 「全部活動款項 (All Events)」
+      - 「進行中 / 報名中活動」
+      - 「籌備中 / 未來活動」
+      - 「已結束歷史活動」
+    - 選取特定活動專案時，表格與頂部三大統計卡片（待確認/待繳費總額、已核銷入帳總額、本專案全部登記款項）即時重新動態彙總。
+  - **工具列雙操作按鈕擴充**:
+    - 新增「財務分析報表」按鈕（帶有 `BarChart3` 圖示）：開啟視覺化財務報表抽屜 `FinanceReportDrawer`。
+    - 新增「+ 新增繳費項目」按鈕（帶有 `Plus` 圖示，採用 `web-admin-btn-primary` 綠色強調樣式）：開啟新增繳費/追加款項抽屜 `AddPaymentDrawer`。
+  - **款項資料列與詳情抽屜催繳通知聯動**:
+    - 於表格「操作」欄位（寬度優化為 70px）新增鈴鐺按鈕，提供快速發送個別催繳通知途徑。
+    - 於側邊滑出式詳情編輯抽屜之「幹部審核與狀態設定」標題旁新增「催繳通知」快捷按鈕。
+    - 點擊後開啟二次確認彈窗 `PaymentReminderModal`，支援即時 LINE Flex 卡片預覽與推播發送。
+  - **抽屜與彈窗全域掛載與自動重新載入**:
+    - 完整掛載 `FinanceReportDrawer`、`AddPaymentDrawer` 與 `PaymentReminderModal`。
+    - 當新增款項、變更核銷或發送催繳完成後，自動重新拉取 Supabase 財務資料與名冊，確保狀態保持最新。
+- **前期審查回饋延宕優化 (Deferred Polish Fixes)**:
+  - **`AddPaymentDrawer.tsx`**: 強化活動金額字串清洗，採用 `.replace(/[^0-9]/g, '')` 濾除非數字字元（如 `$1200` 或費用文字），確保數值型別轉換正確。
+  - **`FinanceReportDrawer.tsx`**: 修正 `useEffect` 相依性，僅在外部傳入之 `selectedEventId` 屬性變動時同步更新，避免抽屜內部切換活動選單時遭到不當覆寫。
+  - **`webAdmin.css`**: 列印樣式 `@media print` 加上 `body:has(.wa-finance-report-drawer)` 範圍守衛，防止列印系統其他一般頁面時畫面遭到空白隱藏。
+- **自動化測試套件**:
+  - 新增 `test/125_web_admin_finance_integration.test.mjs`，驗證主頁面模組整合、活動篩選分組、統計聯動、延宕修復項目與嚴格零 Emoji 規範。
 
 ### v0.1.311 (2026-10-18)
 - **新增繳費 / 追加款項抽屜元件實作 (AddPaymentDrawer.tsx)**:

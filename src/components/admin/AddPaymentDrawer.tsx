@@ -9,7 +9,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Bell,
-  DollarSign,
   Calendar,
   RefreshCw,
   Send,
@@ -135,7 +134,8 @@ export const AddPaymentDrawer: React.FC<AddPaymentDrawerProps> = ({
         const ev = events.find((e) => e.id === eventId);
         if (ev) {
           setTitle(`${ev.name} 活動費用`);
-          const costNum = Number(ev.cost);
+          const costClean = (ev.cost || '').replace(/[^0-9]/g, '');
+          const costNum = Number(costClean);
           if (!isNaN(costNum) && costNum > 0) {
             setUniformAmount(costNum);
           }

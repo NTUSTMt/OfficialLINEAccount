@@ -3,13 +3,10 @@ import {
   X,
   Download,
   Printer,
-  Calendar,
   TrendingUp,
   BarChart3,
   Bell,
-  AlertCircle,
   CheckCircle2,
-  Filter,
 } from 'lucide-react';
 import type { AdminFinanceItem } from '../../types/admin';
 import type { AdminEvent } from '../../types/event';
@@ -80,12 +77,12 @@ export const FinanceReportDrawer: React.FC<FinanceReportDrawerProps> = ({
 
   // 同步外部傳入的 selectedEventId 或預設第一個活動
   useEffect(() => {
-    if (selectedEventId) {
+    if (selectedEventId && selectedEventId !== 'ALL') {
       setCurrentEventId(selectedEventId);
-    } else if (!currentEventId && events.length > 0) {
-      setCurrentEventId(events[0].id);
+    } else if (events.length > 0) {
+      setCurrentEventId((prev) => prev || events[0].id);
     }
-  }, [selectedEventId, events, currentEventId]);
+  }, [selectedEventId]);
 
   // 切換學期設定
   const handleSemesterChange = (semesterKey: string) => {
