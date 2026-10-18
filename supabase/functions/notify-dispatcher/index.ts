@@ -1949,7 +1949,7 @@ function buildPaymentReminderFlex(params: {
           layout: "horizontal",
           contents: [
             { type: "text", text: "應繳金額：", size: "xs", color: "#64748B", flex: 3 },
-            { type: "text", text: `NT$ ${params.amount}`, size: "xs", color: "#D97706", weight: "bold", flex: 7 },
+            { type: "text", text: `NT$ ${Number(params.amount).toLocaleString()}`, size: "xs", color: "#D97706", weight: "bold", flex: 7 },
           ],
         },
         ...(params.dueDate
@@ -2041,6 +2041,11 @@ function buildPaymentReminderFlex(params: {
 
 // 11. 繳費提醒推播通知 (notify_payment_reminder)
 async function handleNotifyPaymentReminder(json: Record<string, any>) {
+  const isOfficer = await isUserOfficer(json.verifiedUserId);
+  if (!isOfficer) {
+    return errorResponse("權限不足：僅限社團幹部發送繳費提醒", 403);
+  }
+
   const lineUserId = json.lineUserId || json.userId;
   if (!lineUserId) {
     return errorResponse("缺少目標使用者 LINE ID (lineUserId)", 400);
@@ -2092,15 +2097,19 @@ async function handleNotifyPaymentReminder(json: Record<string, any>) {
     actionUrl,
   });
 
-  const altText = `【繳費提醒】${title} - NT$ ${amount}`;
+  const altText = `【繳費提醒】${title} - NT$ ${Number(amount).toLocaleString()}`;
 
-  await pushMessage(lineUserId, [
+  const pushRes = await pushMessage(lineUserId, [
     {
       type: "flex",
       altText,
       contents: reminderFlex,
     },
   ]);
+
+  if (!pushRes.success) {
+    return errorResponse(`發送 LINE 繳費提醒失敗: ${pushRes.error || "未知錯誤"}`, 502);
+  }
 
   return successResponse({
     message: "繳費提醒推播已成功送出",

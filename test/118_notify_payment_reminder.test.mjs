@@ -1,4 +1,4 @@
-import { test, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
@@ -25,5 +25,19 @@ describe('118. notify_payment_reminder and Flex card template', () => {
     assert.match(code, /notes/);
     assert.match(code, /bankInfo/);
     assert.match(code, /actionUrl/);
+  });
+
+  it('verifies officer authorization check in handleNotifyPaymentReminder', () => {
+    assert.match(code, /isUserOfficer\(\s*json\.verifiedUserId\s*\)/);
+    assert.match(code, /權限不足：僅限社團幹部發送繳費提醒/);
+  });
+
+  it('verifies pushMessage error transparency and status checking', () => {
+    assert.match(code, /if\s*\(!pushRes\.success\)/);
+    assert.match(code, /發送 LINE 繳費提醒失敗/);
+  });
+
+  it('verifies amount formatting with toLocaleString', () => {
+    assert.match(code, /Number\(params\.amount\)\.toLocaleString\(\)/);
   });
 });
