@@ -736,9 +736,16 @@ DECLARE
     v_mapped_pay_status payment_status_enum;
     v_payment RECORD;
     v_target_user_id TEXT;
-    v_is_membership BOOLEAN;
+    v_is_membership BOOLEAN := FALSE;
     v_extracted_expiry TEXT;
     v_calculated_expiry DATE;
+    v_selected_ids JSONB;
+    v_event_ids TEXT[] := ARRAY[]::TEXT[];
+    v_loan_ids TEXT[] := ARRAY[]::TEXT[];
+    v_item_id TEXT;
+    v_signup RECORD;
+    v_new_signup_status event_signup_status_enum;
+    i INTEGER;
 BEGIN
     v_is_officer := is_officer(p_officer_line_user_id);
 
@@ -767,37 +774,100 @@ BEGIN
             updated_at = NOW()
         WHERE id = p_payment_id;
 
-        -- 判定是否為社費繳納 (支援 target_type 與 type 文字特徵)
-        v_is_membership := (
-            p_target_type = 'membership' 
-            OR v_payment.target_type = 'membership'
-            OR v_payment.type ILIKE '%社費%' 
-            OR v_payment.type ILIKE '%Membership%'
-        );
-
-        -- A. 活動報名連動
-        IF (p_target_type = 'event' OR v_payment.target_type = 'event' OR v_payment.type ILIKE '%活動%') AND v_target_user_id IS NOT NULL THEN
-            UPDATE event_signups
-            SET payment_status = v_mapped_pay_status, updated_at = NOW()
-            WHERE line_user_id = v_target_user_id 
-              AND (event_id = p_target_id OR v_payment.target_id = event_id OR p_target_id IS NULL);
+        -- 1. 解析 selected_ids 陣列
+        v_selected_ids := COALESCE(v_payment.selected_ids, '[]'::jsonb);
+        IF jsonb_typeof(v_selected_ids) = 'array' AND jsonb_array_length(v_selected_ids) > 0 THEN
+            FOR i IN 0 .. (jsonb_array_length(v_selected_ids) - 1) LOOP
+                v_item_id := v_selected_ids->>i;
+                IF v_item_id LIKE 'act_%' THEN
+                    v_event_ids := array_append(v_event_ids, substring(v_item_id from 5));
+                ELSIF v_item_id LIKE 'eq_%' THEN
+                    v_loan_ids := array_append(v_loan_ids, substring(v_item_id from 4));
+                ELSIF v_item_id = 'fee_membership' THEN
+                    v_is_membership := TRUE;
+                END IF;
+            END LOOP;
         END IF;
 
-        -- B. 裝備租借連動
-        IF (p_target_type = 'loan' OR v_payment.target_type = 'loan' OR v_payment.type ILIKE '%裝備%' OR v_payment.type ILIKE '%租借%') THEN
-            IF p_target_id IS NOT NULL THEN
-                UPDATE loans
-                SET payment_status = v_mapped_pay_status, updated_at = NOW()
-                WHERE id = p_target_id;
-            ELSIF v_payment.target_id IS NOT NULL THEN
-                UPDATE loans
-                SET payment_status = v_mapped_pay_status, updated_at = NOW()
-                WHERE id = v_payment.target_id;
-            ELSIF v_target_user_id IS NOT NULL THEN
-                UPDATE loans
-                SET payment_status = v_mapped_pay_status, updated_at = NOW()
-                WHERE line_user_id = v_target_user_id AND (payment_status != '已繳費 Paid' OR NOT v_is_confirmed);
+        -- 若前端有傳入明確 target_id 或 payments 表有紀錄，亦併入精準名單
+        IF p_target_id IS NOT NULL AND trim(p_target_id) != '' THEN
+            IF p_target_type = 'event' THEN
+                v_event_ids := array_append(v_event_ids, trim(p_target_id));
+            ELSIF p_target_type = 'loan' THEN
+                v_loan_ids := array_append(v_loan_ids, trim(p_target_id));
             END IF;
+        END IF;
+
+        IF v_payment.target_id IS NOT NULL AND trim(v_payment.target_id) != '' THEN
+            IF v_payment.target_type = 'event' THEN
+                v_event_ids := array_append(v_event_ids, trim(v_payment.target_id));
+            ELSIF v_payment.target_type = 'loan' THEN
+                v_loan_ids := array_append(v_loan_ids, trim(v_payment.target_id));
+            END IF;
+        END IF;
+
+        -- 判定是否包含社費
+        IF NOT v_is_membership THEN
+            v_is_membership := (
+                p_target_type = 'membership' 
+                OR v_payment.target_type = 'membership'
+                OR v_payment.type ILIKE '%社費%' 
+                OR v_payment.type ILIKE '%Membership%'
+            );
+        END IF;
+
+        -- A. 活動報名連動 (精準限定勾選活動，嚴禁全表誤傷)
+        IF v_target_user_id IS NOT NULL THEN
+            IF array_length(v_event_ids, 1) > 0 THEN
+                FOR v_signup IN 
+                    SELECT id, status 
+                    FROM event_signups 
+                    WHERE line_user_id = v_target_user_id 
+                      AND event_id = ANY(v_event_ids)
+                LOOP
+                    v_new_signup_status := v_signup.status;
+                    IF v_is_confirmed AND v_signup.status::text LIKE '%正取%' AND v_signup.status::text NOT LIKE '%已繳費%' THEN
+                        v_new_signup_status := '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+                    END IF;
+
+                    UPDATE event_signups
+                    SET payment_status = v_mapped_pay_status,
+                        status = v_new_signup_status,
+                        updated_at = NOW()
+                    WHERE id = v_signup.id;
+                END LOOP;
+            ELSIF (p_target_type = 'event' OR v_payment.target_type = 'event' OR v_payment.type ILIKE '%活動%') THEN
+                -- 舊版無 selected_ids 與 target_id 之 fallback：只更新處於「待確認 Checking」的活動報名，嚴禁全表更動
+                FOR v_signup IN 
+                    SELECT id, status 
+                    FROM event_signups 
+                    WHERE line_user_id = v_target_user_id 
+                      AND payment_status = '待確認 Checking'
+                LOOP
+                    v_new_signup_status := v_signup.status;
+                    IF v_is_confirmed AND v_signup.status::text LIKE '%正取%' AND v_signup.status::text NOT LIKE '%已繳費%' THEN
+                        v_new_signup_status := '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+                    END IF;
+
+                    UPDATE event_signups
+                    SET payment_status = v_mapped_pay_status,
+                        status = v_new_signup_status,
+                        updated_at = NOW()
+                    WHERE id = v_signup.id;
+                END LOOP;
+            END IF;
+        END IF;
+
+        -- B. 裝備租借連動 (精準限定勾選租借單)
+        IF array_length(v_loan_ids, 1) > 0 THEN
+            UPDATE loans
+            SET payment_status = v_mapped_pay_status, updated_at = NOW()
+            WHERE id = ANY(v_loan_ids);
+        ELSIF (p_target_type = 'loan' OR v_payment.target_type = 'loan' OR v_payment.type ILIKE '%裝備%' OR v_payment.type ILIKE '%租借%') AND v_target_user_id IS NOT NULL THEN
+            -- 舊版 fallback：只更新處於「待確認 Checking」的租借紀錄
+            UPDATE loans
+            SET payment_status = v_mapped_pay_status, updated_at = NOW()
+            WHERE line_user_id = v_target_user_id AND payment_status = '待確認 Checking';
         END IF;
 
         -- C. 社費繳納連動 (更新繳費狀態、正式社員標記、若有註明則填入到期日)

@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.306-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.308-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.306)](#7-最新版本異動紀錄-changelog-v01306)
+- [7. 最新版本異動紀錄 (Changelog v0.1.308)](#7-最新版本異動紀錄-changelog-v01308)
 
 ---
 
@@ -204,7 +204,18 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.306)
+## 7. 最新版本異動紀錄 (Changelog v0.1.307)
+
+### v0.1.307 (2026-10-16)
+- **試算表名冊繳費狀態正規化子字串命中誤判修復 (Fix Payment Status Normalization Substring Collision)**:
+  - **根本原因 (Root Cause)**:
+    - `src/gas_worker.js` 之 `_normalizePaymentStatus` 原先先判斷 `str.indexOf('paid') > -1`。
+    - 當 Supabase 傳入 `'未繳費 Unpaid'` 或 `'Unpaid'` 時，字尾必然包含 `'paid'`，導致 `indexOf('paid')` 大於 -1 優先命中，將所有未繳費報名者全數錯誤正規化為 `'已繳費 Paid'`。
+  - **修復方案 ([src/gas_worker.js](file:///Users/brianhung/Documents/OfficialLINEAccount/src/gas_worker.js))**:
+    - 重構 `_normalizePaymentStatus` 判定順序，強制優先攔截 `'未繳'`、`'unpaid'` 與 `'待繳'`，確保未繳費狀態直接回傳 `'未繳費 Unpaid'`，杜絕被後續 `paid` 子字串誤判。
+  - **測試驅動開發 (TDD) 與驗證 ([test/110_event_sheet_auto_resync_and_full_roster.test.mjs](file:///Users/brianhung/Documents/OfficialLINEAccount/test/110_event_sheet_auto_resync_and_full_roster.test.mjs))**:
+    - 新增第 7 項單元測試，嚴格驗證 `未繳費 Unpaid`、`Unpaid`、`未繳費`、`待繳費 Unpaid` 皆能正確判定為 `未繳費 Unpaid`，絕不被 `paid` 誤判。
+    - 587 項單元測試全數 100% 通過。
 
 ### v0.1.306 (2026-10-15)
 - **歷史與冗餘資源歸檔整理，以及 Supabase Edge Functions 行為等價性驗證**:
@@ -2714,5 +2725,21 @@ pnpm test
   - 自動化測試套件：
     - 新增 `test/116_roster_table_fields_expansion.test.mjs` 全面驗證型別定義、欄位擴展、查詢欄位包含性、搜尋過濾與手機版彈窗呈現。
 
-
-
+### v0.1.308 (2026-10-18)
+- 繳費系統與 0 元活動邏輯修復、幹部核銷隔離與實名化 (Payment System Logic, Zero-Fee Automation & Attribution Alignment)：
+  - Supabase 資料庫既有資料補正 (Database Remediation)：
+    - 補正林聖恩報名單 (`S0916174657`)：原幹部後台核銷時未將主狀態推進為 `'正取（已繳費）Confirmed (Paid)'` 造成脫鉤，現已更新主狀態與繳費狀態為已繳費。
+    - 補正 17 筆 0 元活動正取隊員狀態：針對 `E2609-02`（陽明山大縱走東段）與 `E2609-05`（北插天山）之 17 筆正取紀錄，批次更新為 `'正取（已繳費）Confirmed (Paid)'` 與 `'已繳費 Paid'`。
+    - 補正 `payments` 表中 3 筆歷史英文 `'pending'` 為標準列舉值 `'未通知'`。
+  - 0 元活動審核流轉與額度保護 (Zero-Fee Event Automation & Quota Protection)：
+    - 資料庫 RPC (`supabase/admin_events_rpc.sql` 之 `update_signup_status_rpc`)：審核正取時自動判定活動費用 `fee = 0`，若為 0 元活動，狀態原子設置為 `status = '正取（已繳費）Confirmed (Paid)'`、`payment_status = '已繳費 Paid'`、`paid_amount = 0`，徹底解決 0 元活動在雙端介面不可見而卡在未繳費的僵局。
+    - 嚴格落實社團 LINE 推播額度保護：0 元活動在錄取時自動完成繳費，絕不發送繳費確認推播，節省寶貴訊息額度。
+  - 幹部後台核銷 RPC 精準隔離與主狀態推進 (`supabase/admin_portal_rpc.sql`)：
+    - 修正 `update_admin_payment_status_rpc`：移除 `OR p_target_id IS NULL` 連帶誤傷漏洞，改為全面對齊 Email 單鍵核銷之解析邏輯，解析 `selected_ids` 並精準鎖定 `event_id = ANY(v_event_ids)`，同時將主狀態原子推進至 `'正取（已繳費）Confirmed (Paid)'`。
+  - 核銷人身分實名識別 (`src/pages/ConfirmPayment.tsx`, `src/pages/AdminFinance.tsx`, `src/utils/supabaseClient.ts`)：
+    - 免登入單鍵核銷頁面 (`ConfirmPayment.tsx`)：加入 `liff.getProfile()` 讀取點擊幹部之 LINE 顯示名稱，傳入 `幹部姓名 (LINE單鍵核銷)`；外部瀏覽器開啟則回退標記為 `'Email 單鍵核銷'`。
+    - 手機端財務後台 (`AdminFinance.tsx`)：動態取得當前登入幹部的真實姓名，傳入 `幹部姓名 (手機後台核銷)`，取代原先硬編碼的 `'財務幹部線上核銷'`。
+    - 前端用戶端函式 (`supabaseClient.ts`)：`verifyPaymentByTokenFromSupabase` 擴充支援傳遞 `officerName` 參數。
+  - 資料庫遷移與自動化測試：
+    - 建立 `supabase/migrations/20261018_remediate_payment_and_zero_fee_workflow.sql` 供線上資料庫環境同步套用。
+    - 新增 `test/118_payment_system_logic_and_zero_fee_workflow.test.mjs`，包含 13 項業務模擬測試與原始碼靜態規格驗證，全數通過。

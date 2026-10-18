@@ -115,5 +115,31 @@ describe('110. 活動試算表全量 23 筆名冊同步與前端 Failed to fetch
       'gas_worker.js 必須具備 Data Validation 報錯救援防護'
     );
   });
+
+  it('7. _normalizePaymentStatus 必須優先處理 Unpaid / 未繳費，絕不可因 paid 子字串誤判為「已繳費 Paid」', () => {
+    const workerContent = fs.readFileSync(workerPath, 'utf8');
+    
+    // 提取 gas_worker.js 中的 _normalizePaymentStatus 函式字串並動態 eval 執行檢驗
+    const fnMatch = workerContent.match(/function _normalizePaymentStatus\([\s\S]*?\n\}/);
+    assert.ok(fnMatch, 'gas_worker.js 必須包含 _normalizePaymentStatus 函式定義');
+    
+    const normalizePaymentStatus = new Function('val', `
+      ${fnMatch[0]}
+      return _normalizePaymentStatus(val);
+    `);
+
+    // 核心邊界測試：Unpaid 結尾包含 paid，絕不可回傳 已繳費 Paid
+    assert.equal(normalizePaymentStatus('未繳費 Unpaid'), '未繳費 Unpaid', '「未繳費 Unpaid」必須精確正規化為「未繳費 Unpaid」');
+    assert.equal(normalizePaymentStatus('Unpaid'), '未繳費 Unpaid', '「Unpaid」必須正規化為「未繳費 Unpaid」');
+    assert.equal(normalizePaymentStatus('未繳費'), '未繳費 Unpaid', '「未繳費」必須正規化為「未繳費 Unpaid」');
+    assert.equal(normalizePaymentStatus('待繳費 Unpaid'), '未繳費 Unpaid', '「待繳費 Unpaid」必須正規化為「未繳費 Unpaid」');
+
+    // 其他合法狀態測試
+    assert.equal(normalizePaymentStatus('待確認 Checking'), '待確認 Checking', '「待確認 Checking」必須正規化為「待確認 Checking」');
+    assert.equal(normalizePaymentStatus('已繳費 Paid'), '已繳費 Paid', '「已繳費 Paid」必須正規化為「已繳費 Paid」');
+    assert.equal(normalizePaymentStatus('Paid'), '已繳費 Paid', '「Paid」必須正規化為「已繳費 Paid」');
+    assert.equal(normalizePaymentStatus(null), '未繳費 Unpaid', 'null 預設必須為「未繳費 Unpaid」');
+  });
 });
+
 

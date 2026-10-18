@@ -275,6 +275,7 @@ AS $$
 DECLARE
     v_status_val event_signup_status_enum;
     v_status_text TEXT;
+    v_event_fee INTEGER := 0;
 BEGIN
     IF NOT is_officer(p_officer_line_user_id) THEN
         RETURN jsonb_build_object('status', 'error', 'message', '權限不足，非幹部無法審核');
@@ -299,10 +300,39 @@ BEGIN
         v_status_val := '審核中 Checking'::event_signup_status_enum;
     END IF;
 
-    UPDATE event_signups
-    SET status = v_status_val,
-        updated_at = NOW()
-    WHERE id = trim(p_signup_id);
+    -- 查詢活動費用 (判定是否為 0 元免費活動)
+    SELECT COALESCE(e.fee, 0) INTO v_event_fee
+    FROM event_signups s
+    LEFT JOIN events e ON s.event_id = e.id
+    WHERE s.id = trim(p_signup_id);
+
+    -- 若為 0 元活動且錄取正取，自動推進為「正取（已繳費）」且 payment_status 為「已繳費 Paid」（完全不發送 LINE 推播，節省額度）
+    IF v_status_text LIKE '%正取%' OR v_status_text LIKE '%Confirmed%' THEN
+        IF v_event_fee = 0 THEN
+            v_status_val := '正取（已繳費）Confirmed (Paid)'::event_signup_status_enum;
+            UPDATE event_signups
+            SET status = v_status_val,
+                payment_status = '已繳費 Paid'::payment_status_enum,
+                updated_at = NOW()
+            WHERE id = trim(p_signup_id);
+        ELSIF v_status_text LIKE '%正取（已繳費）%' OR v_status_text LIKE '%Confirmed (Paid)%' THEN
+            UPDATE event_signups
+            SET status = v_status_val,
+                payment_status = '已繳費 Paid'::payment_status_enum,
+                updated_at = NOW()
+            WHERE id = trim(p_signup_id);
+        ELSE
+            UPDATE event_signups
+            SET status = v_status_val,
+                updated_at = NOW()
+            WHERE id = trim(p_signup_id);
+        END IF;
+    ELSE
+        UPDATE event_signups
+        SET status = v_status_val,
+            updated_at = NOW()
+        WHERE id = trim(p_signup_id);
+    END IF;
 
     IF NOT FOUND THEN
         RETURN jsonb_build_object('status', 'error', 'message', '找不到該筆報名紀錄 (' || trim(p_signup_id) || ')');

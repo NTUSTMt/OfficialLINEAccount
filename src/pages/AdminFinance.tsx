@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import {
   fetchFinanceItemsFromSupabase,
-  updatePaymentAndLinkedStatusInSupabase
+  updatePaymentAndLinkedStatusInSupabase,
+  fetchMemberProfileFromSupabase
 } from '../utils/supabaseClient';
 import type { AdminFinanceItem } from '../types/admin';
 import { NotionFilterBar, type FilterGroup, type SortOption } from '../components/admin/NotionFilterBar';
@@ -24,6 +25,7 @@ const SORT_OPTIONS: SortOption[] = [
 ];
 
 export default function AdminFinance({ userId }: { userId?: string }) {
+  const [officerName, setOfficerName] = useState<string>('管理幹部');
   const [items, setItems] = useState<AdminFinanceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewMemberUserId, setPreviewMemberUserId] = useState<string | null>(null);
@@ -73,6 +75,15 @@ export default function AdminFinance({ userId }: { userId?: string }) {
 
   useEffect(() => {
     loadData(false);
+    if (userId && userId !== 'TEST_USER_ID') {
+      fetchMemberProfileFromSupabase(userId)
+        .then((profile) => {
+          if (profile && profile.name) {
+            setOfficerName(profile.name.trim());
+          }
+        })
+        .catch(() => {});
+    }
   }, [userId]);
 
   const handleOpenDetail = (it: AdminFinanceItem) => {
@@ -102,7 +113,7 @@ export default function AdminFinance({ userId }: { userId?: string }) {
             amount: selectedItem.amount,
             items: selectedItem.type,
             lineUserId: selectedItem.line_user_id,
-            confirmedBy: '財務幹部線上審核'
+            confirmedBy: officerName ? `${officerName} (管理幹部)` : '管理幹部'
           });
 
           // 成功觸發推播後，自動將通知狀態設為已通知
@@ -118,7 +129,7 @@ export default function AdminFinance({ userId }: { userId?: string }) {
         targetType: selectedItem.target_type,
         targetId: selectedItem.target_id,
         newStatus: editStatus,
-        officerName: '財務幹部線上核銷',
+        officerName: officerName || '管理幹部',
         lineUserId: selectedItem.line_user_id,
         notes: officerNotes,
         officerUserId: userId,

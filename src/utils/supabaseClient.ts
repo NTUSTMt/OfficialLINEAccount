@@ -612,7 +612,8 @@ export interface VerifyPaymentResult {
  */
 export const verifyPaymentByTokenFromSupabase = async (
   paymentId: string,
-  token: string
+  token: string,
+  officerName?: string
 ): Promise<VerifyPaymentResult> => {
   if (!supabase || !paymentId || !token) {
     return { success: false, error: '缺少單號或安全金鑰 (Missing paymentId or verifyToken)' };
@@ -622,7 +623,7 @@ export const verifyPaymentByTokenFromSupabase = async (
     const { data, error } = await supabase.rpc('verify_payment_by_token', {
       p_payment_id: paymentId,
       p_verify_token: token,
-      p_officer_name: 'Email 單鍵核銷'
+      p_officer_name: officerName || 'Email 單鍵核銷'
     });
 
     if (error) {

@@ -40,8 +40,20 @@ export default function ConfirmPayment() {
       }
 
       try {
+        let officerName = 'Email 單鍵核銷';
+        try {
+          if (liff.isLoggedIn()) {
+            const profile = await liff.getProfile();
+            if (profile && profile.displayName) {
+              officerName = `${profile.displayName.trim()} (LINE單鍵核銷)`;
+            }
+          }
+        } catch (liffErr) {
+          console.warn('[ConfirmPayment] 讀取 LIFF 幹部資料略過:', liffErr);
+        }
+
         // 1. 直連 Supabase RPC 執行安全 Token 單鍵核銷 (< 50ms)
-        const res = await verifyPaymentByTokenFromSupabase(paymentId, token);
+        const res = await verifyPaymentByTokenFromSupabase(paymentId, token, officerName);
 
         if (!isMounted) return;
 
@@ -69,7 +81,7 @@ export default function ConfirmPayment() {
               amount: res.amount,
               items: res.items,
               lineUserId: res.lineUserId,
-              confirmedBy: '單鍵快速核銷'
+              confirmedBy: officerName
             });
           } catch (e) {
             console.warn('[ConfirmPayment] 推播通知例外:', e);

@@ -853,12 +853,16 @@ function _importExistingSignupsToSheet(sheet, eventId, signupsList, clearExistin
 }
 
 function _normalizePaymentStatus(val) {
-  var str = String(val || '').trim();
-  if (str.indexOf('已繳') > -1 || str.toLowerCase().indexOf('paid') > -1) {
-    return '已繳費 Paid';
+  var str = String(val || '').trim().toLowerCase();
+  // 必須優先攔截「未繳」、「unpaid」、「待繳」，防止 unpaid 被後續 paid 子字串命中誤判
+  if (str.indexOf('未繳') > -1 || str.indexOf('unpaid') > -1 || str.indexOf('待繳') > -1) {
+    return '未繳費 Unpaid';
   }
-  if (str.indexOf('待確認') > -1 || str.toLowerCase().indexOf('checking') > -1) {
+  if (str.indexOf('待確認') > -1 || str.indexOf('checking') > -1) {
     return '待確認 Checking';
+  }
+  if (str.indexOf('已繳') > -1 || str.indexOf('paid') > -1) {
+    return '已繳費 Paid';
   }
   return '未繳費 Unpaid';
 }
