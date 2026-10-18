@@ -29,10 +29,56 @@ function Payment({ userId }: { userId: string }) {
   const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [unpaidList, setUnpaidList] = useState<{ membership: UnpaidItem[], activities: UnpaidItem[], equipments: UnpaidItem[] }>({
+
+  // 解析網址查詢參數 (支援追加款項、特定款項催繳與專屬繳費連結)
+  const urlParams = useMemo(() => {
+    let searchParams = new URLSearchParams(window.location.search);
+    let targetId = searchParams.get('targetId');
+    let urlType = searchParams.get('type') || searchParams.get('paramType');
+    let urlAmount = searchParams.get('amount') || searchParams.get('paramAmount');
+    let urlName = searchParams.get('title') || searchParams.get('name') || searchParams.get('item');
+
+    // 若透過 LIFF liff.state 轉入，自 liff.state 二次解析
+    if (!targetId) {
+      const liffState = searchParams.get('liff.state');
+      if (liffState && liffState.includes('?')) {
+        const nestedParams = new URLSearchParams(liffState.split('?')[1]);
+        targetId = nestedParams.get('targetId');
+        if (!urlType) urlType = nestedParams.get('type') || nestedParams.get('paramType');
+        if (!urlAmount) urlAmount = nestedParams.get('amount') || nestedParams.get('paramAmount');
+        if (!urlName) urlName = nestedParams.get('title') || nestedParams.get('name') || nestedParams.get('item');
+      }
+    }
+
+    // 支援 hash 傳參 fallback
+    if (!targetId && window.location.hash && window.location.hash.includes('?')) {
+      const hashParams = new URLSearchParams(window.location.hash.split('?')[1]);
+      targetId = hashParams.get('targetId');
+      if (!urlType) urlType = hashParams.get('type') || hashParams.get('paramType');
+      if (!urlAmount) urlAmount = hashParams.get('amount') || hashParams.get('paramAmount');
+      if (!urlName) urlName = hashParams.get('title') || hashParams.get('name') || hashParams.get('item');
+    }
+
+    const parsedAmount = urlAmount ? parseInt(urlAmount, 10) : undefined;
+
+    return {
+      targetId: targetId ? targetId.trim() : null,
+      urlType: urlType ? urlType.trim() : null,
+      urlAmount: (parsedAmount !== undefined && !isNaN(parsedAmount)) ? parsedAmount : undefined,
+      urlName: urlName ? urlName.trim() : null
+    };
+  }, []);
+
+  const [unpaidList, setUnpaidList] = useState<{
+    membership: UnpaidItem[];
+    activities: UnpaidItem[];
+    equipments: UnpaidItem[];
+    additionals: UnpaidItem[];
+  }>({
     membership: [],
     activities: [],
-    equipments: []
+    equipments: [],
+    additionals: []
   });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [last5Digits, setLast5Digits] = useState('');
@@ -201,12 +247,69 @@ function Payment({ userId }: { userId: string }) {
             const sbUnpaid = await fetchUnpaidPaymentsFromSupabase(userId);
             if (sbUnpaid && !ignore) {
               setError(null);
-              setUnpaidList(sbUnpaid);
-              const initialSelectedIds = Array.from(new Set([
-                ...(sbUnpaid.activities || []).map((item: UnpaidItem) => item.id),
-                ...(sbUnpaid.equipments || []).map((item: UnpaidItem) => item.id)
-              ]));
-              setSelectedIds(initialSelectedIds);
+              let additionalsList: UnpaidItem[] = [];
+              let targetSelectId: string | null = null;
+
+              if (urlParams.targetId) {
+                const tid = urlParams.targetId;
+                const inMembership = (sbUnpaid.membership || []).some(m => m.id === tid);
+                const inActivities = (sbUnpaid.activities || []).some(a => a.id === tid || a.id === `act_${tid}`);
+                const inEquipments = (sbUnpaid.equipments || []).some(eq => eq.id === tid || eq.id === `eq_${tid}` || eq.orderId === tid);
+
+                if (inMembership) {
+                  targetSelectId = tid;
+                } else if (inActivities) {
+                  targetSelectId = (sbUnpaid.activities || []).find(a => a.id === tid || a.id === `act_${tid}`)?.id || tid;
+                  if (urlParams.urlAmount !== undefined) {
+                    sbUnpaid.activities = sbUnpaid.activities.map(a => a.id === targetSelectId ? { ...a, amount: urlParams.urlAmount! } : a);
+                  }
+                } else if (inEquipments) {
+                  targetSelectId = (sbUnpaid.equipments || []).find(eq => eq.id === tid || eq.id === `eq_${tid}` || eq.orderId === tid)?.id || tid;
+                  if (urlParams.urlAmount !== undefined) {
+                    sbUnpaid.equipments = sbUnpaid.equipments.map(eq => eq.id === targetSelectId ? { ...eq, amount: urlParams.urlAmount! } : eq);
+                  }
+                } else {
+                  const rawType = (urlParams.urlType || '').toLowerCase();
+                  let autoName = urlParams.urlName || '';
+                  if (!autoName) {
+                    if (rawType === 'activity' || rawType === 'event') {
+                      autoName = `活動追加款項 (${tid})`;
+                    } else if (rawType === 'equipment' || rawType === 'loan') {
+                      autoName = `裝備追加款項 (${tid})`;
+                    } else if (rawType === 'membership') {
+                      autoName = `社費款項 (${tid})`;
+                    } else {
+                      autoName = `追加款項 (${tid})`;
+                    }
+                  }
+
+                  const dynamicItem: UnpaidItem = {
+                    id: tid,
+                    name: autoName,
+                    amount: urlParams.urlAmount !== undefined ? urlParams.urlAmount : 0,
+                    purpose: urlParams.urlType || '追加款項'
+                  };
+                  additionalsList = [dynamicItem];
+                  targetSelectId = tid;
+                }
+              }
+
+              setUnpaidList({
+                membership: sbUnpaid.membership || [],
+                activities: sbUnpaid.activities || [],
+                equipments: sbUnpaid.equipments || [],
+                additionals: additionalsList
+              });
+
+              if (targetSelectId) {
+                setSelectedIds([targetSelectId]);
+              } else {
+                const initialSelectedIds = Array.from(new Set([
+                  ...(sbUnpaid.activities || []).map((item: UnpaidItem) => item.id),
+                  ...(sbUnpaid.equipments || []).map((item: UnpaidItem) => item.id)
+                ]));
+                setSelectedIds(initialSelectedIds);
+              }
               setLoading(false);
             }
           } catch (sbErr: any) {
@@ -247,6 +350,34 @@ function Payment({ userId }: { userId: string }) {
         } else {
           // 測試帳號載入假資料
           if (!ignore) {
+            let additionalsList: UnpaidItem[] = [];
+            let targetSelectId: string | null = null;
+
+            if (urlParams.targetId) {
+              const tid = urlParams.targetId;
+              const rawType = (urlParams.urlType || '').toLowerCase();
+              let autoName = urlParams.urlName || '';
+              if (!autoName) {
+                if (rawType === 'activity' || rawType === 'event') {
+                  autoName = `活動追加款項 (${tid})`;
+                } else if (rawType === 'equipment' || rawType === 'loan') {
+                  autoName = `裝備追加款項 (${tid})`;
+                } else if (rawType === 'membership') {
+                  autoName = `社費款項 (${tid})`;
+                } else {
+                  autoName = `追加款項 (${tid})`;
+                }
+              }
+
+              additionalsList = [{
+                id: tid,
+                name: autoName,
+                amount: urlParams.urlAmount !== undefined ? urlParams.urlAmount : 0,
+                purpose: urlParams.urlType || '追加款項'
+              }];
+              targetSelectId = tid;
+            }
+
             setUnpaidList({
               membership: [{ id: 'fee_membership', name: '113-1 學期社費 (Membership Fee)', amount: 200 }],
               activities: [
@@ -256,9 +387,15 @@ function Payment({ userId }: { userId: string }) {
               equipments: [
                 { id: 'eq_R0720141530', name: '雙人高山帳篷', amount: 100, orderId: 'R0720141530', qty: 1, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用', isOfficial: '否' },
                 { id: 'eq_R0720141530', name: '黑冰 Z400 羽絨睡袋', amount: 120, orderId: 'R0720141530', qty: 2, pickupDate: '2026-07-25', returnDate: '2026-07-27', purpose: '個人使用', isOfficial: '否' }
-              ]
+              ],
+              additionals: additionalsList
             });
-            setSelectedIds(['act_E01', 'eq_R0720141530']);
+
+            if (targetSelectId) {
+              setSelectedIds([targetSelectId]);
+            } else {
+              setSelectedIds(['act_E01', 'eq_R0720141530']);
+            }
           }
         }
       } catch (err: unknown) {
@@ -278,7 +415,7 @@ function Payment({ userId }: { userId: string }) {
     return () => {
       ignore = true;
     };
-  }, [userId, t]);
+  }, [userId, t, urlParams]);
 
   // 所有項目的扁平化清單 (社費部分動態計算金額與名稱，裝備部分若同時繳社費享 5 折)
   const allItemsFlat = useMemo(() => {
@@ -365,6 +502,34 @@ function Payment({ userId }: { userId: string }) {
       };
     });
 
+    const additionalsMapped = (unpaidList.additionals || []).map(item => {
+      const rawType = (urlParams.urlType || '').toLowerCase();
+      let typeLabel = t('payment.type.additional', '追加款項');
+      if (rawType === 'activity' || rawType === 'event') {
+        typeLabel = t('payment.type.activity', '活動報名');
+      } else if (rawType === 'equipment' || rawType === 'loan') {
+        typeLabel = t('payment.type.equipment', '裝備租用');
+      } else if (rawType === 'membership') {
+        typeLabel = t('payment.type.membership', '社籍與社費');
+      }
+
+      return {
+        ...item,
+        type: (rawType || 'additional') as any,
+        typeLabel,
+        orderId: undefined,
+        pickupDate: undefined,
+        returnDate: undefined,
+        items: undefined,
+        purpose: item.purpose,
+        isOfficial: undefined,
+        originalAmount: item.amount,
+        discountDiff: 0,
+        canDiscount: false,
+        isDiscounted: false
+      };
+    });
+
     return [
       ...unpaidList.membership.map(item => ({
         ...item,
@@ -398,9 +563,10 @@ function Payment({ userId }: { userId: string }) {
         canDiscount: false,
         isDiscounted: false
       })),
-      ...groupedEquips
+      ...groupedEquips,
+      ...additionalsMapped
     ];
-  }, [unpaidList, membershipDetails, selectedIds, t]);
+  }, [unpaidList, membershipDetails, selectedIds, t, urlParams]);
 
   // 計算已勾選的總金額
   const totalAmount = useMemo(() => {
@@ -550,7 +716,8 @@ function Payment({ userId }: { userId: string }) {
         setUnpaidList(prev => ({
           membership: hasMembership ? [] : prev.membership,
           activities: prev.activities.filter(a => !uniqueSelectedIds.includes(a.id)),
-          equipments: prev.equipments.filter(eq => !uniqueSelectedIds.includes(eq.id))
+          equipments: prev.equipments.filter(eq => !uniqueSelectedIds.includes(eq.id)),
+          additionals: (prev.additionals || []).filter(add => !uniqueSelectedIds.includes(add.id))
         }));
         setSelectedIds([]);
         setProofFile(null);

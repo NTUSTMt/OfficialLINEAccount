@@ -439,7 +439,8 @@
     "type": {
       "equipment": "Gear Rental",
       "membership": "Membership Fee",
-      "activity": "Event Registration"
+      "activity": "Event Registration",
+      "additional": "Additional Fee"
     },
     "membership": {
       "title": "Membership Fee Details:",

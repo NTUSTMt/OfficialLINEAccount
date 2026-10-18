@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.307-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.308-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.307)](#7-最新版本異動紀錄-changelog-v01307)
+- [7. 最新版本異動紀錄 (Changelog v0.1.308)](#7-最新版本異動紀錄-changelog-v01308)
 
 ---
 
@@ -204,7 +204,22 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.307)
+## 7. 最新版本異動紀錄 (Changelog v0.1.308)
+
+### v0.1.308 (2026-10-18)
+- **社員繳費端支援網址參數解析與追加款項自動帶入 (Payment URL Search Params & Additional Fees Auto-injection)**:
+  - **網址參數多來源解析 (`src/pages/Payment.tsx`)**:
+    - 元件掛載時透過 `URLSearchParams` 完整支援標準 Query 參數 (`window.location.search`)、LIFF 巢狀狀態參數 (`liff.state`) 與 Hash 路由相容解析。
+    - 支援讀取 `targetId`、`type` (或 `paramType`)、`amount` (或 `paramAmount`) 與 `title` (或 `name` / `item`)。
+  - **待繳清單動態注入與自動預選**:
+    - 若 `targetId` 存在於既有項目中，動態切換選取該指定項目並套用指定金額。
+    - 若為全新追加款項，動態建立 `additionals` 項目注入待繳項目清單，預先填入應繳金額並預設勾選。
+    - 申報表單直接顯示總額，社員填入帳號末 5 碼與上傳匯款水單即可完成申報；成功送出後自動自清單中排除。
+    - 無帶入網址參數時，完整維持既有社費、活動、裝備租借待繳邏輯與預設行為。
+  - **多語系支援 (`src/locales/zh.json`, `src/locales/en.json`)**:
+    - 補齊 `payment.type.additional` 繁中（追加款項）與英文（Additional Fee）字串。
+  - **自動化測試套件**:
+    - 新增 `test/119_payment_page_url_params.test.mjs`，驗證參數解析、動態項目注入與選取邏輯。
 
 ### v0.1.307 (2026-10-18)
 - **後端 Edge Function 實作 notify_payment_reminder 與專屬 LINE Flex 卡片模板**:
