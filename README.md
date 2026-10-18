@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.309-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.310-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.309)](#7-最新版本異動紀錄-changelog-v01309)
+- [7. 最新版本異動紀錄 (Changelog v0.1.310)](#7-最新版本異動紀錄-changelog-v01310)
 
 ---
 
@@ -204,7 +204,24 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.309)
+## 7. 最新版本異動紀錄 (Changelog v0.1.310)
+
+### v0.1.310 (2026-10-18)
+- **繳費提醒二次確認預覽視窗實作 (PaymentReminderModal.tsx)**:
+  - **發送繳費提醒彈窗元件 (`src/components/admin/PaymentReminderModal.tsx`)**:
+    - 匯出 `PaymentReminderModal` 與 `PaymentReminderModalProps` 介面，當 `!isOpen || !item` 時安全回退。
+    - 顯示提醒對象姓名、待繳項目名稱、應繳金額（以 `toLocaleString()` 格式化）與目標 LINE ID。
+    - 提供提醒備註編輯欄位（預設「請儘速完成匯款並於系統回報末五碼」）與選填繳費期限日期輸入。
+    - 支援未綁定 LINE 帳號防呆校驗（`!item.line_user_id`）：顯示黃色警示橫幅「該對象未綁定 LINE 帳號，無法發送推播通知」，並自動禁用確認發送按鈕。
+    - 完整對接 `notifyDispatcher('notify_payment_reminder', payload)`，實作透明化錯誤處理機制（發生異常或伺服器回傳失敗時直接於紅色錯誤橫幅印出具體原因）。
+    - 發送成功後自動觸發 `onSuccess?.()` 回呼並安全關閉視窗。
+  - **LINE Flex Bubble 卡片即時預覽佈局**:
+    - 即時渲染模擬手機端之 LINE Flex 卡片結構：包含橘黃主題標頭（【繳費通知】、提示說明）、主體（提醒對象、待繳項目、應繳金額亮綠醒目標示、備註內容）、社團預設匯款帳戶資訊區塊（中華郵政 700、帳號、戶名）與底部動作按鈕預覽（前往回報匯款）。
+  - **高密度淺色後台樣式整合 (`src/pages/web-admin/webAdmin.css`)**:
+    - 新增 `.wa-reminder-modal-grid` 雙欄對齊排版，於大螢幕並排呈現表單與 Flex 預覽卡片、小螢幕自動折疊適配。
+    - 新增 Flex 預覽卡片專屬陰影、圓角、金額重點色、警示與錯誤橫幅樣式。
+  - **自動化測試套件**:
+    - 新增 `test/122_payment_reminder_modal.test.mjs`，驗證元件與介面匯出、`notifyDispatcher` 呼叫、未綁定防呆與按鈕禁用、即時卡片預覽、金額逗號格式化、透明錯誤反饋與零 Emoji 規範。
 
 ### v0.1.309 (2026-10-18)
 - **輕量自研 SVG/CSS 視覺圖表與 KPI 元件實作 (FinanceReportCharts.tsx)**:

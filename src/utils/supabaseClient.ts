@@ -1767,7 +1767,7 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
  */
 export const createManualPaymentRequestsInSupabase = async (
   requests: NewPaymentRequest[],
-  officerUserId: string
+  _officerUserId?: string
 ): Promise<{ success: boolean; count: number; error?: string }> => {
   if (!supabase) {
     return { success: false, count: 0, error: '未初始化 Supabase Client' };
