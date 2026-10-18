@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.308-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.309-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.308)](#7-最新版本異動紀錄-changelog-v01308)
+- [7. 最新版本異動紀錄 (Changelog v0.1.309)](#7-最新版本異動紀錄-changelog-v01309)
 
 ---
 
@@ -204,7 +204,19 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.308)
+## 7. 最新版本異動紀錄 (Changelog v0.1.309)
+
+### v0.1.309 (2026-10-18)
+- **輕量自研 SVG/CSS 視覺圖表與 KPI 元件實作 (FinanceReportCharts.tsx)**:
+  - **零外部套件純自研圖表 (`src/components/admin/FinanceReportCharts.tsx`)**:
+    - **應收與實收對比雙層進度條 (`ExpectedVsReceivedBar`)**：支援應收、實收與待核帳/未繳金額計算，計算達成率與對應比例，渲染雙層/多區段 SVG 進度條與細項指標卡片。
+    - **繳費狀態分佈甜甜圈圖 (`StatusDonutChart`)**：運用原生 SVG `strokeDasharray` 與 `strokeDashoffset` 繪製「已確認 (綠 #059669)」、「待核帳 (橘 #d97706)」、「待繳費 (紅 #dc2626)」分佈環，中央顯示核實百分比與下方清楚圖例，具備無資料邊界狀態處理。
+    - **收支類別分佈甜甜圈圖 (`CategoryDonutChart`)**：支援「活動款項」、「裝備租借」、「常年會費」、「一般收支」四類別收支計算，中央顯示總額，下方列出各類別金額與佔比。
+    - **財務收支走勢圖 (`RevenueTrendChart`)**：以語義化 SVG `<path>` 搭配漸層填色（LinearGradient）繪製累積走勢線與面積圖，支援虛線參考格線、金額座標軸與互動式數據點懸浮 Tooltip。
+  - **高密度後台樣式整合 (`src/pages/web-admin/webAdmin.css`)**:
+    - 遵循 `--wa-*` CSS 變數設計體系，新增圖表容器卡片、甜甜圈環圖例、進度條軌道與走勢軸標籤樣式。
+  - **自動化測試套件**:
+    - 新增 `test/121_finance_report_charts.test.mjs`，驗證元件匯出、零外部圖表依賴、狀態色系規範、零 Emoji 規範與 CSS 類別定義。
 
 ### v0.1.308 (2026-10-18)
 - **社員繳費端支援網址參數解析與追加款項自動帶入 (Payment URL Search Params & Additional Fees Auto-injection)**:
