@@ -2842,3 +2842,552 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
     padding: 0 !important;
   }
 }
+
+/* ============================================================================
+   國立臺灣科技大學登山社 - 新增繳費 / 追加款項抽屜 (AddPaymentDrawer)
+   支援雙模式名冊勾選、個別金額客製、LINE 繳費通知推播
+   ============================================================================ */
+
+.wa-add-payment-drawer {
+  max-width: 640px;
+  width: 100%;
+}
+
+.wa-add-payment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 24px;
+}
+
+.wa-drawer-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.wa-drawer-alert-danger {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.wa-drawer-alert-success {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.wa-drawer-alert-content {
+  flex: 1;
+}
+
+.wa-drawer-alert-title {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.wa-drawer-alert-desc {
+  font-size: 0.84rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.wa-drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: #ffffff;
+  border: 1px solid var(--wa-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.wa-section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wa-drawer-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--wa-text, #1e293b);
+  margin: 0;
+}
+
+.wa-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.wa-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wa-form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.wa-form-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--wa-text-muted, #475569);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wa-required {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.wa-label-tip {
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: #94a3b8;
+  margin-left: 4px;
+}
+
+.wa-form-input,
+.wa-form-select,
+.wa-form-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  color: var(--wa-text, #1e293b);
+  background-color: #ffffff;
+  border: 1px solid var(--wa-border, #cbd5e1);
+  border-radius: 6px;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.wa-form-input:focus,
+.wa-form-select:focus,
+.wa-form-textarea:focus {
+  outline: none;
+  border-color: var(--wa-primary, #059669);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+}
+
+.wa-input-with-button {
+  display: flex;
+  gap: 8px;
+}
+
+.wa-input-with-button .wa-form-input {
+  flex: 1;
+}
+
+.wa-btn-secondary-sm {
+  white-space: nowrap;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-btn-secondary-sm:hover {
+  background-color: #e2e8f0;
+}
+
+.wa-subtab-container {
+  display: flex;
+  background-color: #f1f5f9;
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.wa-subtab-btn {
+  padding: 5px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-subtab-btn.active {
+  background: #ffffff;
+  color: var(--wa-primary, #059669);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.wa-subtab-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wa-selection-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wa-selection-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 0.86rem;
+  color: #94a3b8;
+  background-color: #f8fafc;
+  border-radius: 6px;
+  border: 1px dashed #e2e8f0;
+}
+
+.wa-selection-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  font-size: 0.86rem;
+  color: #64748b;
+}
+
+.wa-selection-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wa-filter-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.wa-chip {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-chip.active {
+  background-color: rgba(5, 150, 105, 0.1);
+  border-color: var(--wa-primary, #059669);
+  color: var(--wa-primary, #059669);
+}
+
+.wa-btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+.wa-btn-text-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--wa-primary, #059669);
+  background: transparent;
+  border: 1px solid rgba(5, 150, 105, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-btn-text-sm:hover {
+  background-color: rgba(5, 150, 105, 0.08);
+}
+
+.wa-btn-text-danger-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #ef4444;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-btn-text-danger-sm:hover {
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+.wa-search-control-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wa-search-box-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.wa-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.wa-search-input {
+  width: 100%;
+  padding: 6px 30px 6px 32px;
+  font-size: 0.84rem;
+  border: 1px solid var(--wa-border, #cbd5e1);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.wa-search-clear-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.wa-applicant-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px;
+  background: #fafafa;
+}
+
+.wa-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-checklist-item:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.wa-checklist-item.selected {
+  background-color: rgba(5, 150, 105, 0.05);
+  border-color: rgba(5, 150, 105, 0.4);
+}
+
+.wa-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--wa-primary, #059669);
+  cursor: pointer;
+}
+
+.wa-checklist-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-checklist-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--wa-text, #1e293b);
+}
+
+.wa-checklist-meta {
+  font-size: 0.76rem;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-checklist-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: #f1f5f9;
+  color: #475569;
+}
+
+.wa-checklist-badge.official {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.wa-selected-roster-table-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wa-roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.wa-roster-table th {
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #64748b;
+  border-bottom: 2px solid #e2e8f0;
+  background-color: #f8fafc;
+}
+
+.wa-roster-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.wa-table-cell-name {
+  font-weight: 600;
+  color: var(--wa-text, #1e293b);
+}
+
+.wa-table-cell-info {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.wa-amount-input-box {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 0 6px;
+  width: 100px;
+}
+
+.wa-currency-prefix {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-right: 4px;
+}
+
+.wa-amount-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--wa-text, #1e293b);
+  padding: 4px 0;
+}
+
+.wa-action-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-action-icon-btn.danger:hover {
+  background-color: #fee2e2;
+  color: #ef4444;
+}
+
+.wa-roster-summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background-color: #f8fafc;
+  border-radius: 6px;
+  font-size: 0.84rem;
+  color: #475569;
+}
+
+.wa-summary-total {
+  font-size: 1rem;
+  color: var(--wa-primary, #059669);
+  margin-left: 6px;
+}
+
+.wa-notify-section {
+  background-color: #fdfbf7;
+  border-color: #fde68a;
+}
+
+.wa-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.wa-checkbox-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wa-checkbox-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.wa-checkbox-desc {
+  font-size: 0.78rem;
+  color: #78350f;
+  line-height: 1.4;
+}
+

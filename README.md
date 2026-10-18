@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.310-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.311-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.310)](#7-最新版本異動紀錄-changelog-v01310)
+- [7. 最新版本異動紀錄 (Changelog v0.1.311)](#7-最新版本異動紀錄-changelog-v01311)
 
 ---
 
@@ -204,7 +204,27 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.310)
+## 7. 最新版本異動紀錄 (Changelog v0.1.311)
+
+### v0.1.311 (2026-10-18)
+- **新增繳費 / 追加款項抽屜元件實作 (AddPaymentDrawer.tsx)**:
+  - **抽屜元件與介面匯出 (`src/components/admin/AddPaymentDrawer.tsx`)**:
+    - 匯出 `AddPaymentDrawer` 與 `AddPaymentDrawerProps` 介面，支援 `isOpen`, `onClose`, `events`, `members`, `officerUserId`, `onSuccess`。
+    - 款項表單支援：款項名稱 (必填)、關聯活動下拉選單 (含「無關聯特定活動」選項，選取活動自動帶入預設標題與費用)、款項類別 (活動費用 activity, 裝備租借 equipment, 社籍社費 membership, 其他款項 general)、統一金額設定 (支援一鍵批次套用至已選成員)、備註說明。
+  - **雙模式應繳成員選取**:
+    - 模式一「從活動成員選取」：依據所選關聯活動，透過 `fetchAdminEventSignupsFromSupabase` 即時讀取報名名冊，支援「全部報名者」與「僅正取名單」篩選，提供快速「全選」與「全消」功能。
+    - 模式二「從全社名冊搜尋選取」：提供關鍵字搜尋列，即時針對姓名、學號與系級過濾全社社員名冊，支援快速「全選」與「全消」。
+  - **已選名冊清單與個別金額微調**:
+    - 顯示已選成員人數統計與清單表格（社員姓名、學號/資訊、個別應繳金額輸入框、單筆移除操作）。
+    - 即時累計並計算「應收總額」與總選取人數。
+  - **LINE 繳費通知推播與透明錯誤處理**:
+    - 提供「建立後立即透過 LINE 發送繳費通知卡片 (含回報按鈕)」核取方塊（預設勾選）。
+    - 提交時呼叫 `createManualPaymentRequestsInSupabase` 批次寫入 `payments` 資料表，並透過 `notifyDispatcher('notify_payment_reminder', payload)` 發送個人化繳費通知推播。
+    - 落實錯誤透明度規範，若寫入或推播失敗直接顯示具體錯誤代碼與訊息。
+  - **高密度後台樣式整合 (`src/pages/web-admin/webAdmin.css`)**:
+    - 新增 `.wa-add-payment-drawer`、表單網格、雙模式切換頁籤、名冊勾選清單、金額輸入欄與 LINE 推播核取框樣式。
+  - **自動化測試套件**:
+    - 新增 `test/124_add_payment_drawer.test.mjs`，驗證元件與介面匯出、雙模式成員選取、金額客製、LINE 通知選項、Supabase 與推播對接、零 Emoji 規範與 CSS 類別定義。
 
 ### v0.1.310 (2026-10-18)
 - **繳費提醒二次確認預覽視窗實作 (PaymentReminderModal.tsx)**:
