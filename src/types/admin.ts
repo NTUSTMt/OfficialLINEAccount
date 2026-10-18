@@ -96,6 +96,17 @@ export interface AdminFinanceItem {
   itemCategory: 'activity' | 'equipment' | 'membership' | 'general';
 }
 
+export interface NewPaymentRequest {
+  line_user_id: string;
+  name: string;
+  type: string;
+  amount: number;
+  target_type?: 'event' | 'loan' | 'membership' | 'general' | null;
+  target_id?: string | null;
+  notes?: string;
+  notification_status?: '未通知' | '已通知';
+}
+
 export interface AdminLoanItem {
   id: string;
   line_user_id: string;
