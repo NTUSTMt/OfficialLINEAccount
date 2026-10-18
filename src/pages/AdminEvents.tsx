@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, type ChangeEvent } from 'react';
+import React, { useState, useEffect, useMemo, useRef, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import liff from '@line/liff';
 import { appendAuthToken, gasGet, notifyDispatcher } from '../utils/api';
 import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
@@ -49,6 +49,9 @@ const EVENT_SORT_OPTIONS: SortOption[] = [
 export default function AdminEvents({ userId }: AdminEventsProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const eventIdParam = searchParams.get('eventId') || searchParams.get('event_id');
+  const hasAutoOpenedRef = useRef(false);
 
   // 權限與初始化狀態 (支援快取秒開呈現，若未經 LINE 授權或為測試帳號絕不放行)
   const [authLoading, setAuthLoading] = useState<boolean>(() => {
@@ -640,6 +643,21 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
       setLoadingSignups(false);
     }
   };
+
+  // 當 URL 包含 eventId 且活動清單載入完成後，自動彈出該活動審核名冊 Modal
+  useEffect(() => {
+    if (!eventIdParam || hasAutoOpenedRef.current) return;
+    if (events.length === 0) return;
+
+    const targetEvent = events.find((e) => e.id === eventIdParam);
+    if (targetEvent) {
+      hasAutoOpenedRef.current = true;
+      handleOpenSignupsModal(targetEvent);
+    } else if (!authLoading && !loadingEvents) {
+      hasAutoOpenedRef.current = true;
+      setToastMessage(t('adminEvents.eventNotFound', `找不到指定活動 (${eventIdParam}) 之名冊`));
+    }
+  }, [events, eventIdParam, authLoading, loadingEvents, t]);
 
   // 查看體能證明
   const handleViewProof = (applicant: SignupApplicant) => {

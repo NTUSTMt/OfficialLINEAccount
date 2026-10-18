@@ -386,7 +386,8 @@ export const WebAdminFinance: React.FC = () => {
         lineUserId: item.line_user_id,
         notes: item.officer_notes || '',
         officerUserId: session.userId,
-        notificationStatus: '未通知'
+        notificationStatus: '未通知',
+        client
       });
 
       if (!res.success) {
@@ -439,7 +440,8 @@ export const WebAdminFinance: React.FC = () => {
           lineUserId: item.line_user_id,
           notes: item.officer_notes || '',
           officerUserId: session.userId,
-          notificationStatus: '未通知'
+          notificationStatus: '未通知',
+          client
         });
 
         if (res.success) {
@@ -765,7 +767,8 @@ export const WebAdminFinance: React.FC = () => {
           lineUserId: item.line_user_id,
           notes: item.officer_notes || '',
           officerUserId: session.userId,
-          notificationStatus: '已通知'
+          notificationStatus: '已通知',
+          client
         });
 
         successCount++;
@@ -828,7 +831,8 @@ export const WebAdminFinance: React.FC = () => {
         notes: drawerNotes,
         officerUserId: session.userId,
         paymentType: editingItem.type,
-        notificationStatus: finalNotificationStatus
+        notificationStatus: finalNotificationStatus,
+        client
       });
 
       if (!res.success) {
