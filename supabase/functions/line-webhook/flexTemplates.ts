@@ -2098,7 +2098,7 @@ export function buildWaitlistFailedFlex(
 }
 
 export function buildAdminAssistantGuideFlex() {
-  const adminEventsUrl = "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents";
+  const adminEventsUrl = "https://liff.line.me/2009217429-DSYjXqNK?liff.state=%2Fadmin%2Fevents";
   return {
     type: "bubble",
     size: "mega",

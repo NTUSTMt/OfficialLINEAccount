@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.306-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.308-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.306)](#7-最新版本異動紀錄-changelog-v01306)
+- [7. 最新版本異動紀錄 (Changelog v0.1.308)](#7-最新版本異動紀錄-changelog-v01308)
 
 ---
 
@@ -204,7 +204,31 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.306)
+## 7. 最新版本異動紀錄 (Changelog v0.1.308)
+
+### v0.1.308 (2026-10-18)
+- **修復電腦版財務管理修改活動報名紀錄 RLS 阻斷與幹部身分 JWT 同步**:
+  - **幹部身分 JWT 權杖注入與全域同步 ([src/utils/supabaseClient.ts](file:///Users/brianhung/.gemini/antigravity/worktrees/OfficialLINEAccount/fix_roster_button_link/src/utils/supabaseClient.ts), [src/utils/webAuth.ts](file:///Users/brianhung/.gemini/antigravity/worktrees/OfficialLINEAccount/fix_roster_button_link/src/utils/webAuth.ts), [src/pages/web-admin/WebAdminLayout.tsx](file:///Users/brianhung/.gemini/antigravity/worktrees/OfficialLINEAccount/fix_roster_button_link/src/pages/web-admin/WebAdminLayout.tsx))**:
+    - 修復 `getSupabaseAuthToken()` 僅讀取 `sessionStorage.club_user_jwt` 之缺失，擴充回退讀取 `sessionStorage.web_admin_session` 之 `session.jwt`，確保全域 Supabase Client 於電腦版後台正確攜帶 `Authorization: Bearer <jwt>`。
+    - 於 `webAuth.ts` 之 `exchangeLineCodeForSession` 成功取得幹部憑證後，主動呼叫 `setSupabaseAuthToken(session.jwt)`；於 `webLogout` 登出時同步清空權杖。
+    - 於 `WebAdminLayout.tsx` 幹部版面載入檢驗完成時，同步確認呼叫 `setSupabaseAuthToken(currentSession.jwt)`，避免重新整理後全域 Client 遺失認證標頭。
+  - **財務款項核銷與活動報名更新直通鑑權 Client ([src/pages/web-admin/WebAdminFinance.tsx](file:///Users/brianhung/.gemini/antigravity/worktrees/OfficialLINEAccount/fix_roster_button_link/src/pages/web-admin/WebAdminFinance.tsx), [src/utils/supabaseClient.ts](file:///Users/brianhung/.gemini/antigravity/worktrees/OfficialLINEAccount/fix_roster_button_link/src/utils/supabaseClient.ts))**:
+    - 於 `updatePaymentAndLinkedStatusInSupabase` 函式介面擴充可選之 `client?: SupabaseClient` 參數，優先使用具備幹部憑證之 Client 執行 RPC 與資料庫操作。
+    - 將 `WebAdminFinance.tsx` 中單筆核銷 (`handleVerifyItem`)、批次核銷 (`handleBatchVerify`)、批次推播通知 (`handleBatchNotify`) 以及右側編輯抽屜儲存 (`handleSaveDrawer`) 全數注入具備幹部 JWT 簽章之 `client`。
+    - 擴充 `event_signups` 表直接更新邏輯支援備註欄位 (`notes: params.notes`)，並於 RPC 調用異常時精準印出具體錯誤碼與錯誤訊息。
+  - **徹底消除 RLS 阻斷與未變更資料列錯誤**:
+    - 徹底根除 `[更新 event_signups 失敗]: 資料庫未變更任何資料列 (可能缺少 RLS 寫入權限或該活動報名紀錄不存在)` 錯誤，確保幹部在電腦版後台順利維護活動繳費與核銷狀態。
+
+### v0.1.307 (2026-10-18)
+- **修復幹部群組活動名冊按鈕跳轉異常與自動彈出名冊審核視窗**:
+  - **幹部專屬 LIFF 路由校正 ([supabase/functions/notify-dispatcher/index.ts](file:///Users/brianhung/.gemini/antigravity/worktrees/OfficialLINEAccount/fix_roster_button_link/supabase/functions/notify-dispatcher/index.ts), [supabase/functions/line-webhook/flexTemplates.ts](file:///Users/brianhung/.gemini/antigravity/worktrees/OfficialLINEAccount/fix_roster_button_link/supabase/functions/line-webhook/flexTemplates.ts), [supabase/functions/_shared/messages.ts](file:///Users/brianhung/.gemini/antigravity/worktrees/OfficialLINEAccount/fix_roster_button_link/supabase/functions/_shared/messages.ts))**:
+    - 將正取取消通知卡片上的「查看活動名冊」按鈕網址由個人主頁 LIFF ID (`-jvj3ydDT`) 校正為幹部專屬獨立 LIFF ID (`-DSYjXqNK`)，並將目標路徑指向 `/admin/events?eventId=${params.eventId}`。
+    - 全面校正 `notify-dispatcher` 中裝備審核 (`loanAdminUrl`, `adminLoansUrl`)、財務核銷 (`adminFinanceUrl`) 與新幹部意願登記 (`adminMembersUrl`) 之推播連結至幹部專屬 LIFF ID (`-DSYjXqNK`)，根絕 LIFF 初始化 ID 不匹配導致誤跳轉至預設裝備租借頁面（`/borrow`）之問題。
+    - 同步校正 `flexTemplates.ts` 與 `messages.ts` 中的幹部系統入口連結為 `2009217429-DSYjXqNK`。
+  - **手機版幹部活動中心自動彈出名冊視窗 ([src/pages/AdminEvents.tsx](file:///Users/brianhung/.gemini/antigravity/worktrees/OfficialLINEAccount/fix_roster_button_link/src/pages/AdminEvents.tsx))**:
+    - 導入 `useSearchParams` 提取網址中傳入之 `eventId` 查詢參數。
+    - 於活動清單自 Supabase 載入完成後，自動比對該活動並調用 `handleOpenSignupsModal` 彈出「報名社員審核名冊 Modal」，預設呈現全體名單。
+    - 搭配 `hasAutoOpenedRef` 機制確保進入頁面時僅自動開啟一次，且關閉名冊視窗後保留網址參數，使幹部重新整理頁面時仍可重新彈出該活動名冊。
 
 ### v0.1.306 (2026-10-15)
 - **歷史與冗餘資源歸檔整理，以及 Supabase Edge Functions 行為等價性驗證**:

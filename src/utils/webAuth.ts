@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { LIFF_URLS } from '../constants/liff';
+import { setSupabaseAuthToken } from './supabaseClient';
 
 export interface WebAuthSession {
   jwt: string;
@@ -140,6 +141,7 @@ export const handleLineCallback = async (
       };
 
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+      setSupabaseAuthToken(session.jwt);
       // 換票成功後銷毀暫存 state，防止重複使用
       sessionStorage.removeItem(STATE_STORAGE_KEY);
       try {
@@ -196,6 +198,7 @@ export const getWebSession = (): WebAuthSession | null => {
 export const webLogout = () => {
   sessionStorage.removeItem(SESSION_STORAGE_KEY);
   sessionStorage.removeItem(STATE_STORAGE_KEY);
+  setSupabaseAuthToken(null);
   try {
     localStorage.removeItem(STATE_STORAGE_KEY);
   } catch {

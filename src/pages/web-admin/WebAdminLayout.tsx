@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import { Mountain, LogOut, Calendar, Users, CreditCard, Package, RefreshCw, ClipboardList, Layers } from 'lucide-react';
 import { getWebSession, webLogout, type WebAuthSession } from '../../utils/webAuth';
+import { setSupabaseAuthToken } from '../../utils/supabaseClient';
 import './webAdmin.css';
 
 export const WebAdminLayout: React.FC = () => {
@@ -22,6 +23,10 @@ export const WebAdminLayout: React.FC = () => {
       setLoading(false);
       navigate('/admin-web/login?unauthorized=true', { replace: true });
       return;
+    }
+
+    if (currentSession.jwt) {
+      setSupabaseAuthToken(currentSession.jwt);
     }
 
     setSession(currentSession);

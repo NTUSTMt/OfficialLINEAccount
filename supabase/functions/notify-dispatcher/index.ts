@@ -165,7 +165,7 @@ async function handleNotifyOfficersLoan(json: Record<string, any>) {
   }
 
   const liffChannelId = getLiffChannelId();
-  const loanAdminUrl = `https://liff.line.me/${liffChannelId}-jvj3ydDT?liff.state=%2Fadmin%2Floans`;
+  const loanAdminUrl = `https://liff.line.me/${liffChannelId}-DSYjXqNK?liff.state=%2Fadmin%2Floans`;
 
   const loanFlex = {
     type: "bubble",
@@ -656,7 +656,7 @@ function buildLoanCancelledAdminFlex(params: {
   itemsText: string;
   isPaid: boolean;
 }) {
-  const adminLoansUrl = `https://liff.line.me/${getLiffChannelId()}-jvj3ydDT?liff.state=%2Fadmin%2Floans`;
+  const adminLoansUrl = `https://liff.line.me/${getLiffChannelId()}-DSYjXqNK?liff.state=%2Fadmin%2Floans`;
   return {
     type: "bubble",
     size: "mega",
@@ -868,7 +868,7 @@ function buildPaymentConfirmedAdminFlex(params: {
   items: string;
   confirmedBy: string;
 }) {
-  const adminFinanceUrl = `https://liff.line.me/${getLiffChannelId()}-jvj3ydDT?liff.state=%2Fadmin%2Ffinance`;
+  const adminFinanceUrl = `https://liff.line.me/${getLiffChannelId()}-DSYjXqNK?liff.state=%2Fadmin%2Ffinance`;
   return {
     type: "bubble",
     size: "mega",
@@ -973,7 +973,7 @@ function buildOfficerIntentAdminFlex(params: {
   intentRole: string;
   wantToSay: string;
 }) {
-  const adminMembersUrl = `https://liff.line.me/${getLiffChannelId()}-jvj3ydDT?liff.state=%2Fadmin%2Fmembers`;
+  const adminMembersUrl = `https://liff.line.me/${getLiffChannelId()}-DSYjXqNK?liff.state=%2Fadmin%2Fmembers`;
   return {
     type: "bubble",
     size: "mega",
@@ -1080,7 +1080,10 @@ function buildEventCancelledAdminFlex(params: {
   cancelReason: string;
   isPaid: boolean;
 }) {
-  const adminEventsUrl = `https://liff.line.me/${getLiffChannelId()}-jvj3ydDT?liff.state=%2Fadmin%2Fevents`;
+  const targetState = params.eventId
+    ? `/admin/events?eventId=${encodeURIComponent(params.eventId)}`
+    : "/admin/events";
+  const adminEventsUrl = `https://liff.line.me/${getLiffChannelId()}-DSYjXqNK?liff.state=${encodeURIComponent(targetState)}`;
   return {
     type: "bubble",
     size: "mega",

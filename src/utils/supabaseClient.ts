@@ -33,10 +33,27 @@ export const setSupabaseAuthToken = (token: string | null): void => {
 };
 
 export const getSupabaseAuthToken = (): string | null => {
-  if (!activeUserJwt && typeof window !== 'undefined' && window.sessionStorage) {
-    activeUserJwt = sessionStorage.getItem('club_user_jwt');
+  if (activeUserJwt) return activeUserJwt;
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    const clubJwt = sessionStorage.getItem('club_user_jwt');
+    if (clubJwt) {
+      activeUserJwt = clubJwt;
+      return activeUserJwt;
+    }
+    try {
+      const webAdminSessionRaw = sessionStorage.getItem('web_admin_session');
+      if (webAdminSessionRaw) {
+        const session = JSON.parse(webAdminSessionRaw);
+        if (session && typeof session.jwt === 'string' && session.jwt) {
+          activeUserJwt = session.jwt;
+          return activeUserJwt;
+        }
+      }
+    } catch (e) {
+      console.warn('[Supabase] 解析 web_admin_session JWT 失敗:', e);
+    }
   }
-  return activeUserJwt;
+  return null;
 };
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured()
@@ -1763,13 +1780,15 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
   officerUserId?: string;
   paymentType?: string;
   notificationStatus?: '未通知' | '已通知' | string;
+  client?: SupabaseClient;
 }): Promise<{ success: boolean; error?: string }> => {
-  if (!supabase) return { success: false, error: '缺少 Supabase 連線' };
+  const sb = params.client || supabase;
+  if (!sb) return { success: false, error: '缺少 Supabase 連線' };
 
   // 1. 優先嘗試 RPC (幹部鑑權，完全豁免 RLS 限制)
   if (params.officerUserId && params.officerUserId !== 'TEST_USER_ID') {
     try {
-      const { data: rpcRes, error: rpcErr } = await supabase.rpc('update_admin_payment_status_rpc', {
+      const { data: rpcRes, error: rpcErr } = await sb.rpc('update_admin_payment_status_rpc', {
         p_officer_line_user_id: params.officerUserId,
         p_payment_id: params.paymentId,
         p_source_type: params.sourceType,
@@ -1783,6 +1802,9 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
       });
       if (!rpcErr && rpcRes && rpcRes.success) {
         return { success: true };
+      }
+      if (rpcRes && rpcRes.success === false) {
+        console.warn('[Supabase] update_admin_payment_status_rpc 回傳失敗:', rpcRes.message);
       }
       if (rpcErr) {
         console.warn('[Supabase] update_admin_payment_status_rpc 失敗，切換直更模式:', rpcErr.message);
@@ -1813,7 +1835,7 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
         updatePayload.notification_status = params.notificationStatus;
       }
 
-      const { data: updatedRows, error: pErr } = await supabase
+      const { data: updatedRows, error: pErr } = await sb
         .from('payments')
         .update(updatePayload)
         .eq('id', params.paymentId)
@@ -1836,14 +1858,14 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
 
       // 雙向連動：活動報名
       if (params.targetType === 'event' && params.targetId && params.lineUserId) {
-        await supabase
+        await sb
           .from('event_signups')
           .update({ payment_status: mappedPayStatus, updated_at: nowIso })
           .eq('event_id', params.targetId)
           .eq('line_user_id', params.lineUserId);
       } else if (params.targetType === 'loan' && params.targetId) {
         // 雙向連動：裝備租借
-        await supabase
+        await sb
           .from('loans')
           .update({ payment_status: mappedPayStatus, updated_at: nowIso })
           .eq('id', params.targetId);
@@ -1862,32 +1884,32 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
             memberUpdate.membership_expires_at = expiryDate;
           }
 
-          await supabase
+          await sb
             .from('members')
             .update(memberUpdate)
             .eq('line_user_id', params.lineUserId);
         } else {
-          await supabase
+          await sb
             .from('members')
             .update({ payment_status: mappedPayStatus, updated_at: nowIso })
             .eq('line_user_id', params.lineUserId);
         }
       } else if (params.lineUserId && isConfirmed) {
         // 多筆或未指定 target 時，若已核銷則將該使用者未繳費項目一併轉為已繳費
-        await supabase
+        await sb
           .from('event_signups')
           .update({ payment_status: '已繳費 Paid', updated_at: nowIso })
           .eq('line_user_id', params.lineUserId)
           .eq('payment_status', '待確認 Checking');
 
-        await supabase
+        await sb
           .from('loans')
           .update({ payment_status: '已繳費 Paid', updated_at: nowIso })
           .eq('line_user_id', params.lineUserId)
           .eq('payment_status', '待確認 Checking');
       }
     } else if (params.sourceType === 'loan') {
-      const { data: updatedLoanRows, error: lErr } = await supabase
+      const { data: updatedLoanRows, error: lErr } = await sb
         .from('loans')
         .update({
           payment_status: mappedPayStatus,
@@ -1907,12 +1929,17 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
         };
       }
     } else if (params.sourceType === 'event_signup') {
-      const { data: updatedSignupRows, error: sErr } = await supabase
+      const updatePayload: Record<string, any> = {
+        payment_status: mappedPayStatus,
+        updated_at: nowIso
+      };
+      if (params.notes !== undefined && params.notes !== null) {
+        updatePayload.notes = params.notes;
+      }
+
+      const { data: updatedSignupRows, error: sErr } = await sb
         .from('event_signups')
-        .update({
-          payment_status: mappedPayStatus,
-          updated_at: nowIso
-        })
+        .update(updatePayload)
         .eq('id', params.paymentId)
         .select('id');
 

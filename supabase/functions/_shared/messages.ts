@@ -18,7 +18,7 @@ export const messages = {
       "目前在幹部群組中支援以下功能與指令：\n\n" +
       "【幹部系統】\n" +
       "• 輸入「@小岳助理 幹部系統」或點擊下方連結進入後台：\n" +
-      "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents\n\n" +
+      "https://liff.line.me/2009217429-DSYjXqNK?liff.state=%2Fadmin%2Fevents\n\n" +
       "幹部小提醒：\n" +
       "若需要綁定此群組接收通知，請輸入「@小岳助理 綁定幹部群組」！\n" +
       "若有其他問題，也可以隨時在群組 @小岳助理 詢問登山社相關庶務！",
@@ -28,7 +28,7 @@ export const messages = {
       "Supported commands in officer group:\n\n" +
       "[Officer Portal]\n" +
       "• Type '@小岳助理 幹部系統' or tap link to enter portal:\n" +
-      "https://liff.line.me/2009217429-jvj3ydDT?liff.state=%2Fadmin%2Fevents\n\n" +
+      "https://liff.line.me/2009217429-DSYjXqNK?liff.state=%2Fadmin%2Fevents\n\n" +
       "Note:\n" +
       "To bind this group for alerts, type '@小岳助理 綁定幹部群組'!\n" +
       "Feel free to tag @小岳助理 for club management queries!",
