@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.306-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.307-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.306)](#7-最新版本異動紀錄-changelog-v01306)
+- [7. 最新版本異動紀錄 (Changelog v0.1.307)](#7-最新版本異動紀錄-changelog-v01307)
 
 ---
 
@@ -204,7 +204,16 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.306)
+## 7. 最新版本異動紀錄 (Changelog v0.1.307)
+
+### v0.1.307 (2026-10-18)
+- **後端 Edge Function 實作 notify_payment_reminder 與專屬 LINE Flex 卡片模板**:
+  - **通知派發中樞擴充 (`supabase/functions/notify-dispatcher/index.ts`)**:
+    - 新增 `notify_payment_reminder` 處理分支，接收 `PaymentReminderPayload`（包含 `lineUserId`、`userName`、`title`、`amount`、`dueDate`、`notes`、`bankInfo`、`actionUrl`）。
+    - 實作 `buildPaymentReminderFlex` 建構函式，產生高資訊架構之 LINE Flex Bubble 卡片（包含標題、應繳金額、繳費期限、款項備註、社團匯款帳戶資訊與「前往回報匯款」按鈕）。
+    - 全面落實零 Emoji 規範與防呆機制，若無 `userName` 則自動查詢 `members` 資料表補齊，`actionUrl` 具備動態 LIFF 連結補正。
+  - **自動化測試套件**:
+    - 新增 `test/118_notify_payment_reminder.test.mjs`，驗證 Action 路由、處理函式、Flex 按鈕標籤、欄位解析與零 Emoji 規範。
 
 ### v0.1.306 (2026-10-15)
 - **歷史與冗餘資源歸檔整理，以及 Supabase Edge Functions 行為等價性驗證**:

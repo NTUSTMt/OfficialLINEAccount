@@ -1876,6 +1876,240 @@ async function handleSendEventNotifications(json: Record<string, any>) {
   });
 }
 
+function buildPaymentReminderFlex(params: {
+  userName: string;
+  title: string;
+  amount: number | string;
+  dueDate?: string;
+  notes?: string;
+  bankInfo?: {
+    bankCode?: string;
+    accountNumber?: string;
+    accountName?: string;
+  };
+  actionUrl: string;
+}) {
+  const bankCode = params.bankInfo?.bankCode || "700 (中華郵政)";
+  const accountNumber = params.bankInfo?.accountNumber || "0001236 0543210";
+  const accountName = params.bankInfo?.accountName || "國立臺灣科技大學登山社";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#D97706",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "【繳費通知】",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "md",
+        },
+        {
+          type: "text",
+          text: "請於繳費期限內完成轉帳並回報，以利幹部核銷",
+          color: "#FEF3C7",
+          size: "xxs",
+          margin: "xs",
+          wrap: true,
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "提醒對象：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.userName, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "款項項目：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.title, size: "xs", color: "#0F172A", weight: "bold", flex: 7, wrap: true },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "應繳金額：", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: `NT$ ${params.amount}`, size: "xs", color: "#D97706", weight: "bold", flex: 7 },
+          ],
+        },
+        ...(params.dueDate
+          ? [
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "繳費期限：", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: params.dueDate, size: "xs", color: "#DC2626", weight: "bold", flex: 7 },
+                ],
+              },
+            ]
+          : []),
+        ...(params.notes
+          ? [
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "款項備註：", size: "xs", color: "#64748B", flex: 3 },
+                  { type: "text", text: params.notes, size: "xs", color: "#475569", flex: 7, wrap: true },
+                ],
+              },
+            ]
+          : []),
+        { type: "separator" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          contents: [
+            { type: "text", text: "社團匯款帳戶資訊：", size: "xs", color: "#0F172A", weight: "bold" },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "銀行代碼：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: bankCode, size: "xs", color: "#0F172A", flex: 7 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "匯款帳號：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: accountNumber, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+              ],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              contents: [
+                { type: "text", text: "戶名：", size: "xs", color: "#64748B", flex: 3 },
+                { type: "text", text: accountName, size: "xs", color: "#0F172A", flex: 7 },
+              ],
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          type: "text",
+          text: "匯款完成後請點選下方按鈕，至系統填寫末五碼與上傳水單證明，以利幹部對帳核銷。",
+          size: "xxs",
+          color: "#64748B",
+          wrap: true,
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#D97706",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "前往回報匯款",
+            uri: params.actionUrl,
+          },
+        },
+      ],
+    },
+  };
+}
+
+// 11. 繳費提醒推播通知 (notify_payment_reminder)
+async function handleNotifyPaymentReminder(json: Record<string, any>) {
+  const lineUserId = json.lineUserId || json.userId;
+  if (!lineUserId) {
+    return errorResponse("缺少目標使用者 LINE ID (lineUserId)", 400);
+  }
+
+  const title = json.title || "款項繳費提醒";
+  const amount = json.amount !== undefined ? json.amount : 0;
+  const dueDate = json.dueDate || "";
+  const notes = json.notes || "";
+  let userName = json.userName || "";
+
+  if (!userName) {
+    const client = getSupabaseAdminClient();
+    const { data: member } = await client
+      .from("members")
+      .select("name")
+      .eq("line_user_id", lineUserId)
+      .maybeSingle();
+    if (member && member.name) {
+      userName = member.name;
+    } else {
+      userName = "社員";
+    }
+  }
+
+  let actionUrl = json.actionUrl || "";
+  if (!actionUrl) {
+    try {
+      const channelId = getLiffChannelId();
+      actionUrl = `https://liff.line.me/${channelId}-jvj3ydDT?liff.state=%2Fpayment`;
+    } catch {
+      actionUrl = "https://liff.line.me";
+    }
+  }
+
+  const bankInfo = json.bankInfo || {
+    bankCode: "700 (中華郵政)",
+    accountNumber: "0001236 0543210",
+    accountName: "國立臺灣科技大學登山社",
+  };
+
+  const reminderFlex = buildPaymentReminderFlex({
+    userName,
+    title,
+    amount,
+    dueDate,
+    notes,
+    bankInfo,
+    actionUrl,
+  });
+
+  const altText = `【繳費提醒】${title} - NT$ ${amount}`;
+
+  await pushMessage(lineUserId, [
+    {
+      type: "flex",
+      altText,
+      contents: reminderFlex,
+    },
+  ]);
+
+  return successResponse({
+    message: "繳費提醒推播已成功送出",
+    lineUserId,
+    title,
+    amount,
+  });
+}
+
 Deno.serve(async (req: Request) => {
   activeOrigin = req.headers.get("origin");
 
@@ -2022,6 +2256,9 @@ Deno.serve(async (req: Request) => {
 
     case "send_event_notifications":
       return await handleSendEventNotifications(payload);
+
+    case "notify_payment_reminder":
+      return await handleNotifyPaymentReminder(payload);
 
     default:
       return errorResponse(`未支援的 Helper Action: ${action}`, 400);
