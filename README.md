@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.306-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.313-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.306)](#7-最新版本異動紀錄-changelog-v01306)
+- [7. 最新版本異動紀錄 (Changelog v0.1.313)](#7-最新版本異動紀錄-changelog-v01313)
 
 ---
 
@@ -204,7 +204,123 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.306)
+## 7. 最新版本異動紀錄 (Changelog v0.1.313)
+
+### v0.1.313 (2026-10-18)
+- **財務對帳重構最終審查回饋優化與防禦加固 (Final Whole-Branch Review Fixes)**:
+  - **`AddPaymentDrawer.tsx` 推播失敗警示橫幅與訊息格式化**:
+    - 當勾選「立即透過 LINE 發送繳費通知卡片」且存在推播失敗時 (`notifyFailCount > 0`)，即時格式化提示文字為 `成功建立 ${res.count} 筆款項請求（其中 ${notifyFailCount} 筆 LINE 通知推播失敗）`。
+    - 導入琥珀色警示橫幅樣式 (`wa-drawer-alert-warning` 與 `AlertTriangle` 圖示)，明確提醒幹部部分社員通知未成功發送，提升後台推播狀態透明度。
+  - **`WebAdminFinance.tsx` 表格操作欄位寬度優化**:
+    - 於 `FINANCE_COLUMNS` 中將 `actions` 欄位調整為 `{ key: 'actions', label: '操作', defaultWidth: 70, minWidth: 64 }`，為編輯筆與催繳鈴鐺雙圖示按鈕提供舒適的排列空間。
+  - **`Payment.tsx` 網址金額參數防禦性清洗**:
+    - 於解析 URL / Hash 傳入之 `urlAmount` 時，使用 `Math.max(0, parseInt(urlAmount, 10))` 嚴格防止負數金額注入。
+  - **`FinanceReportCharts.tsx` 視覺化圖表渲染細節優化**:
+    - 在 `RevenueTrendChart` 趨勢走勢圖中，將懸浮 Tooltip 改為在所有數據點 `points.map` 渲染完成後以覆蓋層 `<g pointerEvents="none">` 呈現於 SVG 最上層，確保絕不被後續數據點遮蔽。
+    - 在 `StatusDonutChart` 與 `CategoryDonutChart` 甜甜圈圓環圖中，將切片圓弧 `strokeLinecap` 由 `"round"` 修正為 `"butt"`，消除相鄰切片間的突起重疊接縫。
+  - **`supabaseClient.ts` 手動建立款項錯誤代碼透明化**:
+    - 在 `createManualPaymentRequestsInSupabase` 寫入失敗時，格式化錯誤訊息為 `[新增 payments 失敗]: ${insertErr.message} (代碼: ${insertErr.code || 'UNKNOWN'})`，嚴格落實專案錯誤透明度規範。
+  - **自動化測試套件**:
+    - 新增 `test/126_finance_redesign_final_fixes.test.mjs`，全面驗證通知失敗提醒格式、操作欄寬度、負數金額過濾、圖表覆蓋層與 butt 圓環切片、資料庫錯誤代碼透明化與嚴格零 Emoji 規範。
+
+### v0.1.312 (2026-10-18)
+- **財務對帳後台主頁面深度整合 (WebAdminFinance.tsx 全域狀態與連動)**:
+  - **工具列活動專屬篩選器與層級分組**:
+    - 工具列新增活動下拉選單，依狀態與時限動態分組：
+      - 「全部活動款項 (All Events)」
+      - 「進行中 / 報名中活動」
+      - 「籌備中 / 未來活動」
+      - 「已結束歷史活動」
+    - 選取特定活動專案時，表格與頂部三大統計卡片（待確認/待繳費總額、已核銷入帳總額、本專案全部登記款項）即時重新動態彙總。
+  - **工具列雙操作按鈕擴充**:
+    - 新增「財務分析報表」按鈕（帶有 `BarChart3` 圖示）：開啟視覺化財務報表抽屜 `FinanceReportDrawer`。
+    - 新增「+ 新增繳費項目」按鈕（帶有 `Plus` 圖示，採用 `web-admin-btn-primary` 綠色強調樣式）：開啟新增繳費/追加款項抽屜 `AddPaymentDrawer`。
+  - **款項資料列與詳情抽屜催繳通知聯動**:
+    - 於表格「操作」欄位（寬度優化為 70px）新增鈴鐺按鈕，提供快速發送個別催繳通知途徑。
+    - 於側邊滑出式詳情編輯抽屜之「幹部審核與狀態設定」標題旁新增「催繳通知」快捷按鈕。
+    - 點擊後開啟二次確認彈窗 `PaymentReminderModal`，支援即時 LINE Flex 卡片預覽與推播發送。
+  - **抽屜與彈窗全域掛載與自動重新載入**:
+    - 完整掛載 `FinanceReportDrawer`、`AddPaymentDrawer` 與 `PaymentReminderModal`。
+    - 當新增款項、變更核銷或發送催繳完成後，自動重新拉取 Supabase 財務資料與名冊，確保狀態保持最新。
+- **前期審查回饋延宕優化 (Deferred Polish Fixes)**:
+  - **`AddPaymentDrawer.tsx`**: 強化活動金額字串清洗，採用 `.replace(/[^0-9]/g, '')` 濾除非數字字元（如 `$1200` 或費用文字），確保數值型別轉換正確。
+  - **`FinanceReportDrawer.tsx`**: 修正 `useEffect` 相依性，僅在外部傳入之 `selectedEventId` 屬性變動時同步更新，避免抽屜內部切換活動選單時遭到不當覆寫。
+  - **`webAdmin.css`**: 列印樣式 `@media print` 加上 `body:has(.wa-finance-report-drawer)` 範圍守衛，防止列印系統其他一般頁面時畫面遭到空白隱藏。
+- **自動化測試套件**:
+  - 新增 `test/125_web_admin_finance_integration.test.mjs`，驗證主頁面模組整合、活動篩選分組、統計聯動、延宕修復項目與嚴格零 Emoji 規範。
+
+### v0.1.311 (2026-10-18)
+- **新增繳費 / 追加款項抽屜元件實作 (AddPaymentDrawer.tsx)**:
+  - **抽屜元件與介面匯出 (`src/components/admin/AddPaymentDrawer.tsx`)**:
+    - 匯出 `AddPaymentDrawer` 與 `AddPaymentDrawerProps` 介面，支援 `isOpen`, `onClose`, `events`, `members`, `officerUserId`, `onSuccess`。
+    - 款項表單支援：款項名稱 (必填)、關聯活動下拉選單 (含「無關聯特定活動」選項，選取活動自動帶入預設標題與費用)、款項類別 (活動費用 activity, 裝備租借 equipment, 社籍社費 membership, 其他款項 general)、統一金額設定 (支援一鍵批次套用至已選成員)、備註說明。
+  - **雙模式應繳成員選取**:
+    - 模式一「從活動成員選取」：依據所選關聯活動，透過 `fetchAdminEventSignupsFromSupabase` 即時讀取報名名冊，支援「全部報名者」與「僅正取名單」篩選，提供快速「全選」與「全消」功能。
+    - 模式二「從全社名冊搜尋選取」：提供關鍵字搜尋列，即時針對姓名、學號與系級過濾全社社員名冊，支援快速「全選」與「全消」。
+  - **已選名冊清單與個別金額微調**:
+    - 顯示已選成員人數統計與清單表格（社員姓名、學號/資訊、個別應繳金額輸入框、單筆移除操作）。
+    - 即時累計並計算「應收總額」與總選取人數。
+  - **LINE 繳費通知推播與透明錯誤處理**:
+    - 提供「建立後立即透過 LINE 發送繳費通知卡片 (含回報按鈕)」核取方塊（預設勾選）。
+    - 提交時呼叫 `createManualPaymentRequestsInSupabase` 批次寫入 `payments` 資料表，並透過 `notifyDispatcher('notify_payment_reminder', payload)` 發送個人化繳費通知推播。
+    - 落實錯誤透明度規範，若寫入或推播失敗直接顯示具體錯誤代碼與訊息。
+  - **高密度後台樣式整合 (`src/pages/web-admin/webAdmin.css`)**:
+    - 新增 `.wa-add-payment-drawer`、表單網格、雙模式切換頁籤、名冊勾選清單、金額輸入欄與 LINE 推播核取框樣式。
+  - **自動化測試套件**:
+    - 新增 `test/124_add_payment_drawer.test.mjs`，驗證元件與介面匯出、雙模式成員選取、金額客製、LINE 通知選項、Supabase 與推播對接、零 Emoji 規範與 CSS 類別定義。
+
+### v0.1.310 (2026-10-18)
+- **繳費提醒二次確認預覽視窗實作 (PaymentReminderModal.tsx)**:
+  - **發送繳費提醒彈窗元件 (`src/components/admin/PaymentReminderModal.tsx`)**:
+    - 匯出 `PaymentReminderModal` 與 `PaymentReminderModalProps` 介面，當 `!isOpen || !item` 時安全回退。
+    - 顯示提醒對象姓名、待繳項目名稱、應繳金額（以 `toLocaleString()` 格式化）與目標 LINE ID。
+    - 提供提醒備註編輯欄位（預設「請儘速完成匯款並於系統回報末五碼」）與選填繳費期限日期輸入。
+    - 支援未綁定 LINE 帳號防呆校驗（`!item.line_user_id`）：顯示黃色警示橫幅「該對象未綁定 LINE 帳號，無法發送推播通知」，並自動禁用確認發送按鈕。
+    - 完整對接 `notifyDispatcher('notify_payment_reminder', payload)`，實作透明化錯誤處理機制（發生異常或伺服器回傳失敗時直接於紅色錯誤橫幅印出具體原因）。
+    - 發送成功後自動觸發 `onSuccess?.()` 回呼並安全關閉視窗。
+  - **LINE Flex Bubble 卡片即時預覽佈局**:
+    - 即時渲染模擬手機端之 LINE Flex 卡片結構：包含橘黃主題標頭（【繳費通知】、提示說明）、主體（提醒對象、待繳項目、應繳金額亮綠醒目標示、備註內容）、社團預設匯款帳戶資訊區塊（中華郵政 700、帳號、戶名）與底部動作按鈕預覽（前往回報匯款）。
+  - **高密度淺色後台樣式整合 (`src/pages/web-admin/webAdmin.css`)**:
+    - 新增 `.wa-reminder-modal-grid` 雙欄對齊排版，於大螢幕並排呈現表單與 Flex 預覽卡片、小螢幕自動折疊適配。
+    - 新增 Flex 預覽卡片專屬陰影、圓角、金額重點色、警示與錯誤橫幅樣式。
+  - **自動化測試套件**:
+    - 新增 `test/122_payment_reminder_modal.test.mjs`，驗證元件與介面匯出、`notifyDispatcher` 呼叫、未綁定防呆與按鈕禁用、即時卡片預覽、金額逗號格式化、透明錯誤反饋與零 Emoji 規範。
+
+### v0.1.309 (2026-10-18)
+- **輕量自研 SVG/CSS 視覺圖表與 KPI 元件實作 (FinanceReportCharts.tsx)**:
+  - **零外部套件純自研圖表 (`src/components/admin/FinanceReportCharts.tsx`)**:
+    - **應收與實收對比雙層進度條 (`ExpectedVsReceivedBar`)**：支援應收、實收與待核帳/未繳金額計算，計算達成率與對應比例，渲染雙層/多區段 SVG 進度條與細項指標卡片。
+    - **繳費狀態分佈甜甜圈圖 (`StatusDonutChart`)**：運用原生 SVG `strokeDasharray` 與 `strokeDashoffset` 繪製「已確認 (綠 #059669)」、「待核帳 (橘 #d97706)」、「待繳費 (紅 #dc2626)」分佈環，中央顯示核實百分比與下方清楚圖例，具備無資料邊界狀態處理。
+    - **收支類別分佈甜甜圈圖 (`CategoryDonutChart`)**：支援「活動款項」、「裝備租借」、「常年會費」、「一般收支」四類別收支計算，中央顯示總額，下方列出各類別金額與佔比。
+    - **財務收支走勢圖 (`RevenueTrendChart`)**：以語義化 SVG `<path>` 搭配漸層填色（LinearGradient）繪製累積走勢線與面積圖，支援虛線參考格線、金額座標軸與互動式數據點懸浮 Tooltip。
+  - **高密度後台樣式整合 (`src/pages/web-admin/webAdmin.css`)**:
+    - 遵循 `--wa-*` CSS 變數設計體系，新增圖表容器卡片、甜甜圈環圖例、進度條軌道與走勢軸標籤樣式。
+  - **自動化測試套件**:
+    - 新增 `test/121_finance_report_charts.test.mjs`，驗證元件匯出、零外部圖表依賴、狀態色系規範、零 Emoji 規範與 CSS 類別定義。
+
+### v0.1.308 (2026-10-18)
+- **社員繳費端支援網址參數解析與追加款項自動帶入 (Payment URL Search Params & Additional Fees Auto-injection)**:
+  - **網址參數多來源解析 (`src/pages/Payment.tsx`)**:
+    - 元件掛載時透過 `URLSearchParams` 完整支援標準 Query 參數 (`window.location.search`)、LIFF 巢狀狀態參數 (`liff.state`) 與 Hash 路由相容解析。
+    - 支援讀取 `targetId`、`type` (或 `paramType`)、`amount` (或 `paramAmount`) 與 `title` (或 `name` / `item`)。
+  - **待繳清單動態注入與自動預選**:
+    - 若 `targetId` 存在於既有項目中，動態切換選取該指定項目並套用指定金額。
+    - 若為全新追加款項，動態建立 `additionals` 項目注入待繳項目清單，預先填入應繳金額並預設勾選。
+    - 申報表單直接顯示總額，社員填入帳號末 5 碼與上傳匯款水單即可完成申報；成功送出後自動自清單中排除。
+    - 無帶入網址參數時，完整維持既有社費、活動、裝備租借待繳邏輯與預設行為。
+  - **多語系支援 (`src/locales/zh.json`, `src/locales/en.json`)**:
+    - 補齊 `payment.type.additional` 繁中（追加款項）與英文（Additional Fee）字串。
+  - **自動化測試套件**:
+    - 新增 `test/119_payment_page_url_params.test.mjs`，驗證參數解析、動態項目注入與選取邏輯。
+
+### v0.1.307 (2026-10-18)
+- **後端 Edge Function 實作 notify_payment_reminder 與專屬 LINE Flex 卡片模板**:
+  - **通知派發中樞擴充 (`supabase/functions/notify-dispatcher/index.ts`)**:
+    - 新增 `notify_payment_reminder` 處理分支，接收 `PaymentReminderPayload`（包含 `lineUserId`、`userName`、`title`、`amount`、`dueDate`、`notes`、`bankInfo`、`actionUrl`）。
+    - 實作 `buildPaymentReminderFlex` 建構函式，產生高資訊架構之 LINE Flex Bubble 卡片（包含標題、應繳金額、繳費期限、款項備註、社團匯款帳戶資訊與「前往回報匯款」按鈕）。
+    - 全面落實零 Emoji 規範與防呆機制，若無 `userName` 則自動查詢 `members` 資料表補齊，`actionUrl` 具備動態 LIFF 連結補正。
+  - **自動化測試套件**:
+    - 新增 `test/118_notify_payment_reminder.test.mjs`，驗證 Action 路由、處理函式、Flex 按鈕標籤、欄位解析與零 Emoji 規範。
 
 ### v0.1.306 (2026-10-15)
 - **歷史與冗餘資源歸檔整理，以及 Supabase Edge Functions 行為等價性驗證**:

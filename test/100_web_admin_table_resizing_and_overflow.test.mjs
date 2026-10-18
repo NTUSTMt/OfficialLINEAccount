@@ -99,8 +99,8 @@ test('驗證 v0.1.242: actions 欄寬縮小、名冊 baseTdStyle、登山格式�
   const modalCode = fs.readFileSync(path.join(rootDir, 'src/components/admin/MemberProfileModal.tsx'), 'utf-8');
   const registerCode = fs.readFileSync(path.join(rootDir, 'src/pages/Register.tsx'), 'utf-8');
 
-  // 1. actions 欄位寬度改為 50 / 44
-  assert.match(financeCode, /key:\s*'actions',\s*label:\s*'操作',\s*defaultWidth:\s*50,\s*minWidth:\s*44/);
+  // 1. actions 欄位寬度改為 50 / 44 或 70 / 64 (財務後台擴充催繳按鈕)
+  assert.match(financeCode, /key:\s*'actions',\s*label:\s*'操作',\s*defaultWidth:\s*(?:50|70),\s*minWidth:\s*(?:44|64)/);
   assert.match(inventoryCode, /key:\s*'actions',\s*label:\s*'操作',\s*defaultWidth:\s*50,\s*minWidth:\s*44/);
 
   // 2. 財務對帳抽屜中包含 wa-drawer-side-preview 左側同級大圖預覽
