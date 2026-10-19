@@ -1,6 +1,7 @@
 import { getSupabaseAdminClient } from "../_shared/supabaseClient.ts";
 import { formatTaipeiDate } from "../_shared/dateUtils.ts";
-import { pushAdminMessage } from "../_shared/pushAdminMessage.ts";
+import { sendAdminEmail } from "../_shared/pushAdminMessage.ts";
+import { enqueueAdminDigest } from "../_shared/digestQueue.ts";
 
 export async function runDailyPatrol(): Promise<{
   status: string;
@@ -145,7 +146,87 @@ export async function runDailyPatrol(): Promise<{
       noticeSections.join("\n\n────────────────────\n\n") +
       `\n\n巡檢時間：${formatTaipeiDate(now, "YYYY-MM-DD HH:mm:ss")}`;
 
-    await pushAdminMessage(reportBody, reportSubject);
+    // 1. 即時寄送 Email 備查
+    await sendAdminEmail(reportSubject, reportBody);
+
+    // 2. 封裝巡檢卡片並加入每兩天彙整佇列 (0 即時額度消耗)
+    const patrolBubble = {
+      type: "bubble",
+      size: "kilo",
+      header: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#475569",
+        paddingTop: "14px",
+        paddingBottom: "14px",
+        paddingStart: "16px",
+        paddingEnd: "16px",
+        contents: [
+          {
+            type: "text",
+            text: "【系統自動巡檢報告】",
+            color: "#FFFFFF",
+            weight: "bold",
+            size: "sm",
+          },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        paddingAll: "16px",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              { type: "text", text: "巡檢日期", size: "xs", color: "#64748B", flex: 3 },
+              { type: "text", text: todayStr, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+            ],
+          },
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              { type: "text", text: "關閉活動", size: "xs", color: "#64748B", flex: 3 },
+              { type: "text", text: `${closedEvents.length} 場`, size: "xs", color: "#0F172A", flex: 7 },
+            ],
+          },
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              { type: "text", text: "到期社員", size: "xs", color: "#64748B", flex: 3 },
+              { type: "text", text: `${expiredMembers.length} 人`, size: "xs", color: "#0F172A", flex: 7 },
+            ],
+          },
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              { type: "text", text: "逾期借用", size: "xs", color: "#64748B", flex: 3 },
+              { type: "text", text: `${overdueLoans.length} 筆`, size: "xs", color: "#DC2626", weight: "bold", flex: 7 },
+            ],
+          },
+          { type: "separator", margin: "md" },
+          {
+            type: "text",
+            text: "系統已自動處理逾期社籍重置與活動關閉，詳細清單已同步發送 Email 備查。",
+            size: "xxs",
+            color: "#64748B",
+            wrap: true,
+          },
+        ],
+      },
+    };
+
+    await enqueueAdminDigest({
+      category: "patrol_report",
+      title: reportSubject,
+      summary: `自動巡檢：關閉活動 ${closedEvents.length}，到期社員 ${expiredMembers.length}，逾期裝備 ${overdueLoans.length}`,
+      bubble: patrolBubble,
+    });
   }
 
   return {

@@ -34,7 +34,10 @@ import {
   buildWaitlistConfirmedFlex,
   buildWaitlistFailedFlex,
   buildAdminAssistantGuideFlex,
+  buildPaymentConfirmedAdminFlex,
 } from "./flexTemplates.ts";
+import { sendAdminEmail, sendUserEmail } from "../_shared/pushAdminMessage.ts";
+import { fetchUnsentAdminDigest, buildAdminDigestMessages } from "../_shared/digestQueue.ts";
 
 async function sendEventList(replyToken: string, userId: string): Promise<void> {
   const prefLang = await getUserPreferredLanguage(userId);
@@ -530,7 +533,7 @@ async function handleTextMessage(
     if (!isOfficer) {
       await replyMessage(replyToken, [{
         type: "text",
-        text: "⚠️ 僅有社團幹部具備設定推播群組之權限。",
+        text: "僅有社團幹部具備設定推播群組之權限。",
       }], true);
       return;
     }
@@ -646,6 +649,29 @@ async function handleTextMessage(
     return;
   }
 
+  // 8.5 幹部手動社務彙整與巡檢查詢 (0 額度 reply)
+  if (
+    cleanText.includes("社務彙整") ||
+    cleanText.includes("待處理社務") ||
+    cleanText.includes("巡檢報告") ||
+    cleanText.includes("社務總覽")
+  ) {
+    const isOfficer = await isUserOfficer(userId);
+    if (isOfficer) {
+      const items = await fetchUnsentAdminDigest(30);
+      if (items.length === 0) {
+        await replyMessage(replyToken, [{
+          type: "text",
+          text: "目前無待處理的社務彙整項目！所有裝備租借、棄權與巡檢均已處理或無新增案件。",
+        }]);
+      } else {
+        const messages = buildAdminDigestMessages(items);
+        await replyMessage(replyToken, messages as any);
+      }
+      return;
+    }
+  }
+
   // 9. Gemini AI 客服
   if (isYueMentioned) {
     const prefLang = await getUserPreferredLanguage(userId);
@@ -716,13 +742,132 @@ async function handlePostback(
         await setAppConfig("ADMIN_GROUP_ID", newGroupId);
         await replyMessage(replyToken, [{
           type: "text",
-          text: "✅ 已成功將此群組設定為【幹部管理推播群組】！",
+          text: "已成功將此群組設定為【幹部管理推播群組】！",
         }]);
       }
     }
     return;
   }
+
+  if (action === "verify_payment") {
+    await handleVerifyPaymentPostback(replyToken, userId, params);
+    return;
+  }
 }
+
+async function handleVerifyPaymentPostback(
+  replyToken: string,
+  userId: string,
+  params: Record<string, string>
+): Promise<void> {
+  const paymentId = (params.paymentId || "").trim();
+  const token = (params.token || "").trim();
+
+  if (!paymentId || !token) {
+    await replyMessage(replyToken, [{
+      type: "text",
+      text: "核銷失敗：缺少繳費單號或安全金鑰！",
+    }]);
+    return;
+  }
+
+  // 1. 驗證點擊者是否為社團幹部
+  const isOfficer = await isUserOfficer(userId);
+  if (!isOfficer) {
+    await replyMessage(replyToken, [{
+      type: "text",
+      text: "權限不足：您目前非社團幹部，無法執行繳費單核銷！",
+    }]);
+    return;
+  }
+
+  const client = getSupabaseAdminClient();
+  const { data: officerMember } = await client
+    .from("members")
+    .select("name")
+    .eq("line_user_id", userId)
+    .maybeSingle();
+  const officerName = officerMember?.name || "幹部";
+
+  // 2. 呼叫 verify_payment_by_token RPC
+  const { data: rpcRes, error: rpcErr } = await client.rpc("verify_payment_by_token", {
+    p_payment_id: paymentId,
+    p_verify_token: token,
+    p_officer_name: `${officerName} (LINE Postback)`,
+  });
+
+  if (rpcErr || !rpcRes) {
+    console.error("verify_payment_by_token RPC error:", rpcErr);
+    await replyMessage(replyToken, [{
+      type: "text",
+      text: `核銷處理失敗：${rpcErr?.message || "資料庫執行異常"}`,
+    }]);
+    return;
+  }
+
+  if (rpcRes.alreadyConfirmed) {
+    await replyMessage(replyToken, [{
+      type: "text",
+      text: `繳費單【${paymentId}】先前已完成核銷，請勿重複對帳！`,
+    }]);
+    return;
+  }
+
+  if (!rpcRes.success) {
+    await replyMessage(replyToken, [{
+      type: "text",
+      text: `核銷未通過：${rpcRes.error || "核銷條件不符"}`,
+    }]);
+    return;
+  }
+
+  // 3. 組合核銷完成之翡翠綠 Flex 卡片並使用 0 額度 replyToken 回覆
+  const confirmedFlex = buildPaymentConfirmedAdminFlex({
+    paymentId,
+    userName: rpcRes.userName || "社員",
+    amount: rpcRes.amount || 0,
+    items: rpcRes.items || "社團活動/裝備費用",
+    confirmedBy: `${officerName} (LINE 群組單鍵核銷)`,
+  });
+
+  await replyMessage(replyToken, [{
+    type: "flex",
+    altText: `【台科登山社】繳費單已完成核銷 - ${paymentId}`,
+    contents: confirmedFlex,
+  }]);
+
+  // 4. 非同步寄送確認信給社員 (GAS Worker 0 額度)
+  if (rpcRes.userEmail) {
+    const isEn = rpcRes.userLanguage === "en";
+    const emailSubject = isEn
+      ? `[NTUST Hiking Club] Payment Confirmation Notice - ${paymentId}`
+      : `【台科登山社】繳費成功確認通知 - ${paymentId}`;
+    const emailBody = isEn
+      ? `Dear ${rpcRes.userName || "Member"},\n\nYour payment declaration (ID: ${paymentId}, Amount: NT$ ${rpcRes.amount}) has been verified and confirmed by club officer ${officerName}.\n\nItems:\n${rpcRes.items}\n\nThank you!`
+      : `${rpcRes.userName || "社員"} 您好：\n\n您於台科登山社申報之繳費單（單號：${paymentId}，金額：$${rpcRes.amount} 元）已由幹部 ${officerName} 完成對帳核銷！\n\n核銷項目：\n${rpcRes.items}\n\n感謝您的配合！`;
+
+    sendUserEmail(rpcRes.userEmail, emailSubject, emailBody).catch((err) => {
+      console.warn("sendUserEmail failed:", err);
+    });
+  }
+
+  // 5. 非同步寄送備查信給幹部信箱 (GAS Worker 0 額度)
+  const adminSubject = `【台科登山社】繳費單已完成核銷 - ${paymentId} (${rpcRes.userName || "社員"})`;
+  const adminBody =
+    "【幹部通知：繳費單已完成核銷】\n" +
+    "─────────────\n" +
+    `• 繳費單號：${paymentId}\n` +
+    `• 申報人：${rpcRes.userName || "社員"}\n` +
+    `• 核銷金額：$${rpcRes.amount} 元\n` +
+    `• 核銷項目：${rpcRes.items}\n` +
+    `• 核銷幹部：${officerName}\n` +
+    "• 核銷途徑：LINE 群組單鍵 Postback 核銷 (0 額度)\n" +
+    "• 系統狀態：已成功更新 Supabase 資料庫";
+  sendAdminEmail(adminSubject, adminBody).catch((err) => {
+    console.warn("sendAdminEmail audit failed:", err);
+  });
+}
+
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {

@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.313-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.316-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.313)](#7-最新版本異動紀錄-changelog-v01313)
+- [7. 最新版本異動紀錄 (Changelog v0.1.316)](#7-最新版本異動紀錄-changelog-v01316)
 
 ---
 
@@ -204,7 +204,63 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.313)
+## 7. 最新版本異動紀錄 (Changelog v0.1.316)
+
+### v0.1.316 (2026-10-19)
+- **幹部推播防爆與 LINE 免費額度優化架構 (Officer Push Quota Defense & 2-Day Digest)**:
+  - **LINE 群組推播倍數扣點根因徹底根治**:
+    - 針對 LINE 官方帳號推播至群組時會以「群組總人數（不含機器人）」加倍扣除推播額度（15 人幹部群單次推播消耗 15 則額度，全月 200 則免費額度極易於數天內破表 429）之限制，全面重構幹部通知流。
+  - **新繳費申報一鍵核銷改為 Postback 模式 (0 額度 replyToken 回覆)**:
+    - 繳費申報 Flex 卡片底部按鈕升級為 `postback` 動作，幹部於群組點擊後自動發送 `@小岳助理 核銷 PAY-xxx`。
+    - LINE Webhook 接收後校驗幹部權限，執行 `verify_payment_by_token` RPC 進行資料庫核銷，並使用隨附之 `replyToken` 即時在群組回覆翡翠綠核銷完成卡片。
+    - 徹底省去每次核銷產生的群組 Push 額度消耗（單筆現省 15 則推播），達成零額度核銷互動。
+  - **全面即時 Email 備查（0 額度、零遺漏）**:
+    - 所有幹部通知事件（繳費申報、核銷完成、裝備申請、裝備取消、正取棄權、幹部意願登記、每週系統巡檢）一律經由 GAS Worker 即時發送 Email 至幹部信箱（`ADMIN_EMAIL`），確保行政資訊第一時間 100% 必達。
+  - **移除活動上架/更新之 LINE 群組推播**:
+    - 幹部於管理後台發布或編輯活動時，停用對幹部群組的即時 LINE 推播，改為純 Email 備查，消除幹部自發自看的冗餘損耗。
+  - **每兩天晚間 21:00 社務彙整推播 (Carousel 滾動卡片極限利用)**:
+    - **建立佇列資料表**: 新增 `admin_notification_digest_queue` 及其未發送狀態索引與 RLS 安全策略。
+    - **被動事件導流**: 將裝備租借申請、裝備取消、活動正取棄權、幹部意願登記、每週系統巡檢等非秒級緊急通知全數導流至佇列中。
+    - **排程調用與極限打包**: 建立 `invoke_admin_digest` RPC 與每兩天台北時間 21:00 (UTC 13:00, cron `0 13 */2 * *`) 之 pg_cron 排程。
+    - **零事件零發送**: 若當期兩天內無任何待處理案件，完全不發送訊息，額度消耗為 0。
+    - **Carousel 訊息框極致打包**: 善用 LINE 單次推播支援最多 3 個訊息框且「僅計為 1 則推播額度」之計費規則，將佇列項目以橫向滾動 Carousel Flex 卡片打包（最多可達 30 張詳細卡片），全量在單次推播中發送，將單次推播額度效益發揮至極致。
+  - **幹部對話指令即時查詢 (0 額度 reply)**:
+    - 支援幹部隨時在 LINE 群組中輸入「社務彙整」、「待處理社務」或「巡檢報告」，機器人直接以 0 額度 reply 回覆當前未送出的社務卡片清單。
+  - **自動化測試套件**:
+    - 新增 `test/129_officer_notification_digest_and_reply_verification.test.mjs`，完整覆蓋 Migration 佇列結構、pg_cron 排程規則、Carousel 滾動分頁打包、pushAdminMessage 防爆守衛、Postback 一鍵核銷與零 emoji 規範。
+
+### v0.1.315 (2026-10-18)
+- **活動名冊同步原位差異更新與幹部自訂欄位完整保留 (In-Place Diff Update & Custom Column Preservation)**:
+  - **徹底廢除破壞性清空機制 (`clearContent()`)**:
+    - 全面移除同步名冊時的 `sheet.clearContent()` 操作，杜絕因名冊同步造成既有名單、儲存格格式、字型樣式、外框線、色彩標記與幹部手動編輯內容被整批抹除的風險。
+  - **幹部自訂欄位 100% 完整保留**:
+    - 表頭比對時，僅針對 30 個標準系統欄位進行識別；凡非系統標準欄位的自訂欄位（如幹部在右側或中間手動建立之「車次分配」、「帳篷分組」、「公裝分配」、「保險進度」等），其欄位儲存格資料 100% 完整保留，絕不觸碰或覆蓋。
+  - **既有列原位比對差異更新 (In-Place Row Update)**:
+    - 建立以「報名專屬碼」優先、「系統識別碼」次之的雙向索引映射。
+    - 比對既有儲存格數值與 Supabase 最新數值（`_areCellValuesEqual` 智慧忽略單引號格式差），僅在數值有實質異動時更新該格數值，維持隊員在名冊中的原位順序。
+  - **新報名與取消隊員平滑處理**:
+    - **新報名隊員**：若 Supabase 中的報名紀錄尚未存在於試算表，自動於名冊底部接續追加新列，系統欄位自動填入對應資料，幹部自訂欄位預設留空。
+    - **已取消報名隊員**：若隊員自願取消或幹部審核取消，其「審核結果」更新為「已取消 Cancelled」，並完整保留該列既有的幹部備註與自訂分配資訊，絕不刪除列。
+  - **自動化測試套件**:
+    - 新增 `test/128_event_sheet_in_place_diff_sync.test.mjs`，完整模擬名冊同步前後「車次分配」、「帳篷分組」、「公裝分配」、「保險進度」自訂欄位保留、原位差異更新、已取消隊員保留與新隊員底部追加等情境。
+
+### v0.1.314 (2026-10-18)
+- **活動名冊同步 Google Sheets 30 欄位純精確比對與撞名修復 (Sheets Header Collision Resolution)**:
+  - **表頭比對演算法重構 (`_normalizeHeader` 與純精確 `_matchHeader`)**:
+    - 全面廢除包含比對（`indexOf` 模糊包含比對），改採「純精確比對 (Strict Exact Match)」。
+    - 引入 `_normalizeHeader` 進行表頭文字標準化：自動去除首尾多餘空白、轉為小寫，並以正規表達式安全清除括號附註（如 `(必填)`、`（選填）`、`[居留證/護照]` 等），避免因幹部手動添加提示而失配。
+    - 支援中英文標準雙語別名精確對齊。
+  - **根本解決 4 大欄位互撞錯填問題**:
+    - **姓名 vs 緊急聯絡人姓名**：過去因「姓名」候選詞包含 `'姓名'` 且優先檢查，導致「緊急聯絡人姓名」被誤判為本人姓名；現已明確分離候選詞且精確比對。
+    - **專屬碼 vs LINE ID / 學號**：移除專屬碼別名中之獨立單字 `'id'`，杜絕「LINE ID」、「學號 (student_id)」等含 `'id'` 欄位被誤填入報名專屬碼。
+    - **加入社員意願 vs 是否為社員**：移除「是否為社員」中的泛用候選詞，避免包含「社員」字眼的意願欄位被覆寫為社員資格快照。
+    - **意願解析強化 (`_formatIntent`)**：修復意願欄位若填寫「無意願」、「沒有意願」時因包含「意願」兩字被錯誤判斷為「是」之邏輯缺陷，新增否定詞防護（無、否、沒有、不）。
+  - **試算表初始化 30 欄位標準對齊**:
+    - 更新 `src/gas_worker.js` 中的 `defaultHeaders`，完整對齊目前使用的 30 欄標準表頭：系統識別碼、專屬碼、姓名、性別、國籍、證件號碼、LINE ID、聯絡信箱、聯絡電話、系所、學號、身分、聯絡地址、生日、緊急聯絡人姓名、緊急聯絡人電話、緊急聯絡人聯絡地址、緊急聯絡人關係、個人特殊病史、爬山經驗、體能測驗、體能證明、加入社員意願、是否為社員、擔任幹部意願、審核結果、通知狀態、繳費狀態、備註、想說的話。
+  - **試算表綁定腳本同步升級 (`supabase/event_sheet_script.js`)**:
+    - 同步將試算表側邊欄差異比對 (`openDiffSidebar`) 與推播錄取通知 (`sendAdmissionNotifications`) 中的欄位定位函式升級為精確匹配，杜絕回寫時的欄位誤配。
+  - **自動化測試套件**:
+    - 新增 `test/127_event_sheet_strict_exact_30_columns.test.mjs`，完整模擬 30 欄位對齊、括號註記清理、意願格式化與防撞名交叉檢驗，確保零誤判、零錯填。
 
 ### v0.1.313 (2026-10-18)
 - **財務對帳重構最終審查回饋優化與防禦加固 (Final Whole-Branch Review Fixes)**:

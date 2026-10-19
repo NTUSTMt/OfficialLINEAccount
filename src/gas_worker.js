@@ -395,10 +395,10 @@ function _handleCreateEventSheet(json) {
       var initSheet = newSs.getActiveSheet();
       initSheet.setName('報名名冊');
       var defaultHeaders = [
-        '系統識別碼', '專屬碼', '姓名', '性別', 'LINE ID', '聯絡信箱', '聯絡電話', '聯絡地址',
-        '生日', '證件號碼', '緊急聯絡人姓名', '緊急聯絡人電話', '緊急聯絡人聯絡地址', '緊急聯絡人關係',
-        '爬山經驗', '體能測驗', '體能證明', '是否為社員', '審核結果', '通知狀態', '繳費狀態', '備註', '想說的話', '擔任幹部意願',
-        '系所', '學號', '個人特殊病史', '身分', '加入社員意願'
+        '系統識別碼', '專屬碼', '姓名', '性別', '國籍', '證件號碼', 'LINE ID', '聯絡信箱', '聯絡電話',
+        '系所', '學號', '身分', '聯絡地址', '生日', '緊急聯絡人姓名', '緊急聯絡人電話', '緊急聯絡人聯絡地址', '緊急聯絡人關係',
+        '個人特殊病史', '爬山經驗', '體能測驗', '體能證明', '加入社員意願', '是否為社員', '擔任幹部意願',
+        '審核結果', '通知狀態', '繳費狀態', '備註', '想說的話'
       ];
       initSheet.appendRow(defaultHeaders);
       var headerRange = initSheet.getRange(1, 1, 1, defaultHeaders.length);
@@ -699,6 +699,86 @@ function _updateSupabaseEventDriveUrls(eventId, folderUrl, spreadsheetUrl, sprea
   }
 }
 
+function _areCellValuesEqual(valA, valB) {
+  var a = String(valA !== null && valA !== undefined ? valA : '').trim().replace(/^'/, '');
+  var b = String(valB !== null && valB !== undefined ? valB : '').trim().replace(/^'/, '');
+  return a === b;
+}
+
+function _computeTargetValue(h, s, m, i, curVal) {
+  if (_matchHeader(h, ['序號', '項次', 'no.', 'no', '項', '序號 no.', '編號 (序號)'])) {
+    return (curVal && String(curVal).trim()) ? curVal : (i + 1);
+  } else if (_matchHeader(h, ['系統識別碼', 'line_user_id', 'line userid', 'userid', '系統識別碼 line_user_id'])) {
+    return s.line_user_id || '';
+  } else if (_matchHeader(h, ['專屬碼', '報名專屬碼', '報名碼', '報名代碼', '報名編號', 'signup_id', 'signup id', 'code', '專屬碼 id', '報名專屬碼 signup_id'])) {
+    return s.id || '';
+  } else if (_matchHeader(h, ['緊急聯絡人姓名', '緊急聯絡人', 'emer_name', 'emergency_contact_name', '緊急聯絡人姓名 emergency contact name', '緊急聯絡人 emergency contact'])) {
+    return m.emergency_contact_name || '';
+  } else if (_matchHeader(h, ['姓名', 'name', '隊員姓名', '報名者姓名', '姓名 name', '隊員姓名 member name', '報名姓名'])) {
+    return m.name || s.name || '';
+  } else if (_matchHeader(h, ['性別', 'gender', '性別 gender'])) {
+    return m.gender || '';
+  } else if (_matchHeader(h, ['國籍', 'nationality', '國籍 nationality'])) {
+    return m.nationality || '';
+  } else if (_matchHeader(h, ['證件號碼', '身分證字號', '身分證', '身分證號', '護照號碼', '居留證號', 'id_card', 'id_number', '證件字號', '身分證字號 id_card', '證件號碼 id_number'])) {
+    return m.id_card ? ("'" + String(m.id_card)) : (m.id_number ? ("'" + String(m.id_number)) : '');
+  } else if (_matchHeader(h, ['LINE ID', 'line_id', 'lineid', 'line 帳號', 'line帳號', 'line id / line帳號', 'line id line帳號'])) {
+    return m.line_id || s.line_id || '';
+  } else if (_matchHeader(h, ['聯絡信箱', 'email', '電子郵件', '信箱', 'mail', 'e-mail', '聯絡信箱 email'])) {
+    return m.email || '';
+  } else if (_matchHeader(h, ['緊急聯絡人電話', '緊急聯絡電話', '緊急電話', '緊急聯絡人手機', '緊急聯絡手機', 'emer_phone', 'emergency_contact_phone', '緊急聯絡人電話 emergency contact phone'])) {
+    return m.emergency_contact_phone ? ("'" + String(m.emergency_contact_phone)) : '';
+  } else if (_matchHeader(h, ['聯絡電話', '電話', '手機電話', '手機', '行動電話', 'phone', 'tel', 'phone number', '聯絡電話 phone', '手機 phone'])) {
+    return m.phone ? ("'" + String(m.phone)) : '';
+  } else if (_matchHeader(h, ['系所', '科系', '系級', '學系', 'department', '系所 department', '系級 department'])) {
+    return m.department || '';
+  } else if (_matchHeader(h, ['學號', 'student_id', 'student id', '學號 student_id', '學號 student id'])) {
+    return m.student_id ? ("'" + String(m.student_id)) : '';
+  } else if (_matchHeader(h, ['身分', '身分狀態', '校內身分', 'identity_status', '身分 identity_status'])) {
+    return m.identity_status || '';
+  } else if (_matchHeader(h, ['緊急聯絡人聯絡地址', '緊急聯絡人地址', '緊急地址', 'emer_address', 'emergency_contact_address', '緊急聯絡人聯絡地址 emergency contact address', '緊急聯絡人現居地址', '緊急聯絡人戶籍地址', '緊急聯絡人通訊地址'])) {
+    return m.emergency_contact_address || '';
+  } else if (_matchHeader(h, ['聯絡地址', '地址', '現居地址', '戶籍地址', '通訊地址', 'address', '聯絡地址 address'])) {
+    return m.address || '';
+  } else if (_matchHeader(h, ['生日', '出生年月日', '出生日期', 'birthday', '生日 birthday', '出生年月日 birthday'])) {
+    return m.birthday ? String(m.birthday).replace(/-/g, '/').slice(0, 10) : '';
+  } else if (_matchHeader(h, ['緊急聯絡人關係', '關係', '與緊急聯絡人關係', 'emer_rel', 'emergency_contact_rel', 'emergency_contact_relationship', '緊急聯絡人關係 emergency contact relationship'])) {
+    return m.emergency_contact_rel || m.emergency_contact_relationship || '';
+  } else if (_matchHeader(h, ['個人特殊病史', '特殊病史', '病史', '個人特殊病史或過敏', 'medical_history', '特殊病史 medical_history'])) {
+    return m.medical_history || '';
+  } else if (_matchHeader(h, ['爬山經驗', '登山經驗', '登山經歷', '經驗', 'outdoor_experience', 'hiking_experience', '爬山經驗 outdoor_experience', '百岳經驗'])) {
+    return m.outdoor_experience || m.hiking_experience || '';
+  } else if (_matchHeader(h, ['體能測驗', '體能自評', '體能狀況', '體能', 'fitness_desc', 'fitness_test', '體能測驗 fitness_test'])) {
+    return m.fitness_desc || m.fitness_test || '';
+  } else if (_matchHeader(h, ['體能證明', '證明文件', 'fitness_proof', 'proof_urls', '體能證明 fitness_proof'])) {
+    var proofUrlsStr = '';
+    if (Array.isArray(m.proof_urls)) {
+      proofUrlsStr = m.proof_urls.join(', ');
+    } else if (m.proof_urls) {
+      proofUrlsStr = String(m.proof_urls);
+    }
+    return proofUrlsStr || m.fitness_proof_url || '';
+  } else if (_matchHeader(h, ['加入社員意願', '入社意願', '是否入社', 'join_membership_intent', '加入社員意願 join_membership_intent'])) {
+    return _formatIntent(m.join_membership_intent);
+  } else if (_matchHeader(h, ['是否為社員', '社員身分', '社員', 'is_official_member', 'is_member', '是否為社員 is_official_member', '正式社員'])) {
+    return m.is_official_member ? '是' : (s.is_official_member_snapshot ? '是' : '否');
+  } else if (_matchHeader(h, ['擔任幹部意願', '幹部意願', '有意願擔任幹部', 'officer_intent', '擔任幹部意願 officer_intent'])) {
+    return _formatIntent(m.officer_intent);
+  } else if (_matchHeader(h, ['審核結果', '審核狀態', '錄取審核', 'status', 'audit_status', '審核結果 status'])) {
+    return _normalizeAuditStatus(s.status);
+  } else if (_matchHeader(h, ['通知狀態', '錄取通知', '審核通知', 'notify_status', 'notification_status', '通知狀態 notification_status'])) {
+    return s.notification_status ? String(s.notification_status) : '未通知';
+  } else if (_matchHeader(h, ['繳費狀態', '繳費情形', '付款狀態', '對帳狀態', 'payment_status', '繳費', '繳費狀態 payment_status'])) {
+    return _normalizePaymentStatus(s.payment_status);
+  } else if (_matchHeader(h, ['備註', '幹部備註', 'notes', 'memo', '備註 notes', '備注'])) {
+    return s.notes || '';
+  } else if (_matchHeader(h, ['想說的話', '給幹部的話', '隊員留言', '隊員想說的話', 'want_to_say', '想說的話 want_to_say'])) {
+    return m.want_to_say || '';
+  }
+  // 未命中的自訂欄位，回傳 undefined 表示為幹部手動欄位，不更動既有內容
+  return undefined;
+}
+
 function _importExistingSignupsToSheet(sheet, eventId, signupsList, clearExisting) {
   try {
     var signups = Array.isArray(signupsList) ? signupsList : _fetchSupabaseSignups(eventId);
@@ -723,133 +803,124 @@ function _importExistingSignupsToSheet(sheet, eventId, signupsList, clearExistin
     var headers = sData.length > 0 ? sData[0] : [];
     if (headers.length === 0) return 0;
 
-    // 取得現有名單的專屬碼 (防止重複追加，若 clearExisting 為 true 則直接略過過濾)
-    var codeCol = _findColIdx(headers, ['專屬碼', '報名專屬碼', '報名碼', '編號', 'id']);
-    var existingCodes = {};
-    if (!clearExisting && codeCol > -1) {
-      for (var r = 1; r < sData.length; r++) {
-        var c = String(sData[r][codeCol]).trim();
-        if (c) existingCodes[c] = true;
-      }
+    // 定位關鍵索引欄位（報名專屬碼優先，系統識別碼次之）
+    var codeCol = _findColIdx(headers, ['專屬碼', '報名專屬碼', '報名碼', '報名代碼', '報名編號', 'signup_id', 'signup id', 'code', '專屬碼 id', '報名專屬碼 signup_id']);
+    var uidCol = _findColIdx(headers, ['系統識別碼', 'line_user_id', 'line userid', 'userid', '系統識別碼 line_user_id']);
+
+    // 建立試算表中現有名冊的列索引對照表 (r 為 1-based 資料列在 sData 中的 0-based 索引，r >= 1)
+    var sheetRowMap = {};
+    for (var r = 1; r < sData.length; r++) {
+      var rowCode = codeCol > -1 ? String(sData[r][codeCol] || '').trim() : '';
+      var rowUid = uidCol > -1 ? String(sData[r][uidCol] || '').trim() : '';
+      if (rowCode) sheetRowMap['CODE_' + rowCode] = r;
+      if (rowUid) sheetRowMap['UID_' + rowUid] = r;
     }
 
+    var updatedRowsCount = 0;
     var rowsToAppend = [];
+    var sheetDataModified = false;
+
     for (var i = 0; i < signups.length; i++) {
       var s = signups[i];
-      if (!clearExisting && s.id && existingCodes[s.id]) continue;
       var m = s.members || memberMap[s.line_user_id] || {};
 
-      var proofUrlsStr = '';
-      if (Array.isArray(m.proof_urls)) {
-        proofUrlsStr = m.proof_urls.join(', ');
-      } else if (m.proof_urls) {
-        proofUrlsStr = String(m.proof_urls);
+      var matchedRowIdx = -1;
+      if (s.id && sheetRowMap['CODE_' + s.id] !== undefined) {
+        matchedRowIdx = sheetRowMap['CODE_' + s.id];
+      } else if (s.line_user_id && sheetRowMap['UID_' + s.line_user_id] !== undefined) {
+        matchedRowIdx = sheetRowMap['UID_' + s.line_user_id];
       }
 
-      var row = new Array(headers.length).fill('');
-      for (var c = 0; c < headers.length; c++) {
-        var h = String(headers[c]).trim();
-        // 嚴格依照專屬排他規則比對表頭，避免模糊關鍵字互撞
-        if (_matchHeader(h, ['序號', '項次', 'no.', 'no', '項'], true)) {
-          row[c] = i + 1;
-        } else if (_matchHeader(h, ['系統識別碼', 'line_user_id', 'userid'])) {
-          row[c] = s.line_user_id || '';
-        } else if (_matchHeader(h, ['專屬碼', '報名專屬碼', '報名碼', '編號', 'id'])) {
-          row[c] = s.id || '';
-        } else if (_matchHeader(h, ['姓名', 'name', '隊員姓名', '報名者姓名'])) {
-          row[c] = m.name || s.name || '';
-        } else if (_matchHeader(h, ['性別', 'gender'])) {
-          row[c] = m.gender || '';
-        } else if (_matchHeader(h, ['LINE ID', 'line_id', 'lineid', 'line帳號'])) {
-          row[c] = m.line_id || s.line_id || '';
-        } else if (_matchHeader(h, ['聯絡信箱', 'email', '電子郵件', '信箱', 'mail'])) {
-          row[c] = m.email || '';
-        } else if (_matchHeader(h, ['緊急聯絡人電話', '緊急聯絡電話', '緊急電話', 'emer_phone', 'emergency_contact_phone'])) {
-          row[c] = m.emergency_contact_phone ? ("'" + String(m.emergency_contact_phone)) : '';
-        } else if (_matchHeader(h, ['聯絡電話', '電話', '手機電話', '手機', '行動電話', 'phone', 'tel'])) {
-          row[c] = m.phone ? ("'" + String(m.phone)) : '';
-        } else if (_matchHeader(h, ['緊急聯絡人聯絡地址', '緊急聯絡人地址', '緊急地址', 'emer_address', 'emergency_contact_address'])) {
-          row[c] = m.emergency_contact_address || '';
-        } else if (_matchHeader(h, ['聯絡地址', '地址', '現居地址', '戶籍地址', 'address'])) {
-          row[c] = m.address || '';
-        } else if (_matchHeader(h, ['生日', '出生年月日', '出生日期', 'birthday'])) {
-          row[c] = m.birthday ? String(m.birthday).replace(/-/g, '/').slice(0, 10) : '';
-        } else if (_matchHeader(h, ['證件號碼', '身分證字號', '身分證', '護照號碼', '居留證號', 'id_card', 'id_number'])) {
-          row[c] = m.id_card ? ("'" + String(m.id_card)) : (m.id_number ? ("'" + String(m.id_number)) : '');
-        } else if (_matchHeader(h, ['緊急聯絡人姓名', '緊急聯絡人', 'emer_name', 'emergency_contact_name'])) {
-          row[c] = m.emergency_contact_name || '';
-        } else if (_matchHeader(h, ['緊急聯絡人關係', '關係', '與緊急聯絡人關係', 'emer_rel', 'emergency_contact_rel', 'emergency_contact_relationship'])) {
-          row[c] = m.emergency_contact_rel || m.emergency_contact_relationship || '';
-        } else if (_matchHeader(h, ['爬山經驗', '登山經驗', '登山經歷', '經驗', 'outdoor_experience', 'hiking_experience'])) {
-          row[c] = m.outdoor_experience || m.hiking_experience || '';
-        } else if (_matchHeader(h, ['體能測驗', '體能自評', '體能狀況', 'fitness_desc', 'fitness_test'])) {
-          row[c] = m.fitness_desc || m.fitness_test || '';
-        } else if (_matchHeader(h, ['體能證明', '證明文件', 'fitness_proof', 'proof_urls'])) {
-          row[c] = proofUrlsStr || m.fitness_proof_url || '';
-        } else if (_matchHeader(h, ['是否為社員', '社員身分', '社員', 'is_official_member', 'is_member'])) {
-          row[c] = m.is_official_member ? '是' : (s.is_official_member_snapshot ? '是' : '否');
-        } else if (_matchHeader(h, ['繳費狀態', '繳費情形', '付款狀態', '對帳狀態', 'payment_status', '繳費'])) {
-          row[c] = _normalizePaymentStatus(s.payment_status);
-        } else if (_matchHeader(h, ['通知狀態', '錄取通知', '審核通知', 'notify_status', 'notification_status'])) {
-          row[c] = s.notification_status ? String(s.notification_status) : '未通知';
-        } else if (_matchHeader(h, ['審核結果', '審核狀態', '錄取審核', 'status', 'audit_status'])) {
-          row[c] = _normalizeAuditStatus(s.status);
-        } else if (_matchHeader(h, ['備註', '幹部備註', 'notes', 'memo'])) {
-          row[c] = s.notes || '';
-        } else if (_matchHeader(h, ['想說的話', '給幹部的話', '隊員留言', 'want_to_say'])) {
-          row[c] = m.want_to_say || '';
-        } else if (_matchHeader(h, ['擔任幹部意願', '幹部意願', '有意願擔任幹部', 'officer_intent'])) {
-          row[c] = (m.officer_intent && (String(m.officer_intent).indexOf('意願') > -1 || m.officer_intent === '我有意願成為社團幹部' || m.officer_intent === '是' || m.officer_intent === true)) ? '是' : '否';
-        } else if (_matchHeader(h, ['加入社員意願', '入社意願', '是否入社', 'join_membership_intent'])) {
-          row[c] = (m.join_membership_intent && (String(m.join_membership_intent).indexOf('意願') > -1 || m.join_membership_intent === '我有意願成為社員' || m.join_membership_intent === '是' || m.join_membership_intent === true)) ? '是' : '否';
-        } else if (_matchHeader(h, ['系所', '科系', '系級', 'department'])) {
-          row[c] = m.department || '';
-        } else if (_matchHeader(h, ['學號', 'student_id'])) {
-          row[c] = m.student_id ? ("'" + String(m.student_id)) : '';
-        } else if (_matchHeader(h, ['個人特殊病史', '特殊病史', '病史', 'medical_history'])) {
-          row[c] = m.medical_history || '';
-        } else if (_matchHeader(h, ['身分', '身分狀態', '校內身分', 'identity_status'])) {
-          row[c] = m.identity_status || '';
-        } else if (_matchHeader(h, ['國籍', 'nationality'])) {
-          row[c] = m.nationality || '';
+      if (matchedRowIdx > -1) {
+        // 現有列原位比對：只更新標準系統欄位中數值有異動者，100% 完整保留幹部自訂欄位
+        var rowChanged = false;
+        for (var c = 0; c < headers.length; c++) {
+          var h = String(headers[c]).trim();
+          var targetVal = _computeTargetValue(h, s, m, matchedRowIdx, sData[matchedRowIdx][c]);
+          // 若 targetVal 為 undefined，代表為幹部自訂欄位，保持原值不觸碰
+          if (targetVal !== undefined) {
+            if (!_areCellValuesEqual(sData[matchedRowIdx][c], targetVal)) {
+              sData[matchedRowIdx][c] = targetVal;
+              rowChanged = true;
+            }
+          }
         }
+        if (rowChanged) {
+          updatedRowsCount++;
+          sheetDataModified = true;
+        }
+      } else {
+        // 全新報名者：組裝新列接續追加於底部，自訂欄位留空，絕不清空舊資料
+        var newRow = new Array(headers.length).fill('');
+        for (var nc = 0; nc < headers.length; nc++) {
+          var nh = String(headers[nc]).trim();
+          var nTarget = _computeTargetValue(nh, s, m, sData.length - 1 + rowsToAppend.length, '');
+          newRow[nc] = (nTarget !== undefined) ? nTarget : '';
+        }
+        rowsToAppend.push(newRow);
       }
-      rowsToAppend.push(row);
     }
 
-    if (rowsToAppend.length > 0) {
-      if (clearExisting && sheet.getLastRow() > 1) {
-        sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getMaxColumns()).clearContent();
+    // 1. 若有現存列資料異動，以原位批次 setValues 回寫，保留儲存格格式、色彩與自訂欄位
+    if (sheetDataModified) {
+      var updateRange = sheet.getRange(1, 1, sData.length, headers.length);
+      try {
+        updateRange.setValues(sData);
+      } catch (modErr) {
+        console.warn('原位覆寫遭遇驗證阻擋，自動清除驗證後重試:', modErr);
+        try {
+          updateRange.clearDataValidations();
+          updateRange.setValues(sData);
+        } catch (retryErr) {
+          console.error('原位更新儲存格重試失敗:', retryErr);
+          throw retryErr;
+        }
       }
-      var startRow = clearExisting ? 2 : (sheet.getLastRow() + 1);
+    }
 
-      // 自動檢查並擴充最大列數，防止超出 sheet.getMaxRows() 限制
+    // 2. 若有全新隊員，接續追加至名冊最下方，絕不清空舊資料
+    if (rowsToAppend.length > 0) {
+      var startRow = sheet.getLastRow() + 1;
       var neededRows = startRow + rowsToAppend.length - 1;
       var curMaxRows = sheet.getMaxRows();
       if (neededRows > curMaxRows) {
         sheet.insertRowsAfter(curMaxRows, neededRows - curMaxRows);
       }
 
-      var targetRange = sheet.getRange(startRow, 1, rowsToAppend.length, headers.length);
+      var appendRange = sheet.getRange(startRow, 1, rowsToAppend.length, headers.length);
       try {
-        targetRange.setValues(rowsToAppend);
-      } catch (valErr) {
-        console.warn('setValues 遭遇驗證阻擋，自動清除驗證規則後覆寫重試:', valErr);
+        appendRange.setValues(rowsToAppend);
+      } catch (appErr) {
+        console.warn('追加新列遭遇驗證阻擋，自動清除驗證後重試:', appErr);
         try {
-          targetRange.clearDataValidations();
-          targetRange.setValues(rowsToAppend);
-        } catch (retryErr) {
-          console.error('重試寫入試算表失敗:', retryErr);
-          throw retryErr;
+          appendRange.clearDataValidations();
+          appendRange.setValues(rowsToAppend);
+        } catch (retryAppErr) {
+          console.error('追加新列重試失敗:', retryAppErr);
+          throw retryAppErr;
         }
       }
-      return rowsToAppend.length;
     }
-    return 0;
+
+    return updatedRowsCount + rowsToAppend.length;
   } catch (err) {
-    console.warn('匯入既有名冊資料失敗:', err);
+    console.warn('原位差異同步名冊資料失敗:', err);
     return 0;
   }
+}
+
+function _formatIntent(val) {
+  if (!val) return '否';
+  if (val === true || val === '是') return '是';
+  var str = String(val).trim();
+  if (str === '是' || str.toLowerCase() === 'true') return '是';
+  if (str.indexOf('無') > -1 || str.indexOf('否') > -1 || str.indexOf('沒有') > -1 || str.indexOf('不') > -1) {
+    return '否';
+  }
+  if (str.indexOf('有意願') > -1 || str.indexOf('我有意願') > -1 || str === '意願' || str.indexOf('想') > -1) {
+    return '是';
+  }
+  return '否';
 }
 
 function _normalizePaymentStatus(val) {
@@ -877,19 +948,28 @@ function _normalizeAuditStatus(val) {
   return '審核中 Checking';
 }
 
-function _matchHeader(header, candidates, exactOnly) {
-  var h = String(header).trim().toLowerCase();
+function _normalizeHeader(header) {
+  if (header === null || header === undefined) return { raw: '', stripped: '' };
+  var raw = String(header).trim().toLowerCase().replace(/\s+/g, ' ');
+  // 去除全形與半形括號說明內容，如 (必填)、（居留證/護照）、[必填] 等
+  var stripped = raw.replace(/\s*[\(\[（【〔][^\)\]）】〕]*[\)\]）】〕]\s*/g, '').trim().replace(/\s+/g, ' ');
+  return { raw: raw, stripped: stripped };
+}
+
+function _matchHeader(header, candidates) {
+  if (!candidates || !candidates.length) return false;
+  var norm = _normalizeHeader(header);
+  if (!norm.raw && !norm.stripped) return false;
   for (var i = 0; i < candidates.length; i++) {
-    var c = candidates[i].toLowerCase();
-    if (h === c) return true;
-    if (!exactOnly && h.indexOf(c) > -1) return true;
+    var c = String(candidates[i]).trim().toLowerCase().replace(/\s+/g, ' ');
+    if (norm.raw === c || norm.stripped === c) return true;
   }
   return false;
 }
 
 function _findColIdx(headers, candidates) {
   for (var i = 0; i < headers.length; i++) {
-    if (_matchHeader(headers[i], candidates, false)) return i;
+    if (_matchHeader(headers[i], candidates)) return i;
   }
   return -1;
 }

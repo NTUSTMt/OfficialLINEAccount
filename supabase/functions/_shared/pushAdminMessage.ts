@@ -44,6 +44,41 @@ export async function sendAdminEmail(
   }
 }
 
+export async function sendUserEmail(
+  to: string,
+  subject: string,
+  text: string,
+  optionsOrHtml?: { htmlBody?: string }
+): Promise<boolean> {
+  const workerUrl = Deno.env.get("GAS_WORKER_URL");
+  const workerSecret = Deno.env.get("GAS_WORKER_SECRET");
+
+  if (!workerUrl || !workerSecret || !to) {
+    return false;
+  }
+
+  try {
+    const res = await fetch(workerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-worker-secret": workerSecret,
+      },
+      body: JSON.stringify({
+        action: "send_user_email",
+        to,
+        subject,
+        text,
+        htmlBody: optionsOrHtml?.htmlBody || "",
+      }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("sendUserEmail via GAS Worker failed:", err);
+    return false;
+  }
+}
+
 export async function pushAdminMessage(
   text: string,
   customSubject?: string,
@@ -79,7 +114,17 @@ export async function pushAdminMessage(
     console.warn("GAS Email worker push failed:", err);
   });
 
-  // 3. LINE 官方帳號 Push 發送至幹部群組
+  // 3. LINE 官方帳號 Push 發送至幹部群組 (降頻防爆守衛)
+  if (
+    text.includes("新活動發布") ||
+    text.includes("活動資訊更新") ||
+    text.includes("活動上架") ||
+    text.includes("繳費單已完成核銷")
+  ) {
+    console.log("[pushAdminMessage] 依幹部降頻防爆規則略過 LINE 群組推播，已由 Email 即時備查");
+    return;
+  }
+
   const adminGroupId = await getAppConfig("ADMIN_GROUP_ID");
   if (!adminGroupId) {
     console.warn("pushAdminMessage LINE 略過: ADMIN_GROUP_ID 未設定");

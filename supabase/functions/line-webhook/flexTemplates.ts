@@ -2213,3 +2213,113 @@ export function buildAdminAssistantGuideFlex() {
   };
 }
 
+export function buildPaymentConfirmedAdminFlex(params: {
+  paymentId: string;
+  userName: string;
+  amount: number | string;
+  items: string;
+  confirmedBy: string;
+}) {
+  const liffChannelId = Deno.env.get("LIFF_CHANNEL_ID") || Deno.env.get("LINE_CHANNEL_ID") || "";
+  const adminFinanceUrl = liffChannelId
+    ? `https://liff.line.me/${liffChannelId}-DSYjXqNK?liff.state=%2Fadmin%2Ffinance`
+    : "https://equipments-seven.vercel.app/admin/finance";
+
+  return {
+    type: "bubble",
+    size: "kilo",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#059669",
+      paddingTop: "14px",
+      paddingBottom: "14px",
+      paddingStart: "16px",
+      paddingEnd: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "【幹部通知：繳費單已完成核銷】",
+          color: "#FFFFFF",
+          weight: "bold",
+          size: "sm",
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "繳費單號", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.paymentId, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "申報人", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.userName, size: "xs", color: "#0F172A", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "核銷金額", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: `$${params.amount} 元`, size: "sm", color: "#059669", weight: "bold", flex: 7 },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "核銷項目", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.items, size: "xs", color: "#0F172A", flex: 7, wrap: true },
+          ],
+        },
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "核銷幹部", size: "xs", color: "#64748B", flex: 3 },
+            { type: "text", text: params.confirmedBy, size: "xs", color: "#059669", weight: "bold", flex: 7 },
+          ],
+        },
+        { type: "separator", margin: "md" },
+        {
+          type: "text",
+          text: "款項已確認入帳，資料庫狀態已同步更新為「已核銷 Confirmed」，並發信備查。",
+          size: "xxs",
+          color: "#64748B",
+          wrap: true,
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "開啟財務管理後台",
+            uri: adminFinanceUrl,
+          },
+        },
+      ],
+    },
+  };
+}
+
+

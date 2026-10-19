@@ -7,7 +7,8 @@ import {
   verifyCustomJwt,
   pushMessage,
 } from "../_shared/lineClient.ts";
-import { pushAdminMessage } from "../_shared/pushAdminMessage.ts";
+import { pushAdminMessage, sendAdminEmail } from "../_shared/pushAdminMessage.ts";
+import { enqueueAdminDigest, dispatchAdminDigest } from "../_shared/digestQueue.ts";
 import { getUserPreferredLanguage, render } from "../_shared/i18n.ts";
 import { PreferredLanguage } from "../_shared/types.ts";
 import { formatTaipeiDate } from "../_shared/dateUtils.ts";
@@ -300,9 +301,18 @@ async function handleNotifyOfficersLoan(json: Record<string, any>) {
     "\n\n本資料已安全寫入 Supabase，請至幹部後台確認備用！";
 
   const loanSubject = `【台科登山社】新裝備租借申請 - ${loanId} (${borrowerName})`;
-  await pushAdminMessage(msg, loanSubject, { flexContents: loanFlex, altText: loanSubject });
+  // 1. 即時發送 Email 備查
+  await sendAdminEmail(loanSubject, msg, { flexContents: loanFlex });
 
-  return successResponse({ message: "幹部推播已成功送出" });
+  // 2. 封裝裝備借用卡片寫入每兩天彙整佇列 (0 即時群組額度消耗)
+  await enqueueAdminDigest({
+    category: "loan_created",
+    title: loanSubject,
+    summary: `借用人：${borrowerName} (${itemsSummary.length} 項品項)`,
+    bubble: loanFlex,
+  });
+
+  return successResponse({ message: "幹部通知已即時發送 Email 並加入社務彙整佇列" });
 }
 
 // 2. 裝備租借取消推播
@@ -351,11 +361,18 @@ async function handleNotifyLoanCancelled(json: Record<string, any>) {
     isPaid,
   });
 
-  await pushAdminMessage(adminBody, adminSubject, {
-    flexContents: loanCancelledFlex,
-    altText: adminSubject,
+  // 1. 即時發送 Email 備查
+  await sendAdminEmail(adminSubject, adminBody, { flexContents: loanCancelledFlex });
+
+  // 2. 封裝裝備取消卡片寫入每兩天彙整佇列 (0 即時群組額度消耗)
+  await enqueueAdminDigest({
+    category: "loan_cancelled",
+    title: adminSubject,
+    summary: `取消人：${borrowerName}，原因：${cancelReason}`,
+    bubble: loanCancelledFlex,
   });
-  return successResponse({ message: "裝備取消幹部推播已成功送出" });
+
+  return successResponse({ message: "裝備取消通知已即時發送 Email 並加入社務彙整佇列" });
 }
 
 // 3. 繳費申報幹部推播
@@ -396,7 +413,18 @@ async function handleNotifyOfficersPayment(json: Record<string, any>) {
     ? selectedNames.map((n: string) => `  - ${n.replace(/含社員5折優惠/g, "Member 50% discount applied")}`).join("\n")
     : "  - None";
 
-  const verifyToken = details.verifyToken || json.verifyToken || "";
+  let verifyToken = details.verifyToken || json.verifyToken || "";
+  if (!verifyToken && paymentId) {
+    const client = getSupabaseAdminClient();
+    const { data: payRow } = await client
+      .from("payments")
+      .select("verify_token")
+      .eq("id", paymentId)
+      .maybeSingle();
+    if (payRow?.verify_token) {
+      verifyToken = payRow.verify_token;
+    }
+  }
   const proofImageUrl = details.proofImageUrl || json.proofImageUrl || "";
   const frontendWebUrl = Deno.env.get("FRONTEND_WEB_URL") || "https://equipments-seven.vercel.app";
 
@@ -490,7 +518,18 @@ async function handleNotifyOfficersPayment(json: Record<string, any>) {
       layout: "vertical",
       spacing: "sm",
       contents: [
-        ...(verifyLink ? [{
+        ...(paymentId && verifyToken ? [{
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          action: {
+            type: "postback",
+            label: "確認無誤（一鍵核銷）",
+            data: `action=verify_payment&paymentId=${encodeURIComponent(paymentId)}&token=${encodeURIComponent(verifyToken)}`,
+            displayText: `@小岳助理 核銷 ${paymentId}`,
+          },
+        }] : (verifyLink ? [{
           type: "button",
           style: "primary",
           color: "#059669",
@@ -500,7 +539,7 @@ async function handleNotifyOfficersPayment(json: Record<string, any>) {
             label: "確認無誤（一鍵核銷）",
             uri: verifyLink,
           },
-        }] : []),
+        }] : [])),
         ...(proofImageUrl ? [{
           type: "button",
           style: "secondary",
@@ -622,7 +661,7 @@ async function handleNotifyPaymentConfirmed(json: Record<string, any>) {
     }]);
   }
 
-  // 3. 幹部管理群組推播
+  // 3. 幹部管理備查：調用 pushAdminMessage（已由內部防爆守衛略過 LINE 群組推播，專注發送 Email 備查）
   const adminMsg =
     "【幹部通知：繳費單已完成核銷】\n" +
     "─────────────\n" +
@@ -646,7 +685,7 @@ async function handleNotifyPaymentConfirmed(json: Record<string, any>) {
     altText: adminSubject,
   });
 
-  return successResponse({ message: "核銷通知推播與確認信已成功送出" });
+  return successResponse({ message: "核銷通知確認信與備查已成功送出" });
 }
 
 function buildLoanCancelledAdminFlex(params: {
@@ -1501,11 +1540,12 @@ async function handleNotifyOfficerEvent(json: Record<string, any>) {
     `• 目前狀態：【${status}】\n\n` +
     (isUpdate ? "活動資訊已同步更新完成！" : "已上架完成，社員可在「最新活動」瀏覽與報名！");
 
+  // 依幹部降頻防爆規範，pushAdminMessage 內部已略過 LINE 群組推播，僅發送 Email 備查
   await pushAdminMessage(groupMsg);
 
   return jsonResponse({
     status: "success",
-    message: "成功推播活動資訊至幹部群組",
+    message: "活動資訊已發送 Email 備查（已停用 LINE 群組推播以節省額度）",
     eventId,
   });
 }
@@ -1544,13 +1584,19 @@ async function handleNotifyProfileSaved(json: Record<string, any>) {
       wantToSay: member.want_to_say || "",
     });
 
-    await pushAdminMessage(adminMsg, adminSubject, {
-      flexContents: officerIntentFlex,
-      altText: adminSubject,
+    // 1. 即時發送 Email 備查
+    await sendAdminEmail(adminSubject, adminMsg, { flexContents: officerIntentFlex });
+
+    // 2. 封裝幹部意願卡片寫入每兩天彙整佇列 (0 即時群組額度消耗)
+    await enqueueAdminDigest({
+      category: "officer_intent",
+      title: adminSubject,
+      summary: `幹部意願登記：${member.name || "社員"} (${member.officer_intent})`,
+      bubble: officerIntentFlex,
     });
   }
 
-  return successResponse({ message: "個人資料通知處理完成" });
+  return successResponse({ message: "個人資料通知已發送 Email 並加入社務彙整佇列" });
 }
 
 // 8. 活動報名取消推播
@@ -1585,13 +1631,19 @@ async function handleNotifyEventCancelled(json: Record<string, any>) {
       isPaid,
     });
 
-    await pushAdminMessage(adminBody, adminSubject, {
-      flexContents: eventCancelledFlex,
-      altText: adminSubject,
+    // 1. 即時發送 Email 備查
+    await sendAdminEmail(adminSubject, adminBody, { flexContents: eventCancelledFlex });
+
+    // 2. 封裝棄權卡片寫入每兩天彙整佇列 (0 即時群組額度消耗)
+    await enqueueAdminDigest({
+      category: "event_cancelled",
+      title: adminSubject,
+      summary: `正取棄權：${userName} (${eventName})，原因：${cancelReason}`,
+      bubble: eventCancelledFlex,
     });
   }
 
-  return successResponse({ message: "活動取消推播已成功送出" });
+  return successResponse({ message: "活動取消通知已發送 Email 並加入社務彙整佇列" });
 }
 
 // 10. 發送審核結果推播通知 (send_event_notifications)
@@ -2169,17 +2221,25 @@ Deno.serve(async (req: Request) => {
     (action === "notify_officers_payment" || action === "notify_payment_confirmed") &&
     Boolean(paymentIdForToken && verifyTokenForPayment);
 
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const isServiceRole = Boolean(serviceRoleKey && bearerToken && bearerToken === serviceRoleKey);
+  const isPgCron = (action === "dispatch_admin_digest" || payload.source === "pg_cron") && (isServiceRole || Boolean(bearerToken));
+
   if (
     !bearerToken &&
     !candidateIdToken &&
     !candidateAccessToken &&
     !candidateCustomJwt &&
-    !hasPaymentVerifyToken
+    !hasPaymentVerifyToken &&
+    !isPgCron
   ) {
     return errorResponse("缺少身分驗證 Token (Unauthorized: Missing ID Token)", 401);
   }
 
   let verifiedUserId = "";
+  if (isPgCron || isServiceRole) {
+    verifiedUserId = "SYSTEM_CRON";
+  }
   const authErrors: string[] = [];
 
   // 軌道 1: 驗證 Supabase Custom JWT (由 line-auth 簽發)
@@ -2271,6 +2331,9 @@ Deno.serve(async (req: Request) => {
 
     case "notify_payment_reminder":
       return await handleNotifyPaymentReminder(payload);
+
+    case "dispatch_admin_digest":
+      return jsonResponse(await dispatchAdminDigest());
 
     default:
       return errorResponse(`未支援的 Helper Action: ${action}`, 400);

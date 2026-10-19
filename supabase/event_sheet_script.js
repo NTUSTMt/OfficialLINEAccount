@@ -167,43 +167,43 @@ function getSignupsDiff() {
 
   var headers = data[0];
   function findCol(keywords) {
-    for (var k = 0; k < keywords.length; k++) {
-      var idx = headers.indexOf(keywords[k]);
-      if (idx > -1) return idx;
-    }
     for (var i = 0; i < headers.length; i++) {
-      var hStr = String(headers[i]);
-      for (var j = 0; j < keywords.length; j++) {
-        if (hStr.includes(keywords[j])) return i;
-      }
+      if (_matchHeader(headers[i], keywords)) return i;
     }
     return -1;
   }
 
   var colIdx = {
-    userId: findCol(["系統識別碼"]),
-    code: findCol(["專屬碼", "報名專屬碼"]),
-    name: findCol(["姓名"]),
-    gender: findCol(["性別"]),
-    lineId: findCol(["LINE ID", "Line ID"]),
-    email: findCol(["聯絡信箱", "信箱", "Email"]),
-    phone: findCol(["聯絡電話", "手機電話", "電話"]),
-    address: findCol(["聯絡地址", "地址"]),
-    birthday: findCol(["生日", "出生年月日"]),
-    idNumber: findCol(["證件號碼", "身分證字號", "身分證"]),
-    emerName: findCol(["緊急聯絡人姓名", "緊急聯絡人"]),
-    emerPhone: findCol(["緊急聯絡人電話", "聯絡人電話"]),
-    emerAddr: findCol(["緊急聯絡人聯絡地址", "緊急聯絡人地址"]),
-    emerRel: findCol(["緊急聯絡人關係", "關係"]),
-    exp: findCol(["爬山經驗", "登山經驗"]),
-    fitness: findCol(["體能測驗", "體能"]),
-    proof: findCol(["體能證明"]),
-    isOfficial: findCol(["是否為社員"]),
-    status: findCol(["審核結果", "審核狀態"]),
-    notifyStatus: findCol(["通知狀態"]),
-    payStatus: findCol(["繳費狀態"]),
-    notes: findCol(["備註"]),
-    wantToSay: findCol(["想說的話"])
+    userId: findCol(["系統識別碼", "line_user_id", "userid"]),
+    code: findCol(["專屬碼", "報名專屬碼", "報名碼", "報名代碼", "報名編號", "signup_id", "code"]),
+    name: findCol(["姓名", "隊員姓名", "報名者姓名", "姓名 name", "name"]),
+    gender: findCol(["性別", "gender", "性別 gender"]),
+    nationality: findCol(["國籍", "nationality", "國籍 nationality"]),
+    idNumber: findCol(["證件號碼", "身分證字號", "身分證", "身分證號", "護照號碼", "居留證號", "id_card", "id_number", "證件字號"]),
+    lineId: findCol(["LINE ID", "line_id", "lineid", "line 帳號", "line帳號"]),
+    email: findCol(["聯絡信箱", "信箱", "電子郵件", "email", "mail"]),
+    phone: findCol(["聯絡電話", "手機電話", "手機", "行動電話", "phone", "tel"]),
+    dept: findCol(["系所", "科系", "系級", "學系", "department"]),
+    studentId: findCol(["學號", "student_id", "student id"]),
+    identityStatus: findCol(["身分", "身分狀態", "校內身分", "identity_status"]),
+    address: findCol(["聯絡地址", "地址", "現居地址", "戶籍地址", "通訊地址", "address"]),
+    birthday: findCol(["生日", "出生年月日", "出生日期", "birthday"]),
+    emerName: findCol(["緊急聯絡人姓名", "緊急聯絡人", "emer_name", "emergency_contact_name"]),
+    emerPhone: findCol(["緊急聯絡人電話", "緊急聯絡電話", "緊急電話", "緊急聯絡人手機", "emer_phone", "emergency_contact_phone"]),
+    emerAddr: findCol(["緊急聯絡人聯絡地址", "緊急聯絡人地址", "緊急地址", "emer_address", "emergency_contact_address"]),
+    emerRel: findCol(["緊急聯絡人關係", "關係", "與緊急聯絡人關係", "emer_rel", "emergency_contact_rel", "emergency_contact_relationship"]),
+    medicalHistory: findCol(["個人特殊病史", "特殊病史", "病史", "個人特殊病史或過敏", "medical_history"]),
+    exp: findCol(["爬山經驗", "登山經驗", "登山經歷", "經驗", "outdoor_experience", "hiking_experience"]),
+    fitness: findCol(["體能測驗", "體能自評", "體能狀況", "體能", "fitness_desc", "fitness_test"]),
+    proof: findCol(["體能證明", "證明文件", "fitness_proof", "proof_urls"]),
+    joinIntent: findCol(["加入社員意願", "入社意願", "是否入社", "join_membership_intent"]),
+    isOfficial: findCol(["是否為社員", "社員身分", "社員", "is_official_member", "is_member"]),
+    officerIntent: findCol(["擔任幹部意願", "幹部意願", "有意願擔任幹部", "officer_intent"]),
+    status: findCol(["審核結果", "審核狀態", "錄取審核", "status", "audit_status"]),
+    notifyStatus: findCol(["通知狀態", "錄取通知", "審核通知", "notify_status", "notification_status"]),
+    payStatus: findCol(["繳費狀態", "繳費情形", "付款狀態", "對帳狀態", "payment_status", "繳費"]),
+    notes: findCol(["備註", "幹部備註", "notes", "memo"]),
+    wantToSay: findCol(["想說的話", "給幹部的話", "隊員留言", "want_to_say"])
   };
 
   // 1. 抓取試算表中「有專屬碼」的隊員資料 (過濾非隊員雜項列)
@@ -466,24 +466,17 @@ function sendAdmissionNotifications() {
 
   var headers = data[0];
   function findCol(keywords) {
-    for (var k = 0; k < keywords.length; k++) {
-      var idx = headers.indexOf(keywords[k]);
-      if (idx > -1) return idx;
-    }
     for (var i = 0; i < headers.length; i++) {
-      var hStr = String(headers[i]);
-      for (var j = 0; j < keywords.length; j++) {
-        if (hStr.includes(keywords[j])) return i;
-      }
+      if (_matchHeader(headers[i], keywords)) return i;
     }
     return -1;
   }
 
-  var codeCol = findCol(["專屬碼", "報名專屬碼"]);
-  var statusCol = findCol(["審核結果", "審核狀態"]);
-  var notifyCol = findCol(["通知狀態"]);
-  var nameCol = findCol(["姓名"]);
-  var uidCol = findCol(["系統識別碼"]);
+  var codeCol = findCol(["專屬碼", "報名專屬碼", "報名碼", "報名代碼", "signup_id", "code"]);
+  var statusCol = findCol(["審核結果", "審核狀態", "status", "audit_status"]);
+  var notifyCol = findCol(["通知狀態", "notify_status", "notification_status"]);
+  var nameCol = findCol(["姓名", "隊員姓名", "報名者姓名", "姓名 name", "name"]);
+  var uidCol = findCol(["系統識別碼", "line_user_id", "userid"]);
 
   if (statusCol === -1 || uidCol === -1) {
     ui.alert("欄位缺失", "找不到「審核結果」或「系統識別碼」欄位，請檢查表頭！", ui.ButtonSet.OK);
@@ -666,3 +659,23 @@ function _pushAdmissionFlex(botToken, targetUid, memberName, eventName, statusTe
     return false;
   }
 }
+
+function _normalizeHeader(header) {
+  if (header === null || header === undefined) return { raw: '', stripped: '' };
+  var raw = String(header).trim().toLowerCase().replace(/\s+/g, ' ');
+  // 去除全形與半形括號說明內容，如 (必填)、（居留證/護照）、[必填] 等
+  var stripped = raw.replace(/\s*[\(\[（【〔][^\)\]）】〕]*[\)\]）】〕]\s*/g, '').trim().replace(/\s+/g, ' ');
+  return { raw: raw, stripped: stripped };
+}
+
+function _matchHeader(header, candidates) {
+  if (!candidates || !candidates.length) return false;
+  var norm = _normalizeHeader(header);
+  if (!norm.raw && !norm.stripped) return false;
+  for (var i = 0; i < candidates.length; i++) {
+    var c = String(candidates[i]).trim().toLowerCase().replace(/\s+/g, ' ');
+    if (norm.raw === c || norm.stripped === c) return true;
+  }
+  return false;
+}
+
