@@ -2612,6 +2612,24 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   height: 34px;
 }
 
+.wa-report-date-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.wa-report-date-inputs .wa-report-date-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-report-date-separator {
+  color: var(--wa-text-muted);
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
 .wa-report-actions-row {
   display: flex;
   align-items: center;

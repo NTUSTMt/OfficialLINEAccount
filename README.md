@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.316-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.318-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.316)](#7-最新版本異動紀錄-changelog-v01316)
+- [7. 最新版本異動紀錄 (Changelog v0.1.318)](#7-最新版本異動紀錄-changelog-v01318)
 
 ---
 
@@ -204,7 +204,38 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.316)
+## 7. 最新版本異動紀錄 (Changelog v0.1.318)
+
+### v0.1.318 (2026-10-19)
+- 付費活動金額解析修復與 TDD 測試集驗證（解決付費活動被誤判為 0 元問題）：
+  - 核心問題根因修復 (`src/types/event.ts`, `src/utils/supabaseClient.ts`, `src/components/admin/FinanceReportDrawer.tsx`, `src/pages/web-admin/WebAdminFinance.tsx`)：
+    - 介面定義補齊：`AdminEvent` 介面新增 `fee?: number;` 欄位定義。
+    - 資料庫查詢映射：`fetchEventsFromSupabase` 正確讀取資料庫 `fee` 數值並指派至 `fee: feeVal`。
+    - 防禦性金額解析 (`parseEventFee`)：抽屜與主財務頁全面使用 `parseEventFee`，優先使用數值型態之 `fee`；若不存在或為非數值則自動自 `cost` 字串提取金額數字（支援 `"$2,500"`、`"2500"` 等字串格式）；若為「免費」則解析為 0。
+    - 免費活動條件收斂：嚴格限定僅當活動金額明確解析為 0 (`eventFee === 0`) 時才判定為免費活動並執行 0 元已核銷邏輯，徹底根除付費活動應繳與實收金額被意外重設為 0 元之錯誤。
+  - 測試驅動開發 (TDD) 單元測試套件：
+    - 新增 `test/131_paid_event_amount_preservation.test.mjs`：
+      1. 驗證 `parseEventFee` 針對各類付費活動金額格式（如 `$2,500`、`fee: 2500`）皆能正確保留原始金額，絕不誤判為 0 元。
+      2. 驗證 `AdminEvent` 型別定義包含 `fee?: number;`。
+      3. 驗證 `fetchEventsFromSupabase` 正確將資料庫 `fee` 欄位映射至回傳物件。
+    - 先行執行測試驗證錯誤重現（重現 3 項失敗），修正程式碼後重新執行驗證，全數 100% 通過。
+
+### v0.1.317 (2026-10-19)
+- 財務報表自訂日期排版修復、合併繳費依活動定價拆分計算、0 元活動對帳清單與原子連動核銷：
+  - 報表抽屜篩選排版修復 (`src/components/admin/FinanceReportDrawer.tsx`, `src/pages/web-admin/webAdmin.css`)：
+    - 將抽屜頂部工具列由單一橫列改為固定「上下兩列分行排列」：第一列專屬於「學期篩選」下拉選單；第二列提供「自訂起訖」區間。
+    - 封裝 `.wa-report-date-inputs` 與 `.wa-report-date-separator` 容器樣式，使兩個原生日期選擇器各自佔有 50% 寬度且平分間隙，徹底杜絕抽屜寬度受限時右側結束日期輸入框被推擠破圖之異常。
+  - 合併繳費依活動定價拆分與總額備註 (`src/components/admin/FinanceReportDrawer.tsx`, `src/pages/web-admin/WebAdminFinance.tsx`, `src/types/admin.ts`)：
+    - 於 Mode A 活動明細與財務總表活動篩選時，若款項屬於多筆合併繳費，其在該活動之應收與實收金額僅計入「該活動本身的定價」（例如：0 元免費活動計 NT$ 0；付費活動計該活動之報名費 fee），解決免費活動誤算入其他活動 2,500 元等款項之問題。
+    - 名冊與金額欄位保留原始合併總額 (`combined_total` / `original_amount`) 並加註提示標籤（例如：`合併繳費，總額 NT$ 2,500`），避免幹部誤解總入帳金額。
+    - 0 元活動且無異常或未繳名額時，繳費達成率自動正確顯示為 `100.0%`。
+  - 0 元活動對帳名冊與資料庫 RPC 優化 (`src/utils/supabaseClient.ts`, `supabase/admin_portal_rpc.sql`, `supabase/fix_finance_combined_and_zero_fee_rpc.sql`)：
+    - 解除 RPC `get_admin_finance_rpc` 與前端備援查詢中對正取名單之 `WHERE fee > 0` 排除條件，使免費活動的所有正取名單皆能完整呈現於財務對帳清單中。
+    - 0 元活動項目在前端自動標記為 `已核銷 Confirmed` / `已繳費 Paid`，並帶入「免費活動免繳費」備註，完整顯示正取報名對帳名額。
+  - 合併繳費原子性連動核銷 (`src/utils/supabaseClient.ts`, `supabase/admin_portal_rpc.sql`)：
+    - 強化 `update_admin_payment_status_rpc` 與前端直更 fallback：當幹部核銷包含 `selected_ids` 之合併繳費單時，系統自動將所有選取之活動報名 (`act_`)、裝備租借 (`eq_`) 與社費會員狀態 (`fee_membership`) 一併原子性連動更新為已繳費。
+  - 自動化測試套件：
+    - 新增 `test/130_finance_combined_payments_zero_fee_and_date_filter.test.mjs`，包含排版類別檢驗、合併金額拆分計算、0 元活動對帳清單與 RPC 原子連動核銷等 5 大自動化測試，全數通過。
 
 ### v0.1.316 (2026-10-19)
 - **幹部推播防爆與 LINE 免費額度優化架構 (Officer Push Quota Defense & 2-Day Digest)**:
@@ -2885,6 +2916,3 @@ pnpm test
     - `ApplicantModals.tsx` 基本資料彈窗新增「國籍」顯示，證件號碼標籤對齊更新為「身分證字號 / 護照號碼」，且若該報名者有取消原因時自動以顯眼提示列出「取消原因」。
   - 自動化測試套件：
     - 新增 `test/116_roster_table_fields_expansion.test.mjs` 全面驗證型別定義、欄位擴展、查詢欄位包含性、搜尋過濾與手機版彈窗呈現。
-
-
-

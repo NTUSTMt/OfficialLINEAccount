@@ -219,18 +219,60 @@ export const WebAdminFinance: React.FC = () => {
     return events.find((e) => e.id === selectedEventId);
   }, [events, selectedEventId]);
 
-  // 活動專案篩選之款項紀錄
+  // 安全解析活動金額 (優先讀取數值 fee，若無則從 cost: "$2,500" 提取)
+  const parseEventFee = (ev?: AdminEvent | null): number => {
+    if (!ev) return 0;
+    if (typeof ev.fee === 'number') return ev.fee;
+    if (typeof ev.cost === 'string') {
+      const cleaned = ev.cost.replace(/[^0-9]/g, '');
+      return cleaned ? Number(cleaned) : 0;
+    }
+    return 0;
+  };
+
+  // 活動專案篩選之款項紀錄 (支援合併繳費拆分金額與 0 元活動)
   const activityFilteredItems = useMemo(() => {
     if (selectedEventId === 'ALL') return items;
-    return items.filter((p) => {
-      const isTargetIdMatch = p.target_id === selectedEventId;
-      const isNameMatch = Boolean(
-        selectedEvent &&
-        ((p.type && p.type.includes(selectedEvent.name)) || p.target_id === selectedEvent.name)
-      );
-      const isEventIdInType = Boolean(p.type && p.type.includes(selectedEventId));
-      return isTargetIdMatch || isNameMatch || isEventIdInType;
-    });
+    const eventFee = parseEventFee(selectedEvent);
+    const isFreeEvent = eventFee === 0;
+
+    return items
+      .filter((p) => {
+        const isTargetIdMatch = p.target_id === selectedEventId;
+        const isSelectedIdsMatch = Array.isArray(p.selected_ids) && p.selected_ids.includes(`act_${selectedEventId}`);
+        const isNameMatch = Boolean(
+          selectedEvent &&
+          ((p.type && p.type.includes(selectedEvent.name)) || p.target_id === selectedEvent.name)
+        );
+        const isEventIdInType = Boolean(p.type && p.type.includes(selectedEventId));
+        return isTargetIdMatch || isSelectedIdsMatch || isNameMatch || isEventIdInType;
+      })
+      .map((p) => {
+        const isCombined =
+          (Array.isArray(p.selected_ids) && p.selected_ids.length > 1) ||
+          ((p.type?.includes('、') || p.type?.includes(',') || p.type?.includes('，')) &&
+           (p.type?.includes('活動') || p.type?.includes('社費') || p.type?.includes('裝備')));
+
+        let res = p;
+        if (isCombined) {
+          res = {
+            ...p,
+            original_amount: p.amount,
+            amount: eventFee,
+            is_combined: true,
+            combined_total: p.amount,
+          };
+        }
+        if (isFreeEvent) {
+          res = {
+            ...res,
+            amount: 0,
+            status: '已核銷 Confirmed',
+            payment_status: '已繳費 Paid',
+          };
+        }
+        return res;
+      });
   }, [items, selectedEventId, selectedEvent]);
 
   // 過濾清單
@@ -1551,7 +1593,12 @@ export const WebAdminFinance: React.FC = () => {
                                 color: 'var(--wa-text)',
                               }}
                             >
-                              ${item.amount}
+                              <div>${item.amount}</div>
+                              {item.is_combined && (
+                                <div style={{ fontSize: '0.72rem', color: 'var(--wa-primary)', fontWeight: 500, fontFamily: 'sans-serif' }}>
+                                  (合併總額 ${item.combined_total})
+                                </div>
+                              )}
                             </td>
                           );
 

@@ -94,6 +94,10 @@ export interface AdminFinanceItem {
   created_at: string;
   sourceType: 'payment' | 'loan' | 'event_signup';
   itemCategory: 'activity' | 'equipment' | 'membership' | 'general';
+  selected_ids?: string[] | null;
+  original_amount?: number;
+  is_combined?: boolean;
+  combined_total?: number;
 }
 
 export interface NewPaymentRequest {

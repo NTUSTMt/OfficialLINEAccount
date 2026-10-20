@@ -559,7 +559,8 @@ BEGIN
                 WHEN p.target_type = 'loan' OR p.type ILIKE '%裝備%' THEN 'equipment'
                 WHEN p.target_type = 'membership' OR p.type ILIKE '%社費%' THEN 'membership'
                 ELSE 'general'
-            END AS item_category
+            END AS item_category,
+            p.selected_ids
         FROM payments p
         LEFT JOIN members m ON p.line_user_id = m.line_user_id
 
@@ -583,7 +584,8 @@ BEGIN
             '未通知' AS notification_status,
             to_char(l.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             'loan' AS source_type,
-            'equipment' AS item_category
+            'equipment' AS item_category,
+            NULL::jsonb AS selected_ids
         FROM loans l
         LEFT JOIN members m ON l.line_user_id = m.line_user_id
         WHERE l.total_rent > 0
@@ -592,19 +594,20 @@ BEGIN
               SELECT 1 FROM payments p 
               WHERE (
                   (p.target_type = 'loan' AND p.target_id = l.id)
+                  OR (p.selected_ids IS NOT NULL AND p.selected_ids ? ('eq_' || l.id))
                   OR (p.line_user_id = l.line_user_id AND p.type ILIKE '%' || l.id || '%')
               )
           )
 
         UNION ALL
 
-        -- 3. 未填報 payments 之正取待繳費活動報名
+        -- 3. 未填報 payments 之正取活動報名 (包含 0 元免費活動)
         SELECT 
             s.id,
             s.line_user_id,
             COALESCE(s.name, m.name, '活動參加者') AS name,
             '🔸 活動：' || e.title AS type,
-            e.fee AS amount,
+            COALESCE(e.fee, 0) AS amount,
             NULL AS bank_last5,
             NULL AS proof_image_url,
             'event' AS target_type,
@@ -616,18 +619,22 @@ BEGIN
             '未通知' AS notification_status,
             to_char(s.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             'event_signup' AS source_type,
-            'activity' AS item_category
+            'activity' AS item_category,
+            NULL::jsonb AS selected_ids
         FROM event_signups s
         JOIN events e ON s.event_id = e.id
         LEFT JOIN members m ON s.line_user_id = m.line_user_id
-        WHERE e.fee > 0
-          AND s.status = '正取 Confirmed'
-          AND s.payment_status != '已繳費 Paid'
+        WHERE s.status = '正取 Confirmed'
+          AND (
+              (COALESCE(e.fee, 0) = 0)
+              OR (COALESCE(e.fee, 0) > 0 AND s.payment_status != '已繳費 Paid')
+          )
           AND NOT EXISTS (
               SELECT 1 FROM payments p 
               WHERE p.line_user_id = s.line_user_id
                 AND (
                     (p.target_type = 'event' AND p.target_id = e.id)
+                    OR (p.selected_ids IS NOT NULL AND p.selected_ids ? ('act_' || e.id))
                     OR (p.type ILIKE '%' || e.title || '%')
                     OR (p.type ILIKE '%' || e.id || '%')
                 )
@@ -775,7 +782,53 @@ BEGIN
             OR v_payment.type ILIKE '%Membership%'
         );
 
-        -- A. 活動報名連動
+        -- A0. 合併繳費 selected_ids 優先全量連動
+        IF v_payment.selected_ids IS NOT NULL AND jsonb_typeof(v_payment.selected_ids) = 'array' AND jsonb_array_length(v_payment.selected_ids) > 0 THEN
+            -- 1. 連動所有選取之活動報名
+            IF v_target_user_id IS NOT NULL THEN
+                UPDATE event_signups
+                SET payment_status = v_mapped_pay_status, updated_at = NOW()
+                WHERE line_user_id = v_target_user_id 
+                  AND ('act_' || event_id) IN (SELECT jsonb_array_elements_text(v_payment.selected_ids));
+            END IF;
+
+            -- 2. 連動所有選取之裝備租借
+            UPDATE loans
+            SET payment_status = v_mapped_pay_status, updated_at = NOW()
+            WHERE ('eq_' || id) IN (SELECT jsonb_array_elements_text(v_payment.selected_ids));
+
+            -- 3. 連動社費
+            IF v_target_user_id IS NOT NULL AND (
+                v_payment.selected_ids ? 'fee_membership' OR v_payment.selected_ids ? 'membership'
+            ) THEN
+                IF v_is_confirmed THEN
+                    v_extracted_expiry := substring(v_payment.type from '(\d{4}[-/]\d{2}[-/]\d{2})');
+                    IF v_extracted_expiry IS NOT NULL THEN
+                        BEGIN
+                            v_calculated_expiry := replace(v_extracted_expiry, '/', '-')::DATE;
+                        EXCEPTION WHEN OTHERS THEN
+                            v_calculated_expiry := NULL;
+                        END;
+                    ELSE
+                        v_calculated_expiry := NULL;
+                    END IF;
+
+                    UPDATE members
+                    SET payment_status = '已繳費 Paid',
+                        is_official_member = TRUE,
+                        membership_expires_at = COALESCE(v_calculated_expiry, membership_expires_at),
+                        updated_at = NOW()
+                    WHERE line_user_id = v_target_user_id;
+                ELSE
+                    UPDATE members
+                    SET payment_status = v_mapped_pay_status,
+                        updated_at = NOW()
+                    WHERE line_user_id = v_target_user_id;
+                END IF;
+            END IF;
+        END IF;
+
+        -- A. 活動報名連動 (若尚未經 selected_ids 處理)
         IF (p_target_type = 'event' OR v_payment.target_type = 'event' OR v_payment.type ILIKE '%活動%') AND v_target_user_id IS NOT NULL THEN
             UPDATE event_signups
             SET payment_status = v_mapped_pay_status, updated_at = NOW()

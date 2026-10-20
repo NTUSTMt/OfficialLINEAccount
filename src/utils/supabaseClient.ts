@@ -257,6 +257,7 @@ export const fetchEventsFromSupabase = async (): Promise<AdminEvent[] | null> =>
         endDate: row.end_date || '',
         deadline: row.deadline || '',
         cost: costStr,
+        fee: feeVal,
         status: row.status || '關閉',
         shortDesc: row.summary || '',
         shortDescEn: row.summary_en || '',
@@ -1615,7 +1616,8 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
           notification_status: it.notification_status || '未通知',
           created_at: it.created_at || new Date().toISOString(),
           sourceType: it.source_type || 'payment',
-          itemCategory: it.item_category || 'general'
+          itemCategory: it.item_category || 'general',
+          selected_ids: it.selected_ids || null
         })) as AdminFinanceItem[];
       }
       if (rpcErr) {
@@ -1682,7 +1684,8 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
           notification_status: p.notification_status || '未通知',
           created_at: p.created_at || new Date().toISOString(),
           sourceType: 'payment',
-          itemCategory: cat
+          itemCategory: cat,
+          selected_ids: p.selected_ids || null
         });
       });
     }
@@ -1726,48 +1729,54 @@ export const fetchFinanceItemsFromSupabase = async (officerUserId?: string): Pro
       });
     }
 
-    // 3. 補充未填報 payments 之正取待繳費活動報名
+    // 3. 補充未填報 payments 之正取活動報名 (包含 0 元免費活動)
     const { data: unpaidSignups } = await supabase
       .from('event_signups')
       .select('id, event_id, line_user_id, name, status, payment_status, notes, created_at, events(title, fee)')
       .eq('status', '正取 Confirmed')
-      .neq('payment_status', '已繳費 Paid')
       .order('created_at', { ascending: false });
 
     if (unpaidSignups && Array.isArray(unpaidSignups)) {
       unpaidSignups.forEach((s: any) => {
         const fee = Number(s.events?.fee) || 0;
-        if (fee > 0) {
-          const alreadyInPayments = items.some(it =>
-            it.line_user_id === s.line_user_id && (
-              it.target_id === s.event_id ||
-              it.target_id === s.id ||
-              (it.type && s.events?.title && it.type.includes(s.events.title)) ||
-              (it.type && s.event_id && it.type.includes(s.event_id))
-            )
-          );
-          if (!alreadyInPayments) {
-            items.push({
-              id: s.id,
-              line_user_id: s.line_user_id,
-              name: s.name || '活動參加者',
-              type: `活動：${s.events?.title || s.event_id}`,
-              amount: fee,
-              status: s.payment_status === '已繳費 Paid'
-                ? '已核銷 Confirmed'
-                : s.payment_status === '待確認 Checking'
-                  ? '待確認 Checking'
-                  : '待繳費 Unpaid',
-              payment_status: s.payment_status || '未繳費 Unpaid',
-              notes: s.notes || '',
-              notification_status: '未通知',
-              created_at: s.created_at || new Date().toISOString(),
-              sourceType: 'event_signup',
-              itemCategory: 'activity',
-              target_type: 'event',
-              target_id: s.event_id
-            });
-          }
+        const isFree = fee === 0;
+
+        // 若不是 0 元活動且已完成繳費，則略過 (已有 payments 紀錄)
+        if (!isFree && s.payment_status === '已繳費 Paid') {
+          return;
+        }
+
+        const alreadyInPayments = items.some(it =>
+          it.line_user_id === s.line_user_id && (
+            it.target_id === s.event_id ||
+            it.target_id === s.id ||
+            (Array.isArray(it.selected_ids) && it.selected_ids.includes(`act_${s.event_id}`)) ||
+            (it.type && s.events?.title && it.type.includes(s.events.title)) ||
+            (it.type && s.event_id && it.type.includes(s.event_id))
+          )
+        );
+
+        if (!alreadyInPayments) {
+          items.push({
+            id: s.id,
+            line_user_id: s.line_user_id,
+            name: s.name || '活動參加者',
+            type: `活動：${s.events?.title || s.event_id}`,
+            amount: fee,
+            status: isFree
+              ? '已核銷 Confirmed'
+              : s.payment_status === '待確認 Checking'
+                ? '待確認 Checking'
+                : '待繳費 Unpaid',
+            payment_status: isFree ? '已繳費 Paid' : (s.payment_status || '未繳費 Unpaid'),
+            notes: s.notes || (isFree ? '免費活動免繳費' : ''),
+            notification_status: '未通知',
+            created_at: s.created_at || new Date().toISOString(),
+            sourceType: 'event_signup',
+            itemCategory: 'activity',
+            target_type: 'event',
+            target_id: s.event_id
+          });
         }
       });
     }
@@ -1913,24 +1922,74 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
         };
       }
 
+      // 讀取該筆 payment 之 selected_ids 以支援合併繳費原子連動更新
+      const { data: currentPayment } = await sb
+        .from('payments')
+        .select('selected_ids, line_user_id, type')
+        .eq('id', params.paymentId)
+        .maybeSingle();
+
+      const selectedIds: string[] = Array.isArray(currentPayment?.selected_ids) ? currentPayment.selected_ids : [];
+      const effectiveUserId = params.lineUserId || currentPayment?.line_user_id;
+
+      // 若有 selected_ids，原子連動所有包含之活動報名、裝備租借與社費
+      if (selectedIds.length > 0 && effectiveUserId) {
+        const actIds = selectedIds
+          .filter((sid) => typeof sid === 'string' && sid.startsWith('act_'))
+          .map((sid) => sid.slice(4));
+        const loanIds = selectedIds
+          .filter((sid) => typeof sid === 'string' && sid.startsWith('eq_'))
+          .map((sid) => sid.slice(3));
+        const hasMembership = selectedIds.some((sid) => sid === 'fee_membership' || sid === 'membership');
+
+        if (actIds.length > 0) {
+          await sb
+            .from('event_signups')
+            .update({ payment_status: mappedPayStatus, updated_at: nowIso })
+            .eq('line_user_id', effectiveUserId)
+            .in('event_id', actIds);
+        }
+
+        if (loanIds.length > 0) {
+          await sb
+            .from('loans')
+            .update({ payment_status: mappedPayStatus, updated_at: nowIso })
+            .in('id', loanIds);
+        }
+
+        if (hasMembership) {
+          if (isConfirmed) {
+            await sb
+              .from('members')
+              .update({ payment_status: '已繳費 Paid', is_official_member: true, updated_at: nowIso })
+              .eq('line_user_id', effectiveUserId);
+          } else {
+            await sb
+              .from('members')
+              .update({ payment_status: mappedPayStatus, updated_at: nowIso })
+              .eq('line_user_id', effectiveUserId);
+          }
+        }
+      }
+
       const isMembership =
         params.targetType === 'membership' ||
         (params.paymentType && (params.paymentType.includes('社費') || params.paymentType.includes('Membership')));
 
-      // 雙向連動：活動報名
-      if (params.targetType === 'event' && params.targetId && params.lineUserId) {
+      // 雙向連動：單一活動報名 (若尚未經 selected_ids 連動)
+      if (params.targetType === 'event' && params.targetId && params.lineUserId && selectedIds.length === 0) {
         await sb
           .from('event_signups')
           .update({ payment_status: mappedPayStatus, updated_at: nowIso })
           .eq('event_id', params.targetId)
           .eq('line_user_id', params.lineUserId);
-      } else if (params.targetType === 'loan' && params.targetId) {
-        // 雙向連動：裝備租借
+      } else if (params.targetType === 'loan' && params.targetId && selectedIds.length === 0) {
+        // 雙向連動：單一裝備租借 (若尚未經 selected_ids 連動)
         await sb
           .from('loans')
           .update({ payment_status: mappedPayStatus, updated_at: nowIso })
           .eq('id', params.targetId);
-      } else if (isMembership && params.lineUserId) {
+      } else if (isMembership && params.lineUserId && selectedIds.length === 0) {
         // 雙向連動：社費繳納 (包含正式社員標記與到期日提取)
         if (isConfirmed) {
           const match = (params.paymentType || '').match(/(\d{4}[-/]\d{2}[-/]\d{2})/);
@@ -1955,7 +2014,7 @@ export const updatePaymentAndLinkedStatusInSupabase = async (params: {
             .update({ payment_status: mappedPayStatus, updated_at: nowIso })
             .eq('line_user_id', params.lineUserId);
         }
-      } else if (params.lineUserId && isConfirmed) {
+      } else if (params.lineUserId && isConfirmed && selectedIds.length === 0) {
         // 多筆或未指定 target 時，若已核銷則將該使用者未繳費項目一併轉為已繳費
         await sb
           .from('event_signups')

@@ -52,7 +52,8 @@ BEGIN
                 WHEN p.target_type = 'loan' OR p.type ILIKE '%裝備%' THEN 'equipment'
                 WHEN p.target_type = 'membership' OR p.type ILIKE '%社費%' THEN 'membership'
                 ELSE 'general'
-            END AS item_category
+            END AS item_category,
+            p.selected_ids
         FROM payments p
         LEFT JOIN members m ON p.line_user_id = m.line_user_id
 
@@ -76,7 +77,8 @@ BEGIN
             '未通知' AS notification_status,
             to_char(l.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             'loan' AS source_type,
-            'equipment' AS item_category
+            'equipment' AS item_category,
+            NULL::jsonb AS selected_ids
         FROM loans l
         LEFT JOIN members m ON l.line_user_id = m.line_user_id
         WHERE l.total_rent > 0
@@ -85,42 +87,54 @@ BEGIN
               SELECT 1 FROM payments p 
               WHERE (
                   (p.target_type = 'loan' AND p.target_id = l.id)
+                  OR (p.selected_ids IS NOT NULL AND p.selected_ids ? ('eq_' || l.id))
                   OR (p.line_user_id = l.line_user_id AND p.type ILIKE '%' || l.id || '%')
               )
           )
 
         UNION ALL
 
-        -- 3. 未填報 payments 之正取待繳費活動報名 (格式統一為 '🔸 活動：' || e.title)
+        -- 3. 未填報 payments 之正取活動報名 (包含 0 元免費活動，格式統一為活動項目)
         SELECT 
             s.id,
             s.line_user_id,
             COALESCE(s.name, m.name, '活動參加者') AS name,
             '🔸 活動：' || e.title AS type,
-            e.fee AS amount,
+            COALESCE(e.fee, 0) AS amount,
             NULL AS bank_last5,
             NULL AS proof_image_url,
             'event' AS target_type,
             e.id AS target_id,
-            CASE WHEN s.payment_status = '待確認 Checking' THEN '待確認 Checking' ELSE '待繳費 Unpaid' END AS status,
-            s.payment_status::TEXT AS payment_status,
+            CASE 
+                WHEN COALESCE(e.fee, 0) = 0 THEN '已核銷 Confirmed'
+                WHEN s.payment_status = '待確認 Checking' THEN '待確認 Checking' 
+                ELSE '待繳費 Unpaid' 
+            END AS status,
+            CASE 
+                WHEN COALESCE(e.fee, 0) = 0 THEN '已繳費 Paid'
+                ELSE s.payment_status::TEXT 
+            END AS payment_status,
             s.notes,
-            NULL AS officer_notes,
+            CASE WHEN COALESCE(e.fee, 0) = 0 THEN '免費活動免收費' ELSE NULL END AS officer_notes,
             '未通知' AS notification_status,
             to_char(s.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
             'event_signup' AS source_type,
-            'activity' AS item_category
+            'activity' AS item_category,
+            NULL::jsonb AS selected_ids
         FROM event_signups s
         JOIN events e ON s.event_id = e.id
         LEFT JOIN members m ON s.line_user_id = m.line_user_id
-        WHERE e.fee > 0
-          AND s.status = '正取 Confirmed'
-          AND s.payment_status != '已繳費 Paid'
+        WHERE s.status = '正取 Confirmed'
+          AND (
+              (COALESCE(e.fee, 0) = 0)
+              OR (COALESCE(e.fee, 0) > 0 AND s.payment_status != '已繳費 Paid')
+          )
           AND NOT EXISTS (
               SELECT 1 FROM payments p 
               WHERE p.line_user_id = s.line_user_id
                 AND (
                     (p.target_type = 'event' AND p.target_id = e.id)
+                    OR (p.selected_ids IS NOT NULL AND p.selected_ids ? ('act_' || e.id))
                     OR (p.type ILIKE '%' || e.title || '%')
                     OR (p.type ILIKE '%' || e.id || '%')
                 )

@@ -113,14 +113,57 @@ export const FinanceReportDrawer: React.FC<FinanceReportDrawerProps> = ({
     return events.find((ev) => ev.id === currentEventId);
   }, [events, currentEventId]);
 
-  // Mode A: 活動專案篩選之項目
+  // 安全解析活動金額 (優先讀取數值 fee，若無則從 cost: "$2,500" 提取)
+  const parseEventFee = (ev?: AdminEvent | null): number => {
+    if (!ev) return 0;
+    if (typeof ev.fee === 'number') return ev.fee;
+    if (typeof ev.cost === 'string') {
+      const cleaned = ev.cost.replace(/[^0-9]/g, '');
+      return cleaned ? Number(cleaned) : 0;
+    }
+    return 0;
+  };
+
+  // Mode A: 活動專案篩選之項目 (支援合併繳費拆分金額與 0 元活動)
   const eventItems = useMemo(() => {
     if (!currentEventId) return [];
-    return filteredByDateItems.filter((it) => {
-      const isTargetIdMatch = it.target_id === currentEventId;
-      const isNameMatch = currentEvent && (it.type?.includes(currentEvent.name) || it.target_id === currentEvent.name);
-      return isTargetIdMatch || isNameMatch;
-    });
+    const eventFee = parseEventFee(currentEvent);
+    const isFreeEvent = eventFee === 0;
+
+    return filteredByDateItems
+      .filter((it) => {
+        const isTargetIdMatch = it.target_id === currentEventId;
+        const isSelectedIdsMatch = Array.isArray(it.selected_ids) && it.selected_ids.includes(`act_${currentEventId}`);
+        const isNameMatch = currentEvent && (it.type?.includes(currentEvent.name) || it.target_id === currentEvent.name);
+        const isIdInType = Boolean(it.type && it.type.includes(currentEventId));
+        return isTargetIdMatch || isSelectedIdsMatch || isNameMatch || isIdInType;
+      })
+      .map((it) => {
+        const isCombined =
+          (Array.isArray(it.selected_ids) && it.selected_ids.length > 1) ||
+          ((it.type?.includes('、') || it.type?.includes(',') || it.type?.includes('，')) &&
+           (it.type?.includes('活動') || it.type?.includes('社費') || it.type?.includes('裝備')));
+
+        let res = it;
+        if (isCombined) {
+          res = {
+            ...it,
+            original_amount: it.amount,
+            amount: eventFee,
+            is_combined: true,
+            combined_total: it.amount,
+          };
+        }
+        if (isFreeEvent) {
+          res = {
+            ...res,
+            amount: 0,
+            status: '已核銷 Confirmed',
+            payment_status: '已繳費 Paid',
+          };
+        }
+        return res;
+      });
   }, [filteredByDateItems, currentEventId, currentEvent]);
 
   // Mode A KPI 計算
@@ -150,7 +193,7 @@ export const FinanceReportDrawer: React.FC<FinanceReportDrawerProps> = ({
     }
 
     const pend = chk + unp;
-    const rate = exp > 0 ? (conf / exp) * 100 : conf > 0 ? 100 : 0;
+    const rate = exp > 0 ? (conf / exp) * 100 : (unp === 0 && chk === 0) ? 100 : 0;
 
     return {
       expectedTotal: exp,
@@ -338,10 +381,12 @@ export const FinanceReportDrawer: React.FC<FinanceReportDrawerProps> = ({
                 ))}
               </select>
             </div>
+          </div>
 
+          <div className="wa-report-filter-row">
             <div className="wa-report-filter-item wa-report-date-range">
               <label className="wa-report-filter-label">自訂起訖</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="wa-report-date-inputs">
                 <input
                   type="date"
                   className="wa-form-input wa-report-date-input"
@@ -352,7 +397,7 @@ export const FinanceReportDrawer: React.FC<FinanceReportDrawerProps> = ({
                   }}
                   title="起始日期"
                 />
-                <span style={{ color: 'var(--wa-text-muted)', fontSize: '0.82rem' }}>至</span>
+                <span className="wa-report-date-separator">至</span>
                 <input
                   type="date"
                   className="wa-form-input wa-report-date-input"
@@ -507,6 +552,11 @@ export const FinanceReportDrawer: React.FC<FinanceReportDrawerProps> = ({
                           </div>
                           <div className="wa-report-roster-detail-row">
                             <span>應繳 NT$ {Number(item.amount || 0).toLocaleString()}</span>
+                            {item.is_combined && (
+                              <span style={{ color: 'var(--wa-primary)', fontSize: '0.78rem', fontWeight: 600 }}>
+                                (合併繳費，總額 NT$ {Number(item.combined_total || item.original_amount || 0).toLocaleString()})
+                              </span>
+                            )}
                             {item.bank_last5 && <span>末五碼: {item.bank_last5}</span>}
                             {item.notes && <span className="wa-report-roster-note">{item.notes}</span>}
                           </div>

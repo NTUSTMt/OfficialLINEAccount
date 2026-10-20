@@ -6,6 +6,7 @@ export interface AdminEvent {
   endDate: string;
   deadline: string;
   cost: string;
+  fee?: number;
   status: '開放' | '未來開放' | '關閉' | string;
   shortDesc: string;
   shortDescEn?: string;
