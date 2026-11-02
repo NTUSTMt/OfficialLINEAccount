@@ -178,4 +178,63 @@ export const notifyDispatcher = async (
   }
 };
 
+/**
+ * 調用 Supabase 通知調度中心 (notify-dispatcher) 並取得回傳之完整業務資料
+ */
+export const callDispatcherAction = async <T = any>(
+  action: string,
+  payload: Record<string, unknown>
+): Promise<{ success: boolean; data?: T; message?: string }> => {
+  try {
+    const idToken = getIdToken();
+    const accessToken = getAccessToken();
+    const customJwt = getCustomJwt();
+
+    const bodyWithAuth: Record<string, unknown> = {
+      action,
+      ...payload,
+      ...(idToken ? { idToken } : {}),
+      ...(accessToken ? { accessToken } : {}),
+      ...(customJwt ? { customJwt } : {})
+    };
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (idToken) {
+      headers['x-line-id-token'] = idToken;
+    }
+    if (accessToken) {
+      headers['x-line-access-token'] = accessToken;
+    }
+    const bearerToken = customJwt || idToken || accessToken;
+    if (bearerToken) {
+      headers['Authorization'] = `Bearer ${bearerToken}`;
+    }
+
+    const res = await fetch(NOTIFY_DISPATCHER_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(bodyWithAuth)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[callDispatcherAction] HTTP ${res.status}:`, errText);
+      return { success: false, message: errText };
+    }
+
+    const json = await res.json();
+    return {
+      success: json.status === 'success' || !json.status || json.status === 200,
+      data: json as T,
+      message: json.message
+    };
+  } catch (err) {
+    console.warn('[callDispatcherAction] 請求失敗:', err);
+    return { success: false, message: err instanceof Error ? err.message : String(err) };
+  }
+};
+
+
 

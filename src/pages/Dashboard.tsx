@@ -89,9 +89,9 @@ function Dashboard({ userId, jwtReady }: { userId: string; jwtReady?: boolean })
 
   const getPayStatusText = (status: string) => {
     if (!status) return t('dashboard.status.unreported');
-    if (status.includes('已繳') || status.includes('Paid')) return t('dashboard.status.paid');
-    if (status.includes('待確認') || status.includes('Checking')) return t('dashboard.status.checking');
     if (status.includes('未繳') || status.includes('Unpaid')) return t('dashboard.status.unpaid');
+    if (status.includes('待確認') || status.includes('Checking')) return t('dashboard.status.checking');
+    if (status.includes('已繳') || status.includes('Paid')) return t('dashboard.status.paid');
     return status;
   };
 
@@ -259,7 +259,7 @@ function Dashboard({ userId, jwtReady }: { userId: string; jwtReady?: boolean })
         const eventName = targetAct?.eventName || '社團活動';
         const eventId = targetAct?.eventId || code;
         const reviewStatus = targetAct?.reviewStatus || '備取/審核中';
-        const isPaid = targetAct ? (targetAct.payStatus.includes('已繳') || targetAct.payStatus.includes('Paid')) : false;
+        const isPaid = targetAct ? ((targetAct.payStatus.includes('已繳') || targetAct.payStatus.includes('Paid')) && !targetAct.payStatus.includes('未繳') && !targetAct.payStatus.includes('Unpaid')) : false;
         const userName = data?.profile?.name || lineProfile?.displayName || '社員';
 
         try {
@@ -311,7 +311,7 @@ function Dashboard({ userId, jwtReady }: { userId: string; jwtReady?: boolean })
         const targetAct = data?.activities.find(a => (a.code === targetActivity.code || a.eventId === targetActivity.code));
         const eventName = targetActivity.eventName || targetAct?.eventName || '社團活動';
         const eventId = targetAct?.eventId || targetActivity.code;
-        const isPaid = targetAct ? (targetAct.payStatus.includes('已繳') || targetAct.payStatus.includes('Paid')) : false;
+        const isPaid = targetAct ? ((targetAct.payStatus.includes('已繳') || targetAct.payStatus.includes('Paid')) && !targetAct.payStatus.includes('未繳') && !targetAct.payStatus.includes('Unpaid')) : false;
         const userName = data?.profile?.name || lineProfile?.displayName || '社員';
 
         try {
@@ -787,7 +787,7 @@ function Dashboard({ userId, jwtReady }: { userId: string; jwtReady?: boolean })
                           style={{
                             fontSize: '10px',
                             fontWeight: 'bold',
-                            color: (eq.payStatus.includes('已繳') || eq.payStatus.includes('Paid')) ? '#047857' : (eq.payStatus.includes('待確認') || eq.payStatus.includes('Checking')) ? '#2563eb' : '#ef4444'
+                            color: (eq.payStatus && (eq.payStatus.includes('未繳') || eq.payStatus.includes('Unpaid'))) ? '#ef4444' : (eq.payStatus.includes('已繳') || eq.payStatus.includes('Paid')) ? '#047857' : (eq.payStatus.includes('待確認') || eq.payStatus.includes('Checking')) ? '#2563eb' : '#ef4444'
                           }}
                         >
                           {getPayStatusText(eq.payStatus)}

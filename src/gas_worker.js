@@ -67,23 +67,25 @@ function doGet(e) {
       return _workerSuccess({ message: 'GAS Thin Worker is running actively', timestamp: new Date().toISOString() });
     }
 
-    // 幹部前端建立/同步活動試算表與公開相片動作
+    // 1. 公開/前端允許之相片上傳動作 (供社員與幹部於 LIFF 即時上傳體能證明、繳費收據、心得照片)
+    if (action === 'upload_drive_files' || action === 'upload_drive_file' || action === 'upload_image_to_drive') {
+      return _handleUploadDriveFiles(e && e.parameter ? e.parameter : {});
+    }
+
+    // 2. 敏感操作（試算表建立、名冊個資同步、Drive 刪除、知識庫讀取）強制校驗 x-worker-secret 密鑰
+    if (!_verifyWorkerSecret(e)) {
+      return _workerError('Unauthorized: Invalid or missing x-worker-secret', 401);
+    }
+
+    // 建立/同步活動試算表與檔案維護 (需金鑰鑑權)
     if (action === 'create_event_sheet') {
       return _handleCreateEventSheet(e && e.parameter ? e.parameter : {});
     }
     if (action === 'sync_event_sheet_signups' || action === 'sync_event_roster') {
       return _handleSyncEventSheetSignups(e && e.parameter ? e.parameter : {});
     }
-    if (action === 'upload_drive_files' || action === 'upload_drive_file' || action === 'upload_image_to_drive') {
-      return _handleUploadDriveFiles(e && e.parameter ? e.parameter : {});
-    }
     if (action === 'delete_drive_file' || action === 'delete_drive_files') {
       return _handleDeleteDriveFiles(e && e.parameter ? e.parameter : {});
-    }
-
-    // 後端內部任務（讀取規章知識庫等）需校驗密鑰
-    if (!_verifyWorkerSecret(e)) {
-      return _workerError('Unauthorized: Invalid or missing x-worker-secret', 401);
     }
 
     // 1. 讀取 Google Docs 社團規章知識庫
@@ -113,10 +115,16 @@ function doPost(e) {
 
     var action = json.action || (e && e.parameter && e.parameter.action) || '';
 
-    // 1. 公開/前端允許之 Drive 檔案上傳與相片維護動作 (供社員與幹部於 LIFF 即時上傳體能證明、繳費收據、心得照片)
+    // 1. 公開/前端允許之 Drive 檔案上傳動作 (供社員與幹部於 LIFF 即時上傳體能證明、繳費收據、心得照片)
     if (action === 'upload_drive_files' || action === 'upload_drive_file' || action === 'upload_image_to_drive') {
       return _handleUploadDriveFiles(json);
     }
+
+    // 2. 敏感任務（檔案刪除、郵件發送、試算表名冊操作等）強制校驗 x-worker-secret 密鑰
+    if (!_verifyWorkerSecret(e)) {
+      return _workerError('Unauthorized: Invalid or missing x-worker-secret', 401);
+    }
+
     if (action === 'delete_drive_file' || action === 'delete_drive_files') {
       return _handleDeleteDriveFiles(json);
     }
@@ -125,11 +133,6 @@ function doPost(e) {
     }
     if (action === 'sync_event_sheet_signups' || action === 'sync_event_roster') {
       return _handleSyncEventSheetSignups(json);
-    }
-
-    // 2. 後端專屬任務（郵件發送、試算表名冊操作等）強制校驗 x-worker-secret 密鑰
-    if (!_verifyWorkerSecret(e)) {
-      return _workerError('Unauthorized: Invalid or missing x-worker-secret', 401);
     }
 
     // Gmail 管理員/社員郵件發送
@@ -366,10 +369,9 @@ function _handleCreateEventSheet(json) {
     var folderName = datePart + '_' + eventName;
     var sheetName = folderName;
 
-    // 2. 建立活動專屬雲端資料夾
+    // 2. 建立活動專屬雲端資料夾 (維持預設社團權限，不向公開網路廣播)
     var rootFolder = ROOT_DRIVE_FOLDER_ID ? DriveApp.getFolderById(ROOT_DRIVE_FOLDER_ID) : DriveApp.getRootFolder();
     var eventFolder = rootFolder.createFolder(folderName);
-    eventFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
     // 3. 建立或複製活動專屬試算表 (優先從 SPREADSHEET_ID 或 EVENT_SHEET_TEMPLATE_ID 範本複製)
     var templateId = SCRIPT_PROPERTIES.getProperty('SPREADSHEET_ID') ||
@@ -420,7 +422,6 @@ function _handleCreateEventSheet(json) {
     _setOrUpdateConfigRow(configSheet, 'CREATED_AT', new Date().toISOString());
     _setOrUpdateConfigRow(configSheet, 'LAST_SYNCED_AT', new Date().toISOString());
     if (SUPABASE_URL) _setOrUpdateConfigRow(configSheet, 'SUPABASE_URL', SUPABASE_URL);
-    if (SUPABASE_SERVICE_ROLE_KEY) _setOrUpdateConfigRow(configSheet, 'SUPABASE_SERVICE_ROLE_KEY', SUPABASE_SERVICE_ROLE_KEY);
     configSheet.hideSheet();
 
     // 5. 匯入既有報名名冊資料至「報名名冊」工作表 (動態對齊表頭)
@@ -925,6 +926,10 @@ function _formatIntent(val) {
 
 function _normalizePaymentStatus(val) {
   var str = String(val || '').trim();
+  // 必須先判斷「未繳」與「unpaid」，防止 'unpaid' 內包含 'paid' 子字串造成誤判
+  if (str.indexOf('未繳') > -1 || str.toLowerCase().indexOf('unpaid') > -1) {
+    return '未繳費 Unpaid';
+  }
   if (str.indexOf('已繳') > -1 || str.toLowerCase().indexOf('paid') > -1) {
     return '已繳費 Paid';
   }

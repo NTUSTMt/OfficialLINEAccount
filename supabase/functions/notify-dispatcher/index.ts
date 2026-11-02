@@ -638,6 +638,8 @@ async function handleNotifyPaymentConfirmed(json: Record<string, any>) {
         to: userEmail,
         subject: emailSubject,
         text: emailBody,
+        worker_secret: workerSecret,
+        "x-worker-secret": workerSecret,
       }),
     }).catch((err) => console.warn("GAS send_user_email failed:", err));
   }
@@ -1648,7 +1650,7 @@ async function handleNotifyEventCancelled(json: Record<string, any>) {
 
 // 10. 發送審核結果推播通知 (send_event_notifications)
 async function handleSendEventNotifications(json: Record<string, any>) {
-  const userId = json.userId;
+  const userId = String(json.verifiedUserId || json.userId || "").trim();
   const targetEventId = json.eventId ? String(json.eventId).trim() : "";
 
   const isOfficer = await isUserOfficer(userId);
@@ -2174,6 +2176,91 @@ async function handleNotifyPaymentReminder(json: Record<string, any>) {
   });
 }
 
+// 12. 幹部活動專屬獨立試算表建立轉發 (create_event_sheet)
+async function handleCreateEventSheetDispatcher(json: Record<string, any>) {
+  const userId = String(json.verifiedUserId || json.userId || "").trim();
+  const isOfficer = await isUserOfficer(userId);
+  if (!isOfficer) {
+    return errorResponse("權限不足，僅限社團幹部可建立活動試算表", 403);
+  }
+
+  const workerUrl = Deno.env.get("GAS_WORKER_URL");
+  const workerSecret = Deno.env.get("GAS_WORKER_SECRET");
+  if (!workerUrl || !workerSecret) {
+    return errorResponse("未配置 GAS_WORKER_URL 或 GAS_WORKER_SECRET", 500);
+  }
+
+  const payload = {
+    action: "create_event_sheet",
+    eventId: json.eventId,
+    title: json.title || json.eventName,
+    startDate: json.startDate,
+    userId: userId,
+    signups: json.signups,
+    worker_secret: workerSecret,
+    "x-worker-secret": workerSecret,
+  };
+
+  const res = await fetch(workerUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-worker-secret": workerSecret,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text);
+    return jsonResponse(data, res.status);
+  } catch (_e) {
+    return jsonResponse({ status: res.ok ? "success" : "error", message: text }, res.status);
+  }
+}
+
+// 13. 幹部活動試算表明冊手動全量同步轉發 (sync_event_sheet_signups)
+async function handleSyncEventSheetDispatcher(json: Record<string, any>) {
+  const userId = String(json.verifiedUserId || json.userId || "").trim();
+  const isOfficer = await isUserOfficer(userId);
+  if (!isOfficer) {
+    return errorResponse("權限不足，僅限社團幹部可同步活動名冊", 403);
+  }
+
+  const workerUrl = Deno.env.get("GAS_WORKER_URL");
+  const workerSecret = Deno.env.get("GAS_WORKER_SECRET");
+  if (!workerUrl || !workerSecret) {
+    return errorResponse("未配置 GAS_WORKER_URL 或 GAS_WORKER_SECRET", 500);
+  }
+
+  const payload = {
+    action: "sync_event_sheet_signups",
+    eventId: json.eventId,
+    spreadsheetId: json.spreadsheetId,
+    signups: json.signups,
+    userId: userId,
+    worker_secret: workerSecret,
+    "x-worker-secret": workerSecret,
+  };
+
+  const res = await fetch(workerUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-worker-secret": workerSecret,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text);
+    return jsonResponse(data, res.status);
+  } catch (_e) {
+    return jsonResponse({ status: res.ok ? "success" : "error", message: text }, res.status);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   activeOrigin = req.headers.get("origin");
 
@@ -2223,7 +2310,7 @@ Deno.serve(async (req: Request) => {
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const isServiceRole = Boolean(serviceRoleKey && bearerToken && bearerToken === serviceRoleKey);
-  const isPgCron = (action === "dispatch_admin_digest" || payload.source === "pg_cron") && (isServiceRole || Boolean(bearerToken));
+  const isPgCron = (action === "dispatch_admin_digest" || payload.source === "pg_cron") && isServiceRole;
 
   if (
     !bearerToken &&
@@ -2331,6 +2418,13 @@ Deno.serve(async (req: Request) => {
 
     case "notify_payment_reminder":
       return await handleNotifyPaymentReminder(payload);
+
+    case "create_event_sheet":
+      return await handleCreateEventSheetDispatcher(payload);
+
+    case "sync_event_sheet_signups":
+    case "sync_event_roster":
+      return await handleSyncEventSheetDispatcher(payload);
 
     case "dispatch_admin_digest":
       return jsonResponse(await dispatchAdminDigest());

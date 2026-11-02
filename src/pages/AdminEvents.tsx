@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, type ChangeEvent } from 'r
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import liff from '@line/liff';
-import { appendAuthToken, gasGet, notifyDispatcher } from '../utils/api';
+import { appendAuthToken, gasGet, notifyDispatcher, callDispatcherAction } from '../utils/api';
 import { getDirectImageUrl, validateImageUploadFile } from '../utils/image';
 import { getCache, setCache, removeCache } from '../utils/cacheUtils';
 import { GAS_API_URL } from '../constants/api';
@@ -523,15 +523,29 @@ export default function AdminEvents({ userId }: AdminEventsProps) {
 
     setCreatingSheetEventId(eventId);
     try {
-      const query = new URLSearchParams({
-        action: 'create_event_sheet',
-        userId: userId,
-        eventId: eventId
-      });
+      let result: any = null;
+      try {
+        const res = await callDispatcherAction<any>('create_event_sheet', {
+          userId: userId,
+          eventId: eventId
+        });
+        if (res && (res.success || res.data?.status === 'success')) {
+          result = res.data || res;
+        }
+      } catch (dispErr) {
+        console.warn('[AdminEvents] Dispatcher 建立試算表失敗，嘗試備援通道:', dispErr);
+      }
 
-      const result = await gasGet<any>(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
+      if (!result) {
+        const query = new URLSearchParams({
+          action: 'create_event_sheet',
+          userId: userId,
+          eventId: eventId
+        });
+        result = await gasGet<any>(appendAuthToken(`${GAS_API_URL}?${query.toString()}`));
+      }
 
-      if (result.status === 'success') {
+      if (result && result.status === 'success') {
         const targetUrl = result.spreadsheetUrl || events.find(e => e.id === eventId)?.spreadsheetUrl;
         setEvents((prev) => {
           const next = prev.map((e) =>

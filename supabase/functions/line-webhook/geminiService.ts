@@ -31,10 +31,14 @@ export async function fetchDocsKnowledgeBase(): Promise<string> {
 
   if (workerUrl && workerSecret) {
     try {
-      const res = await fetch(`${workerUrl}?action=get_knowledge_base`, {
-        method: "GET",
-        headers: { "x-worker-secret": workerSecret },
-      });
+      const separator = workerUrl.includes("?") ? "&" : "?";
+      const res = await fetch(
+        `${workerUrl}${separator}action=get_knowledge_base&x-worker-secret=${encodeURIComponent(workerSecret)}`,
+        {
+          method: "GET",
+          headers: { "x-worker-secret": workerSecret },
+        }
+      );
       if (res.ok) {
         const data = await res.json();
         if (data && data.knowledge) {

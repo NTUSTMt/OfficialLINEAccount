@@ -35,6 +35,8 @@ export async function sendAdminEmail(
         subject,
         text,
         htmlBody: optionsOrHtml?.htmlBody || "",
+        worker_secret: workerSecret,
+        "x-worker-secret": workerSecret,
       }),
     });
     return res.ok;
@@ -70,6 +72,8 @@ export async function sendUserEmail(
         subject,
         text,
         htmlBody: optionsOrHtml?.htmlBody || "",
+        worker_secret: workerSecret,
+        "x-worker-secret": workerSecret,
       }),
     });
     return res.ok;

@@ -21,8 +21,7 @@ import {
   User,
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
-import { GAS_API_URL } from '../../constants/api';
-import { notifyDispatcher } from '../../utils/api';
+import { notifyDispatcher, callDispatcherAction } from '../../utils/api';
 import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
 import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
 import { getNationalityLabel } from '../../constants/nationalities';
@@ -1019,24 +1018,21 @@ export const WebAdminRoster: React.FC = () => {
     let targetDriveFolderUrl = currentEvent.drive_folder_url || '';
 
     try {
-      // 若尚未建立試算表，呼叫建立 API
+      // 若尚未建立試算表，呼叫建立 API (透過 Edge Function 安全轉發)
       if (!targetSpreadsheetUrl) {
         try {
-          const query = new URLSearchParams({
-            action: 'create_event_sheet',
+          const res = await callDispatcherAction<any>('create_event_sheet', {
             userId: session.userId,
             eventId: selectedEventId,
           });
+          const result = res.data || (res as any);
 
-          const res = await fetch(`${GAS_API_URL}?${query.toString()}`);
-          const result = await res.json();
-
-          if (result.status === 'success') {
+          if (result && result.status === 'success') {
             targetSpreadsheetUrl = result.spreadsheetUrl || '';
             targetSpreadsheetId = result.spreadsheetId || '';
             targetDriveFolderUrl = result.driveFolderUrl || '';
           } else {
-            throw new Error(result.message || '建立試算表失敗');
+            throw new Error(result?.message || res.message || '建立試算表失敗');
           }
         } catch (fetchErr: any) {
           console.warn('[WebAdminRoster] create_event_sheet fetch failed, attempting self-healing verification from Supabase...', fetchErr);
@@ -1062,20 +1058,15 @@ export const WebAdminRoster: React.FC = () => {
       // 如果已有或剛建立取得試算表 ID，自動進行全量名冊二次校驗與推送同步（確保全量 23 筆報名資料完整寫入）
       if (targetSpreadsheetId) {
         try {
-          const syncRes = await fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-              action: 'sync_event_sheet_signups',
-              spreadsheetId: targetSpreadsheetId,
-              eventId: selectedEventId,
-              signups: signups,
-            }),
+          const syncRes = await callDispatcherAction<any>('sync_event_sheet_signups', {
+            spreadsheetId: targetSpreadsheetId,
+            eventId: selectedEventId,
+            signups: signups,
           });
-          const syncResult = await syncRes.json();
+          const syncResult = syncRes.data || (syncRes as any);
           if (syncResult && syncResult.status !== 'success') {
-            console.warn('[WebAdminRoster] sync_event_sheet_signups returned non-success:', syncResult.message);
-            alert(`[試算表名冊同步警告]: ${syncResult.message || '名冊同步未完成'}`);
+            console.warn('[WebAdminRoster] sync_event_sheet_signups returned non-success:', syncResult?.message || syncRes.message);
+            alert(`[試算表名冊同步警告]: ${syncResult?.message || syncRes.message || '名冊同步未完成'}`);
           }
         } catch (syncErr: any) {
           console.warn('[WebAdminRoster] sync_event_sheet_signups POST failed:', syncErr);
@@ -1885,7 +1876,7 @@ export const WebAdminRoster: React.FC = () => {
 
                       // 4. 繳費狀態欄位徽章
                       if (col.key === 'payment_status') {
-                        const isPaid = textVal.includes('已繳費') || textVal.includes('Paid');
+                        const isPaid = (textVal.includes('已繳費') || textVal.includes('Paid')) && !textVal.includes('未繳') && !textVal.includes('Unpaid');
                         return (
                           <td
                             key={col.key}

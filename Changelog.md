@@ -2,6 +2,96 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.323] - 2026-11-02
+
+### Bug 修正：修復 GAS 轉發鑑權遺失與試算表建立 401 錯誤 (Fix GAS Worker Secret Forwarding)
+
+- Edge Function 調度器修正 (`supabase/functions/notify-dispatcher/index.ts`)：
+  - 於 `handleCreateEventSheetDispatcher` 與 `handleSyncEventSheetDispatcher` 的 POST 本文 (`payload`) 中注入 `worker_secret` 與 `x-worker-secret`。
+  - 徹底解決 Google Apps Script Web App 無法接收自訂 HTTP Request Headers (`e.headers` 不存在) 及跨網域 302 重導向剝除 Header，導致 GAS 判讀金鑰為空並回傳 `401 Unauthorized: Invalid or missing x-worker-secret` 的問題。
+  - 同步修復 `send_user_email` 轉發請求之本文密鑰帶入。
+- LINE Webhook 與管理推播共用模組強化：
+  - `supabase/functions/_shared/pushAdminMessage.ts`：於 `send_admin_email` 與 `send_user_email` 的 POST 本文中補上 `worker_secret`。
+  - `supabase/functions/line-webhook/geminiService.ts`：針對 GET 請求知識庫讀取，於 URL Query 參數補上 `&x-worker-secret=` 備援。
+  - `supabase/functions/line-webhook/index.ts`：於 `append_event_sheet` POST 本文中補上 `worker_secret`。
+- 單元測試套件更新：
+  - 更新 `test/138_cadre_sheet_dispatcher.test.mjs`，新增驗證轉發 Payload 必須攜帶 `worker_secret` 欄位。
+
+## [0.1.322] - 2026-10-24
+
+### 安全性修復：前端與開發依賴套件弱點修補 (Dependency Security Hardening)
+
+- 直接依賴版本升級 (`package.json`)：
+  - `react-router-dom` 升級至 `^7.18.2`：徹底修復 React Router 在 RSC 模式下的 CSRF 繞過弱點 (GHSA-qwww-vcr4-c8h2)。
+  - `vite` 升級至 `^8.1.6`：修復 Windows launch-editor 路徑檢查與伺服器中間件安全性弱點 (GHSA-587h-7wmj-h5pm 等)。
+- 深層相依版本覆寫 (`pnpm.overrides`)：
+  - 強制覆寫 `brace-expansion` 至 `>=5.0.12`：防止 ESLint minimatch 括號展開引發之 OOM/DoS (GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895, GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p, GHSA-q2hr-2g5m-vwhr)。
+  - 強制覆寫 `axios` 至 `>=1.20.0` 及 `follow-redirects` 至 `>=1.16.1`：修補 `@line/liff` 子依賴的 ReDoS、Prototype Pollution、Header 注入與 HTTP/2 異常。
+  - 強制覆寫 `nanoid` (`>=3.3.18`)、`postcss` (`>=8.5.23`)、`source-map-js` (`>=1.2.2`)、`browserslist` (`>=4.28.7`)、`baseline-browser-mapping` (`>=2.11.0`)、`zod` (`>=4.6.6`)，消除建置與語法檢查工具鏈之各項記憶體流失與路徑處理漏洞。
+
+## [0.1.321] - 2026-10-23
+
+### 功能強化：幹部試算表安全轉發調度器 (Solution A: Cadre Spreadsheet Dispatcher)
+
+- Edge Function notify-dispatcher 實作幹部試算表轉發端點 (`supabase/functions/notify-dispatcher/index.ts`)：
+  - 新增 `create_event_sheet` 轉發處理函式：透過 `isUserOfficer(verifiedUserId)` 驗證幹部身分，安全注入 `GAS_WORKER_SECRET` 向 GAS Worker 請求建立獨立活動試算表與資料夾，並回傳試算表與資料夾網址。
+  - 新增 `sync_event_sheet_signups` 轉發處理函式：嚴格校驗幹部權限，轉發名冊資料至 GAS Worker 進行全量原位同步。
+  - 徹底解決前端瀏覽器無法持有 `GAS_WORKER_SECRET` 導致手動同步遭遇 401 阻斷的問題，達成「前端零機密、後端安全轉發、試算表 100% 正常寫入」。
+- 前端共用通訊模組擴充 (`src/utils/api.ts`)：
+  - 封裝通用泛型函式 `callDispatcherAction<T>`，自動附加 Custom JWT、LINE ID Token，並回傳結構化之業務資料物件 (`data`)。
+- 幹部管理頁面無縫接入 Dispatcher 轉發 (`src/pages/web-admin/WebAdminRoster.tsx`, `src/pages/AdminEvents.tsx`)：
+  - 電腦版名冊工作站（`WebAdminRoster.tsx`）：建立試算表與全量名冊同步全面改由 `callDispatcherAction` 觸發，保留 Supabase 輪詢自癒機制。
+  - 手機版活動中心（`AdminEvents.tsx`）：一鍵建立活動試算表優先採用 `callDispatcherAction`，維持相容備援機制。
+- 自動化測試套件：
+  - 新增 `test/138_cadre_sheet_dispatcher.test.mjs` (驗證 notify-dispatcher 之試算表建立與同步轉發端點及幹部鑑權)。
+  - 新增 `test/139_call_dispatcher_action.test.mjs` (驗證前端通訊模組 callDispatcherAction 封裝與 data 泛型欄位)。
+  - 新增 `test/140_cadre_sheet_frontend_integration.test.mjs` (驗證 WebAdminRoster 與 AdminEvents 接入 Dispatcher)。
+
+## [0.1.320] - 2026-10-23
+
+### 安全性修復：十項安全漏洞加固 (Security Audit 10 Vulnerabilities Remediation)
+
+- Google Apps Script Thin Worker 鑑權加固與防機密洩漏 (`src/gas_worker.js`)：
+  - 徹底移除 `_handleCreateEventSheet` 建立活動專屬試算表時向 `_CONFIG` 工作表明文寫入 `SUPABASE_SERVICE_ROLE_KEY` 之重大機密外洩缺陷。
+  - 移除新建立活動試算表與資料夾預設設定為 `DriveApp.Access.ANYONE_WITH_LINK` 之公開存取權限。
+  - 將試算表建立（`create_event_sheet`）、報名名冊個資同步（`sync_event_sheet_signups` / `sync_event_roster`）以及 Drive 檔案刪除（`delete_drive_file` / `delete_drive_files`）在 `doGet` 與 `doPost` 中全面移入 `_verifyWorkerSecret` 檢驗之後，僅保留公開相片上傳。
+- Supabase PL/pgSQL RPC 鑑權與 IDOR 身分防偽造加固 (`supabase/migrations/20261023_security_remediation_p3.sql`)：
+  - `save_member_profile`：強制驗證 caller 權杖身分（`auth.jwt() ->> 'sub'`）必須匹配目標 `p_line_user_id` 或具備幹部權限，杜絕任意匿名與跨使用者個資覆寫。
+  - `cancel_event_signup_rpc` 與 `cancel_equipment_loan_rpc`：移除 `v_jwt_sub IS NOT NULL` 旁路條件，強制拒絕匿名未鑑權呼叫，徹底阻斷未授權取消他人活動報名與裝備預約。
+  - `signup_rpc` 與 `save_reflection_rpc`：加入 caller 身分檢驗，防止未鑑權或偽造他人身分發布心得與報名活動。
+- Admin Portal 寬鬆 RLS 策略清除 (`supabase/admin_portal_rpc.sql`, `supabase/migrations/20261023_security_remediation_p3.sql`)：
+  - 徹底移除 `admin_portal_rpc.sql` 中 11 條歷史遺留之 `Allow anon read/update/insert` 策略建立語句。
+  - 於 Migration 腳本中加入對應 `DROP POLICY IF EXISTS` 指令，確保生產資料庫中若有殘存寬鬆策略一併清除，全面回歸 `desktop_admin_security.sql` 之嚴密 RLS 政策。
+- Edge Function notify-dispatcher 身分鑑權防偽造 (`supabase/functions/notify-dispatcher/index.ts`)：
+  - 加固 `isPgCron` 判斷式，強制比對 `serviceRoleKey`，杜絕任意 Bearer Token 藉由 `source: "pg_cron"` 偽造取得 `SYSTEM_CRON` 權限。
+  - `handleSendEventNotifications` 強制優先採用 `verifiedUserId` 進行幹部權限檢查，杜絕 client payload 偽造 `userId` 觸發全體活動推播。
+- Vercel HTTP 安全標頭加固 (`vercel.json`)：
+  - 全站標頭補齊 `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`，強制全站 HTTPS 傳輸。
+- 自動化測試套件：
+  - 新增 `test/133_gas_worker_security_hardening.test.mjs` (GAS Worker 鑑權與機密防洩漏驗證)。
+  - 新增 `test/134_supabase_rpc_security_guards.test.mjs` (Supabase RPC 鑑權與 IDOR 守衛驗證)。
+  - 新增 `test/135_admin_portal_rls_hardening.test.mjs` (Admin Portal 寬鬆 RLS 清除驗證)。
+  - 新增 `test/136_notify_dispatcher_auth_hardening.test.mjs` (notify-dispatcher 鑑權防偽造驗證)。
+  - 新增 `test/137_vercel_security_headers.test.mjs` (Vercel HSTS 安全標頭驗證)。
+
+## [0.1.319] - 2026-10-21
+
+### 修復：Google 試算表與系統繳費狀態 Unpaid 優先權與子字串誤判 (Fix Payment Status Unpaid Precedence and Substring Collision)
+
+- GAS 背景同步 Worker 繳費狀態正規化優先權修復 (`src/gas_worker.js`)：
+  - 於 `_normalizePaymentStatus` 函式中將「未繳」與「unpaid」比對順序置於「已繳」與「paid」之前。
+  - 徹底解決英文 `unpaid` 結尾包含 `paid` 子字串造成 `str.toLowerCase().indexOf('paid') > -1` 恆真，導致 Supabase 中「未繳費 Unpaid」被誤判並寫入試算表為「已繳費 Paid」的嚴重邏輯錯誤。
+- 電腦版後台名冊工作站繳費徽章判定修復 (`src/pages/web-admin/WebAdminRoster.tsx`)：
+  - 修正 `isPaid` 邏輯，明確排除 `未繳` 與 `Unpaid`，避免徽章被賦予成功綠色樣式。
+- 社員個人儀表板狀態函式修復 (`src/pages/Dashboard.tsx`)：
+  - `getPayStatusText` 優先判定未繳費狀態；於取消活動推播判定 `isPaid` 與裝備繳費文字顏色時精準排除未繳費。
+- 全域狀態正規化防禦升級 (`src/utils/statusUtils.ts`)：
+  - `normalizeActivityStatus` 判定 `Paid` 時強制排除未繳費狀態。
+- 資料庫 RPC 與轉型函式 Migration 腳本 (`supabase/migrations/20261021_fix_payment_status_unpaid_precedence.sql`)：
+  - 提供 `text_to_payment_status_enum` 與 `get_admin_event_signups_rpc` 修復 Migration，保證資料庫端 `CASE` 判斷未繳費優先。
+- 自動化測試套件：
+  - 新增 `test/132_fix_payment_status_unpaid_precedence.test.mjs`，驗證各類文字輸入與空值狀態在正規化時的精準判定與零 Emoji 規範。
+
 ## [0.1.308] - 2026-10-18
 
 ### 修復：電腦版財務管理修改活動報名紀錄 RLS 阻斷與幹部身分 JWT 同步 (Fix Web Admin Finance RLS Rejection and JWT Sync)

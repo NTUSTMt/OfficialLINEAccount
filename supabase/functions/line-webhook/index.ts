@@ -293,6 +293,8 @@ async function handleSignup(
           spreadsheet_id: result.spreadsheet_id,
           signup_id: actualSignupId,
           line_user_id: userId,
+          worker_secret: workerSecret,
+          "x-worker-secret": workerSecret,
         }),
       }).catch((workerErr) => {
         console.warn("GAS worker append_event_sheet failed:", workerErr);

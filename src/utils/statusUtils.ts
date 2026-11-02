@@ -15,7 +15,7 @@ export interface StatusStyle {
 export function normalizeActivityStatus(status: string | undefined): string {
   if (!status) return '審核中 Checking';
   const s = String(status).trim();
-  if (s.includes('已繳費') || s.includes('Paid')) return '正取（已繳費）Confirmed(Paid)';
+  if ((s.includes('已繳費') || s.includes('Paid')) && !s.includes('未繳') && !s.includes('Unpaid')) return '正取（已繳費）Confirmed(Paid)';
   if (s.includes('正取') || s.includes('Confirmed')) return '正取 Confirmed';
   if (s.includes('有意願') || s.toLowerCase().includes('interested')) return '備取（有意願）Waitlisted (Interested)';
   if (s.includes('備取') || s.includes('Waitlisted')) return '備取 Waitlisted';

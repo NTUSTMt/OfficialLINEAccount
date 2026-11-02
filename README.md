@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.318-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.322-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -20,7 +20,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.318)](#7-最新版本異動紀錄-changelog-v01318)
+- [7. 最新版本異動紀錄 (Changelog v0.1.321)](#7-最新版本異動紀錄-changelog-v01321)
 
 ---
 
@@ -204,7 +204,83 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.318)
+## 7. 最新版本異動紀錄 (Changelog v0.1.323)
+
+### v0.1.323 (2026-11-02)
+- 修復 GAS 轉發鑑權遺失與試算表建立 401 錯誤 (Fix GAS Worker Secret Forwarding)：
+  - **Edge Function notify-dispatcher 轉發請求修復 (`supabase/functions/notify-dispatcher/index.ts`)**：
+    - 於 `handleCreateEventSheetDispatcher` 與 `handleSyncEventSheetDispatcher` 向 GAS 發送的 POST 本文 (`payload`) 中注入 `worker_secret` 與 `x-worker-secret`。
+    - 徹底解決 Google Apps Script Web App 無法接收自訂 HTTP Request Headers (`e.headers` 不存在) 及跨網域 302 重導向剝除 Header，導致 GAS 判讀金鑰為空並回傳 `401 Unauthorized: Invalid or missing x-worker-secret` 的問題。
+    - 同步修復 `send_user_email` 轉發請求之本文密鑰帶入。
+  - **LINE Webhook 與推播模組補強 (`supabase/functions/_shared/pushAdminMessage.ts`, `supabase/functions/line-webhook/`)**：
+    - `pushAdminMessage.ts`：於 `send_admin_email` 與 `send_user_email` POST 本文中補上 `worker_secret`。
+    - `geminiService.ts`：於 GET 規章知識庫請求之 URL Query 參數補上 `&x-worker-secret=` 備援。
+    - `line-webhook/index.ts`：於 `append_event_sheet` POST 本文中補上 `worker_secret`。
+  - **自動化測試更新 (`test/138_cadre_sheet_dispatcher.test.mjs`)**：
+    - 新增驗證轉發 Payload 必須攜帶 `worker_secret` 欄位，確保測試防護網完整。
+
+### v0.1.322 (2026-10-24)
+- 安全性修復：前端與開發依賴套件弱點修補 (Dependency Security Hardening)：
+  - 直接依賴版本升級 (`package.json`)：`react-router-dom` 升級至 `^7.18.2`、`vite` 升級至 `^8.1.6`。
+  - 深層相依版本覆寫 (`pnpm.overrides`)：覆寫 `brace-expansion` 至 `>=5.0.12`、`axios` 至 `>=1.20.0`、`follow-redirects` 至 `>=1.16.1`，消除各項安全弱點。
+
+### v0.1.321 (2026-10-23)
+- 幹部試算表安全轉發調度器實作與後台接入 (Solution A: Cadre Spreadsheet Dispatcher)：
+  - **Edge Function notify-dispatcher 實作幹部試算表轉發端點 (`supabase/functions/notify-dispatcher/index.ts`)**：
+    - 新增 `create_event_sheet` 與 `sync_event_sheet_signups` 轉發端點。
+    - 嚴格校驗呼叫者的 `verifiedUserId` 具備社團幹部身分（`isUserOfficer`），非幹部直接回傳 403。
+    - 幹部驗證通過後，在後端自環境變數注入 `GAS_WORKER_SECRET` 向 Google Apps Script 發送請求，徹底解決前端無機密導致手動同步 401 阻斷之問題，保證試算表 100% 正常建立與全量名冊同步。
+  - **前端通用通訊模組擴充 (`src/utils/api.ts`)**：
+    - 封裝通用泛型函式 `callDispatcherAction<T>`，自動附加 Custom JWT 與 LINE ID Token，支援接收 `data` 泛型業務資料回傳。
+  - **幹部管理介面全面接入 Dispatcher 轉發 (`src/pages/web-admin/WebAdminRoster.tsx`, `src/pages/AdminEvents.tsx`)**：
+    - 電腦版名冊工作站（`WebAdminRoster.tsx`）：建立試算表與名冊同步由直連 GAS 改為透過 `callDispatcherAction` 觸發，保持 Supabase 輪詢自癒機制。
+    - 手機版活動中心（`AdminEvents.tsx`）：建立活動試算表優先調用 `callDispatcherAction`，保持相容備援。
+  - **自動化測試套件**：
+    - 新增 `test/138_cadre_sheet_dispatcher.test.mjs` (Dispatcher 試算表轉發與幹部鑑權驗證)。
+    - 新增 `test/139_call_dispatcher_action.test.mjs` (callDispatcherAction 通訊模組擴充驗證)。
+    - 新增 `test/140_cadre_sheet_frontend_integration.test.mjs` (幹部頁面接入 Dispatcher 驗證)。
+
+### v0.1.320 (2026-10-23)
+- 全面安全性稽核 10 項重大與高風險弱點防禦加固 (Security Audit 10 Vulnerabilities Remediation)：
+  - **Google Apps Script Thin Worker 邊界鑑權加固 (`src/gas_worker.js`)**：
+    - 徹底拔除 `_handleCreateEventSheet` 建立活動專屬試算表時，在 `_CONFIG` 系統設定分頁明文寫入 `SUPABASE_SERVICE_ROLE_KEY` 之嚴重機密洩漏缺陷。
+    - 移除新活動 Google Drive 資料夾與試算表預設開放為 `ANYONE_WITH_LINK` 之設定，維持社團私有權限。
+    - 調整 `doGet` 與 `doPost` 路由分流機制：除公開照片上傳（`upload_drive_files`）與健康檢查（`health_check`）外，所有試算表建立（`create_event_sheet`）、報名名冊個資同步（`sync_event_sheet_signups`）與 Drive 檔案刪除（`delete_drive_file`、`delete_drive_files`）全面移入 `_verifyWorkerSecret` 檢驗之後，杜絕未鑑權存取與任意刪除 Drive 檔案。
+  - **Supabase PL/pgSQL RPC 身分鑑權與 IDOR 守衛加固 (`supabase/migrations/20261023_security_remediation_p3.sql`)**：
+    - `save_member_profile`：強制校驗 caller 身分權杖（`auth.jwt() ->> 'sub'`）必須匹配 `p_line_user_id` 或具備幹部權限，杜絕跨使用者或匿名覆寫他人個資。
+    - `cancel_event_signup_rpc` 與 `cancel_equipment_loan_rpc`：移除 `v_jwt_sub IS NOT NULL` 旁路條件，強制拒絕匿名未鑑權呼叫，徹底阻絕越權取消他人活動報名與裝備預約。
+    - `signup_rpc` 與 `save_reflection_rpc`：加入 caller 身分檢驗，防止未鑑權或偽造他人身分發布心得與報名活動。
+  - **Admin Portal 寬鬆 RLS 策略清除 (`supabase/admin_portal_rpc.sql`, `supabase/migrations/20261023_security_remediation_p3.sql`)**：
+    - 徹底移除 `admin_portal_rpc.sql` 中 11 條歷史遺留之 `Allow anon read/update/insert` 策略建立語句。
+    - 於 Migration 腳本中加入對應 `DROP POLICY IF EXISTS` 指令，確保生產資料庫中若有殘存寬鬆策略一併清除，全面回歸 `desktop_admin_security.sql` 之嚴密 RLS 政策。
+  - **Edge Function notify-dispatcher 身分鑑權防偽造 (`supabase/functions/notify-dispatcher/index.ts`)**：
+    - 加固 `isPgCron` 判斷式，強制比對 `serviceRoleKey`，杜絕任意 Bearer Token 藉由 `source: "pg_cron"` 偽造取得 `SYSTEM_CRON` 權限。
+    - `handleSendEventNotifications` 強制優先採用 `verifiedUserId` 進行幹部權限檢查，杜絕 client payload 偽造 `userId` 觸發全體活動推播。
+  - **Vercel HTTP 安全標頭加固 (`vercel.json`)**：
+    - 全站標頭補齊 `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`，強制全站 HTTPS 傳輸。
+  - **自動化測試套件**：
+    - 新增 `test/133_gas_worker_security_hardening.test.mjs` (GAS Worker 鑑權與機密防洩漏驗證)。
+    - 新增 `test/134_supabase_rpc_security_guards.test.mjs` (Supabase RPC 鑑權與 IDOR 守衛驗證)。
+    - 新增 `test/135_admin_portal_rls_hardening.test.mjs` (Admin Portal 寬鬆 RLS 清除驗證)。
+    - 新增 `test/136_notify_dispatcher_auth_hardening.test.mjs` (notify-dispatcher 鑑權防偽造驗證)。
+    - 新增 `test/137_vercel_security_headers.test.mjs` (Vercel HSTS 安全標頭驗證)。
+
+### v0.1.319 (2026-10-21)
+- Google 試算表同步與系統繳費狀態 Unpaid 優先權修復（解決「未繳費」被誤填為「已繳費」之問題）：
+  - GAS 背景同步 Worker 繳費狀態正規化優先權修復 (`src/gas_worker.js`)：
+    - 於 `_normalizePaymentStatus` 函式中將「未繳」與「unpaid」比對優先順序調至「已繳」與「paid」之前。
+    - 徹底根治英文 `unpaid` 結尾包含 `paid` 子字串造成 `str.toLowerCase().indexOf('paid') > -1` 恆真，導致 Supabase 中「未繳費 Unpaid」在幹部點擊同步試算表時被誤判並填入試算表為「已繳費 Paid」的嚴重問題。
+    - 幹部在電腦後台點擊同步時，系統將自動比對並覆寫修正試算表中既有的錯誤繳費狀態。
+  - 電腦版後台名冊工作站繳費徽章判定修復 (`src/pages/web-admin/WebAdminRoster.tsx`)：
+    - 修正 `isPaid` 邏輯，明確排除 `未繳` 與 `Unpaid`，防止未繳費隊員被渲染為綠色已繳費徽章。
+  - 社員個人儀表板狀態函式修復 (`src/pages/Dashboard.tsx`)：
+    - `getPayStatusText` 優先判定未繳費狀態；於取消活動推播判定 `isPaid` 與裝備繳費文字顏色時精準排除未繳費。
+  - 全域狀態正規化防禦升級 (`src/utils/statusUtils.ts`)：
+    - `normalizeActivityStatus` 判定 `Paid` 時強制排除未繳費狀態。
+  - 資料庫 RPC 與轉型函式 Migration 腳本 (`supabase/migrations/20261021_fix_payment_status_unpaid_precedence.sql`)：
+    - 提供 `text_to_payment_status_enum` 與 `get_admin_event_signups_rpc` 專屬 Migration 腳本，保證資料庫端 `CASE` 判斷未繳費優先。
+  - 自動化測試套件：
+    - 新增 `test/132_fix_payment_status_unpaid_precedence.test.mjs`，驗證各類文字輸入與空值狀態在正規化時的精準判定與零 Emoji 規範。
 
 ### v0.1.318 (2026-10-19)
 - 付費活動金額解析修復與 TDD 測試集驗證（解決付費活動被誤判為 0 元問題）：

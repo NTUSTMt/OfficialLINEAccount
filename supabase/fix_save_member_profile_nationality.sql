@@ -17,11 +17,27 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+    v_jwt_sub TEXT;
     v_is_officer BOOLEAN := FALSE;
+    v_is_service_role BOOLEAN := FALSE;
     v_officer_role TEXT := NULL;
 BEGIN
     IF p_line_user_id IS NULL OR trim(p_line_user_id) = '' OR trim(p_line_user_id) = 'TEST_USER_ID' THEN
         RETURN jsonb_build_object('success', false, 'message', '無效的使用者識別碼');
+    END IF;
+
+    v_jwt_sub := auth.jwt() ->> 'sub';
+    v_is_officer := COALESCE((auth.jwt() ->> 'is_officer')::boolean, FALSE);
+    v_is_service_role := (COALESCE(auth.role(), '') = 'service_role') OR (COALESCE(auth.jwt() ->> 'role', '') = 'service_role');
+
+    -- 身分鑑權守衛：非 service_role 呼叫時，強制檢查 JWT sub 與 p_line_user_id 一致性或幹部身分
+    IF NOT v_is_service_role THEN
+        IF v_jwt_sub IS NULL OR trim(v_jwt_sub) = '' THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Unauthorized: 缺少有效身分憑證');
+        END IF;
+        IF NOT v_is_officer AND trim(v_jwt_sub) != trim(p_line_user_id) THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Forbidden: 禁止越權修改他人個人資料');
+        END IF;
     END IF;
 
     -- 檢查該成員目前是否具備幹部身分 (避免被覆蓋)

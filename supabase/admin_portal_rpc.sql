@@ -932,39 +932,18 @@ GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
 
--- 確保 payments, loans, loan_items, event_signups, members 具備 SELECT 與 UPDATE 策略
+-- 確保清除歷史遺留之過度寬鬆 anon 策略 (改由 desktop_admin_security.sql 嚴密 RLS 控管)
 DROP POLICY IF EXISTS "Allow anon read members" ON members;
-CREATE POLICY "Allow anon read members" ON members FOR SELECT USING (true);
-
 DROP POLICY IF EXISTS "Allow anon update members" ON members;
-CREATE POLICY "Allow anon update members" ON members FOR UPDATE USING (true) WITH CHECK (true);
-
 DROP POLICY IF EXISTS "Allow anon read payments" ON payments;
-CREATE POLICY "Allow anon read payments" ON payments FOR SELECT USING (true);
-
 DROP POLICY IF EXISTS "Allow anon update payments" ON payments;
-CREATE POLICY "Allow anon update payments" ON payments FOR UPDATE USING (true) WITH CHECK (true);
-
 DROP POLICY IF EXISTS "Allow anon insert payments" ON payments;
-CREATE POLICY "Allow anon insert payments" ON payments FOR INSERT WITH CHECK (true);
-
 DROP POLICY IF EXISTS "Allow anon read loans" ON loans;
-CREATE POLICY "Allow anon read loans" ON loans FOR SELECT USING (true);
-
 DROP POLICY IF EXISTS "Allow anon update loans" ON loans;
-CREATE POLICY "Allow anon update loans" ON loans FOR UPDATE USING (true) WITH CHECK (true);
-
 DROP POLICY IF EXISTS "Allow anon insert loans" ON loans;
-CREATE POLICY "Allow anon insert loans" ON loans FOR INSERT WITH CHECK (true);
-
 DROP POLICY IF EXISTS "Allow anon read loan_items" ON loan_items;
-CREATE POLICY "Allow anon read loan_items" ON loan_items FOR SELECT USING (true);
-
 DROP POLICY IF EXISTS "Allow anon update loan_items" ON loan_items;
-CREATE POLICY "Allow anon update loan_items" ON loan_items FOR UPDATE USING (true) WITH CHECK (true);
-
 DROP POLICY IF EXISTS "Allow anon insert loan_items" ON loan_items;
-CREATE POLICY "Allow anon insert loan_items" ON loan_items FOR INSERT WITH CHECK (true);
 
 -- 授權 RPC 函式執行權限予 authenticated, service_role (撤銷 anon 權限以防未鑑權存取)
 REVOKE EXECUTE ON FUNCTION is_officer(TEXT) FROM anon, public;
