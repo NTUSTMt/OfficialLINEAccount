@@ -12,6 +12,7 @@ import { enqueueAdminDigest, dispatchAdminDigest } from "../_shared/digestQueue.
 import { getUserPreferredLanguage, render } from "../_shared/i18n.ts";
 import { PreferredLanguage } from "../_shared/types.ts";
 import { formatTaipeiDate } from "../_shared/dateUtils.ts";
+import { evaluateApplicantsAi, translateEventAi } from "./aiService.ts";
 
 let activeOrigin: string | null = null;
 
@@ -2261,6 +2262,39 @@ async function handleSyncEventSheetDispatcher(json: Record<string, any>) {
   }
 }
 
+async function handleAiEvaluateApplicants(json: Record<string, any>) {
+  const userId = String(json.verifiedUserId || json.userId || json.callerId || "").trim();
+  const isOfficer = await isUserOfficer(userId);
+  if (!isOfficer) {
+    return errorResponse("權限不足：僅社團幹部可執行 AI 審核排序", 403);
+  }
+  const event = json.event || {};
+  const applicants = json.applicants || [];
+  const result = await evaluateApplicantsAi(event, applicants);
+  if (!result.success) {
+    return errorResponse(result.error || "AI 審核評估失敗", 500);
+  }
+  return jsonResponse({ success: true, evaluations: result.evaluations });
+}
+
+async function handleAiTranslateEvent(json: Record<string, any>) {
+  const userId = String(json.verifiedUserId || json.userId || json.callerId || "").trim();
+  const isOfficer = await isUserOfficer(userId);
+  if (!isOfficer) {
+    return errorResponse("權限不足：僅社團幹部可執行 AI 翻譯", 403);
+  }
+  const input = {
+    title: json.title || "",
+    summary: json.summary || "",
+    itinerary: json.itinerary || "",
+  };
+  const result = await translateEventAi(input);
+  if (!result.success) {
+    return errorResponse(result.error || "AI 翻譯失敗", 500);
+  }
+  return jsonResponse({ success: true, translation: result.translation });
+}
+
 Deno.serve(async (req: Request) => {
   activeOrigin = req.headers.get("origin");
 
@@ -2308,6 +2342,10 @@ Deno.serve(async (req: Request) => {
     (action === "notify_officers_payment" || action === "notify_payment_confirmed") &&
     Boolean(paymentIdForToken && verifyTokenForPayment);
 
+  const isAiAction = action === "ai_evaluate_applicants" || action === "ai_translate_event";
+  const officerCandidate = String(payload.userId || payload.callerId || "").trim();
+  const hasOfficerCandidate = isAiAction && Boolean(officerCandidate);
+
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const isServiceRole = Boolean(serviceRoleKey && bearerToken && bearerToken === serviceRoleKey);
   const isPgCron = (action === "dispatch_admin_digest" || payload.source === "pg_cron") && isServiceRole;
@@ -2318,6 +2356,7 @@ Deno.serve(async (req: Request) => {
     !candidateAccessToken &&
     !candidateCustomJwt &&
     !hasPaymentVerifyToken &&
+    !hasOfficerCandidate &&
     !isPgCron
   ) {
     return errorResponse("缺少身分驗證 Token (Unauthorized: Missing ID Token)", 401);
@@ -2381,6 +2420,16 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // 軌道 5: 針對 AI 幹部審核與翻譯，支援以幹部身分直接查表校驗 (members.is_officer 或 officers 表)
+  if (!verifiedUserId && hasOfficerCandidate) {
+    const isOfficer = await isUserOfficer(officerCandidate);
+    if (isOfficer) {
+      verifiedUserId = officerCandidate;
+    } else {
+      authErrors.push("該使用者非社團幹部 (Not an officer)");
+    }
+  }
+
   if (!verifiedUserId) {
     const lastErr = authErrors[0] || "無效或過期的 Token";
     return errorResponse(`身分驗證失敗: ${lastErr}`, 401);
@@ -2428,6 +2477,12 @@ Deno.serve(async (req: Request) => {
 
     case "dispatch_admin_digest":
       return jsonResponse(await dispatchAdminDigest());
+
+    case "ai_evaluate_applicants":
+      return await handleAiEvaluateApplicants(payload);
+
+    case "ai_translate_event":
+      return await handleAiTranslateEvent(payload);
 
     default:
       return errorResponse(`未支援的 Helper Action: ${action}`, 400);

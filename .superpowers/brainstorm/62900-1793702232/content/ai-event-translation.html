@@ -1,0 +1,92 @@
+<h2>功能二：活動內容 AI 一鍵雙語翻譯 (Mockup)</h2>
+<p class="subtitle">針對中文標題、簡介與行程進行高精準度翻譯，嚴格限制字數並維持固定輸出格式</p>
+
+<div class="mockup" style="margin-bottom: 24px;">
+  <div class="mockup-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <span>活動管理 - 編輯活動內容與雙語資訊</span>
+    <span style="font-size: 12px; background: rgba(59, 130, 246, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 4px; font-weight: 500;">
+      字數限制防護：簡介 ≤ 1000 字 / 行程 ≤ 700 字 / 總計 ≤ 1400 字
+    </span>
+  </div>
+  <div class="mockup-body" style="background: #fafafa; padding: 18px;">
+    <!-- 工具列 -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: #fff; padding: 10px 14px; border-radius: 6px; border: 1px solid #e2e8f0;">
+      <div>
+        <div style="font-weight: 600; font-size: 14px; color: #1e293b;">雙語內容產生器</div>
+        <div style="font-size: 12px; color: #64748b;">自動保留日期、費用、高山地名與分天行程格式</div>
+      </div>
+      <button class="mock-button" style="background: #2563eb; color: #fff; font-weight: 600; padding: 7px 14px; border-radius: 5px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+        ✨ AI 一鍵翻譯至英文欄位
+      </button>
+    </div>
+
+    <!-- 欄位對照區域 -->
+    <div class="split" style="gap: 16px;">
+      <!-- 左欄：中文來源 -->
+      <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px;">
+        <div style="font-weight: 600; font-size: 13px; color: #0f172a; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px;">
+          中文原始內容 (來源)
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 12px; color: #64748b; font-weight: 500;">活動名稱</label>
+          <div style="padding: 6px 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; margin-top: 3px;">
+            合歡西北峰二日健行
+          </div>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 12px; color: #64748b; font-weight: 500;">活動簡介 (字數: 186 / 1000)</label>
+          <div style="padding: 8px 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; margin-top: 3px; line-height: 1.5; color: #334155;">
+            合歡北峰為合歡群峰最高峰，視野遼闊；西峰經多次起伏，為考驗體能之百岳入門挑戰。本行程採小隊協作，夜宿小溪營地或民宿，需具備基本負重能力。
+          </div>
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #64748b; font-weight: 500;">行程規劃 (字數: 134 / 700)</label>
+          <div style="padding: 8px 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; margin-top: 3px; line-height: 1.5; color: #334155;">
+            Day 1: 07:00 台科大集合出發 → 12:30 小風口登山口 → 15:30 合歡北峰 → 17:00 營地搭帳紮營。<br/>
+            Day 2: 05:00 輕裝出發 → 08:30 合歡西峰 → 12:30 返回北峰 → 14:30 登山口返程。
+          </div>
+        </div>
+      </div>
+
+      <!-- 右欄：AI 翻譯結果 -->
+      <div style="background: #fff; border: 1px solid #93c5fd; border-radius: 6px; padding: 14px; position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #eff6ff; padding-bottom: 6px;">
+          <span style="font-weight: 600; font-size: 13px; color: #1d4ed8;">英文翻譯 (AI 依格式生成)</span>
+          <span style="font-size: 11px; background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 3px; font-weight: 600;">已符合字數限制</span>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 12px; color: #64748b; font-weight: 500;">Title (English)</label>
+          <input class="mock-input" value="Mt. Hehuan North & West Peak 2-Day Trek" style="width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1px solid #93c5fd; border-radius: 4px; font-size: 13px; margin-top: 3px;" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 12px; color: #64748b; font-weight: 500;">Summary (English) (Chars: 245 / 1000)</label>
+          <textarea style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 4px; font-size: 12px; margin-top: 3px; line-height: 1.5; height: 95px; font-family: inherit;">Mt. Hehuan North Peak offers sweeping panoramic ridge views, while West Peak tests stamina with rolling terrain. This 2-day team trek features overnight camping at Xiaoxi Campsite. Participants should have moderate backpacking fitness.</textarea>
+        </div>
+        <div>
+          <label style="font-size: 12px; color: #64748b; font-weight: 500;">Itinerary (English) (Chars: 278 / 700)</label>
+          <textarea style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #93c5fd; border-radius: 4px; font-size: 12px; margin-top: 3px; line-height: 1.5; height: 95px; font-family: inherit;">Day 1: 07:00 Meet at NTUST → 12:30 Xiaofengkou Trailhead → 15:30 Mt. Hehuan North Peak → 17:00 Camp Setup.<br/>Day 2: 05:00 Start with daypack → 08:30 Mt. Hehuan West Peak → 12:30 Return to North Peak → 14:30 Trailhead & Return to Taipei.</textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3>翻譯時的互動與套用方式偏好</h3>
+<p class="subtitle">點選下方選項可在終端機中進一步確認</p>
+
+<div class="options">
+  <div class="option" data-choice="fill-directly" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>直接填入表單英文欄位（最快速）</h3>
+      <p>點擊翻譯後，AI 直接將成果寫入 Title En、Summary En、Itinerary En 輸入框中，上方顯示「已由 AI 填入，可直接編輯」提示，並保留「一鍵還原為前次內容」按鈕。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="preview-modal" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>獨立對照彈窗確認（更嚴謹）</h3>
+      <p>點擊翻譯後先彈出中英對照視窗，幹部可在彈窗內快速檢閱、修改，點擊「確認套用」後才覆寫至活動表單中。</p>
+    </div>
+  </div>
+</div>

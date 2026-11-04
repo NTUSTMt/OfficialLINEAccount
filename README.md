@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.322-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.328-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -13,6 +13,13 @@
 
 ---
 
+## 最新修正 (2026-11-04)
+
+- 修正 `signup_rpc` 讀取不存在的 `events.member_fee` 欄位，現在統一使用正式欄位 `events.fee`。
+- 新增 `supabase/migrations/20261104000000_fix_signup_rpc_member_fee_reference.sql`，部署後即可恢復 LINE 一鍵報名。
+- 修正新社員資料儲存時 `proof_urls` 的 JSONB 型別錯誤，新增 `20261104010000_fix_save_member_profile_proof_urls_jsonb.sql`。
+- 修正活動取消與再次報名時的 enum 錯誤，新增 `20261104020000_fix_event_signup_cancelled_enum.sql`；退款提示改記錄於 `notes`，資料庫狀態統一使用 `已取消 Cancelled`。
+
 ## 目錄 (Table of Contents)
 - [1. 系統架構總覽 (Architecture Overview)](#1-系統架構總覽-architecture-overview)
 - [2. 專案目錄結構 (Project Structure)](#2-專案目錄結構-project-structure)
@@ -20,7 +27,7 @@
 - [4. 資料修改途徑與試算表同步機制 (Data Modification & Sheet Sync)](#4-資料修改途徑與試算表同步機制-data-modification--sheet-sync)
 - [5. 開發與交付規範 (Development Guidelines & Agent Rules)](#5-開發與交付規範-development-guidelines--agent-rules)
 - [6. 本地開發與部署流程 (Quick Start & Deployment)](#6-本地開發與部署流程-quick-start--deployment)
-- [7. 最新版本異動紀錄 (Changelog v0.1.321)](#7-最新版本異動紀錄-changelog-v01321)
+- [7. 最新版本異動紀錄 (Changelog v0.1.328)](#7-最新版本異動紀錄-changelog-v01328)
 
 ---
 
@@ -204,7 +211,36 @@ pnpm test
 
 ---
 
-## 7. 最新版本異動紀錄 (Changelog v0.1.323)
+## 7. 最新版本異動紀錄 (Changelog v0.1.328)
+
+### v0.1.325 (2026-11-04)
+- 幹部管理後台 AI 審核助手、雙語鏡像翻譯與雙向色彩標籤表格 (Admin AI Assistant & Table Customization)：
+  - **後端 Edge Function AI 調度動作 (`supabase/functions/notify-dispatcher/aiService.ts`, `index.ts`)**：
+    - 新增 `ai_evaluate_applicants` 動作：結合活動難度等級、天數與負重綜合評量，產出 1-100 分適合度與客觀理由。
+    - 嚴格去識別化（PII Sanitization）：嚴格白名單過濾，僅傳送匿名序號、登山經驗、體能自評與過往病史，絕不向 AI 模型傳入姓名、學號、電話、LINE ID 等個資。
+    - 新增 `ai_translate_event` 動作：調用 Gemini 模型將活動簡介、行程與注意事項翻譯為專業英文，結構完全鏡像對應（分天標題、時間箭頭），總字數嚴格限制 ≤ 1400 字元。
+  - **前端 API 封裝與型別安全 (`src/types/admin.ts`, `src/utils/api.ts`)**：
+    - 定義 `ApplicantEvaluation`、`EventTranslationInput` 等 TypeScript 介面。
+    - 實作前端第一層 PII 剝除，並採用每批 25 人自動拆分並行請求機制，防止大名單超時或 Token 溢出。
+  - **活動內容雙語翻譯與一鍵還原 UI (`src/pages/web-admin/WebAdminEvents.tsx`, `src/components/admin/AdminEventForm.tsx`)**：
+    - 新增「AI 一鍵雙語翻譯」按鈕、載入旋轉動態指示與「一鍵還原」防呆復原功能。
+  - **名單管理表格雙向選色與原地編輯 (`src/pages/web-admin/WebAdminRoster.tsx`)**：
+    - 支援縱向欄位與橫向列 6 色色彩主題（灰、藍、綠、黃、橘、紫）圓圈選單，儲存格微底色自然透明疊加。
+    - 新增 `ai_score`（適合度評分）與 `ai_reasoning`（審核理由）直欄，支援點擊展開閱讀。
+    - 支援「AI 體能評估排序」觸發與「依 AI 分數排序」切換，並自動寫入 `localStorage` 快取。
+    - 原地直接編輯：幹部備註失焦（onBlur）或按下 Enter 鍵自動靜默儲存（無多餘 Toast 提示）；審核狀態下拉選單原地即時更新。
+  - **自動化測試套件**：
+    - 新增 `test/142_admin_ai_assistant.test.mjs`、`test/143_admin_ai_frontend_api.test.mjs`、`test/144_admin_event_translation_ui.test.mjs`、`test/145_admin_roster_table_features.test.mjs` 全數通過。
+
+### v0.1.324 (2026-11-03)
+- 修復 signup_rpc 報名活動時 fee 欄位不存在錯誤 (Fix Missing Fee Column in signup_rpc)：
+  - **資料庫預存程序修復 (`supabase/migrations/20261103_fix_signup_rpc_remove_fee_column.sql`)**：
+    - 移除 `signup_rpc` 中對 `event_signups` 資料表不存在之 `fee` 欄位的錯誤 `INSERT` 語句，徹底排除 `column "fee" of relation "event_signups" does not exist` 錯誤。
+    - 補齊 `event_signups` 紀錄中之 `name`、`line_id`、`notification_status`（'未通知'）與 `is_official_member_snapshot` 寫入。
+    - 修正回傳物件相容性（`'status', 'ok'`），補齊 `spreadsheet_id`、`fee`、`is_official_member` 回傳，恢復 LINE Bot 報名確認推播與 Google 試算表名冊追加。
+    - 維持 caller 身分驗證守衛。
+  - **自動化測試套件**：
+    - 新增 `test/141_fix_signup_rpc_remove_fee.test.mjs`，驗證 `signup_rpc` 正確排除 `event_signups.fee` 欄位並符合 LINE Webhook 規範。
 
 ### v0.1.323 (2026-11-02)
 - 修復 GAS 轉發鑑權遺失與試算表建立 401 錯誤 (Fix GAS Worker Secret Forwarding)：

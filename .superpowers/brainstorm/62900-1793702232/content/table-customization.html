@@ -1,0 +1,156 @@
+<h2>功能三：名單表格編輯擴充與自訂欄位色彩 (Mockup)</h2>
+<p class="subtitle">讓幹部能依業務需求自訂欄位色彩分組、快速原地編輯與視圖管理</p>
+
+<div class="mockup" style="margin-bottom: 24px;">
+  <div class="mockup-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <span>Web Admin 名單表格 - 欄位自訂色彩與進階編輯預覽</span>
+    <span style="font-size: 12px; background: rgba(147, 51, 234, 0.15); color: #7e22ce; padding: 2px 8px; border-radius: 4px; font-weight: 500;">
+      自訂色彩與設定自動儲存於瀏覽器
+    </span>
+  </div>
+  <div class="mockup-body" style="background: #fafafa; padding: 16px;">
+    
+    <!-- 工具列功能展示 -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; background: #fff; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span style="font-weight: 600; font-size: 13px;">名單欄位自訂：</span>
+        <span style="font-size: 12px; padding: 3px 8px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-weight: 500;">
+          藍色：AI 與體能經驗
+        </span>
+        <span style="font-size: 12px; padding: 3px 8px; background: #fef3c7; color: #b45309; border-radius: 4px; font-weight: 500;">
+          黃色：保險與緊急聯絡
+        </span>
+        <span style="font-size: 12px; padding: 3px 8px; background: #dcfce7; color: #15803d; border-radius: 4px; font-weight: 500;">
+          綠色：審核與繳費狀態
+        </span>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button class="mock-button" style="padding: 4px 8px; font-size: 12px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">
+          重設所有顏色
+        </button>
+      </div>
+    </div>
+
+    <!-- 表格預覽 -->
+    <div style="overflow-x: auto; background: #fff; border-radius: 6px; border: 1px solid #e2e8f0;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+        <thead>
+          <tr style="border-bottom: 1px solid #cbd5e1;">
+            <!-- 基本資訊欄 (預設灰) -->
+            <th style="padding: 10px; background: #f8fafc; color: #475569; width: 60px;">序號</th>
+            <th style="padding: 10px; background: #f8fafc; color: #475569; width: 90px;">姓名</th>
+            
+            <!-- 自訂藍色分組：AI 與體能 -->
+            <th style="padding: 10px; background: #bae6fd; color: #0369a1; width: 140px; border-left: 2px solid #38bdf8;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>登山經驗</span>
+                <span style="cursor: pointer; font-size: 11px; opacity: 0.8;">🎨</span>
+              </div>
+            </th>
+            <th style="padding: 10px; background: #bae6fd; color: #0369a1; width: 110px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>AI 適合度</span>
+                <span style="cursor: pointer; font-size: 11px; opacity: 0.8;">🎨</span>
+              </div>
+            </th>
+
+            <!-- 自訂黃色分組：保險與緊急聯絡 -->
+            <th style="padding: 10px; background: #fde68a; color: #854d0e; width: 130px; border-left: 2px solid #facc15;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>身分證字號</span>
+                <span style="cursor: pointer; font-size: 11px; opacity: 0.8;">🎨</span>
+              </div>
+            </th>
+            <th style="padding: 10px; background: #fde68a; color: #854d0e; width: 120px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>緊急聯絡電話</span>
+                <span style="cursor: pointer; font-size: 11px; opacity: 0.8;">🎨</span>
+              </div>
+            </th>
+
+            <!-- 自訂綠色分組：審核與繳費 -->
+            <th style="padding: 10px; background: #bbf7d0; color: #166534; width: 120px; border-left: 2px solid #4ade80;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>審核狀態</span>
+                <span style="cursor: pointer; font-size: 11px; opacity: 0.8;">🎨</span>
+              </div>
+            </th>
+            <th style="padding: 10px; background: #bbf7d0; color: #166534; width: 110px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>繳費確認</span>
+                <span style="cursor: pointer; font-size: 11px; opacity: 0.8;">🎨</span>
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 10px; background: #fff;">#1</td>
+            <td style="padding: 10px; font-weight: 500;">王小明</td>
+            
+            <!-- 藍色欄內容：微淡背景區隔 -->
+            <td style="padding: 10px; background: #f0f9ff; border-left: 2px solid #e0f2fe;">雪山、奇萊 (8座)</td>
+            <td style="padding: 10px; background: #f0f9ff; font-weight: 700; color: #0284c7;">92 分</td>
+
+            <!-- 黃色欄內容 -->
+            <td style="padding: 10px; background: #fefce8; border-left: 2px solid #fef9c3;">A12345****</td>
+            <td style="padding: 10px; background: #fefce8;">0912-***-456</td>
+
+            <!-- 綠色欄內容（支援原地快速點擊編輯） -->
+            <td style="padding: 10px; background: #f0fdf4; border-left: 2px solid #dcfce7;">
+              <select style="padding: 4px 6px; border-radius: 4px; border: 1px solid #86efac; font-size: 12px; background: #fff;">
+                <option selected>正取 Confirmed</option>
+                <option>備取 Waitlisted</option>
+                <option>審核中 Checking</option>
+              </select>
+            </td>
+            <td style="padding: 10px; background: #f0fdf4;">
+              <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; background: #dcfce7; color: #15803d; font-weight: 600;">已核銷 $1,800</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 調色盤選色器預覽示意 -->
+    <div style="margin-top: 14px; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px;">
+      <span style="font-size: 12px; font-weight: 600; color: #334155;">點擊欄位 🎨 調色盤可選色：</span>
+      <div style="display: flex; gap: 6px;">
+        <span style="width: 20px; height: 20px; border-radius: 50%; background: #f8fafc; border: 1px solid #cbd5e1; display: inline-block; cursor: pointer;" title="預設灰"></span>
+        <span style="width: 20px; height: 20px; border-radius: 50%; background: #bae6fd; border: 1px solid #38bdf8; display: inline-block; cursor: pointer;" title="天空藍"></span>
+        <span style="width: 20px; height: 20px; border-radius: 50%; background: #bbf7d0; border: 1px solid #4ade80; display: inline-block; cursor: pointer;" title="清新綠"></span>
+        <span style="width: 20px; height: 20px; border-radius: 50%; background: #fde68a; border: 1px solid #facc15; display: inline-block; cursor: pointer;" title="警示黃"></span>
+        <span style="width: 20px; height: 20px; border-radius: 50%; background: #fed7aa; border: 1px solid #fb923c; display: inline-block; cursor: pointer;" title="活力橘"></span>
+        <span style="width: 20px; height: 20px; border-radius: 50%; background: #e9d5ff; border: 1px solid #c084fc; display: inline-block; cursor: pointer;" title="優雅紫"></span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<h3>除了自訂色彩，您還希望包含哪些表格編輯能力？</h3>
+<p class="subtitle">可點選下方您最看重的擴充功能</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="inline-edit" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>原地直接編輯（Inline Editing）</h3>
+      <p>直接在表格內修改審核狀態、備註筆記或繳費註記，不必每次點開側邊 Drawer 編輯。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="color-tags" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>自訂欄位色彩調色盤（Column Color Themes）</h3>
+      <p>為各欄位自由設定標頭與微底色（藍/綠/黃/橘/紫/灰），直覺歸類資訊並持久化儲存。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="batch-edit" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>批次勾選與操作（Batch Actions）</h3>
+      <p>可多選報名者，一鍵「批次轉正取」、「批次轉備取」或「批次複製通訊名單」。</p>
+    </div>
+  </div>
+</div>

@@ -21,7 +21,7 @@ import {
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import { getDirectImageUrl, validateImageUploadFile } from '../../utils/image';
 import { GAS_API_URL } from '../../constants/api';
-import { withAuthPayload } from '../../utils/api';
+import { withAuthPayload, translateEventViaAi } from '../../utils/api';
 import { parseTaiwanDeadline, buildTaiwanIsoString, formatTaiwanDateTime, isTaiwanDeadlinePassed } from '../../utils/dateUtils';
 import './webAdmin.css';
 
@@ -138,6 +138,13 @@ export const WebAdminEvents: React.FC = () => {
     summary_en: '',
     itinerary_en: '',
   });
+
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationSnapshot, setTranslationSnapshot] = useState<{
+    title_en: string;
+    summary_en: string;
+    itinerary_en: string;
+  } | null>(null);
 
   const client = useMemo(() => {
     return createAuthenticatedSupabaseClient(session.jwt);
@@ -305,7 +312,56 @@ export const WebAdminEvents: React.FC = () => {
       itinerary_en: event.itinerary_en || '',
     });
     setModalOpen(true);
+    setTranslationSnapshot(null);
     setErrorMsg(null);
+  };
+
+  // AI 一鍵雙語翻譯處理
+  const handleAiTranslate = async () => {
+    if (isTranslating) return;
+    if (!formData.title && !formData.summary && !formData.itinerary) {
+      alert('請先填寫中文活動名稱、簡介或行程內容');
+      return;
+    }
+
+    setIsTranslating(true);
+    // 儲存目前翻譯快照以供一鍵還原
+    setTranslationSnapshot({
+      title_en: formData.title_en || '',
+      summary_en: formData.summary_en || '',
+      itinerary_en: formData.itinerary_en || '',
+    });
+
+    const res = await translateEventViaAi({
+      title: formData.title || '',
+      summary: formData.summary || '',
+      itinerary: formData.itinerary || '',
+    }, session?.userId);
+
+    setIsTranslating(false);
+
+    if (!res.success || !res.translation) {
+      alert(`AI 翻譯失敗: ${res.error || '未知錯誤'}`);
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      title_en: res.translation!.title_en || prev.title_en,
+      summary_en: res.translation!.summary_en || prev.summary_en,
+      itinerary_en: res.translation!.itinerary_en || prev.itinerary_en,
+    }));
+  };
+
+  const handleUndoTranslation = () => {
+    if (!translationSnapshot) return;
+    setFormData((prev) => ({
+      ...prev,
+      title_en: translationSnapshot.title_en,
+      summary_en: translationSnapshot.summary_en,
+      itinerary_en: translationSnapshot.itinerary_en,
+    }));
+    setTranslationSnapshot(null);
   };
 
   // 5. 刪除活動（連帶清除報名名冊與心得，並跳出二次確認）
@@ -1125,10 +1181,40 @@ export const WebAdminEvents: React.FC = () => {
 
                   {/* 右欄：英文內容 (English Translation) */}
                   <div className="wa-bilingual-col">
-                    <div className="wa-bilingual-header">
+                    <div className="wa-bilingual-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Globe size={15} color="#2563eb" />
                         <span>英文內容 (English Translation)</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {translationSnapshot && (
+                          <button
+                            type="button"
+                            className="web-admin-btn"
+                            onClick={handleUndoTranslation}
+                            style={{ padding: '2px 8px', fontSize: '0.75rem', height: 26 }}
+                            title="還原為翻譯前之內容"
+                          >
+                            一鍵還原
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="web-admin-btn web-admin-btn-primary"
+                          onClick={handleAiTranslate}
+                          disabled={isTranslating}
+                          style={{ padding: '2px 10px', fontSize: '0.75rem', height: 26, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                          title="使用 AI 自動將中文名稱、簡介與行程翻譯為英文"
+                        >
+                          {isTranslating ? (
+                            <>
+                              <RefreshCw size={12} className="wa-spin" />
+                              <span>翻譯中...</span>
+                            </>
+                          ) : (
+                            <span>AI 一鍵雙語翻譯</span>
+                          )}
+                        </button>
                       </div>
                     </div>
 

@@ -1,0 +1,125 @@
+<h2>功能三原型更新：極簡色彩選擇器與原地直接編輯</h2>
+<p class="subtitle">移除多餘文字、純色圓圈直覺展開，保留現有所有欄位排序/縮放/凍結/搜尋與檢視能力</p>
+
+<div class="mockup" style="margin-bottom: 24px;">
+  <div class="mockup-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <span>Web Admin 名單表格 - 雙向極簡選色與無干擾儲存</span>
+    <span style="font-size: 12px; background: rgba(59, 130, 246, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 4px; font-weight: 500;">
+      無文字干擾，純色圓點直接選色
+    </span>
+  </div>
+  <div class="mockup-body" style="background: #fafafa; padding: 16px;">
+    
+    <div style="overflow-x: auto; background: #fff; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 12px;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+        <thead>
+          <tr style="border-bottom: 1px solid #cbd5e1; background: #f8fafc;">
+            <!-- 橫列工具 / 序號標頭 -->
+            <th style="padding: 10px; width: 70px; color: #475569;">
+              序號
+            </th>
+
+            <!-- 縱向欄位 1：姓名 -->
+            <th style="padding: 10px; width: 100px; color: #475569;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span>姓名</span>
+                <span style="width: 14px; height: 14px; border-radius: 50%; background: #e2e8f0; border: 1px solid #94a3b8; display: inline-block; cursor: pointer;" title="變更整欄顏色"></span>
+              </div>
+            </th>
+
+            <!-- 縱向欄位 2：登山經驗（套用藍色整欄） -->
+            <th style="padding: 10px; width: 140px; background: #bae6fd; color: #0369a1; border-top: 3px solid #0284c7;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span>登山經驗</span>
+                <span style="width: 14px; height: 14px; border-radius: 50%; background: #38bdf8; border: 1px solid #0284c7; display: inline-block; cursor: pointer;" title="目前藍色（點擊修改）"></span>
+              </div>
+            </th>
+
+            <!-- 縱向欄位 3：AI 適合度（套用藍色整欄） -->
+            <th style="padding: 10px; width: 110px; background: #bae6fd; color: #0369a1; border-top: 3px solid #0284c7;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span>AI 評分</span>
+                <span style="width: 14px; height: 14px; border-radius: 50%; background: #38bdf8; border: 1px solid #0284c7; display: inline-block; cursor: pointer;" title="目前藍色（點擊修改）"></span>
+              </div>
+            </th>
+
+            <!-- 縱向欄位 4：審核狀態 -->
+            <th style="padding: 10px; width: 130px; color: #475569;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span>審核狀態</span>
+                <span style="width: 14px; height: 14px; border-radius: 50%; background: #e2e8f0; border: 1px solid #94a3b8; display: inline-block; cursor: pointer;" title="變更整欄顏色"></span>
+              </div>
+            </th>
+
+            <!-- 縱向欄位 5：備註 -->
+            <th style="padding: 10px; color: #475569;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span>幹部備註</span>
+                <span style="width: 14px; height: 14px; border-radius: 50%; background: #e2e8f0; border: 1px solid #94a3b8; display: inline-block; cursor: pointer;" title="變更整欄顏色"></span>
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- 橫列 1：套用黃色整列 -->
+          <tr style="border-bottom: 1px solid #f1f5f9; background: #fefce8; border-left: 4px solid #facc15;">
+            <td style="padding: 10px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-weight: 700; color: #854d0e;">#1</span>
+                <span style="width: 14px; height: 14px; border-radius: 50%; background: #facc15; border: 1px solid #ca8a04; display: inline-block; cursor: pointer;" title="橫列黃色"></span>
+              </div>
+            </td>
+            <td style="padding: 10px; font-weight: 600;">王小明</td>
+            <td style="padding: 10px; background: #f0fdf4;">雪山、奇萊主北 (8座)</td>
+            <td style="padding: 10px; background: #f0fdf4; font-weight: 700; color: #0284c7;">92 分</td>
+            <td style="padding: 10px;">
+              <select style="padding: 3px 6px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff;">
+                <option selected>正取 1</option>
+                <option>備取</option>
+                <option>審核中</option>
+              </select>
+            </td>
+            <!-- 原地編輯：Enter/onBlur 自動默默儲存，不跳提示訊息 -->
+            <td style="padding: 10px;">
+              <input type="text" value="已致電確認過夜裝備齊全" style="width: 90%; font-size: 12px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff;" />
+            </td>
+          </tr>
+
+          <!-- 橫列 2：點擊圓圈展開純色盤（無任何多餘文字，直接顯示 6 顆顏色圓圈） -->
+          <tr style="background: #fff; position: relative;">
+            <td style="padding: 10px; position: relative;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-weight: 600; color: #475569;">#2</span>
+                <span style="width: 14px; height: 14px; border-radius: 50%; background: #e2e8f0; border: 1px solid #94a3b8; display: inline-block; cursor: pointer;" title="點擊設定此列顏色"></span>
+              </div>
+              
+              <!-- 極簡浮動調色盤：僅顯示 6 個純色圓圈，無文字 -->
+              <div style="position: absolute; left: 55px; top: -6px; background: #fff; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.12); border-radius: 20px; padding: 4px 8px; display: flex; gap: 6px; align-items: center; z-index: 10;">
+                <span style="width: 16px; height: 16px; border-radius: 50%; background: #94a3b8; cursor: pointer; display: inline-block; border: 1px solid #64748b;" title="灰 (重設)"></span>
+                <span style="width: 16px; height: 16px; border-radius: 50%; background: #38bdf8; cursor: pointer; display: inline-block; border: 1px solid #0284c7;" title="藍"></span>
+                <span style="width: 16px; height: 16px; border-radius: 50%; background: #4ade80; cursor: pointer; display: inline-block; border: 1px solid #16a34a;" title="綠"></span>
+                <span style="width: 16px; height: 16px; border-radius: 50%; background: #facc15; cursor: pointer; display: inline-block; border: 1px solid #ca8a04;" title="黃"></span>
+                <span style="width: 16px; height: 16px; border-radius: 50%; background: #fb923c; cursor: pointer; display: inline-block; border: 1px solid #ea580c;" title="橘"></span>
+                <span style="width: 16px; height: 16px; border-radius: 50%; background: #c084fc; cursor: pointer; display: inline-block; border: 1px solid #9333ea;" title="紫"></span>
+              </div>
+            </td>
+            <td style="padding: 10px; font-weight: 500;">陳美玲</td>
+            <td style="padding: 10px; background: #f0f9ff;">陽明山、鳶嘴山</td>
+            <td style="padding: 10px; background: #f0f9ff; font-weight: 700; color: #0284c7;">74 分</td>
+            <td style="padding: 10px;">
+              <select style="padding: 3px 6px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff;">
+                <option>正取</option>
+                <option selected>備取 1</option>
+                <option>審核中</option>
+              </select>
+            </td>
+            <td style="padding: 10px;">
+              <input type="text" value="待確認是否租借帳篷" style="width: 90%; font-size: 12px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff;" />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>

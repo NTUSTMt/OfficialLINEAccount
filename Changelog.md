@@ -2,6 +2,73 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.328] - 2026-11-04
+
+### Bug 修正：修復活動取消與再次報名的非法 enum 狀態
+
+- 新增 `supabase/migrations/20261104020000_fix_event_signup_cancelled_enum.sql`。
+- `cancel_event_signup_rpc` 統一寫入合法的 `已取消 Cancelled`，已付款或待確認的退款提醒改記錄於 `notes` 的 `【已繳費待退款】`。
+- `signup_rpc` 重新報名只判斷合法的 `已取消 Cancelled`，不再引用不存在的 `已取消 (待退款)` enum。
+- 新增 `test/147_fix_event_signup_cancelled_enum.test.mjs` 回歸測試。
+
+## [0.1.327] - 2026-11-04
+
+### Bug 修正：修復新社員 proof_urls JSONB 型別錯誤
+
+- 新增 `supabase/migrations/20261104010000_fix_save_member_profile_proof_urls_jsonb.sql`。
+- 修正 `save_member_profile` 將 `proof_urls` 誤轉成 PostgreSQL `text[]` 的問題，現在直接以 JSONB 陣列寫入 `members.proof_urls`。
+- 保留原有 JWT 身分驗證、幹部身分保護與既有社員照片更新行為。
+- 新增 `test/146_save_member_profile_proof_urls_jsonb.test.mjs` 回歸測試。
+
+## [0.1.326] - 2026-11-04
+
+### Bug 修正：修復 signup_rpc 引用不存在的 member_fee 欄位
+
+- 新增 `supabase/migrations/20261104000000_fix_signup_rpc_member_fee_reference.sql`。
+- `signup_rpc` 現在統一從 `events.fee` 取得活動費用，不再讀取不存在的 `events.member_fee`。
+- 新增回歸測試，防止未來再次引入 `member_fee` 欄位引用。
+
+## [0.1.325] - 2026-11-04
+
+### 新增功能：幹部管理後台 AI 審核助手、雙語翻譯與雙向色彩標籤表格 (Admin AI Assistant & Table Customization)
+
+- 後端 Edge Function 擴充 (`supabase/functions/notify-dispatcher/aiService.ts`, `index.ts`)：
+  - 新增 `ai_evaluate_applicants` 與 `ai_translate_event` 兩大幹部調度動作。
+  - 實作雙重去識別化機制 (`sanitizeApplicants`)：嚴格過濾白名單以外的所有個人身分識別資訊（PII），絕不將真實姓名、學號、電話、LINE ID 傳入 AI 模型。
+  - 實作 `evaluateApplicantsAi`：結合當前活動的路線難度等級、天數與負重評估報名者適格度，產出 1-100 適合度分數與客觀審核理由。
+  - 實作 `translateEventAi`：使用 Gemini 模型翻譯活動資訊，保證行程結構（分天、時間箭頭）對齊，並強制總字數不超過 1400 字元。
+- 前端 API 與型別擴充 (`src/types/admin.ts`, `src/utils/api.ts`)：
+  - 新增 `ApplicantEvaluation`, `ApplicantEvaluationResult`, `EventTranslationInput`, `EventTranslationResult` 完整型別定義。
+  - 封裝 `evaluateApplicantsViaAi`：在瀏覽器端先執行第一道 PII 徹底剝除，並採用每 25 人自動批次並行處理，防止大型名冊遭遇逾時或 Token 限制。
+  - 封裝 `translateEventViaAi`：呼叫 Edge Function 取得英文化活動內容。
+- 活動管理雙語翻譯介面 (`src/pages/web-admin/WebAdminEvents.tsx`, `src/components/admin/AdminEventForm.tsx`)：
+  - 表單新增「AI 一鍵雙語翻譯」按鈕與旋轉載入指示器。
+  - 提供「一鍵還原」功能，保障幹部在誤觸或需取消翻譯時能安全復原原始編輯內容。
+  - 介面清楚標示「翻譯總字數上限 1400 字元」。
+- 名單管理表格進階功能 (`src/pages/web-admin/WebAdminRoster.tsx`)：
+  - 雙向（縱向直欄與橫向列）6 色選色系統（灰/藍/綠/黃/橘/紫）：在欄位標頭與序號格點擊純色圓圈即可展開選色浮動選單，點選灰色或重設即還原預設色。
+  - 儲存格色彩支援直欄微底色與橫列邊條自然疊加，層次分明。
+  - 新增 `ai_score`（AI 適合度）與 `ai_reasoning`（AI 評估理由）表格直欄，支援理由點擊展開檢視。
+  - 工具列新增「AI 體能評估排序」觸發按鈕與「依 AI 分數排序」切換按鈕，評估結果支援 `localStorage` 本地持久化快取。
+  - 原地直接編輯：幹部備註支援失焦（onBlur）與按下 Enter 鍵自動靜默儲存；審核狀態與通知狀態下拉選單原地即時更新。
+- 自動化單元測試套件：
+  - 新增 `test/142_admin_ai_assistant.test.mjs`（後端 Edge Function AI 邏輯與 PII 白名單驗證）。
+  - 新增 `test/143_admin_ai_frontend_api.test.mjs`（前端 API 呼叫、PII 剝除與分批邏輯驗證）。
+  - 新增 `test/144_admin_event_translation_ui.test.mjs`（活動雙語翻譯與一鍵還原前端介面驗證）。
+  - 新增 `test/145_admin_roster_table_features.test.mjs`（名單表格雙向選色、AI 排序與原地編輯驗證）。
+
+## [0.1.324] - 2026-11-03
+
+### Bug 修正：修復 signup_rpc 報名活動時 fee 欄位不存在錯誤 (Fix Missing Fee Column in signup_rpc)
+
+- 資料庫預存程序修復 (`supabase/migrations/20261103_fix_signup_rpc_remove_fee_column.sql`)：
+  - 移除 `signup_rpc` 中對 `event_signups` 資料表不存在之 `fee` 欄位的錯誤 `INSERT` 操作（活動費用本質由 `events` 表維護）。
+  - 補全 `event_signups` 名冊紀錄中的重要欄位寫入：`name`（社員姓名）、`line_id`（聯絡 LINE ID）、`notification_status`（'未通知'）、`is_official_member_snapshot`（社員優惠快照）。
+  - 修正回傳結構為 `'status', 'ok'`，並補齊 `spreadsheet_id`、`fee` 與 `is_official_member`，恢復 LINE Bot 報名後的即時通知與 Google 試算表非同步名冊追加。
+  - 保留完整的 caller 鑑權防護，徹底排除 `column "fee" of relation "event_signups" does not exist` 錯誤。
+- 自動化測試套件：
+  - 新增 `test/141_fix_signup_rpc_remove_fee.test.mjs`，驗證 `signup_rpc` 排除 `event_signups.fee` 寫入，且符合 LINE Webhook 回傳規範。
+
 ## [0.1.323] - 2026-11-02
 
 ### Bug 修正：修復 GAS 轉發鑑權遺失與試算表建立 401 錯誤 (Fix GAS Worker Secret Forwarding)

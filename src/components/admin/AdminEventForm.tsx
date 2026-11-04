@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, Info, ImageIcon, Check, Mountain, Link2, AlertCircle, Bookmark, Send } from 'lucide-react';
+import { translateEventViaAi } from '../../utils/api';
 
 export interface AdminEventFormData {
   eventId: string;
@@ -81,6 +82,59 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
     lineGroupUrlTrimmed && (!isLineGroupValid || lineGroupUrlTrimmed.includes('/ti/g2/'))
   );
 
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationSnapshot, setTranslationSnapshot] = useState<{
+    nameEn: string;
+    shortDescEn: string;
+    fullDescEn: string;
+  } | null>(null);
+
+  const handleAiTranslate = async () => {
+    if (isTranslating) return;
+    if (!formData.name && !formData.shortDesc && !formData.fullDesc) {
+      alert('請先填寫中文活動名稱、簡介或行程內容');
+      return;
+    }
+
+    setIsTranslating(true);
+    setTranslationSnapshot({
+      nameEn: formData.nameEn || '',
+      shortDescEn: formData.shortDescEn || '',
+      fullDescEn: formData.fullDescEn || ''
+    });
+
+    const res = await translateEventViaAi({
+      title: formData.name || '',
+      summary: formData.shortDesc || '',
+      itinerary: formData.fullDesc || ''
+    });
+
+    setIsTranslating(false);
+
+    if (!res.success || !res.translation) {
+      alert(`AI 翻譯失敗: ${res.error || '未知錯誤'}`);
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      nameEn: res.translation!.title_en || prev.nameEn,
+      shortDescEn: res.translation!.summary_en || prev.shortDescEn,
+      fullDescEn: res.translation!.itinerary_en || prev.fullDescEn
+    }));
+  };
+
+  const handleUndoTranslation = () => {
+    if (!translationSnapshot) return;
+    setFormData((prev) => ({
+      ...prev,
+      nameEn: translationSnapshot.nameEn,
+      shortDescEn: translationSnapshot.shortDescEn,
+      fullDescEn: translationSnapshot.fullDescEn
+    }));
+    setTranslationSnapshot(null);
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
       {/* 左欄：表單 */}
@@ -112,6 +166,49 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
             </button>
           )}
         </div>
+
+        {/* 雙語 AI 翻譯快速輔助列 */}
+        {activeLangTab === 'en' && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+            <div style={{ fontSize: '13px', color: '#1e40af', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={15} color="#2563eb" />
+              <span>英文內容 AI 智慧輔助</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {translationSnapshot && (
+                <button
+                  type="button"
+                  onClick={handleUndoTranslation}
+                  style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', color: '#475569', cursor: 'pointer' }}
+                  title="還原為翻譯前之內容"
+                >
+                  一鍵還原
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleAiTranslate}
+                disabled={isTranslating}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: '12px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  fontWeight: 'bold',
+                  cursor: isTranslating ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title="自動根據中文名稱、簡介與行程翻譯為英文"
+              >
+                {isTranslating ? '翻譯中...' : 'AI 一鍵雙語翻譯'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 活動名稱 */}
         <div>
@@ -363,7 +460,7 @@ export const AdminEventForm: React.FC<AdminEventFormProps> = ({
               <span>{t('adminEvents.lineGroupUrlLabel', '活動專屬群組連結 (LINE Group URL) *')}</span>
             </label>
             <span style={{ fontSize: '11px', color: isEditing && !lineGroupUrlTrimmed ? '#f59e0b' : '#64748b', fontWeight: isEditing && !lineGroupUrlTrimmed ? 'bold' : 'normal' }}>
-              {isEditing && !lineGroupUrlTrimmed ? '⚠️ 尚未填寫，推播前請補填' : '（保密，不公開於活動說明）'}
+              {isEditing && !lineGroupUrlTrimmed ? '[注意] 尚未填寫，推播前請補填' : '（保密，不公開於活動說明）'}
             </span>
           </div>
           <input

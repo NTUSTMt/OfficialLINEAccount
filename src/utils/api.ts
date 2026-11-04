@@ -1,5 +1,6 @@
 import liff from '@line/liff';
 import { GAS_API_URL, NOTIFY_DISPATCHER_URL } from '../constants/api';
+import type { ApplicantEvaluation, EventTranslationInput, EventTranslationResult } from '../types/admin';
 
 export { GAS_API_URL, NOTIFY_DISPATCHER_URL };
 
@@ -112,14 +113,49 @@ export const getAccessToken = (): string => {
 export const getCustomJwt = (): string => {
   try {
     if (typeof window !== 'undefined' && window.sessionStorage) {
-      return (
+      const direct =
         sessionStorage.getItem('club_user_jwt') ||
-        sessionStorage.getItem('web_admin_jwt') ||
-        ''
-      );
+        sessionStorage.getItem('web_admin_jwt');
+      if (direct) return direct;
+
+      const rawSession = sessionStorage.getItem('web_admin_session');
+      if (rawSession) {
+        try {
+          const parsed = JSON.parse(rawSession);
+          if (parsed && typeof parsed.jwt === 'string') {
+            return parsed.jwt;
+          }
+        } catch {
+          // ignore json parse error
+        }
+      }
     }
   } catch (e) {
     console.warn('無法讀取 sessionStorage JWT:', e);
+  }
+  return '';
+};
+
+/**
+ * 取得當前 Web 管理後台登入者之使用者 ID
+ */
+export const getWebAdminUserId = (): string => {
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const rawSession = sessionStorage.getItem('web_admin_session');
+      if (rawSession) {
+        try {
+          const parsed = JSON.parse(rawSession);
+          if (parsed && typeof parsed.userId === 'string') {
+            return parsed.userId;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch (e) {
+    // ignore
   }
   return '';
 };
@@ -135,9 +171,11 @@ export const notifyDispatcher = async (
     const idToken = getIdToken();
     const accessToken = getAccessToken();
     const customJwt = getCustomJwt();
+    const adminUserId = getWebAdminUserId();
 
     const bodyWithAuth: Record<string, unknown> = {
       action,
+      ...(adminUserId ? { userId: adminUserId, callerId: adminUserId } : {}),
       ...payload,
       ...(idToken ? { idToken } : {}),
       ...(accessToken ? { accessToken } : {}),
@@ -189,9 +227,11 @@ export const callDispatcherAction = async <T = any>(
     const idToken = getIdToken();
     const accessToken = getAccessToken();
     const customJwt = getCustomJwt();
+    const adminUserId = getWebAdminUserId();
 
     const bodyWithAuth: Record<string, unknown> = {
       action,
+      ...(adminUserId ? { userId: adminUserId, callerId: adminUserId } : {}),
       ...payload,
       ...(idToken ? { idToken } : {}),
       ...(accessToken ? { accessToken } : {}),
@@ -233,6 +273,125 @@ export const callDispatcherAction = async <T = any>(
   } catch (err) {
     console.warn('[callDispatcherAction] 請求失敗:', err);
     return { success: false, message: err instanceof Error ? err.message : String(err) };
+  }
+};
+
+/**
+ * 透過 AI 進行報名者體能與登山經驗去識別化評估
+ * 前端第一道防護：徹底過濾姓名、電話、學號、Line ID 等敏感個資
+ * 當名單超過 30 人時自動以 25 人為一組分批呼叫並合併結果
+ */
+export const evaluateApplicantsViaAi = async (
+  event: {
+    title: string;
+    start_date?: string;
+    end_date?: string;
+    duration_days?: number;
+    summary?: string;
+    itinerary?: string;
+  },
+  rawApplicants: Array<{
+    anonymousId: string;
+    outdoor_experience?: string;
+    fitness_desc?: string;
+    medical_history?: string;
+    [key: string]: any;
+  }>,
+  callerUserId?: string
+): Promise<{ success: boolean; evaluations: ApplicantEvaluation[]; error?: string }> => {
+  try {
+    // 嚴格白名單過濾個資
+    const sanitized = rawApplicants.map((a, idx) => ({
+      anonymousId: String(a.anonymousId || `A${idx + 1}`),
+      outdoor_experience: typeof a.outdoor_experience === 'string' ? a.outdoor_experience.slice(0, 500) : '',
+      fitness_desc: typeof a.fitness_desc === 'string' ? a.fitness_desc.slice(0, 500) : '',
+      medical_history: typeof a.medical_history === 'string' ? a.medical_history.slice(0, 300) : ''
+    }));
+
+    if (sanitized.length === 0) {
+      return { success: true, evaluations: [] };
+    }
+
+    // 當人數超過 30 人時，每 25 人一組分批送出
+    const BATCH_SIZE = 25;
+    const batches: typeof sanitized[] = [];
+    for (let i = 0; i < sanitized.length; i += BATCH_SIZE) {
+      batches.push(sanitized.slice(i, i + BATCH_SIZE));
+    }
+
+    const allEvaluations: ApplicantEvaluation[] = [];
+
+    for (let b = 0; b < batches.length; b++) {
+      const batch = batches[b];
+      const res = await callDispatcherAction<{ success: boolean; evaluations: ApplicantEvaluation[] }>(
+        'ai_evaluate_applicants',
+        {
+          event,
+          applicants: batch,
+          ...(callerUserId ? { userId: callerUserId, callerId: callerUserId } : {})
+        }
+      );
+
+      if (!res.success || !res.data) {
+        return {
+          success: false,
+          evaluations: allEvaluations,
+          error: res.message || `批次 ${b + 1} AI 評估失敗`
+        };
+      }
+
+      if (Array.isArray(res.data.evaluations)) {
+        allEvaluations.push(...res.data.evaluations);
+      }
+    }
+
+    return {
+      success: true,
+      evaluations: allEvaluations
+    };
+  } catch (err) {
+    return {
+      success: false,
+      evaluations: [],
+      error: err instanceof Error ? err.message : String(err)
+    };
+  }
+};
+
+/**
+ * 透過 AI 一鍵進行中文活動內容雙語翻譯 (鏡像對應格式，總字數限制 ≤ 1400 字元)
+ */
+export const translateEventViaAi = async (
+  input: EventTranslationInput,
+  callerUserId?: string
+): Promise<{ success: boolean; translation?: EventTranslationResult; error?: string }> => {
+  try {
+    const res = await callDispatcherAction<{ success: boolean; translation: EventTranslationResult }>(
+      'ai_translate_event',
+      {
+        title: input.title,
+        summary: input.summary,
+        itinerary: input.itinerary,
+        ...(callerUserId ? { userId: callerUserId, callerId: callerUserId } : {})
+      }
+    );
+
+    if (!res.success || !res.data || !res.data.translation) {
+      return {
+        success: false,
+        error: res.message || 'AI 翻譯服務回傳失敗'
+      };
+    }
+
+    return {
+      success: true,
+      translation: res.data.translation
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err)
+    };
   }
 };
 

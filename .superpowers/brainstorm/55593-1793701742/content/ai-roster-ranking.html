@@ -1,0 +1,115 @@
+<h2>功能一：AI 體能與登山經驗評估與排序 (Mockup)</h2>
+<p class="subtitle">結合活動難度與天數進行去識別化評估，保護個資並提供客觀理由</p>
+
+<div class="mockup" style="margin-bottom: 24px;">
+  <div class="mockup-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <span>Web Admin 名單管理 -【合歡西北峰二日】（難度：中高 / 2天1夜）</span>
+    <span style="font-size: 12px; background: rgba(34, 197, 94, 0.2); color: #16a34a; padding: 2px 8px; border-radius: 4px; font-weight: 500;">
+      去識別化隱私防護已啟用（姓名、電話、學號不傳送至 AI）
+    </span>
+  </div>
+  <div class="mockup-body" style="background: #fafafa; padding: 16px;">
+    <!-- 頂部工具列 -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; background: #fff; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span style="font-weight: 600; font-size: 14px;">報名名冊 (共 3 位待審核)</span>
+        <button class="mock-button" style="background: #2563eb; color: #fff; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;">
+          AI 智能體能審核與排序
+        </button>
+      </div>
+      <div style="font-size: 13px; color: #64748b;">
+        排序依據：AI 適合度分數 (由高至低)
+      </div>
+    </div>
+
+    <!-- 模擬表格 -->
+    <div style="overflow-x: auto; background: #fff; border-radius: 6px; border: 1px solid #e2e8f0;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+        <thead>
+          <tr style="background: #f1f5f9; border-bottom: 1px solid #cbd5e1; color: #475569;">
+            <th style="padding: 10px; width: 60px;">序號</th>
+            <th style="padding: 10px; width: 90px;">姓名</th>
+            <th style="padding: 10px; width: 140px;">登山經驗</th>
+            <th style="padding: 10px; width: 140px;">體能自述</th>
+            <th style="padding: 10px; width: 110px; background: #e0f2fe; color: #0369a1;">AI 評分</th>
+            <th style="padding: 10px; background: #e0f2fe; color: #0369a1;">AI 評估理由 (Reasoning)</th>
+            <th style="padding: 10px; width: 120px;">審核操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- 報名者 1 -->
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 10px; font-weight: 600;">#1</td>
+            <td style="padding: 10px;">王小明</td>
+            <td style="padding: 10px; color: #334155;">奇萊主北、雪山主東，百岳累計 8 座</td>
+            <td style="padding: 10px; color: #334155;">每週慢跑 15km、週末負重爬郊山</td>
+            <td style="padding: 10px; background: #f0f9ff;">
+              <span style="font-size: 15px; font-weight: 700; color: #0284c7;">92 分</span>
+              <span style="display: block; font-size: 11px; color: #16a34a; font-weight: 600;">高度適任</span>
+            </td>
+            <td style="padding: 10px; background: #f0f9ff; color: #0f172a;">
+              具備多次高山百岳重裝過夜經驗，體能規律且有負重訓練，足以應付合歡西峰長程起伏。
+            </td>
+            <td style="padding: 10px;">
+              <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: #dcfce7; color: #15803d; font-weight: 600;">正取 1</span>
+            </td>
+          </tr>
+          <!-- 報名者 2 -->
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 10px; font-weight: 600;">#2</td>
+            <td style="padding: 10px;">陳美玲</td>
+            <td style="padding: 10px; color: #334155;">陽明山十連峰、鳶嘴山，無過夜百岳經驗</td>
+            <td style="padding: 10px; color: #334155;">每週健身房重訓 2 次，體力尚可</td>
+            <td style="padding: 10px; background: #f0f9ff;">
+              <span style="font-size: 15px; font-weight: 700; color: #0284c7;">74 分</span>
+              <span style="display: block; font-size: 11px; color: #ca8a04; font-weight: 600;">中度適任</span>
+            </td>
+            <td style="padding: 10px; background: #f0f9ff; color: #0f172a;">
+              具備良好郊山地形攀爬能力與重訓基礎，但缺乏 3000m 以上高海拔重裝過夜經驗，西峰回程可能耗損較大。
+            </td>
+            <td style="padding: 10px;">
+              <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: #fef9c3; color: #a16207; font-weight: 600;">備取 1</span>
+            </td>
+          </tr>
+          <!-- 報名者 3 -->
+          <tr>
+            <td style="padding: 10px; font-weight: 600;">#3</td>
+            <td style="padding: 10px;">李大華</td>
+            <td style="padding: 10px; color: #334155;">象山健行、大安森林公園散步</td>
+            <td style="padding: 10px; color: #334155;">平時少運動，容易喘</td>
+            <td style="padding: 10px; background: #f0f9ff;">
+              <span style="font-size: 15px; font-weight: 700; color: #0284c7;">48 分</span>
+              <span style="display: block; font-size: 11px; color: #dc2626; font-weight: 600;">建議勸退/備取</span>
+            </td>
+            <td style="padding: 10px; background: #f0f9ff; color: #0f172a;">
+              缺乏中長程健行經驗，自述易喘且無規律運動習慣。合歡西峰總爬升與路程長，有體力耗盡與高山反應風險。
+            </td>
+            <td style="padding: 10px;">
+              <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: #fee2e2; color: #b91c1c; font-weight: 600;">建議審慎評估</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<h3>您偏好哪種互動方式？</h3>
+<p class="subtitle">點選下方選項可在終端機中進一步確認</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>表格原地整合模式（直覺檢視）</h3>
+      <p>點擊按鈕後直接在現有名單表格中加入「AI 分數」與「評估理由」欄位，並支援一鍵切換「依 AI 分數重新排序表格」。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>審核專用抽屜 / 彈窗模式（批次預覽後套用）</h3>
+      <p>點擊按鈕後彈出專門的「AI 審核建議中心」，列出去識別化分析報告與建議名單，幹部確認無誤後一鍵「批次將建議套用至正取/備取」。</p>
+    </div>
+  </div>
+</div>

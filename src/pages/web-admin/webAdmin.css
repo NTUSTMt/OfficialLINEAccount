@@ -3424,3 +3424,12 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   line-height: 1.4;
 }
 
+@keyframes wa-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.wa-spin {
+  animation: wa-spin 1s linear infinite;
+}
+

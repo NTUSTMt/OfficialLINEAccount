@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -19,13 +20,68 @@ import {
   FolderPlus,
   FileSpreadsheet,
   User,
+  Sparkles,
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
-import { notifyDispatcher, callDispatcherAction } from '../../utils/api';
+import { notifyDispatcher, callDispatcherAction, evaluateApplicantsViaAi } from '../../utils/api';
+import type { ApplicantEvaluation } from '../../types/admin';
 import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
 import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
 import { getNationalityLabel } from '../../constants/nationalities';
 import './webAdmin.css';
+
+export const TABLE_COLOR_THEMES = {
+  gray: {
+    key: 'gray',
+    circleColor: '#94a3b8',
+    headerBg: '',
+    headerColor: '',
+    cellBg: 'transparent',
+    border: '#cbd5e1',
+  },
+  blue: {
+    key: 'blue',
+    circleColor: '#38bdf8',
+    headerBg: '#bae6fd',
+    headerColor: '#0369a1',
+    cellBg: 'rgba(56, 189, 248, 0.08)',
+    border: '#0284c7',
+  },
+  green: {
+    key: 'green',
+    circleColor: '#4ade80',
+    headerBg: '#bbf7d0',
+    headerColor: '#166534',
+    cellBg: 'rgba(74, 222, 128, 0.08)',
+    border: '#16a34a',
+  },
+  yellow: {
+    key: 'yellow',
+    circleColor: '#facc15',
+    headerBg: '#fde68a',
+    headerColor: '#854d0e',
+    cellBg: 'rgba(250, 204, 21, 0.10)',
+    border: '#ca8a04',
+  },
+  orange: {
+    key: 'orange',
+    circleColor: '#fb923c',
+    headerBg: '#fed7aa',
+    headerColor: '#9a3412',
+    cellBg: 'rgba(251, 146, 60, 0.08)',
+    border: '#ea580c',
+  },
+  purple: {
+    key: 'purple',
+    circleColor: '#c084fc',
+    headerBg: '#e9d5ff',
+    headerColor: '#6b21a8',
+    cellBg: 'rgba(192, 132, 252, 0.08)',
+    border: '#9333ea',
+  },
+} as const;
+
+export type TableColorKey = keyof typeof TABLE_COLOR_THEMES;
 
 interface EventItem {
   id: string;
@@ -79,6 +135,9 @@ interface SignupRow {
   notes?: string;
   created_at: string;
   members?: MemberInfo | null;
+  aiScore?: number;
+  aiRating?: string;
+  aiReasoning?: string;
 }
 
 interface ColumnDef {
@@ -245,6 +304,20 @@ const ALL_COLUMNS: ColumnDef[] = [
     defaultWidth: 140,
     getValue: (r) => r.members?.fitness_desc || '',
     formatText: (r) => r.members?.fitness_desc || '-',
+  },
+  {
+    key: 'ai_score',
+    label: 'AI 適合度',
+    defaultWidth: 105,
+    getValue: (r) => r.aiScore ?? null,
+    formatText: (r) => (r.aiScore !== undefined ? `${r.aiScore} 分 (${r.aiRating || ''})` : '-'),
+  },
+  {
+    key: 'ai_reasoning',
+    label: 'AI 評估理由',
+    defaultWidth: 240,
+    getValue: (r) => r.aiReasoning || '',
+    formatText: (r) => r.aiReasoning || '-',
   },
   {
     key: 'proof_urls',
@@ -488,6 +561,94 @@ export const WebAdminRoster: React.FC = () => {
     return defWidths;
   });
 
+  // 縱向與橫向欄位自訂色彩狀態
+  const [columnColors, setColumnColors] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.columnColors && typeof parsed.columnColors === 'object') {
+          return parsed.columnColors;
+        }
+      }
+    } catch {}
+    return {};
+  });
+
+  const [rowColors, setRowColors] = useState<Record<string, string>>({});
+
+  // 依據活動載入 rowColors
+  useEffect(() => {
+    if (!selectedEventId) {
+      setRowColors({});
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.rowColorsByEvent && parsed.rowColorsByEvent[selectedEventId]) {
+          setRowColors(parsed.rowColorsByEvent[selectedEventId]);
+          return;
+        }
+      }
+    } catch {}
+    setRowColors({});
+  }, [selectedEventId]);
+
+  // 調色盤浮動選單開啟狀態
+  const [colorPickerColKey, setColorPickerColKey] = useState<string | null>(null);
+  const [colorPickerRowId, setColorPickerRowId] = useState<string | null>(null);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
+  // 調色盤 Portal 定位用 anchor rect
+  const [colorPickerAnchorRect, setColorPickerAnchorRect] = useState<DOMRect | null>(null);
+  // 調色盤 Portal 目前 active theme key（col 或 row 的當前值）
+  const [colorPickerActiveThemeKey, setColorPickerActiveThemeKey] = useState<string>('gray');
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
+        setColorPickerColKey(null);
+        setColorPickerRowId(null);
+        setColorPickerAnchorRect(null);
+        setColorPickerActiveThemeKey('gray');
+      }
+    };
+    if (colorPickerColKey || colorPickerRowId) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [colorPickerColKey, colorPickerRowId]);
+
+  // AI 體能與經驗綜合評估狀態
+  const AI_CACHE_KEY_PREFIX = 'wa_roster_ai_evaluations_v1_';
+  const [isAiEvaluating, setIsAiEvaluating] = useState(false);
+  const [aiEvaluations, setAiEvaluations] = useState<Record<string, ApplicantEvaluation>>({});
+  const [aiSorted, setAiSorted] = useState(false);
+
+  // 切換活動時載入快取的 AI 評估資料
+  useEffect(() => {
+    if (!selectedEventId) {
+      setAiEvaluations({});
+      setAiSorted(false);
+      return;
+    }
+    try {
+      const cached = localStorage.getItem(`${AI_CACHE_KEY_PREFIX}${selectedEventId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object') {
+          setAiEvaluations(parsed);
+          return;
+        }
+      }
+    } catch {}
+    setAiEvaluations({});
+    setAiSorted(false);
+  }, [selectedEventId]);
+
   // 列級排序與自訂狀態
   const [pinnedRowIds, setPinnedRowIds] = useState<Set<string>>(new Set());
   const [hiddenRowIds, setHiddenRowIds] = useState<Set<string>>(new Set());
@@ -496,20 +657,32 @@ export const WebAdminRoster: React.FC = () => {
   // 儲存表格狀態至 localStorage
   useEffect(() => {
     try {
+      const existing = localStorage.getItem(STORAGE_KEY);
+      let parsed: any = {};
+      if (existing) {
+        try { parsed = JSON.parse(existing); } catch {}
+      }
+      const rowColorsByEvent = parsed.rowColorsByEvent || {};
+      if (selectedEventId) {
+        rowColorsByEvent[selectedEventId] = rowColors;
+      }
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
+          ...parsed,
           columnOrder,
           pinnedColumns,
           hiddenColumns,
           columnWidths,
           rowHeights,
+          columnColors,
+          rowColorsByEvent,
         })
       );
     } catch {
       // 忽略儲存錯誤
     }
-  }, [columnOrder, pinnedColumns, hiddenColumns, columnWidths, rowHeights]);
+  }, [columnOrder, pinnedColumns, hiddenColumns, columnWidths, rowHeights, columnColors, rowColors, selectedEventId]);
 
   // 關閉下拉面板點擊事件
   useEffect(() => {
@@ -622,7 +795,24 @@ export const WebAdminRoster: React.FC = () => {
         throw new Error(`[讀取報名名冊失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
       }
 
-      const list = (data || []) as SignupRow[];
+      const cachedAi = (() => {
+        try {
+          const raw = localStorage.getItem(`${AI_CACHE_KEY_PREFIX}${eventId}`);
+          return raw ? JSON.parse(raw) : {};
+        } catch {
+          return {};
+        }
+      })();
+
+      const list = ((data || []) as SignupRow[]).map((s) => {
+        const ev = cachedAi[s.id];
+        return {
+          ...s,
+          aiScore: ev ? ev.score : undefined,
+          aiRating: ev ? ev.rating : undefined,
+          aiReasoning: ev ? ev.reasoning : undefined,
+        };
+      });
       setSignups(list);
       setCustomRowOrder(list.map((s) => s.id));
     } catch (err: any) {
@@ -630,6 +820,78 @@ export const WebAdminRoster: React.FC = () => {
       setErrorMsg(err.message || String(err));
     } finally {
       setLoadingSignups(false);
+    }
+  };
+
+  // 觸發 AI 體能與經驗綜合評估
+  const handleTriggerAiEvaluation = async () => {
+    if (isAiEvaluating) return;
+    if (!selectedEventId || !currentEvent) {
+      alert('請先選擇活動');
+      return;
+    }
+
+    const validSignups = signups.filter((s) => !normalizeStatus(s.status).includes('取消'));
+    if (validSignups.length === 0) {
+      alert('目前無有效（非取消）的報名者可供評估');
+      return;
+    }
+
+    setIsAiEvaluating(true);
+    setErrorMsg(null);
+
+    try {
+      const rawApplicants = validSignups.map((s) => ({
+        anonymousId: s.id,
+        outdoor_experience: s.members?.outdoor_experience || '',
+        fitness_desc: s.members?.fitness_desc || '',
+        medical_history: s.members?.medical_history || '',
+      }));
+
+      const res = await evaluateApplicantsViaAi(
+        {
+          title: currentEvent.title,
+          start_date: currentEvent.start_date,
+          end_date: currentEvent.end_date,
+          summary: (currentEvent as any).summary,
+          itinerary: (currentEvent as any).itinerary,
+        },
+        rawApplicants,
+        session?.userId
+      );
+
+      if (!res.success || !res.evaluations) {
+        alert(`AI 評估失敗: ${res.error || '未知錯誤'}`);
+        return;
+      }
+
+      const evalMap: Record<string, ApplicantEvaluation> = {};
+      for (const ev of res.evaluations) {
+        evalMap[ev.anonymousId] = ev;
+      }
+
+      setAiEvaluations(evalMap);
+      try {
+        localStorage.setItem(`${AI_CACHE_KEY_PREFIX}${selectedEventId}`, JSON.stringify(evalMap));
+      } catch {}
+
+      setSignups((prev) =>
+        prev.map((s) => {
+          const ev = evalMap[s.id];
+          return {
+            ...s,
+            aiScore: ev ? ev.score : s.aiScore,
+            aiRating: ev ? ev.rating : s.aiRating,
+            aiReasoning: ev ? ev.reasoning : s.aiReasoning,
+          };
+        })
+      );
+
+      setAiSorted(true);
+    } catch (err: any) {
+      alert(`AI 評估失敗: ${err.message || String(err)}`);
+    } finally {
+      setIsAiEvaluating(false);
     }
   };
 
@@ -872,7 +1134,7 @@ export const WebAdminRoster: React.FC = () => {
     const normal = sortedRows.filter((r) => !pinnedRowIds.has(r.id) && !hiddenRowIds.has(r.id));
     const allActiveRows = [...pinned, ...normal];
 
-    return allActiveRows.filter((s) => {
+    const filtered = allActiveRows.filter((s) => {
       const m = s.members || {};
       const name = m.name || s.name || '';
       const phone = m.phone || '';
@@ -900,7 +1162,21 @@ export const WebAdminRoster: React.FC = () => {
 
       return matchKeyword && matchStatus;
     });
-  }, [signups, customRowOrder, pinnedRowIds, hiddenRowIds, searchKeyword, statusFilter]);
+
+    if (aiSorted) {
+      filtered.sort((a, b) => {
+        const isPinnedA = pinnedRowIds.has(a.id);
+        const isPinnedB = pinnedRowIds.has(b.id);
+        if (isPinnedA && !isPinnedB) return -1;
+        if (!isPinnedA && isPinnedB) return 1;
+        const scoreA = a.aiScore !== undefined ? a.aiScore : -1;
+        const scoreB = b.aiScore !== undefined ? b.aiScore : -1;
+        return scoreB - scoreA;
+      });
+    }
+
+    return filtered;
+  }, [signups, customRowOrder, pinnedRowIds, hiddenRowIds, searchKeyword, statusFilter, aiSorted]);
 
   const selectAllRef = useRef<HTMLInputElement>(null);
 
@@ -1212,6 +1488,7 @@ export const WebAdminRoster: React.FC = () => {
   }, [visibleColumns, pinnedColumns]);
 
   return (
+    <React.Fragment>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* 單一整合控制橫條 */}
       <div className="web-admin-toolbar" style={{ padding: '8px 14px' }}>
@@ -1257,6 +1534,41 @@ export const WebAdminRoster: React.FC = () => {
             <option value="CHECKING">僅顯示審核中</option>
             <option value="CANCELLED">僅顯示已取消</option>
           </select>
+
+          {/* AI 智能評估與排序按鈕 */}
+          <button
+            type="button"
+            className="web-admin-btn web-admin-btn-primary"
+            onClick={handleTriggerAiEvaluation}
+            disabled={isAiEvaluating || loadingSignups || !selectedEventId}
+            style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+            title="去識別化送審體能與經驗，由 AI 根據活動難度產出分數與理由"
+          >
+            {isAiEvaluating ? (
+              <>
+                <RefreshCw size={13} className="animate-spin" />
+                <span>AI 評估中...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={13} />
+                <span>AI 體能評估排序</span>
+              </>
+            )}
+          </button>
+
+          {/* AI 分數排序切換按鈕 */}
+          {Object.keys(aiEvaluations).length > 0 && (
+            <button
+              type="button"
+              className={`web-admin-btn ${aiSorted ? 'active' : 'web-admin-btn-secondary'}`}
+              onClick={() => setAiSorted(!aiSorted)}
+              style={{ padding: '6px 10px', fontSize: '0.82rem' }}
+              title={aiSorted ? '切換回原始登記順序' : '依 AI 適合度分數排序'}
+            >
+              <span>{aiSorted ? '已依 AI 分數排序' : '依 AI 分數排序'}</span>
+            </button>
+          )}
         </div>
 
         <div className="web-admin-toolbar-right" style={{ gap: 8, position: 'relative' }}>
@@ -1489,6 +1801,10 @@ export const WebAdminRoster: React.FC = () => {
                 const stickyLeft = stickyLeftPositions[col.key];
                 const isLastPinned = col.key === lastPinnedKey;
                 const width = columnWidths[col.key] || col.defaultWidth;
+                const colThemeKey = columnColors[col.key];
+                const colTheme = colThemeKey && TABLE_COLOR_THEMES[colThemeKey as TableColorKey]?.key !== 'gray'
+                  ? TABLE_COLOR_THEMES[colThemeKey as TableColorKey]
+                  : null;
 
                 return (
                   <th
@@ -1500,7 +1816,9 @@ export const WebAdminRoster: React.FC = () => {
                       position: isPinned ? 'sticky' : undefined,
                       left: isPinned ? stickyLeft : undefined,
                       zIndex: isPinned ? 15 : undefined,
-                      backgroundColor: '#f8fafc',
+                      backgroundColor: colTheme ? colTheme.headerBg : '#f8fafc',
+                      color: colTheme ? colTheme.headerColor : undefined,
+                      borderTop: colTheme ? `3px solid ${colTheme.border}` : undefined,
                       borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
                     }}
                     className={`${isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''} ${
@@ -1579,6 +1897,38 @@ export const WebAdminRoster: React.FC = () => {
                         >
                           <EyeOff size={13} />
                         </button>
+                        {/* 縱向欄位色彩選色鈕 */}
+                        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            className="wa-th-btn"
+                            title="變更欄位顏色"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setColorPickerRowId(null);
+                              if (colorPickerColKey === col.key) {
+                                setColorPickerColKey(null);
+                                setColorPickerAnchorRect(null);
+                              } else {
+                                setColorPickerColKey(col.key);
+                                setColorPickerAnchorRect(e.currentTarget.getBoundingClientRect());
+                                setColorPickerActiveThemeKey(colThemeKey || 'gray');
+                              }
+                            }}
+                            style={{ padding: 0, width: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: '50%',
+                                backgroundColor: colTheme ? colTheme.circleColor : '#94a3b8',
+                                border: '1px solid rgba(0,0,0,0.2)',
+                                display: 'inline-block',
+                              }}
+                            />
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1616,6 +1966,10 @@ export const WebAdminRoster: React.FC = () => {
                 const isRowPinned = pinnedRowIds.has(s.id);
                 const isUpdating = updatingId === s.id;
                 const normStatus = normalizeStatus(s.status);
+                const rowThemeKey = rowColors[s.id];
+                const rowTheme = rowThemeKey && TABLE_COLOR_THEMES[rowThemeKey as TableColorKey]?.key !== 'gray'
+                  ? TABLE_COLOR_THEMES[rowThemeKey as TableColorKey]
+                  : null;
 
                 return (
                   <tr
@@ -1623,7 +1977,10 @@ export const WebAdminRoster: React.FC = () => {
                     className={`${isSelected ? 'selected' : ''} ${isRowPinned ? 'wa-row-pinned' : ''} ${
                       dragOverRowId === s.id ? 'wa-row-drag-over' : ''
                     }`}
-                    style={{ height: rowHeights[s.id] ? `${rowHeights[s.id]}px` : undefined }}
+                    style={{
+                      height: rowHeights[s.id] ? `${rowHeights[s.id]}px` : undefined,
+                      borderLeft: rowTheme ? `4px solid ${rowTheme.border}` : undefined,
+                    }}
                     onDragOver={(e) => {
                       e.preventDefault();
                       if (draggedRowId && draggedRowId !== s.id) {
@@ -1643,7 +2000,7 @@ export const WebAdminRoster: React.FC = () => {
                         position: 'sticky',
                         left: 0,
                         zIndex: 10,
-                        backgroundColor: '#ffffff',
+                        backgroundColor: rowTheme ? rowTheme.cellBg : '#ffffff',
                         borderRight: '1px solid var(--wa-border)',
                       }}
                     >
@@ -1667,11 +2024,38 @@ export const WebAdminRoster: React.FC = () => {
                         position: 'sticky',
                         left: 44,
                         zIndex: 10,
-                        backgroundColor: isRowPinned ? '#f0fdf4' : '#ffffff',
+                        backgroundColor: rowTheme ? rowTheme.cellBg : isRowPinned ? '#f0fdf4' : '#ffffff',
                         borderRight: '1px solid var(--wa-border)',
                       }}
                     >
-                      <span className="wa-row-index-text">{idx + 1}</span>
+                      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                        <span className="wa-row-index-text">{idx + 1}</span>
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            backgroundColor: rowTheme ? rowTheme.circleColor : '#cbd5e1',
+                            border: '1px solid #94a3b8',
+                            display: 'inline-block',
+                            marginLeft: 4,
+                            cursor: 'pointer',
+                          }}
+                          title="變更此列顏色"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setColorPickerColKey(null);
+                            if (colorPickerRowId === s.id) {
+                              setColorPickerRowId(null);
+                              setColorPickerAnchorRect(null);
+                            } else {
+                              setColorPickerRowId(s.id);
+                              setColorPickerAnchorRect(e.currentTarget.getBoundingClientRect());
+                              setColorPickerActiveThemeKey(rowThemeKey || 'gray');
+                            }
+                          }}
+                        />
+                      </div>
 
                       {/* 懸浮時分散在四個角顯示圖示並覆蓋序號數字 */}
                       <div className="wa-row-actions-quad">
@@ -1738,6 +2122,21 @@ export const WebAdminRoster: React.FC = () => {
                       const isLastPinned = col.key === lastPinnedKey;
                       const textVal = col.formatText(s);
                       const width = columnWidths[col.key] || col.defaultWidth;
+
+                      const colThemeKey = columnColors[col.key];
+                      const colTheme = colThemeKey && TABLE_COLOR_THEMES[colThemeKey as TableColorKey]?.key !== 'gray'
+                        ? TABLE_COLOR_THEMES[colThemeKey as TableColorKey]
+                        : null;
+
+                      let cellBg = '#ffffff';
+                      if (rowTheme && colTheme) {
+                        cellBg = colTheme.cellBg;
+                      } else if (rowTheme) {
+                        cellBg = rowTheme.cellBg;
+                      } else if (colTheme) {
+                        cellBg = colTheme.cellBg;
+                      }
+
                       const baseTdStyle: React.CSSProperties = {
                         width: `${width}px`,
                         minWidth: `${width}px`,
@@ -1747,7 +2146,7 @@ export const WebAdminRoster: React.FC = () => {
                         position: isPinned ? 'sticky' : undefined,
                         left: isPinned ? stickyLeft : undefined,
                         zIndex: isPinned ? 8 : undefined,
-                        backgroundColor: '#ffffff',
+                        backgroundColor: cellBg,
                         borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
                       };
 
@@ -1893,6 +2292,78 @@ export const WebAdminRoster: React.FC = () => {
                         );
                       }
 
+                      // 5. AI 適合度評分欄位
+                      if (col.key === 'ai_score') {
+                        const score = s.aiScore;
+                        const rating = s.aiRating;
+                        return (
+                          <td
+                            key={col.key}
+                            style={baseTdStyle}
+                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                          >
+                            {score !== undefined ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span
+                                  style={{
+                                    fontWeight: 700,
+                                    fontSize: '0.82rem',
+                                    color:
+                                      score >= 80 ? '#0284c7' : score >= 65 ? '#16a34a' : score >= 50 ? '#ca8a04' : '#dc2626',
+                                  }}
+                                >
+                                  {score} 分
+                                </span>
+                                {rating && (
+                                  <span
+                                    style={{
+                                      fontSize: '0.7rem',
+                                      padding: '1px 4px',
+                                      borderRadius: 3,
+                                      backgroundColor: 'rgba(0,0,0,0.06)',
+                                      color: 'var(--wa-text-muted)',
+                                    }}
+                                  >
+                                    {rating}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>-</span>
+                            )}
+                          </td>
+                        );
+                      }
+
+                      // 6. AI 評估理由欄位 (點擊可展開全文)
+                      if (col.key === 'ai_reasoning') {
+                        const reasoning = s.aiReasoning;
+                        const isExpanded = expandedCells.has(`${s.id}_ai_reasoning`);
+                        return (
+                          <td
+                            key={col.key}
+                            style={{
+                              ...baseTdStyle,
+                              cursor: reasoning ? 'pointer' : 'default',
+                              whiteSpace: isExpanded ? 'normal' : 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                            onClick={() => reasoning && toggleCellExpand(`${s.id}_ai_reasoning`)}
+                            title={reasoning || ''}
+                          >
+                            {reasoning ? (
+                              <span style={{ fontSize: '0.78rem', color: 'var(--wa-text)' }}>
+                                {reasoning}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>-</span>
+                            )}
+                          </td>
+                        );
+                      }
+
                       // 姓名欄位 (質感綠色膠囊按鈕，點擊開啟個資檢視彈窗)
                       if (col.key === 'name') {
                         return (
@@ -2001,5 +2472,67 @@ export const WebAdminRoster: React.FC = () => {
         }}
       />
     </div>
+
+      {/* 調色盤 Portal：渲染至 body 以避免被 overflow:auto 截掉 */}
+      {(colorPickerColKey || colorPickerRowId) && colorPickerAnchorRect && createPortal(
+        <div
+          ref={colorPickerRef}
+          style={{
+            position: 'fixed',
+            left: colorPickerAnchorRect.right + 6,
+            top: colorPickerAnchorRect.top + colorPickerAnchorRect.height / 2 - 13,
+            backgroundColor: '#ffffff',
+            border: '1px solid #cbd5e1',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            borderRadius: '20px',
+            padding: '4px 8px',
+            display: 'flex',
+            gap: 6,
+            alignItems: 'center',
+            zIndex: 9999,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {Object.values(TABLE_COLOR_THEMES).map((theme) => (
+            <span
+              key={theme.key}
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                backgroundColor: theme.circleColor,
+                border: colorPickerActiveThemeKey === theme.key ? '2px solid #0f172a' : '1px solid rgba(0,0,0,0.18)',
+                cursor: 'pointer',
+                display: 'inline-block',
+              }}
+              title={theme.key === 'gray' ? '重設 (無色)' : theme.key}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (colorPickerColKey) {
+                  setColumnColors((prev) => {
+                    const next = { ...prev };
+                    if (theme.key === 'gray') delete next[colorPickerColKey];
+                    else next[colorPickerColKey] = theme.key;
+                    return next;
+                  });
+                  setColorPickerColKey(null);
+                } else if (colorPickerRowId) {
+                  setRowColors((prev) => {
+                    const next = { ...prev };
+                    if (theme.key === 'gray') delete next[colorPickerRowId];
+                    else next[colorPickerRowId] = theme.key;
+                    return next;
+                  });
+                  setColorPickerRowId(null);
+                }
+                setColorPickerAnchorRect(null);
+                setColorPickerActiveThemeKey('gray');
+              }}
+            />
+          ))}
+        </div>,
+        document.body
+      )}
+    </React.Fragment>
   );
 };

@@ -180,3 +180,28 @@ export interface MemberTimelineRecord {
     [key: string]: any;
   };
 }
+
+export interface ApplicantEvaluation {
+  anonymousId: string;
+  score: number;
+  rating: string;
+  reasoning: string;
+}
+
+export interface ApplicantEvaluationResult {
+  success: boolean;
+  evaluations: ApplicantEvaluation[];
+  error?: string;
+}
+
+export interface EventTranslationInput {
+  title: string;
+  summary?: string;
+  itinerary?: string;
+}
+
+export interface EventTranslationResult {
+  title_en: string;
+  summary_en: string;
+  itinerary_en: string;
+}
