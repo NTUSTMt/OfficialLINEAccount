@@ -11,7 +11,7 @@ export interface DigestQueueItem {
 }
 
 export async function enqueueAdminDigest(params: {
-  category: "loan_created" | "loan_cancelled" | "event_cancelled" | "officer_intent" | "patrol_report";
+  category: "loan_created" | "loan_cancelled" | "event_cancelled" | "officer_intent" | "patrol_report" | "payment_declared";
   title: string;
   summary: string;
   bubble: unknown;
@@ -36,7 +36,7 @@ export async function enqueueAdminDigest(params: {
   }
 }
 
-export async function fetchUnsentAdminDigest(limit = 30): Promise<DigestQueueItem[]> {
+export async function fetchUnsentAdminDigest(limit = 50): Promise<DigestQueueItem[]> {
   const client = getSupabaseAdminClient();
   const { data, error } = await client
     .from("admin_notification_digest_queue")
@@ -76,8 +76,8 @@ export function buildAdminDigestMessages(items: DigestQueueItem[]): unknown[] {
     chunkedBubbles.push(bubbles.slice(i, i + 10));
   }
 
-  // LINE 單次推播支援最多打包 3 個 Carousel 訊息框 (最多 30 張卡片)
-  const targetChunks = chunkedBubbles.slice(0, 3);
+  // LINE 單次推播支援最多打包 5 個 Carousel 訊息框 (最多 50 張卡片)
+  const targetChunks = chunkedBubbles.slice(0, 5);
   return targetChunks.map((chunk, idx) => ({
     type: "flex",
     altText: `【台科登山社】幹部社務彙整報告 (${items.length} 則待處理事項${targetChunks.length > 1 ? ` 第 ${idx + 1} 部分` : ""})`,
@@ -93,7 +93,7 @@ export async function dispatchAdminDigest(): Promise<{
   count: number;
   message: string;
 }> {
-  const items = await fetchUnsentAdminDigest(30);
+  let items = await fetchUnsentAdminDigest(50);
   if (items.length === 0) {
     return {
       success: true,
@@ -101,6 +101,84 @@ export async function dispatchAdminDigest(): Promise<{
       message: "目前無待處理之彙整項目，已自動略過推播以節省額度",
     };
   }
+
+  const client = getSupabaseAdminClient();
+
+  // 1. 推播前防呆去重：過濾已在後台完成核銷的繳費單
+  const paymentItems = items.filter((it) => it.category === "payment_declared");
+  if (paymentItems.length > 0) {
+    const paymentIds = paymentItems
+      .map((it) => (it.bubble_payload as any)?.payment_id)
+      .filter((pid): pid is string => Boolean(pid && String(pid).trim()));
+
+    if (paymentIds.length > 0) {
+      try {
+        const { data: verifiedPayments } = await client
+          .from("payments")
+          .select("id, status")
+          .in("id", paymentIds);
+
+        if (verifiedPayments && verifiedPayments.length > 0) {
+          const verifiedSet = new Set(
+            verifiedPayments
+              .filter((p) => {
+                const st = String(p.status || "");
+                return (
+                  st.includes("已繳費") ||
+                  st.includes("已核銷") ||
+                  st.includes("Paid") ||
+                  st.includes("Confirmed")
+                );
+              })
+              .map((p) => p.id)
+          );
+
+          if (verifiedSet.size > 0) {
+            const alreadyVerifiedItemIds: string[] = [];
+            items = items.filter((it) => {
+              const pid = (it.bubble_payload as any)?.payment_id;
+              if (pid && verifiedSet.has(pid)) {
+                alreadyVerifiedItemIds.push(it.id);
+                return false;
+              }
+              return true;
+            });
+
+            if (alreadyVerifiedItemIds.length > 0) {
+              await markAdminDigestSent(alreadyVerifiedItemIds);
+            }
+          }
+        }
+      } catch (checkErr) {
+        console.warn("dispatchAdminDigest payment verification check error:", checkErr);
+      }
+    }
+  }
+
+  if (items.length === 0) {
+    return {
+      success: true,
+      count: 0,
+      message: "待處理項目均已在後台完成對帳核銷，已自動略過推播以節省額度",
+    };
+  }
+
+  // 2. 智慧優先序排序：高急迫性（繳費申報、正取棄權）優先排在最前
+  const CATEGORY_PRIORITY: Record<string, number> = {
+    payment_declared: 1,
+    event_cancelled: 2,
+    loan_created: 3,
+    loan_cancelled: 4,
+    officer_intent: 5,
+    patrol_report: 6,
+  };
+
+  items.sort((a, b) => {
+    const prioA = CATEGORY_PRIORITY[a.category] || 99;
+    const prioB = CATEGORY_PRIORITY[b.category] || 99;
+    if (prioA !== prioB) return prioA - prioB;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
 
   const adminGroupId = await getAppConfig("ADMIN_GROUP_ID");
   if (!adminGroupId) {

@@ -86,20 +86,21 @@ function successResponse(data: Record<string, unknown> = {}) {
 }
 
 async function isUserOfficer(userId: string): Promise<boolean> {
-  if (!userId) return false;
+  const cleanId = String(userId || "").trim();
+  if (!cleanId) return false;
   const client = getSupabaseAdminClient();
   const { data: member } = await client
     .from("members")
     .select("is_officer")
-    .eq("line_user_id", userId)
+    .eq("line_user_id", cleanId)
     .maybeSingle();
 
-  if (member && member.is_officer) return true;
+  if (member && member.is_officer === true) return true;
 
   const { data: officer } = await client
     .from("officers")
     .select("line_user_id")
-    .eq("line_user_id", userId)
+    .eq("line_user_id", cleanId)
     .maybeSingle();
 
   return Boolean(officer);
@@ -569,10 +570,22 @@ async function handleNotifyOfficersPayment(json: Record<string, any>) {
     "\n資料已安全記錄於 Supabase，請幹部核對網銀後核銷！";
 
   const paymentSubject = `【台科登山社】新繳費申報 - $${totalAmount} (${userName || "未知社員"}，末5碼 ${last5Digits})`;
-  await pushAdminMessage(adminMsg, paymentSubject, { flexContents: paymentFlex, altText: paymentSubject });
 
-  // 停用個人 pushMessage 以節省 LINE Messaging API 每月免費額度 (前端已透過 liff.sendMessages 發送 0 額度發話憑證)
-  return successResponse({ message: "繳費申報幹部推播已成功送出" });
+  // 1. 即時發送 Email 備查
+  await sendAdminEmail(paymentSubject, adminMsg, { flexContents: paymentFlex });
+
+  // 2. 封裝繳費卡片寫入每兩天彙整佇列 (0 即時群組額度消耗，上限提升至 50 張)
+  await enqueueAdminDigest({
+    category: "payment_declared",
+    title: paymentSubject,
+    summary: `申報人：${userName || userId} ($${totalAmount}，末5碼 ${last5Digits})`,
+    bubble: {
+      ...paymentFlex,
+      payment_id: paymentId,
+    },
+  });
+
+  return successResponse({ message: "繳費申報已即時發送 Email 並加入社務彙整佇列" });
 }
 
 // 4. 繳費單核銷完成推播
@@ -2264,7 +2277,7 @@ async function handleSyncEventSheetDispatcher(json: Record<string, any>) {
 
 async function handleAiEvaluateApplicants(json: Record<string, any>) {
   const userId = String(json.verifiedUserId || json.userId || json.callerId || "").trim();
-  const isOfficer = await isUserOfficer(userId);
+  const isOfficer = json.verifiedIsOfficer === true ? true : await isUserOfficer(userId);
   if (!isOfficer) {
     return errorResponse("權限不足：僅社團幹部可執行 AI 審核排序", 403);
   }
@@ -2279,7 +2292,7 @@ async function handleAiEvaluateApplicants(json: Record<string, any>) {
 
 async function handleAiTranslateEvent(json: Record<string, any>) {
   const userId = String(json.verifiedUserId || json.userId || json.callerId || "").trim();
-  const isOfficer = await isUserOfficer(userId);
+  const isOfficer = json.verifiedIsOfficer === true ? true : await isUserOfficer(userId);
   if (!isOfficer) {
     return errorResponse("權限不足：僅社團幹部可執行 AI 翻譯", 403);
   }
@@ -2363,8 +2376,10 @@ Deno.serve(async (req: Request) => {
   }
 
   let verifiedUserId = "";
+  let verifiedIsOfficer = false;
   if (isPgCron || isServiceRole) {
     verifiedUserId = "SYSTEM_CRON";
+    verifiedIsOfficer = true;
   }
   const authErrors: string[] = [];
 
@@ -2374,6 +2389,9 @@ Deno.serve(async (req: Request) => {
       const jwtRes = await verifyCustomJwt(jwtCandidate);
       if (jwtRes.success && jwtRes.userId) {
         verifiedUserId = jwtRes.userId;
+        if (jwtRes.isOfficer) {
+          verifiedIsOfficer = true;
+        }
         break;
       }
       if (jwtRes.error) authErrors.push(jwtRes.error);
@@ -2425,6 +2443,7 @@ Deno.serve(async (req: Request) => {
     const isOfficer = await isUserOfficer(officerCandidate);
     if (isOfficer) {
       verifiedUserId = officerCandidate;
+      verifiedIsOfficer = true;
     } else {
       authErrors.push("該使用者非社團幹部 (Not an officer)");
     }
@@ -2436,6 +2455,7 @@ Deno.serve(async (req: Request) => {
   }
 
   payload.verifiedUserId = verifiedUserId;
+  payload.verifiedIsOfficer = verifiedIsOfficer;
 
   switch (action) {
     case "notify_officers_loan":

@@ -463,7 +463,7 @@ export const WebAdminRoster: React.FC = () => {
           return parsed.rowHeights;
         }
       }
-    } catch {}
+    } catch { }
     return {};
   });
 
@@ -571,7 +571,7 @@ export const WebAdminRoster: React.FC = () => {
           return parsed.columnColors;
         }
       }
-    } catch {}
+    } catch { }
     return {};
   });
 
@@ -592,7 +592,7 @@ export const WebAdminRoster: React.FC = () => {
           return;
         }
       }
-    } catch {}
+    } catch { }
     setRowColors({});
   }, [selectedEventId]);
 
@@ -644,7 +644,7 @@ export const WebAdminRoster: React.FC = () => {
           return;
         }
       }
-    } catch {}
+    } catch { }
     setAiEvaluations({});
     setAiSorted(false);
   }, [selectedEventId]);
@@ -660,7 +660,7 @@ export const WebAdminRoster: React.FC = () => {
       const existing = localStorage.getItem(STORAGE_KEY);
       let parsed: any = {};
       if (existing) {
-        try { parsed = JSON.parse(existing); } catch {}
+        try { parsed = JSON.parse(existing); } catch { }
       }
       const rowColorsByEvent = parsed.rowColorsByEvent || {};
       if (selectedEventId) {
@@ -873,7 +873,7 @@ export const WebAdminRoster: React.FC = () => {
       setAiEvaluations(evalMap);
       try {
         localStorage.setItem(`${AI_CACHE_KEY_PREFIX}${selectedEventId}`, JSON.stringify(evalMap));
-      } catch {}
+      } catch { }
 
       setSignups((prev) =>
         prev.map((s) => {
@@ -888,6 +888,15 @@ export const WebAdminRoster: React.FC = () => {
       );
 
       setAiSorted(true);
+
+      // 自動釘選 AI 適合度與 AI 評估理由欄位，並確保未被隱藏
+      setPinnedColumns((prev) => {
+        const next = [...prev];
+        if (!next.includes('ai_score')) next.push('ai_score');
+        if (!next.includes('ai_reasoning')) next.push('ai_reasoning');
+        return next;
+      });
+      setHiddenColumns((prev) => prev.filter((k) => k !== 'ai_score' && k !== 'ai_reasoning'));
     } catch (err: any) {
       alert(`AI 評估失敗: ${err.message || String(err)}`);
     } finally {
@@ -1354,11 +1363,11 @@ export const WebAdminRoster: React.FC = () => {
         prev.map((e) =>
           e.id === selectedEventId
             ? {
-                ...e,
-                spreadsheet_url: targetSpreadsheetUrl || e.spreadsheet_url,
-                spreadsheet_id: targetSpreadsheetId || e.spreadsheet_id,
-                drive_folder_url: targetDriveFolderUrl || e.drive_folder_url,
-              }
+              ...e,
+              spreadsheet_url: targetSpreadsheetUrl || e.spreadsheet_url,
+              spreadsheet_id: targetSpreadsheetId || e.spreadsheet_id,
+              drive_folder_url: targetDriveFolderUrl || e.drive_folder_url,
+            }
             : e
         )
       );
@@ -1489,989 +1498,1035 @@ export const WebAdminRoster: React.FC = () => {
 
   return (
     <React.Fragment>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* 單一整合控制橫條 */}
-      <div className="web-admin-toolbar" style={{ padding: '8px 14px' }}>
-        <div className="web-admin-toolbar-left" style={{ gap: 10 }}>
-          {/* 活動下拉選擇 */}
-          <select
-            className="web-admin-select"
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-            disabled={loadingEvents}
-            style={{ fontWeight: 600, minWidth: 240, maxWidth: 320 }}
-          >
-            {events.map((ev) => (
-              <option key={ev.id} value={ev.id}>
-                [{ev.id}] {ev.title} ({ev.status})
-              </option>
-            ))}
-          </select>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* 單一整合控制橫條 */}
+        <div className="web-admin-toolbar" style={{ padding: '8px 14px' }}>
+          <div className="web-admin-toolbar-left" style={{ gap: 10 }}>
+            {/* 活動下拉選擇 */}
+            <select
+              className="web-admin-select"
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+              disabled={loadingEvents}
+              style={{ fontWeight: 600, minWidth: 240, maxWidth: 320 }}
+            >
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  [{ev.id}] {ev.title} ({ev.status})
+                </option>
+              ))}
+            </select>
 
-          {/* 搜尋關鍵字輸入框 */}
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--wa-text-muted)' }} />
-            <input
-              type="text"
-              className="web-admin-input"
-              placeholder="搜尋姓名、電話、身分證、學號、LINE..."
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              style={{ paddingLeft: 30, width: 220 }}
-            />
+            {/* 搜尋關鍵字輸入框 */}
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--wa-text-muted)' }} />
+              <input
+                type="text"
+                className="web-admin-input"
+                placeholder="搜尋姓名、電話、身分證、學號、LINE..."
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                style={{ paddingLeft: 30, width: 220 }}
+              />
+            </div>
+
+            {/* 審核狀態篩選選單 */}
+            <select
+              className="web-admin-select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{ minWidth: 140 }}
+            >
+              <option value="ALL">全體名冊 (全部狀態)</option>
+              <option value="CONFIRMED">僅顯示正取</option>
+              <option value="WAITLIST">僅顯示備取</option>
+              <option value="CHECKING">僅顯示審核中</option>
+              <option value="CANCELLED">僅顯示已取消</option>
+            </select>
+
+            {/* AI 智能評估與排序按鈕 */}
+            <button
+              type="button"
+              className="web-admin-btn web-admin-btn-primary"
+              onClick={handleTriggerAiEvaluation}
+              disabled={isAiEvaluating || loadingSignups || !selectedEventId}
+              style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+              title="去識別化送審體能與經驗，由 AI 根據活動難度產出分數與理由"
+            >
+              {isAiEvaluating ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin" />
+                  <span>AI 評估中...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={13} />
+                  <span>AI 體能評估排序</span>
+                </>
+              )}
+            </button>
+
+            {/* AI 分數排序切換按鈕 */}
+            {Object.keys(aiEvaluations).length > 0 && (
+              <button
+                type="button"
+                className={`web-admin-btn ${aiSorted ? 'active' : 'web-admin-btn-secondary'}`}
+                onClick={() => {
+                  const nextState = !aiSorted;
+                  setAiSorted(nextState);
+                  if (nextState) {
+                    setPinnedColumns((prev) => {
+                      const next = [...prev];
+                      if (!next.includes('ai_score')) next.push('ai_score');
+                      if (!next.includes('ai_reasoning')) next.push('ai_reasoning');
+                      return next;
+                    });
+                    setHiddenColumns((prev) => prev.filter((k) => k !== 'ai_score' && k !== 'ai_reasoning'));
+                  }
+                }}
+                style={{ padding: '6px 10px', fontSize: '0.82rem' }}
+                title={aiSorted ? '切換回原始登記順序' : '依 AI 適合度分數排序'}
+              >
+                <span>{aiSorted ? '已依 AI 分數排序' : '依 AI 分數排序'}</span>
+              </button>
+            )}
           </div>
 
-          {/* 審核狀態篩選選單 */}
-          <select
-            className="web-admin-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ minWidth: 140 }}
-          >
-            <option value="ALL">全體名冊 (全部狀態)</option>
-            <option value="CONFIRMED">僅顯示正取</option>
-            <option value="WAITLIST">僅顯示備取</option>
-            <option value="CHECKING">僅顯示審核中</option>
-            <option value="CANCELLED">僅顯示已取消</option>
-          </select>
-
-          {/* AI 智能評估與排序按鈕 */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-primary"
-            onClick={handleTriggerAiEvaluation}
-            disabled={isAiEvaluating || loadingSignups || !selectedEventId}
-            style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-            title="去識別化送審體能與經驗，由 AI 根據活動難度產出分數與理由"
-          >
-            {isAiEvaluating ? (
-              <>
-                <RefreshCw size={13} className="animate-spin" />
-                <span>AI 評估中...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={13} />
-                <span>AI 體能評估排序</span>
-              </>
-            )}
-          </button>
-
-          {/* AI 分數排序切換按鈕 */}
-          {Object.keys(aiEvaluations).length > 0 && (
-            <button
-              type="button"
-              className={`web-admin-btn ${aiSorted ? 'active' : 'web-admin-btn-secondary'}`}
-              onClick={() => setAiSorted(!aiSorted)}
-              style={{ padding: '6px 10px', fontSize: '0.82rem' }}
-              title={aiSorted ? '切換回原始登記順序' : '依 AI 適合度分數排序'}
-            >
-              <span>{aiSorted ? '已依 AI 分數排序' : '依 AI 分數排序'}</span>
-            </button>
-          )}
-        </div>
-
-        <div className="web-admin-toolbar-right" style={{ gap: 8, position: 'relative' }}>
-          {/* 批次操作按鈕 */}
-          {selectedSignupIds.size > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--wa-primary)' }}>
-                選取 {selectedSignupIds.size} 筆
-              </span>
-              <button
-                type="button"
-                className="web-admin-btn"
-                style={{ padding: '6px 10px', fontSize: '0.82rem' }}
-                onClick={() => handleBatchStatus('正取 Confirmed')}
-                disabled={loadingSignups}
-              >
-                <span>批次設為正取</span>
-              </button>
-              <button
-                type="button"
-                className="web-admin-btn web-admin-btn-secondary"
-                style={{ padding: '6px 10px', fontSize: '0.82rem' }}
-                onClick={() => handleBatchStatus('備取 Waitlisted')}
-                disabled={loadingSignups}
-              >
-                <span>批次設為備取</span>
-              </button>
-            </div>
-          )}
-
-          {/* 重新整理按鈕（移至隱藏按鈕左邊） */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={() => {
-              loadEvents();
-              if (selectedEventId) loadSignups(selectedEventId);
-            }}
-            title="重新整理名冊"
-            style={{ padding: '7px 10px' }}
-          >
-            <RefreshCw size={15} className={loadingSignups ? 'animate-spin' : ''} />
-          </button>
-
-          {/* 顯示隱藏項目按鈕（眼睛圖示） */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className={`web-admin-btn web-admin-btn-secondary ${hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'active' : ''}`}
-              onClick={() => setShowHiddenMenu(!showHiddenMenu)}
-              title="顯示與隱藏項目"
-              style={{
-                padding: '7px 10px',
-                borderColor: hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'var(--wa-primary)' : undefined,
-                color: hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'var(--wa-primary)' : undefined,
-              }}
-            >
-              <Eye size={15} />
-            </button>
-
-            {/* 隱藏項目下拉面板 */}
-            {showHiddenMenu && (
-              <div ref={hiddenMenuRef} className="wa-dropdown-panel">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid var(--wa-border)' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e293b' }}>欄位與列可見度</span>
-                  <button
-                    type="button"
-                    onClick={unhideAllColumnsAndRows}
-                    style={{ background: 'none', border: 'none', color: 'var(--wa-primary)', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
-                  >
-                    全部顯示
-                  </button>
-                </div>
-
-                {hiddenRowIds.size > 0 && (
-                  <div style={{ padding: '6px 8px', background: '#f8fafc', borderRadius: 6, fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>已隱藏 {hiddenRowIds.size} 列</span>
-                    <button
-                      type="button"
-                      onClick={() => setHiddenRowIds(new Set())}
-                      style={{ background: 'none', border: 'none', color: 'var(--wa-primary)', cursor: 'pointer', fontSize: '0.78rem' }}
-                    >
-                      還原所有列
-                    </button>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto', paddingRight: 4 }}>
-                  {ALL_COLUMNS.map((col) => {
-                    const isHidden = hiddenColumns.includes(col.key);
-                    return (
-                      <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          className="wa-checkbox"
-                          checked={!isHidden}
-                          onChange={() => {
-                            if (isHidden) {
-                              unhideColumn(col.key);
-                            } else {
-                              hideColumn(col.key);
-                            }
-                          }}
-                        />
-                        <span>{col.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+          <div className="web-admin-toolbar-right" style={{ gap: 8, position: 'relative' }}>
+            {/* 批次操作按鈕 */}
+            {selectedSignupIds.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--wa-primary)' }}>
+                  選取 {selectedSignupIds.size} 筆
+                </span>
+                <button
+                  type="button"
+                  className="web-admin-btn"
+                  style={{ padding: '6px 10px', fontSize: '0.82rem' }}
+                  onClick={() => handleBatchStatus('正取 Confirmed')}
+                  disabled={loadingSignups}
+                >
+                  <span>批次設為正取</span>
+                </button>
+                <button
+                  type="button"
+                  className="web-admin-btn web-admin-btn-secondary"
+                  style={{ padding: '6px 10px', fontSize: '0.82rem' }}
+                  onClick={() => handleBatchStatus('備取 Waitlisted')}
+                  disabled={loadingSignups}
+                >
+                  <span>批次設為備取</span>
+                </button>
               </div>
             )}
-          </div>
 
-          {/* 一鍵恢復預設欄位寬度與高度（左右箭頭圖示） */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={resetColumnWidthsAndHeights}
-            title="一鍵恢復預設欄寬與列高"
-            style={{ padding: '7px 10px' }}
-          >
-            <ArrowLeftRight size={15} />
-          </button>
+            {/* 重新整理按鈕（移至隱藏按鈕左邊） */}
+            <button
+              type="button"
+              className="web-admin-btn web-admin-btn-secondary"
+              onClick={() => {
+                loadEvents();
+                if (selectedEventId) loadSignups(selectedEventId);
+              }}
+              title="重新整理名冊"
+              style={{ padding: '7px 10px' }}
+            >
+              <RefreshCw size={15} className={loadingSignups ? 'animate-spin' : ''} />
+            </button>
 
-          {/* 純圖示複製整份名冊（TSV） */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={handleCopyTSV}
-            title={copiedSuccess ? '已複製到剪貼簿！' : '複製當前名冊 (TSV 格式，供保險/入山表貼上)'}
-            style={{ padding: '7px 10px' }}
-          >
-            {copiedSuccess ? <Check size={15} color="var(--wa-primary)" /> : <Copy size={15} />}
-          </button>
+            {/* 顯示隱藏項目按鈕（眼睛圖示） */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className={`web-admin-btn web-admin-btn-secondary ${hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'active' : ''}`}
+                onClick={() => setShowHiddenMenu(!showHiddenMenu)}
+                title="顯示與隱藏項目"
+                style={{
+                  padding: '7px 10px',
+                  borderColor: hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'var(--wa-primary)' : undefined,
+                  color: hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'var(--wa-primary)' : undefined,
+                }}
+              >
+                <Eye size={15} />
+              </button>
 
-          {/* 建立資料夾與 Google 試算表 / 即時同步並開啟試算表 */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={handleSyncOrOpenSheet}
-            disabled={syncingSheet}
-            title={
-              currentEvent?.spreadsheet_url
-                ? '即時同步名冊並開啟 Google 試算表'
-                : '為此活動在雲端硬碟建立資料夾與 Google 試算表'
-            }
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px' }}
-          >
-            {syncingSheet ? (
-              <>
+              {/* 隱藏項目下拉面板 */}
+              {showHiddenMenu && (
+                <div ref={hiddenMenuRef} className="wa-dropdown-panel">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid var(--wa-border)' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e293b' }}>欄位與列可見度</span>
+                    <button
+                      type="button"
+                      onClick={unhideAllColumnsAndRows}
+                      style={{ background: 'none', border: 'none', color: 'var(--wa-primary)', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
+                    >
+                      全部顯示
+                    </button>
+                  </div>
+
+                  {hiddenRowIds.size > 0 && (
+                    <div style={{ padding: '6px 8px', background: '#f8fafc', borderRadius: 6, fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>已隱藏 {hiddenRowIds.size} 列</span>
+                      <button
+                        type="button"
+                        onClick={() => setHiddenRowIds(new Set())}
+                        style={{ background: 'none', border: 'none', color: 'var(--wa-primary)', cursor: 'pointer', fontSize: '0.78rem' }}
+                      >
+                        還原所有列
+                      </button>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto', paddingRight: 4 }}>
+                    {ALL_COLUMNS.map((col) => {
+                      const isHidden = hiddenColumns.includes(col.key);
+                      return (
+                        <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            className="wa-checkbox"
+                            checked={!isHidden}
+                            onChange={() => {
+                              if (isHidden) {
+                                unhideColumn(col.key);
+                              } else {
+                                hideColumn(col.key);
+                              }
+                            }}
+                          />
+                          <span>{col.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 一鍵恢復預設欄位寬度與高度（左右箭頭圖示） */}
+            <button
+              type="button"
+              className="web-admin-btn web-admin-btn-secondary"
+              onClick={resetColumnWidthsAndHeights}
+              title="一鍵恢復預設欄寬與列高"
+              style={{ padding: '7px 10px' }}
+            >
+              <ArrowLeftRight size={15} />
+            </button>
+
+            {/* 純圖示複製整份名冊（TSV） */}
+            <button
+              type="button"
+              className="web-admin-btn web-admin-btn-secondary"
+              onClick={handleCopyTSV}
+              title={copiedSuccess ? '已複製到剪貼簿！' : '複製當前名冊 (TSV 格式，供保險/入山表貼上)'}
+              style={{ padding: '7px 10px' }}
+            >
+              {copiedSuccess ? <Check size={15} color="var(--wa-primary)" /> : <Copy size={15} />}
+            </button>
+
+            {/* 建立資料夾與 Google 試算表 / 即時同步並開啟試算表 */}
+            <button
+              type="button"
+              className="web-admin-btn web-admin-btn-secondary"
+              onClick={handleSyncOrOpenSheet}
+              disabled={syncingSheet}
+              title={
+                currentEvent?.spreadsheet_url
+                  ? '即時同步名冊並開啟 Google 試算表'
+                  : '為此活動在雲端硬碟建立資料夾與 Google 試算表'
+              }
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px' }}
+            >
+              {syncingSheet ? (
+                <>
+                  <RefreshCw size={15} className="animate-spin" />
+                  <span>同步中...</span>
+                </>
+              ) : currentEvent?.spreadsheet_url ? (
+                <>
+                  <FileSpreadsheet size={15} />
+                  <span>開啟試算表</span>
+                </>
+              ) : (
+                <>
+                  <FolderPlus size={15} />
+                  <span>建立資料夾與試算表</span>
+                </>
+              )}
+            </button>
+
+            {/* 一鍵發送通知按鈕 (綠色按鈕白字) */}
+            <button
+              type="button"
+              className="web-admin-btn"
+              onClick={handleSendNotifications}
+              disabled={sendingNotification}
+              title="一鍵推播審核結果與行前通知至已報名社員 LINE"
+              style={{
+                backgroundColor: '#10b981',
+                color: '#ffffff',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 14px',
+                fontWeight: 600,
+              }}
+            >
+              {sendingNotification ? (
                 <RefreshCw size={15} className="animate-spin" />
-                <span>同步中...</span>
-              </>
-            ) : currentEvent?.spreadsheet_url ? (
-              <>
-                <FileSpreadsheet size={15} />
-                <span>開啟試算表</span>
-              </>
-            ) : (
-              <>
-                <FolderPlus size={15} />
-                <span>建立資料夾與試算表</span>
-              </>
-            )}
-          </button>
-
-          {/* 一鍵發送通知按鈕 (綠色按鈕白字) */}
-          <button
-            type="button"
-            className="web-admin-btn"
-            onClick={handleSendNotifications}
-            disabled={sendingNotification}
-            title="一鍵推播審核結果與行前通知至已報名社員 LINE"
-            style={{
-              backgroundColor: '#10b981',
-              color: '#ffffff',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 14px',
-              fontWeight: 600,
-            }}
-          >
-            {sendingNotification ? (
-              <RefreshCw size={15} className="animate-spin" />
-            ) : (
-              <Send size={15} />
-            )}
-            <span>發送通知</span>
-          </button>
+              ) : (
+                <Send size={15} />
+              )}
+              <span>發送通知</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* 錯誤橫幅 */}
-      {errorMsg && (
-        <div className="web-admin-error-banner">
-          <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
-          <span>{errorMsg}</span>
-        </div>
-      )}
+        {/* 錯誤橫幅 */}
+        {errorMsg && (
+          <div className="web-admin-error-banner">
+            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
-      {/* 試算表高密度資料網格 */}
-      <div className="web-admin-grid-container">
-        <table className="web-admin-table">
-          <thead>
-            <tr>
-              {/* 全選核取方塊 */}
-              <th style={{ width: 44, minWidth: 44, maxWidth: 44, textAlign: 'center', position: 'sticky', left: 0, zIndex: 20, backgroundColor: '#f8fafc', borderRight: '1px solid var(--wa-border)' }}>
-                <input
-                  ref={selectAllRef}
-                  type="checkbox"
-                  className="wa-checkbox"
-                  checked={
-                    filteredSignups.length > 0 &&
-                    filteredSignups.every((s) => selectedSignupIds.has(s.id))
-                  }
-                  onChange={() => toggleSelectAll(filteredSignups.map((s) => s.id))}
-                />
-              </th>
+        {/* 試算表高密度資料網格 */}
+        <div className="web-admin-grid-container">
+          <table className="web-admin-table">
+            <thead>
+              <tr>
+                {/* 全選核取方塊 */}
+                <th style={{ width: 44, minWidth: 44, maxWidth: 44, textAlign: 'center', position: 'sticky', left: 0, zIndex: 20, backgroundColor: '#f8fafc', borderRight: '1px solid var(--wa-border)' }}>
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    className="wa-checkbox"
+                    checked={
+                      filteredSignups.length > 0 &&
+                      filteredSignups.every((s) => selectedSignupIds.has(s.id))
+                    }
+                    onChange={() => toggleSelectAll(filteredSignups.map((s) => s.id))}
+                  />
+                </th>
 
-              {/* 序號表頭 改為 # */}
-              <th style={{ width: 46, minWidth: 46, maxWidth: 46, textAlign: 'center', position: 'sticky', left: 44, zIndex: 20, backgroundColor: '#f8fafc', borderRight: '1px solid var(--wa-border)' }}>
-                #
-              </th>
+                {/* 序號表頭 改為 # */}
+                <th style={{ width: 46, minWidth: 46, maxWidth: 46, textAlign: 'center', position: 'sticky', left: 44, zIndex: 20, backgroundColor: '#f8fafc', borderRight: '1px solid var(--wa-border)' }}>
+                  #
+                </th>
 
-              {/* 動態渲染可見欄位表頭 */}
-              {visibleColumns.map((col) => {
-                const isPinned = pinnedColumns.includes(col.key);
-                const stickyLeft = stickyLeftPositions[col.key];
-                const isLastPinned = col.key === lastPinnedKey;
-                const width = columnWidths[col.key] || col.defaultWidth;
-                const colThemeKey = columnColors[col.key];
-                const colTheme = colThemeKey && TABLE_COLOR_THEMES[colThemeKey as TableColorKey]?.key !== 'gray'
-                  ? TABLE_COLOR_THEMES[colThemeKey as TableColorKey]
-                  : null;
+                {/* 動態渲染可見欄位表頭 */}
+                {visibleColumns.map((col) => {
+                  const isPinned = pinnedColumns.includes(col.key);
+                  const stickyLeft = stickyLeftPositions[col.key];
+                  const isLastPinned = col.key === lastPinnedKey;
+                  const width = columnWidths[col.key] || col.defaultWidth;
+                  const colThemeKey = columnColors[col.key];
+                  const colTheme = colThemeKey && TABLE_COLOR_THEMES[colThemeKey as TableColorKey]?.key !== 'gray'
+                    ? TABLE_COLOR_THEMES[colThemeKey as TableColorKey]
+                    : null;
 
-                return (
-                  <th
-                    key={col.key}
-                    style={{
-                      width,
-                      minWidth: width,
-                      maxWidth: width,
-                      position: isPinned ? 'sticky' : undefined,
-                      left: isPinned ? stickyLeft : undefined,
-                      zIndex: isPinned ? 15 : undefined,
-                      backgroundColor: colTheme ? colTheme.headerBg : '#f8fafc',
-                      color: colTheme ? colTheme.headerColor : undefined,
-                      borderTop: colTheme ? `3px solid ${colTheme.border}` : undefined,
-                      borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
-                    }}
-                    className={`${isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''} ${
-                      dragOverColKey === col.key ? 'wa-col-drag-over' : ''
-                    }`}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      if (draggedColKey && draggedColKey !== col.key) {
-                        setDragOverColKey(col.key);
-                      }
-                    }}
-                    onDragLeave={() => setDragOverColKey(null)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleColDrop(col.key);
-                    }}
-                  >
-                    <div className="wa-th-cell">
-                      <span className="wa-th-label" title={col.label}>{col.label}</span>
+                  return (
+                    <th
+                      key={col.key}
+                      style={{
+                        width,
+                        minWidth: width,
+                        maxWidth: width,
+                        position: isPinned ? 'sticky' : undefined,
+                        left: isPinned ? stickyLeft : undefined,
+                        zIndex: isPinned ? 15 : undefined,
+                        backgroundColor: colTheme ? colTheme.headerBg : '#f8fafc',
+                        color: colTheme ? colTheme.headerColor : undefined,
+                        borderTop: colTheme ? `3px solid ${colTheme.border}` : undefined,
+                        borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
+                      }}
+                      className={`${isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''} ${dragOverColKey === col.key ? 'wa-col-drag-over' : ''
+                        }`}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (draggedColKey && draggedColKey !== col.key) {
+                          setDragOverColKey(col.key);
+                        }
+                      }}
+                      onDragLeave={() => setDragOverColKey(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleColDrop(col.key);
+                      }}
+                    >
+                      <div className="wa-th-cell">
+                        <span className="wa-th-label" title={col.label}>{col.label}</span>
 
-                      {/* 懸浮時靠左覆蓋表頭名稱之動作工具列 */}
-                      <div className="wa-th-actions-overlay">
-                        {/* 左右拖曳欄位手柄 */}
-                        <div
-                          className="wa-col-drag-handle"
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData('text/plain', col.key);
-                            setDraggedColKey(col.key);
-                          }}
-                          title="按住拖拉調整欄位順序"
-                        >
-                          <GripVertical size={13} />
-                        </div>
-                        <button
-                          type="button"
-                          className="wa-th-btn"
-                          title="向左移動欄位"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            moveColumn(col.key, 'left');
-                          }}
-                        >
-                          <ChevronLeft size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          className="wa-th-btn"
-                          title="向右移動欄位"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            moveColumn(col.key, 'right');
-                          }}
-                        >
-                          <ChevronRight size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          className={`wa-th-btn ${isPinned ? 'active' : ''}`}
-                          title={isPinned ? '取消釘選' : '釘選至最左側'}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            togglePinColumn(col.key);
-                          }}
-                        >
-                          <Pin size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          className="wa-th-btn"
-                          title="隱藏此欄位"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            hideColumn(col.key);
-                          }}
-                        >
-                          <EyeOff size={13} />
-                        </button>
-                        {/* 縱向欄位色彩選色鈕 */}
-                        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                        {/* 懸浮時靠左覆蓋表頭名稱之動作工具列 */}
+                        <div className="wa-th-actions-overlay">
+                          {/* 左右拖曳欄位手柄 */}
+                          <div
+                            className="wa-col-drag-handle"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', col.key);
+                              setDraggedColKey(col.key);
+                            }}
+                            title="按住拖拉調整欄位順序"
+                          >
+                            <GripVertical size={13} />
+                          </div>
                           <button
                             type="button"
                             className="wa-th-btn"
-                            title="變更欄位顏色"
+                            title="向左移動欄位"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setColorPickerRowId(null);
-                              if (colorPickerColKey === col.key) {
-                                setColorPickerColKey(null);
+                              moveColumn(col.key, 'left');
+                            }}
+                          >
+                            <ChevronLeft size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="wa-th-btn"
+                            title="向右移動欄位"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              moveColumn(col.key, 'right');
+                            }}
+                          >
+                            <ChevronRight size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className={`wa-th-btn ${isPinned ? 'active' : ''}`}
+                            title={isPinned ? '取消釘選' : '釘選至最左側'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePinColumn(col.key);
+                            }}
+                          >
+                            <Pin size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="wa-th-btn"
+                            title="隱藏此欄位"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              hideColumn(col.key);
+                            }}
+                          >
+                            <EyeOff size={13} />
+                          </button>
+                          {/* 縱向欄位色彩選色鈕 */}
+                          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              className="wa-th-btn"
+                              title="變更欄位顏色"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setColorPickerRowId(null);
+                                if (colorPickerColKey === col.key) {
+                                  setColorPickerColKey(null);
+                                  setColorPickerAnchorRect(null);
+                                } else {
+                                  setColorPickerColKey(col.key);
+                                  setColorPickerAnchorRect(e.currentTarget.getBoundingClientRect());
+                                  setColorPickerActiveThemeKey(colThemeKey || 'gray');
+                                }
+                              }}
+                              style={{ padding: 0, width: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                              <span
+                                style={{
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: '50%',
+                                  backgroundColor: colTheme ? colTheme.circleColor : '#94a3b8',
+                                  border: '1px solid rgba(0,0,0,0.2)',
+                                  display: 'inline-block',
+                                }}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 欄位邊緣調寬拖曳柄（置於 th 邊界線上） */}
+                      <div
+                        className="wa-col-resizer"
+                        onMouseDown={(e) => startResizing(col.key, e)}
+                        title="拖曳調整欄寬"
+                      />
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+
+            <tbody>
+              {loadingSignups ? (
+                <tr>
+                  <td colSpan={visibleColumns.length + 2} style={{ textAlign: 'center', padding: 48, color: 'var(--wa-text-muted)' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <RefreshCw className="animate-spin" size={18} />
+                      <span>載入報名名冊中...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredSignups.length === 0 ? (
+                <tr>
+                  <td colSpan={visibleColumns.length + 2} style={{ textAlign: 'center', padding: 48, color: 'var(--wa-text-muted)' }}>
+                    此活動目前尚無符合篩選條件的報名者
+                  </td>
+                </tr>
+              ) : (
+                filteredSignups.map((s, idx) => {
+                  const isSelected = selectedSignupIds.has(s.id);
+                  const isRowPinned = pinnedRowIds.has(s.id);
+                  const isUpdating = updatingId === s.id;
+                  const normStatus = normalizeStatus(s.status);
+                  const rowThemeKey = rowColors[s.id];
+                  const rowTheme = rowThemeKey && TABLE_COLOR_THEMES[rowThemeKey as TableColorKey]?.key !== 'gray'
+                    ? TABLE_COLOR_THEMES[rowThemeKey as TableColorKey]
+                    : null;
+
+                  return (
+                    <tr
+                      key={s.id}
+                      className={`${isSelected ? 'selected' : ''} ${isRowPinned ? 'wa-row-pinned' : ''} ${dragOverRowId === s.id ? 'wa-row-drag-over' : ''
+                        }`}
+                      style={{
+                        height: rowHeights[s.id] ? `${rowHeights[s.id]}px` : undefined,
+                        borderLeft: rowTheme ? `4px solid ${rowTheme.border}` : undefined,
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (draggedRowId && draggedRowId !== s.id) {
+                          setDragOverRowId(s.id);
+                        }
+                      }}
+                      onDragLeave={() => setDragOverRowId(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleRowDrop(s.id);
+                      }}
+                    >
+                      {/* 勾選核取方塊 */}
+                      <td
+                        style={{
+                          textAlign: 'center',
+                          position: 'sticky',
+                          left: 0,
+                          zIndex: 10,
+                          backgroundColor: rowTheme ? rowTheme.cellBg : '#ffffff',
+                          borderRight: '1px solid var(--wa-border)',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="wa-checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            const next = new Set(selectedSignupIds);
+                            if (next.has(s.id)) next.delete(s.id);
+                            else next.add(s.id);
+                            setSelectedSignupIds(next);
+                          }}
+                        />
+                      </td>
+
+                      {/* 序號儲存格與四角懸浮操作列 + 中央拖曳手柄 */}
+                      <td
+                        className="wa-row-index-cell"
+                        style={{
+                          position: 'sticky',
+                          left: 44,
+                          zIndex: 10,
+                          backgroundColor: rowTheme ? rowTheme.cellBg : isRowPinned ? '#f0fdf4' : '#ffffff',
+                          borderRight: '1px solid var(--wa-border)',
+                        }}
+                      >
+                        <div className="wa-row-index-normal" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                          <span className="wa-row-index-text">{idx + 1}</span>
+                          <span
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: '50%',
+                              backgroundColor: rowTheme ? rowTheme.circleColor : '#cbd5e1',
+                              border: '1px solid #94a3b8',
+                              display: 'inline-block',
+                              marginLeft: 4,
+                              cursor: 'pointer',
+                            }}
+                            title="變更此列顏色"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setColorPickerColKey(null);
+                              if (colorPickerRowId === s.id) {
+                                setColorPickerRowId(null);
                                 setColorPickerAnchorRect(null);
                               } else {
-                                setColorPickerColKey(col.key);
+                                setColorPickerRowId(s.id);
                                 setColorPickerAnchorRect(e.currentTarget.getBoundingClientRect());
-                                setColorPickerActiveThemeKey(colThemeKey || 'gray');
+                                setColorPickerActiveThemeKey(rowThemeKey || 'gray');
                               }
                             }}
-                            style={{ padding: 0, width: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                          />
+                        </div>
+
+                        {/* 懸浮時顯示合併的 6 大功能操作列 (2 欄 x 3 列) */}
+                        <div className="wa-row-actions-quad">
+                          {/* 1. 上移此列 */}
+                          <button
+                            type="button"
+                            className="wa-row-quad-btn wa-row-quad-tl"
+                            title="上移此列"
+                            onClick={() => moveRow(s.id, 'up')}
+                          >
+                            <ArrowUp size={11} />
+                          </button>
+
+                          {/* 2. 固定置頂 */}
+                          <button
+                            type="button"
+                            className={`wa-row-quad-btn wa-row-quad-tr ${isRowPinned ? 'active' : ''}`}
+                            title={isRowPinned ? '取消置頂' : '固定至最上方'}
+                            onClick={() => togglePinRow(s.id)}
+                          >
+                            <Pin size={11} />
+                          </button>
+
+                          {/* 3. 拖曳手柄 */}
+                          <div
+                            className="wa-row-drag-handle"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', s.id);
+                              setDraggedRowId(s.id);
+                            }}
+                            title="按住拖拉調整列順序"
+                          >
+                            <GripVertical size={11} />
+                          </div>
+
+                          {/* 4. 變更此列顏色 (整合選色功能) */}
+                          <button
+                            type="button"
+                            className="wa-row-quad-btn wa-row-quad-color"
+                            title="變更此列顏色"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setColorPickerColKey(null);
+                              if (colorPickerRowId === s.id) {
+                                setColorPickerRowId(null);
+                                setColorPickerAnchorRect(null);
+                              } else {
+                                setColorPickerRowId(s.id);
+                                setColorPickerAnchorRect(e.currentTarget.getBoundingClientRect());
+                                setColorPickerActiveThemeKey(rowThemeKey || 'gray');
+                              }
+                            }}
                           >
                             <span
                               style={{
                                 width: 10,
                                 height: 10,
                                 borderRadius: '50%',
-                                backgroundColor: colTheme ? colTheme.circleColor : '#94a3b8',
-                                border: '1px solid rgba(0,0,0,0.2)',
+                                backgroundColor: rowTheme ? rowTheme.circleColor : '#cbd5e1',
+                                border: '1px solid #94a3b8',
                                 display: 'inline-block',
                               }}
                             />
                           </button>
+
+                          {/* 5. 下移此列 */}
+                          <button
+                            type="button"
+                            className="wa-row-quad-btn wa-row-quad-bl"
+                            title="下移此列"
+                            onClick={() => moveRow(s.id, 'down')}
+                          >
+                            <ArrowDown size={11} />
+                          </button>
+
+                          {/* 6. 隱藏此列 */}
+                          <button
+                            type="button"
+                            className="wa-row-quad-btn wa-row-quad-br"
+                            title="隱藏此列"
+                            onClick={() => hideRow(s.id)}
+                          >
+                            <EyeOff size={11} />
+                          </button>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* 欄位邊緣調寬拖曳柄（置於 th 邊界線上） */}
-                    <div
-                      className="wa-col-resizer"
-                      onMouseDown={(e) => startResizing(col.key, e)}
-                      title="拖曳調整欄寬"
-                    />
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-
-          <tbody>
-            {loadingSignups ? (
-              <tr>
-                <td colSpan={visibleColumns.length + 2} style={{ textAlign: 'center', padding: 48, color: 'var(--wa-text-muted)' }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    <RefreshCw className="animate-spin" size={18} />
-                    <span>載入報名名冊中...</span>
-                  </div>
-                </td>
-              </tr>
-            ) : filteredSignups.length === 0 ? (
-              <tr>
-                <td colSpan={visibleColumns.length + 2} style={{ textAlign: 'center', padding: 48, color: 'var(--wa-text-muted)' }}>
-                  此活動目前尚無符合篩選條件的報名者
-                </td>
-              </tr>
-            ) : (
-              filteredSignups.map((s, idx) => {
-                const isSelected = selectedSignupIds.has(s.id);
-                const isRowPinned = pinnedRowIds.has(s.id);
-                const isUpdating = updatingId === s.id;
-                const normStatus = normalizeStatus(s.status);
-                const rowThemeKey = rowColors[s.id];
-                const rowTheme = rowThemeKey && TABLE_COLOR_THEMES[rowThemeKey as TableColorKey]?.key !== 'gray'
-                  ? TABLE_COLOR_THEMES[rowThemeKey as TableColorKey]
-                  : null;
-
-                return (
-                  <tr
-                    key={s.id}
-                    className={`${isSelected ? 'selected' : ''} ${isRowPinned ? 'wa-row-pinned' : ''} ${
-                      dragOverRowId === s.id ? 'wa-row-drag-over' : ''
-                    }`}
-                    style={{
-                      height: rowHeights[s.id] ? `${rowHeights[s.id]}px` : undefined,
-                      borderLeft: rowTheme ? `4px solid ${rowTheme.border}` : undefined,
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      if (draggedRowId && draggedRowId !== s.id) {
-                        setDragOverRowId(s.id);
-                      }
-                    }}
-                    onDragLeave={() => setDragOverRowId(null)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleRowDrop(s.id);
-                    }}
-                  >
-                    {/* 勾選核取方塊 */}
-                    <td
-                      style={{
-                        textAlign: 'center',
-                        position: 'sticky',
-                        left: 0,
-                        zIndex: 10,
-                        backgroundColor: rowTheme ? rowTheme.cellBg : '#ffffff',
-                        borderRight: '1px solid var(--wa-border)',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        className="wa-checkbox"
-                        checked={isSelected}
-                        onChange={() => {
-                          const next = new Set(selectedSignupIds);
-                          if (next.has(s.id)) next.delete(s.id);
-                          else next.add(s.id);
-                          setSelectedSignupIds(next);
-                        }}
-                      />
-                    </td>
-
-                    {/* 序號儲存格與四角懸浮操作列 + 中央拖曳手柄 */}
-                    <td
-                      className="wa-row-index-cell"
-                      style={{
-                        position: 'sticky',
-                        left: 44,
-                        zIndex: 10,
-                        backgroundColor: rowTheme ? rowTheme.cellBg : isRowPinned ? '#f0fdf4' : '#ffffff',
-                        borderRight: '1px solid var(--wa-border)',
-                      }}
-                    >
-                      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                        <span className="wa-row-index-text">{idx + 1}</span>
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            backgroundColor: rowTheme ? rowTheme.circleColor : '#cbd5e1',
-                            border: '1px solid #94a3b8',
-                            display: 'inline-block',
-                            marginLeft: 4,
-                            cursor: 'pointer',
-                          }}
-                          title="變更此列顏色"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setColorPickerColKey(null);
-                            if (colorPickerRowId === s.id) {
-                              setColorPickerRowId(null);
-                              setColorPickerAnchorRect(null);
-                            } else {
-                              setColorPickerRowId(s.id);
-                              setColorPickerAnchorRect(e.currentTarget.getBoundingClientRect());
-                              setColorPickerActiveThemeKey(rowThemeKey || 'gray');
-                            }
-                          }}
-                        />
-                      </div>
-
-                      {/* 懸浮時分散在四個角顯示圖示並覆蓋序號數字 */}
-                      <div className="wa-row-actions-quad">
-                        <button
-                          type="button"
-                          className="wa-row-quad-btn wa-row-quad-tl"
-                          title="上移此列"
-                          onClick={() => moveRow(s.id, 'up')}
-                        >
-                          <ArrowUp size={11} />
-                        </button>
-                        <button
-                          type="button"
-                          className={`wa-row-quad-btn wa-row-quad-tr ${isRowPinned ? 'active' : ''}`}
-                          title={isRowPinned ? '取消置頂' : '固定至最上方'}
-                          onClick={() => togglePinRow(s.id)}
-                        >
-                          <Pin size={11} />
-                        </button>
-
-                        {/* 中央上下拖曳換位手柄 */}
+                        {/* 拖曳調整列高柄 */}
                         <div
-                          className="wa-row-drag-handle"
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData('text/plain', s.id);
-                            setDraggedRowId(s.id);
-                          }}
-                          title="按住拖拉調整列順序"
-                        >
-                          <GripVertical size={13} />
-                        </div>
+                          className="wa-row-resizer"
+                          onMouseDown={(e) => startRowResizing(s.id, e)}
+                          title="拖曳調整列高"
+                        />
+                      </td>
 
-                        <button
-                          type="button"
-                          className="wa-row-quad-btn wa-row-quad-bl"
-                          title="下移此列"
-                          onClick={() => moveRow(s.id, 'down')}
-                        >
-                          <ArrowDown size={11} />
-                        </button>
-                        <button
-                          type="button"
-                          className="wa-row-quad-btn wa-row-quad-br"
-                          title="隱藏此列"
-                          onClick={() => hideRow(s.id)}
-                        >
-                          <EyeOff size={11} />
-                        </button>
-                      </div>
+                      {/* 動態渲染可見欄位內容 */}
+                      {visibleColumns.map((col) => {
+                        const isPinned = pinnedColumns.includes(col.key);
+                        const stickyLeft = stickyLeftPositions[col.key];
+                        const isLastPinned = col.key === lastPinnedKey;
+                        const textVal = col.formatText(s);
+                        const width = columnWidths[col.key] || col.defaultWidth;
 
-                      {/* 拖曳調整列高柄 */}
-                      <div
-                        className="wa-row-resizer"
-                        onMouseDown={(e) => startRowResizing(s.id, e)}
-                        title="拖曳調整列高"
-                      />
-                    </td>
+                        const colThemeKey = columnColors[col.key];
+                        const colTheme = colThemeKey && TABLE_COLOR_THEMES[colThemeKey as TableColorKey]?.key !== 'gray'
+                          ? TABLE_COLOR_THEMES[colThemeKey as TableColorKey]
+                          : null;
 
-                    {/* 動態渲染可見欄位內容 */}
-                    {visibleColumns.map((col) => {
-                      const isPinned = pinnedColumns.includes(col.key);
-                      const stickyLeft = stickyLeftPositions[col.key];
-                      const isLastPinned = col.key === lastPinnedKey;
-                      const textVal = col.formatText(s);
-                      const width = columnWidths[col.key] || col.defaultWidth;
+                        let cellBg = '#ffffff';
+                        if (rowTheme && colTheme) {
+                          cellBg = colTheme.cellBg;
+                        } else if (rowTheme) {
+                          cellBg = rowTheme.cellBg;
+                        } else if (colTheme) {
+                          cellBg = colTheme.cellBg;
+                        }
 
-                      const colThemeKey = columnColors[col.key];
-                      const colTheme = colThemeKey && TABLE_COLOR_THEMES[colThemeKey as TableColorKey]?.key !== 'gray'
-                        ? TABLE_COLOR_THEMES[colThemeKey as TableColorKey]
-                        : null;
+                        const baseTdStyle: React.CSSProperties = {
+                          width: `${width}px`,
+                          minWidth: `${width}px`,
+                          maxWidth: `${width}px`,
+                          boxSizing: 'border-box',
+                          overflow: 'hidden',
+                          position: isPinned ? 'sticky' : undefined,
+                          left: isPinned ? stickyLeft : undefined,
+                          zIndex: isPinned ? 8 : undefined,
+                          backgroundColor: cellBg,
+                          borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
+                        };
 
-                      let cellBg = '#ffffff';
-                      if (rowTheme && colTheme) {
-                        cellBg = colTheme.cellBg;
-                      } else if (rowTheme) {
-                        cellBg = rowTheme.cellBg;
-                      } else if (colTheme) {
-                        cellBg = colTheme.cellBg;
-                      }
-
-                      const baseTdStyle: React.CSSProperties = {
-                        width: `${width}px`,
-                        minWidth: `${width}px`,
-                        maxWidth: `${width}px`,
-                        boxSizing: 'border-box',
-                        overflow: 'hidden',
-                        position: isPinned ? 'sticky' : undefined,
-                        left: isPinned ? stickyLeft : undefined,
-                        zIndex: isPinned ? 8 : undefined,
-                        backgroundColor: cellBg,
-                        borderRight: isPinned ? '1px solid var(--wa-border)' : undefined,
-                      };
-
-                      // 1. 審核狀態欄位 (下拉選單即時更新)
-                      if (col.key === 'status') {
-                        return (
-                          <td
-                            key={col.key}
-                            style={baseTdStyle}
-                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
-                          >
-                            <select
-                              className="web-admin-select"
-                              value={normStatus}
-                              onChange={(e) => handleStatusChange(s.id, e.target.value)}
-                              disabled={isUpdating}
-                              style={{
-                                width: '100%',
-                                maxWidth: '100%',
-                                boxSizing: 'border-box',
-                                padding: '3px 6px',
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                backgroundColor: normStatus.includes('正取')
-                                  ? 'rgba(5, 150, 105, 0.1)'
-                                  : normStatus.includes('備取')
-                                  ? 'rgba(217, 119, 6, 0.1)'
-                                  : normStatus.includes('取消')
-                                  ? 'rgba(220, 38, 38, 0.08)'
-                                  : '#ffffff',
-                                color: normStatus.includes('正取')
-                                  ? '#047857'
-                                  : normStatus.includes('備取')
-                                  ? '#b45309'
-                                  : normStatus.includes('取消')
-                                  ? '#b91c1c'
-                                  : 'var(--wa-text)',
-                              }}
+                        // 1. 審核狀態欄位 (下拉選單即時更新)
+                        if (col.key === 'status') {
+                          return (
+                            <td
+                              key={col.key}
+                              style={baseTdStyle}
+                              className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
                             >
-                              {STATUS_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                        );
-                      }
+                              <select
+                                className="web-admin-select"
+                                value={normStatus}
+                                onChange={(e) => handleStatusChange(s.id, e.target.value)}
+                                disabled={isUpdating}
+                                style={{
+                                  width: '100%',
+                                  maxWidth: '100%',
+                                  boxSizing: 'border-box',
+                                  padding: '3px 6px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 600,
+                                  backgroundColor: normStatus.includes('正取')
+                                    ? 'rgba(5, 150, 105, 0.1)'
+                                    : normStatus.includes('備取')
+                                      ? 'rgba(217, 119, 6, 0.1)'
+                                      : normStatus.includes('取消')
+                                        ? 'rgba(220, 38, 38, 0.08)'
+                                        : '#ffffff',
+                                  color: normStatus.includes('正取')
+                                    ? '#047857'
+                                    : normStatus.includes('備取')
+                                      ? '#b45309'
+                                      : normStatus.includes('取消')
+                                        ? '#b91c1c'
+                                        : 'var(--wa-text)',
+                                }}
+                              >
+                                {STATUS_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          );
+                        }
 
-                      // 2. 通知狀態欄位 (下拉選單即時修改)
-                      if (col.key === 'notification_status') {
-                        const notifyVal = s.notification_status || '未通知';
-                        return (
-                          <td
-                            key={col.key}
-                            style={baseTdStyle}
-                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
-                          >
-                            <select
-                              className="wa-status-select"
-                              value={notifyVal}
-                              onChange={(e) => handleNotificationStatusChange(s.id, e.target.value)}
-                              disabled={isUpdating}
-                              style={{
-                                width: '100%',
-                                maxWidth: '100%',
-                                boxSizing: 'border-box',
-                                color: notifyVal === '已通知' ? '#047857' : '#64748b',
-                                backgroundColor: notifyVal === '已通知' ? 'rgba(5, 150, 105, 0.1)' : '#f1f5f9',
-                              }}
+                        // 2. 通知狀態欄位 (下拉選單即時修改)
+                        if (col.key === 'notification_status') {
+                          const notifyVal = s.notification_status || '未通知';
+                          return (
+                            <td
+                              key={col.key}
+                              style={baseTdStyle}
+                              className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
                             >
-                              <option value="未通知">未通知</option>
-                              <option value="已通知">已通知</option>
-                            </select>
-                          </td>
-                        );
-                      }
+                              <select
+                                className="wa-status-select"
+                                value={notifyVal}
+                                onChange={(e) => handleNotificationStatusChange(s.id, e.target.value)}
+                                disabled={isUpdating}
+                                style={{
+                                  width: '100%',
+                                  maxWidth: '100%',
+                                  boxSizing: 'border-box',
+                                  color: notifyVal === '已通知' ? '#047857' : '#64748b',
+                                  backgroundColor: notifyVal === '已通知' ? 'rgba(5, 150, 105, 0.1)' : '#f1f5f9',
+                                }}
+                              >
+                                <option value="未通知">未通知</option>
+                                <option value="已通知">已通知</option>
+                              </select>
+                            </td>
+                          );
+                        }
 
-                      // 3. 幹部備註欄位 (點擊直接打字編輯)
-                      if (col.key === 'notes') {
-                        const isEditingNotes = editingNotesId === s.id;
+                        // 3. 幹部備註欄位 (點擊直接打字編輯)
+                        if (col.key === 'notes') {
+                          const isEditingNotes = editingNotesId === s.id;
+                          return (
+                            <td
+                              key={col.key}
+                              style={{
+                                ...baseTdStyle,
+                                cursor: 'pointer',
+                              }}
+                              className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                              onClick={() => {
+                                if (!isEditingNotes) {
+                                  setEditingNotesId(s.id);
+                                  setEditingNotesText(s.notes || '');
+                                }
+                              }}
+                              title="點擊可直接編輯幹部備註"
+                            >
+                              {isEditingNotes ? (
+                                <input
+                                  type="text"
+                                  className="wa-notes-input"
+                                  autoFocus
+                                  value={editingNotesText}
+                                  onChange={(e) => setEditingNotesText(e.target.value)}
+                                  onBlur={() => handleSaveNotes(s.id, editingNotesText)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveNotes(s.id, editingNotesText);
+                                    if (e.key === 'Escape') setEditingNotesId(null);
+                                  }}
+                                  style={{ width: '100%', boxSizing: 'border-box' }}
+                                />
+                              ) : (
+                                <span style={{ fontSize: '0.82rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {s.notes ? (
+                                    s.notes
+                                  ) : (
+                                    <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.78rem' }}>
+                                      點擊輸入備註...
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        // 4. 繳費狀態欄位徽章
+                        if (col.key === 'payment_status') {
+                          const isPaid = (textVal.includes('已繳費') || textVal.includes('Paid')) && !textVal.includes('未繳') && !textVal.includes('Unpaid');
+                          return (
+                            <td
+                              key={col.key}
+                              style={baseTdStyle}
+                              className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                            >
+                              <span
+                                className={`web-admin-badge ${isPaid ? 'web-admin-badge-success' : 'web-admin-badge-warning'}`}
+                                style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                              >
+                                {textVal}
+                              </span>
+                            </td>
+                          );
+                        }
+
+                        // 5. AI 適合度評分欄位
+                        if (col.key === 'ai_score') {
+                          const score = s.aiScore;
+                          const rating = s.aiRating;
+                          return (
+                            <td
+                              key={col.key}
+                              style={baseTdStyle}
+                              className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                            >
+                              {score !== undefined ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <span
+                                    style={{
+                                      fontWeight: 700,
+                                      fontSize: '0.82rem',
+                                      color:
+                                        score >= 80 ? '#0284c7' : score >= 65 ? '#16a34a' : score >= 50 ? '#ca8a04' : '#dc2626',
+                                    }}
+                                  >
+                                    {score} 分
+                                  </span>
+                                  {rating && (
+                                    <span
+                                      style={{
+                                        fontSize: '0.7rem',
+                                        padding: '1px 4px',
+                                        borderRadius: 3,
+                                        backgroundColor: 'rgba(0,0,0,0.06)',
+                                        color: 'var(--wa-text-muted)',
+                                      }}
+                                    >
+                                      {rating}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>-</span>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        // 6. AI 評估理由欄位 (點擊可展開全文)
+                        if (col.key === 'ai_reasoning') {
+                          const reasoning = s.aiReasoning;
+                          const isExpanded = expandedCells.has(`${s.id}_ai_reasoning`);
+                          return (
+                            <td
+                              key={col.key}
+                              style={{
+                                ...baseTdStyle,
+                                cursor: reasoning ? 'pointer' : 'default',
+                                whiteSpace: isExpanded ? 'normal' : 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                              className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                              onClick={() => reasoning && toggleCellExpand(`${s.id}_ai_reasoning`)}
+                              title={reasoning || ''}
+                            >
+                              {reasoning ? (
+                                <span style={{ fontSize: '0.78rem', color: 'var(--wa-text)' }}>
+                                  {reasoning}
+                                </span>
+                              ) : (
+                                <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>-</span>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        // 姓名欄位 (質感綠色膠囊按鈕，點擊開啟個資檢視彈窗)
+                        if (col.key === 'name') {
+                          return (
+                            <td
+                              key={col.key}
+                              style={baseTdStyle}
+                              className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                            >
+                              <button
+                                type="button"
+                                className="wa-name-capsule-btn"
+                                style={{ maxWidth: '100%', boxSizing: 'border-box' }}
+                                onClick={() => {
+                                  const mData: any = Array.isArray(s.members) ? s.members[0] : s.members;
+                                  setProfileModalUserId(s.line_user_id || null);
+                                  setProfileModalMember(
+                                    mData
+                                      ? { ...mData, line_user_id: s.line_user_id, name: mData.name || s.name, avatar_url: mData.avatar_url || (s as any).avatar_url }
+                                      : { line_user_id: s.line_user_id, name: s.name, avatar_url: (s as any).avatar_url }
+                                  );
+                                }}
+                                title="查看報名者詳細個人資料"
+                              >
+                                <User size={12} style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{textVal}</span>
+                              </button>
+                            </td>
+                          );
+                        }
+
+                        // 5. 一般欄位 (長文字原地展開)
+                        const cellKey = `${s.id}:${col.key}`;
+                        const isExpanded = expandedCells.has(cellKey);
+
                         return (
                           <td
                             key={col.key}
+                            className={`wa-clickable-cell ${isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}`}
                             style={{
                               ...baseTdStyle,
-                              cursor: 'pointer',
+                              overflow: isExpanded ? 'visible' : 'hidden',
+                              whiteSpace: isExpanded ? 'normal' : 'nowrap',
                             }}
-                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
                             onClick={() => {
-                              if (!isEditingNotes) {
-                                setEditingNotesId(s.id);
-                                setEditingNotesText(s.notes || '');
+                              if (textVal && textVal !== '-') {
+                                toggleCellExpand(cellKey);
                               }
                             }}
-                            title="點擊可直接編輯幹部備註"
-                          >
-                            {isEditingNotes ? (
-                              <input
-                                type="text"
-                                className="wa-notes-input"
-                                autoFocus
-                                value={editingNotesText}
-                                onChange={(e) => setEditingNotesText(e.target.value)}
-                                onBlur={() => handleSaveNotes(s.id, editingNotesText)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleSaveNotes(s.id, editingNotesText);
-                                  if (e.key === 'Escape') setEditingNotesId(null);
-                                }}
-                                style={{ width: '100%', boxSizing: 'border-box' }}
-                              />
-                            ) : (
-                              <span style={{ fontSize: '0.82rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {s.notes ? (
-                                  s.notes
-                                ) : (
-                                  <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.78rem' }}>
-                                    點擊輸入備註...
-                                  </span>
-                                )}
-                              </span>
-                            )}
-                          </td>
-                        );
-                      }
-
-                      // 4. 繳費狀態欄位徽章
-                      if (col.key === 'payment_status') {
-                        const isPaid = (textVal.includes('已繳費') || textVal.includes('Paid')) && !textVal.includes('未繳') && !textVal.includes('Unpaid');
-                        return (
-                          <td
-                            key={col.key}
-                            style={baseTdStyle}
-                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
+                            title={textVal !== '-' ? (isExpanded ? '點擊收合' : '點擊展開全文') : undefined}
                           >
                             <span
-                              className={`web-admin-badge ${isPaid ? 'web-admin-badge-success' : 'web-admin-badge-warning'}`}
-                              style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                              className={isExpanded ? 'wa-cell-expanded' : 'wa-cell-ellipsis'}
+                              style={{
+                                display: 'block',
+                                overflow: isExpanded ? 'visible' : 'hidden',
+                                textOverflow: isExpanded ? 'clip' : 'ellipsis',
+                                whiteSpace: isExpanded ? 'normal' : 'nowrap',
+                                wordBreak: isExpanded ? 'break-word' : 'normal',
+                              }}
                             >
                               {textVal}
                             </span>
                           </td>
                         );
-                      }
+                      })}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
 
-                      // 5. AI 適合度評分欄位
-                      if (col.key === 'ai_score') {
-                        const score = s.aiScore;
-                        const rating = s.aiRating;
-                        return (
-                          <td
-                            key={col.key}
-                            style={baseTdStyle}
-                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
-                          >
-                            {score !== undefined ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span
-                                  style={{
-                                    fontWeight: 700,
-                                    fontSize: '0.82rem',
-                                    color:
-                                      score >= 80 ? '#0284c7' : score >= 65 ? '#16a34a' : score >= 50 ? '#ca8a04' : '#dc2626',
-                                  }}
-                                >
-                                  {score} 分
-                                </span>
-                                {rating && (
-                                  <span
-                                    style={{
-                                      fontSize: '0.7rem',
-                                      padding: '1px 4px',
-                                      borderRadius: 3,
-                                      backgroundColor: 'rgba(0,0,0,0.06)',
-                                      color: 'var(--wa-text-muted)',
-                                    }}
-                                  >
-                                    {rating}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>-</span>
-                            )}
-                          </td>
-                        );
-                      }
+        {/* 報名者個人資料檢視彈窗 */}
+        <MemberProfileModal
+          isOpen={Boolean(profileModalUserId)}
+          onClose={() => {
+            setProfileModalUserId(null);
+            setProfileModalMember(null);
+          }}
+          userId={profileModalUserId}
+          officerUserId={session.userId}
+          initialMember={profileModalMember}
+          onOpenEditDrawer={(uid) => {
+            setProfileModalUserId(null);
+            setProfileModalMember(null);
+            setEditDrawerUserId(uid);
+            setEditDrawerOpen(true);
+          }}
+        />
 
-                      // 6. AI 評估理由欄位 (點擊可展開全文)
-                      if (col.key === 'ai_reasoning') {
-                        const reasoning = s.aiReasoning;
-                        const isExpanded = expandedCells.has(`${s.id}_ai_reasoning`);
-                        return (
-                          <td
-                            key={col.key}
-                            style={{
-                              ...baseTdStyle,
-                              cursor: reasoning ? 'pointer' : 'default',
-                              whiteSpace: isExpanded ? 'normal' : 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
-                            onClick={() => reasoning && toggleCellExpand(`${s.id}_ai_reasoning`)}
-                            title={reasoning || ''}
-                          >
-                            {reasoning ? (
-                              <span style={{ fontSize: '0.78rem', color: 'var(--wa-text)' }}>
-                                {reasoning}
-                              </span>
-                            ) : (
-                              <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>-</span>
-                            )}
-                          </td>
-                        );
-                      }
-
-                      // 姓名欄位 (質感綠色膠囊按鈕，點擊開啟個資檢視彈窗)
-                      if (col.key === 'name') {
-                        return (
-                          <td
-                            key={col.key}
-                            style={baseTdStyle}
-                            className={isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}
-                          >
-                            <button
-                              type="button"
-                              className="wa-name-capsule-btn"
-                              style={{ maxWidth: '100%', boxSizing: 'border-box' }}
-                              onClick={() => {
-                                const mData: any = Array.isArray(s.members) ? s.members[0] : s.members;
-                                setProfileModalUserId(s.line_user_id || null);
-                                setProfileModalMember(
-                                  mData
-                                    ? { ...mData, line_user_id: s.line_user_id, name: mData.name || s.name, avatar_url: mData.avatar_url || (s as any).avatar_url }
-                                    : { line_user_id: s.line_user_id, name: s.name, avatar_url: (s as any).avatar_url }
-                                );
-                              }}
-                              title="查看報名者詳細個人資料"
-                            >
-                              <User size={12} style={{ flexShrink: 0 }} />
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{textVal}</span>
-                            </button>
-                          </td>
-                        );
-                      }
-
-                      // 5. 一般欄位 (長文字原地展開)
-                      const cellKey = `${s.id}:${col.key}`;
-                      const isExpanded = expandedCells.has(cellKey);
-
-                      return (
-                        <td
-                          key={col.key}
-                          className={`wa-clickable-cell ${isPinned ? `wa-col-pinned ${isLastPinned ? 'wa-col-pinned-divider' : ''}` : ''}`}
-                          style={{
-                            ...baseTdStyle,
-                            overflow: isExpanded ? 'visible' : 'hidden',
-                            whiteSpace: isExpanded ? 'normal' : 'nowrap',
-                          }}
-                          onClick={() => {
-                            if (textVal && textVal !== '-') {
-                              toggleCellExpand(cellKey);
-                            }
-                          }}
-                          title={textVal !== '-' ? (isExpanded ? '點擊收合' : '點擊展開全文') : undefined}
-                        >
-                          <span
-                            className={isExpanded ? 'wa-cell-expanded' : 'wa-cell-ellipsis'}
-                            style={{
-                              display: 'block',
-                              overflow: isExpanded ? 'visible' : 'hidden',
-                              textOverflow: isExpanded ? 'clip' : 'ellipsis',
-                              whiteSpace: isExpanded ? 'normal' : 'nowrap',
-                              wordBreak: isExpanded ? 'break-word' : 'normal',
-                            }}
-                          >
-                            {textVal}
-                          </span>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+        {/* 右側滑出式個人資料編輯抽屜 */}
+        <MemberEditDrawer
+          isOpen={editDrawerOpen}
+          onClose={() => {
+            setEditDrawerOpen(false);
+            setEditDrawerUserId(null);
+          }}
+          userId={editDrawerUserId}
+          officerUserId={session.userId}
+          jwt={session.jwt}
+          onSaved={(_updated) => {
+            if (selectedEventId) {
+              loadSignups(selectedEventId);
+            }
+          }}
+        />
       </div>
-
-      {/* 報名者個人資料檢視彈窗 */}
-      <MemberProfileModal
-        isOpen={Boolean(profileModalUserId)}
-        onClose={() => {
-          setProfileModalUserId(null);
-          setProfileModalMember(null);
-        }}
-        userId={profileModalUserId}
-        officerUserId={session.userId}
-        initialMember={profileModalMember}
-        onOpenEditDrawer={(uid) => {
-          setProfileModalUserId(null);
-          setProfileModalMember(null);
-          setEditDrawerUserId(uid);
-          setEditDrawerOpen(true);
-        }}
-      />
-
-      {/* 右側滑出式個人資料編輯抽屜 */}
-      <MemberEditDrawer
-        isOpen={editDrawerOpen}
-        onClose={() => {
-          setEditDrawerOpen(false);
-          setEditDrawerUserId(null);
-        }}
-        userId={editDrawerUserId}
-        officerUserId={session.userId}
-        jwt={session.jwt}
-        onSaved={(_updated) => {
-          if (selectedEventId) {
-            loadSignups(selectedEventId);
-          }
-        }}
-      />
-    </div>
 
       {/* 調色盤 Portal：渲染至 body 以避免被 overflow:auto 截掉 */}
       {(colorPickerColKey || colorPickerRowId) && colorPickerAnchorRect && createPortal(

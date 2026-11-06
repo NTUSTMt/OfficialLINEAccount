@@ -91,10 +91,10 @@ export async function evaluateApplicantsAi(
 - 行程概要：${eventItinerary}
 
 【評估原則】：
-1. 適合度評分 (score)：0 ~ 100 分。考量本次路線之爬升、海拔高度、重裝/過夜需求與天數，評估報名者過往登山經驗與平時體能是否足夠安全勝任。
+1. 適合度評分 (score)：0 ~ 100 分。請「上網」取得路線難易度，考量「本次路線」之爬升、海拔高度、重裝/過夜需求與天數，評估報名者過往登山經驗與平時體能是否足夠安全勝任。
 2. 評級標籤 (rating)：高度適任 (80~100)、中度適任 (65~79)、需審慎評估 (50~64)、建議勸退/備取 (0~49)。
-3. 評估理由 (reasoning)：約 30~80 字，指出體能與經驗符合或不足的核心原因（例如百岳重裝過夜經驗豐富、缺乏高海拔過夜經驗、平時運動量不足等）。
-4. 嚴格輸出 JSON 格式：
+3. 評估理由 (reasoning)：約 30~80 字，指出對於該活動，體能與經驗符合或不足的核心原因（例如：百岳重裝過夜經驗豐富、缺乏高海拔過夜經驗、平時運動量不足等）。
+4. 嚴格輸出 JSON 格式，並以繁體中文回覆：
 {
   "evaluations": [
     {
@@ -159,11 +159,11 @@ ${JSON.stringify(applicants, null, 2)}
 
     const evaluations: ApplicantEvaluation[] = Array.isArray(parsed.evaluations)
       ? parsed.evaluations.map((item: any) => ({
-          anonymousId: String(item.anonymousId || ""),
-          score: Math.min(100, Math.max(0, Number(item.score) || 60)),
-          rating: String(item.rating || "待評估"),
-          reasoning: String(item.reasoning || "經驗符合一般行程"),
-        }))
+        anonymousId: String(item.anonymousId || ""),
+        score: Math.min(100, Math.max(0, Number(item.score) || 60)),
+        rating: String(item.rating || "待評估"),
+        reasoning: String(item.reasoning || "經驗符合一般行程"),
+      }))
       : [];
 
     return { success: true, evaluations };
@@ -200,8 +200,8 @@ export async function translateEventAi(
 1. title_en: 精簡貼切的英文活動名稱。
 2. summary_en: 活動簡介英文，維持清晰重點。
 3. itinerary_en: 行程規劃英文。必須嚴格鏡像對應中文版格式：
-   - 逐日行程結構（例如 Day X: HH:MM ... → ...）。
-   - 嚴格保留時間箭頭符號 " → "。
+   - 逐日行程結構（例如 Day X: HH:MM）。
+   - 嚴格保留時間箭頭符號 " → " 或 " - "。
    - 保留各站點地名與數字（例如 07:00 NTUST → 12:30 Trailhead → 15:30 Camp）。
    - 高山地名採用標準英譯（例如 Mt. Hehuan North Peak, Snow Mountain Main Peak 等）。
 4. 總長度限制：title_en + summary_en + itinerary_en 三者總字元數必須嚴格 ≤ 1400 字元！

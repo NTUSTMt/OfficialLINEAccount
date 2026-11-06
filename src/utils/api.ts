@@ -182,9 +182,13 @@ export const notifyDispatcher = async (
       ...(customJwt ? { customJwt } : {})
     };
 
+    const anonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || '';
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     };
+    if (anonKey) {
+      headers['apikey'] = anonKey;
+    }
     if (idToken) {
       headers['x-line-id-token'] = idToken;
     }
@@ -204,8 +208,15 @@ export const notifyDispatcher = async (
 
     if (!res.ok) {
       const errText = await res.text();
-      console.warn(`[notifyDispatcher] HTTP ${res.status}:`, errText);
-      return { success: false, message: errText };
+      let parsedMsg = errText;
+      try {
+        const errJson = JSON.parse(errText);
+        parsedMsg = errJson.message || errJson.error || errText;
+      } catch {
+        // 保留原始文字
+      }
+      console.warn(`[notifyDispatcher] HTTP ${res.status}:`, parsedMsg);
+      return { success: false, message: parsedMsg };
     }
 
     const json = await res.json();
@@ -238,9 +249,13 @@ export const callDispatcherAction = async <T = any>(
       ...(customJwt ? { customJwt } : {})
     };
 
+    const anonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || '';
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     };
+    if (anonKey) {
+      headers['apikey'] = anonKey;
+    }
     if (idToken) {
       headers['x-line-id-token'] = idToken;
     }
@@ -260,8 +275,15 @@ export const callDispatcherAction = async <T = any>(
 
     if (!res.ok) {
       const errText = await res.text();
-      console.warn(`[callDispatcherAction] HTTP ${res.status}:`, errText);
-      return { success: false, message: errText };
+      let parsedMsg = errText;
+      try {
+        const errJson = JSON.parse(errText);
+        parsedMsg = errJson.message || errJson.error || errText;
+      } catch {
+        // 保留原始文字
+      }
+      console.warn(`[callDispatcherAction] HTTP ${res.status}:`, parsedMsg);
+      return { success: false, message: parsedMsg };
     }
 
     const json = await res.json();
@@ -300,6 +322,8 @@ export const evaluateApplicantsViaAi = async (
   callerUserId?: string
 ): Promise<{ success: boolean; evaluations: ApplicantEvaluation[]; error?: string }> => {
   try {
+    const effectiveUserId = callerUserId || getWebAdminUserId();
+
     // 嚴格白名單過濾個資
     const sanitized = rawApplicants.map((a, idx) => ({
       anonymousId: String(a.anonymousId || `A${idx + 1}`),
@@ -328,7 +352,7 @@ export const evaluateApplicantsViaAi = async (
         {
           event,
           applicants: batch,
-          ...(callerUserId ? { userId: callerUserId, callerId: callerUserId } : {})
+          ...(effectiveUserId ? { userId: effectiveUserId, callerId: effectiveUserId } : {})
         }
       );
 
@@ -366,13 +390,14 @@ export const translateEventViaAi = async (
   callerUserId?: string
 ): Promise<{ success: boolean; translation?: EventTranslationResult; error?: string }> => {
   try {
+    const effectiveUserId = callerUserId || getWebAdminUserId();
     const res = await callDispatcherAction<{ success: boolean; translation: EventTranslationResult }>(
       'ai_translate_event',
       {
         title: input.title,
         summary: input.summary,
         itinerary: input.itinerary,
-        ...(callerUserId ? { userId: callerUserId, callerId: callerUserId } : {})
+        ...(effectiveUserId ? { userId: effectiveUserId, callerId: effectiveUserId } : {})
       }
     );
 

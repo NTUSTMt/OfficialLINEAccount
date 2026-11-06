@@ -1184,7 +1184,7 @@ export const WebAdminEvents: React.FC = () => {
                     <div className="wa-bilingual-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Globe size={15} color="#2563eb" />
-                        <span>英文內容 (English Translation)</span>
+                        <span>英文內容</span>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         {translationSnapshot && (

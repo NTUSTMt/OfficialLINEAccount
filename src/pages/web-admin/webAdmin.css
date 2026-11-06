@@ -1774,8 +1774,9 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   line-height: 38px;
 }
 
+.web-admin-table tr:hover .wa-row-index-normal,
 .web-admin-table tr:hover .wa-row-index-text {
-  display: none;
+  display: none !important;
 }
 
 .wa-row-actions-quad {
@@ -1786,17 +1787,23 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   box-shadow: none;
   border-radius: 0;
   z-index: 4;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  align-items: center;
+  justify-items: center;
+  padding: 1px 2px;
+  box-sizing: border-box;
 }
 
 .web-admin-table tr:hover .wa-row-actions-quad {
-  display: block;
+  display: grid;
 }
 
 .wa-row-quad-btn {
-  position: absolute;
+  position: static;
   width: 18px;
-  height: 18px;
-  display: flex;
+  height: 12px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
@@ -1816,11 +1823,6 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
 .wa-row-quad-btn.active {
   color: var(--wa-primary);
 }
-
-.wa-row-quad-tl { top: 2px; left: 2px; }
-.wa-row-quad-tr { top: 2px; right: 2px; }
-.wa-row-quad-bl { bottom: 2px; left: 2px; }
-.wa-row-quad-br { bottom: 2px; right: 2px; }
 
 /* 儲存格點擊原地展開全文與調整欄高 */
 .wa-clickable-cell {
@@ -1868,15 +1870,12 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   box-shadow: 3px 0 6px -2px rgba(0, 0, 0, 0.12);
 }
 
-/* 序號中央顯式拖曳手柄與列級拖曳標記 */
+/* 序號拖曳手柄與列級拖曳標記 */
 .wa-row-drag-handle {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 14px;
-  height: 20px;
-  display: flex;
+  position: static;
+  width: 18px;
+  height: 12px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: grab;

@@ -660,11 +660,11 @@ async function handleTextMessage(
   ) {
     const isOfficer = await isUserOfficer(userId);
     if (isOfficer) {
-      const items = await fetchUnsentAdminDigest(30);
+      const items = await fetchUnsentAdminDigest(50);
       if (items.length === 0) {
         await replyMessage(replyToken, [{
           type: "text",
-          text: "目前無待處理的社務彙整項目！所有裝備租借、棄權與巡檢均已處理或無新增案件。",
+          text: "目前無待處理的社務彙整項目！所有裝備租借、繳費申報、棄權與巡檢均已處理或無新增案件。",
         }]);
       } else {
         const messages = buildAdminDigestMessages(items);

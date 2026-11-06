@@ -269,8 +269,7 @@ Deno.serve(async (req: Request) => {
 
     const isOfficer = Boolean(
       (memberData && memberData.is_officer) ||
-      officerData ||
-      (memberData && memberData.officer_role)
+      officerData
     );
 
     const officerRole = (officerData as any)?.title || officerData?.role || memberData?.officer_role || null;

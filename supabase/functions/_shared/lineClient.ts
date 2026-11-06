@@ -289,7 +289,7 @@ function base64UrlToUint8Array(base64Url: string): Uint8Array {
 export async function verifyCustomJwt(
   jwtToken: string,
   expectedUserId?: string
-): Promise<{ success: boolean; userId?: string; error?: string }> {
+): Promise<{ success: boolean; userId?: string; isOfficer?: boolean; error?: string }> {
   if (!jwtToken || jwtToken.split(".").length !== 3) {
     return { success: false, error: "Invalid JWT format" };
   }
@@ -337,7 +337,8 @@ export async function verifyCustomJwt(
       return { success: false, error: "身分與 Token 不符 (Identity Mismatch)" };
     }
 
-    return { success: true, userId: sub };
+    const isOfficer = Boolean(payload.is_officer);
+    return { success: true, userId: sub, isOfficer };
   } catch (err: unknown) {
     const errString = err instanceof Error ? err.message : String(err);
     return { success: false, error: "Custom JWT verification error: " + errString };
