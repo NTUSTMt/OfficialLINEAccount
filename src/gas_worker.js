@@ -21,6 +21,8 @@ var SUPABASE_SERVICE_ROLE_KEY = SCRIPT_PROPERTIES.getProperty('SUPABASE_SERVICE_
 var SPREADSHEET_ID = SCRIPT_PROPERTIES.getProperty('SPREADSHEET_ID') || '';
 var DOCS_KNOWLEDGE_BASE_ID = SCRIPT_PROPERTIES.getProperty('DOCS_KNOWLEDGE_BASE_ID') || '';
 var ROOT_DRIVE_FOLDER_ID = SCRIPT_PROPERTIES.getProperty('ROOT_DRIVE_FOLDER_ID') || '';
+var CLUB_CALENDAR_ID = SCRIPT_PROPERTIES.getProperty('CLUB_CALENDAR_ID') || 'primary';
+var SCHOOL_CALENDAR_ID = SCRIPT_PROPERTIES.getProperty('SCHOOL_CALENDAR_ID') || '';
 
 function _workerResponse(data, code) {
   code = code || 200;
@@ -84,6 +86,9 @@ function doGet(e) {
     if (action === 'sync_event_sheet_signups' || action === 'sync_event_roster') {
       return _handleSyncEventSheetSignups(e && e.parameter ? e.parameter : {});
     }
+    if (action === 'sync_calendar_events') {
+      return _handleSyncCalendarEvents(e && e.parameter ? e.parameter : {});
+    }
     if (action === 'delete_drive_file' || action === 'delete_drive_files') {
       return _handleDeleteDriveFiles(e && e.parameter ? e.parameter : {});
     }
@@ -133,6 +138,9 @@ function doPost(e) {
     }
     if (action === 'sync_event_sheet_signups' || action === 'sync_event_roster') {
       return _handleSyncEventSheetSignups(json);
+    }
+    if (action === 'sync_calendar_events') {
+      return _handleSyncCalendarEvents(json);
     }
 
     // Gmail 管理員/社員郵件發送
@@ -978,4 +986,129 @@ function _findColIdx(headers, candidates) {
   }
   return -1;
 }
+
+/**
+ * 同步 Google 日曆與學校校曆行程至 Supabase external_calendar_events 快取表
+ */
+function _handleSyncCalendarEvents(params) {
+  params = params || {};
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return _workerError('未配置 SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY', 500);
+  }
+
+  var clubCalendarId = params.clubCalendarId || CLUB_CALENDAR_ID || 'primary';
+  var schoolCalendarId = params.schoolCalendarId || SCHOOL_CALENDAR_ID || '';
+
+  // 預設抓取前後區間：前 60 天至後 180 天
+  var now = new Date();
+  var startDate = params.startTime ? new Date(params.startTime) : new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+  var endDate = params.endTime ? new Date(params.endTime) : new Date(now.getTime() + 180 * 24 * 60 * 60 * 1000);
+
+  var clubEvents = [];
+  try {
+    var clubCal = null;
+    if (clubCalendarId && clubCalendarId !== 'primary') {
+      clubCal = CalendarApp.getCalendarById(clubCalendarId);
+    }
+    if (!clubCal) {
+      clubCal = CalendarApp.getDefaultCalendar();
+    }
+    if (clubCal) {
+      clubEvents = _extractCalendarEvents(clubCal, 'club', startDate, endDate);
+    }
+  } catch (errClub) {
+    console.warn('讀取社團主日曆發生錯誤:', errClub);
+  }
+
+  var schoolEvents = [];
+  if (schoolCalendarId) {
+    try {
+      var schoolCal = CalendarApp.getCalendarById(schoolCalendarId);
+      if (schoolCal) {
+        schoolEvents = _extractCalendarEvents(schoolCal, 'school', startDate, endDate);
+      }
+    } catch (errSchool) {
+      console.warn('讀取學校校曆發生錯誤:', errSchool);
+    }
+  }
+
+  var allEventsMap = {};
+  for (var i = 0; i < clubEvents.length; i++) {
+    allEventsMap[clubEvents[i].id] = clubEvents[i];
+  }
+  for (var j = 0; j < schoolEvents.length; j++) {
+    allEventsMap[schoolEvents[j].id] = schoolEvents[j];
+  }
+
+  var allEvents = [];
+  for (var idKey in allEventsMap) {
+    if (Object.prototype.hasOwnProperty.call(allEventsMap, idKey)) {
+      allEvents.push(allEventsMap[idKey]);
+    }
+  }
+
+  if (allEvents.length === 0) {
+    return _workerSuccess({
+      count: 0,
+      clubCount: clubEvents.length,
+      schoolCount: schoolEvents.length,
+      message: '外部日曆無任何行程需要同步'
+    });
+  }
+
+  try {
+    var url = SUPABASE_URL + '/rest/v1/external_calendar_events';
+    var response = UrlFetchApp.fetch(url, {
+      method: 'POST',
+      contentType: 'application/json',
+      headers: {
+        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      payload: JSON.stringify(allEvents),
+      muteHttpExceptions: true
+    });
+
+    var responseCode = response.getResponseCode();
+    if (responseCode >= 200 && responseCode < 300) {
+      return _workerSuccess({
+        count: allEvents.length,
+        clubCount: clubEvents.length,
+        schoolCount: schoolEvents.length,
+        message: '成功同步 ' + allEvents.length + ' 筆外部日程至 Supabase'
+      });
+    } else {
+      return _workerError('寫入 Supabase external_calendar_events 失敗 (HTTP ' + responseCode + '): ' + response.getContentText(), 500);
+    }
+  } catch (syncErr) {
+    return _workerError('同步外部日曆發生例外: ' + syncErr.toString(), 500);
+  }
+}
+
+function _extractCalendarEvents(calendar, calendarType, startDate, endDate) {
+  var list = [];
+  if (!calendar) return list;
+  try {
+    var events = calendar.getEvents(startDate, endDate);
+    for (var k = 0; k < events.length; k++) {
+      var ev = events[k];
+      list.push({
+        id: ev.getId(),
+        calendar_type: calendarType,
+        title: ev.getTitle() || '未命名行程',
+        description: ev.getDescription() || '',
+        start_time: ev.getStartTime().toISOString(),
+        end_time: ev.getEndTime().toISOString(),
+        is_all_day: ev.isAllDayEvent ? ev.isAllDayEvent() : false,
+        location: ev.getLocation() || '',
+        updated_at: new Date().toISOString()
+      });
+    }
+  } catch (err) {
+    console.warn('提取日曆行程失敗 (' + calendarType + '):', err);
+  }
+  return list;
+}
+
 

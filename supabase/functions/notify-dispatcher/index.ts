@@ -2275,6 +2275,49 @@ async function handleSyncEventSheetDispatcher(json: Record<string, any>) {
   }
 }
 
+// 14. 幹部觸發 Google 日曆與學校校曆外部同步轉發 (sync_calendar)
+async function handleSyncCalendarDispatcher(json: Record<string, any>) {
+  const userId = String(json.verifiedUserId || json.userId || "").trim();
+  const isOfficer = json.verifiedIsOfficer === true ? true : await isUserOfficer(userId);
+  if (!isOfficer) {
+    return errorResponse("權限不足，僅限社團幹部可執行日曆同步", 403);
+  }
+
+  const workerUrl = Deno.env.get("GAS_WORKER_URL");
+  const workerSecret = Deno.env.get("GAS_WORKER_SECRET");
+  if (!workerUrl || !workerSecret) {
+    return errorResponse("未配置 GAS_WORKER_URL 或 GAS_WORKER_SECRET", 500);
+  }
+
+  const payload = {
+    action: "sync_calendar_events",
+    userId: userId,
+    clubCalendarId: json.clubCalendarId,
+    schoolCalendarId: json.schoolCalendarId,
+    startTime: json.startTime,
+    endTime: json.endTime,
+    worker_secret: workerSecret,
+    "x-worker-secret": workerSecret,
+  };
+
+  const res = await fetch(workerUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-worker-secret": workerSecret,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text);
+    return jsonResponse(data, res.status);
+  } catch (_e) {
+    return jsonResponse({ status: res.ok ? "success" : "error", message: text }, res.status);
+  }
+}
+
 async function handleAiEvaluateApplicants(json: Record<string, any>) {
   const userId = String(json.verifiedUserId || json.userId || json.callerId || "").trim();
   const isOfficer = json.verifiedIsOfficer === true ? true : await isUserOfficer(userId);
@@ -2494,6 +2537,9 @@ Deno.serve(async (req: Request) => {
     case "sync_event_sheet_signups":
     case "sync_event_roster":
       return await handleSyncEventSheetDispatcher(payload);
+
+    case "sync_calendar":
+      return await handleSyncCalendarDispatcher(payload);
 
     case "dispatch_admin_digest":
       return jsonResponse(await dispatchAdminDigest());
