@@ -27,3 +27,4 @@ dist-ssr
 secrets.local
 .env
 supabase/.temp/
+.superpowers/
