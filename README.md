@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.328-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.330-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -13,7 +13,39 @@
 
 ---
 
-## 最新修正 (2026-11-04)
+## 最新修正 (2026-11-07, v0.1.330)
+
+- **幹部工作站「社務日程 (Calendar & Activity Hub)」功能上線**：
+  - **功能定位與目標**：為社團幹部打造跨模組的全局社務中樞，一站聚合登山出隊活動、報名截止日、隊員繳費申報、裝備借用與應還雙錨點，以及臺科大校務與登山社外部 Google Calendar。
+  - **核心路由與入口**：存取途徑為 `/web-admin/schedule`，並於 Web 幹部管理中心頂部導覽列提供專屬「社務日程」頁籤。
+  - **雙重視圖模式**：
+    - **巨觀月曆視圖 (Calendar View)**：以月為單位瀏覽整月活動與重要節點，以醒目色彩長條呈現出隊行程與報名截止日，輔以灰底微型標籤呈現繳費與裝備動態。
+    - **時間軸清單視圖 (Timeline View)**：依日期分組線性呈現社務明細，適合快速檢視當日或近期所有待辦與變動項目。
+  - **多維度篩選與即時搜尋**：提供五大分類切換按鈕（全部、活動、財務、裝備、外部行事曆），並支援關鍵字全文即時過濾。
+  - **模組抽屜與一鍵直達**：點擊任一排程卡片可於右側展開詳情抽屜，並支援一鍵跳轉對應的管理模組（活動管理、名冊審核、財務對帳、裝備租借），無縫銜接既有作業流程。
+  - **雙向日曆同步**：
+    - 於 Google Apps Script (`src/gas_worker.js`) 提供 `syncExternalCalendars` 定期任務，解析社團 Google Calendar 與臺科大行事曆 (iCal/RSS) 批次寫入 Supabase 快取表 `external_calendar_events`。
+    - Edge Function (`notify-dispatcher`) 提供 `sync_calendar` 代理端點，幹部亦可在後台介面點擊「同步行事曆」手動觸發即時同步。
+  - **高效 SQL 聚合預存程序**：資料庫 `get_schedule_feed` RPC 透過 SQL `UNION ALL` 於資料庫端一次性完成跨表聚合與權限校驗，響應時間低於 100ms。
+  - **嚴格零 Emoji (Zero Emoji) 規範**：全介面、按鈕、徽章、樣式與程式碼註解皆遵循社團嚴格無表情符號規範。
+
+## 過往重大修正 (2026-11-07, v0.1.329)
+
+- **Supabase 資料庫架構單一真值綱要 (SSOT) 模組化統整**：
+  - 於 `supabase/schema/` 建立全新權威定義檔，100% 精準對齊線上生產環境（14 大資料表、35 支即時 RPC 函式）。
+  - `00_master_schema.sql`：一鍵初始化與整合部署主控檔。
+  - `01_types_and_enums.sql`：自訂 Enums、安全隱式轉換器與通用 updated_at 觸發器。
+  - `02_members_and_officers.sql`：社員與幹部資料表、is_officer 防偽冒鑑權與個資 RPC。
+  - `03_events_and_signups.sql`：活動雙語行程、報名名冊、心得評價牆與原子報名取消 RPC。
+  - `04_equipments_and_loans.sql`：裝備庫存品項、租借主單與細項、計費與庫存原子扣減釋出 RPC。
+  - `05_finance_and_payments.sql`：繳費申報、單鍵核銷 Token、合併繳費連動與財務對帳 RPC。
+  - `06_system_and_queues.sql`：系統組態、佇列表、安全稽核日誌與防遞迴守衛觸發器。
+  - `supabase/schema/README.md`：詳盡繁體中文架構關係圖、資料字典與 RPC 參數清冊。
+- **散落 SQL 檔案盤點與安全防護報告**：
+  - 產出 `supabase/FILE_INVENTORY_REPORT.md`，完整盤點根目錄 30 個檔案與 migrations 目錄 19 個檔案之收錄狀態。
+  - 明確揭露 22 個自動化測試套件之歷史檔案依賴，確認不得貿然刪除歷史修補檔以確保測試穩定性。
+
+## 過往重大修正 (2026-11-04)
 
 - 修正 `signup_rpc` 讀取不存在的 `events.member_fee` 欄位，現在統一使用正式欄位 `events.fee`。
 - 新增 `supabase/migrations/20261104000000_fix_signup_rpc_member_fee_reference.sql`，部署後即可恢復 LINE 一鍵報名。

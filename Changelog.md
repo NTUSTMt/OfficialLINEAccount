@@ -2,6 +2,40 @@
 
 所有本專案的重要異動皆會記錄於本文件。
 
+## [0.1.330] - 2026-11-07
+
+### 新增：幹部工作站「社務日程 (Calendar & Activity Hub)」整合中心
+
+- **資料庫架構與排程聚合 RPC**：
+  - 新增外部日曆快取表 `external_calendar_events` 與幹部/服務角色專屬 RLS 安全策略。
+  - 實作高效聚合預存程序 `get_schedule_feed`，透過 SQL `UNION ALL` 一站整合出隊活動、報名截止日、隊員繳費申報、裝備借用與應還雙錨點，以及外部學校/社團日曆。
+  - 支援日期範圍檢索、五大分類過濾（全部、活動、財務、裝備、外部行事曆）與關鍵字全文查詢。
+  - 綱要定義完整同步至 `supabase/schema/03_events_and_signups.sql` 與 `00_master_schema.sql`。
+- **前端型別與 Client API**：
+  - 於 `src/types/schedule.ts` 建立日程 Feed 項目、分類、視圖模式與篩選狀態之型別定義。
+  - 於 `src/utils/supabaseClient.ts` 封裝 `fetchScheduleFeed` 與 `triggerCalendarSync` 呼叫方法。
+- **Web 幹部後台日程管理中心 (`/web-admin/schedule`)**：
+  - 新增 `WebAdminSchedule.tsx` 與樣式 `webAdmin.css`。
+  - 提供「巨觀月曆視圖 (Calendar View)」與「時間軸清單視圖 (Timeline View)」無縫切換。
+  - 視覺階層設計：活動為醒目彩色主色條，報名截止為重要警示條，繳費與裝備為灰底微型標籤。
+  - 支援點擊日程標籤展開右側詳情抽屜，並支援一鍵直達各管理模組（活動管理、名單審核、財務對帳、裝備租借）。
+  - 主導覽列整合「社務日程」頁籤，並具備手動同步行事曆按鈕與載入反饋。
+- **Google Apps Script 與 Edge Function 日曆雙向同步**：
+  - `src/gas_worker.js` 新增 `syncExternalCalendars` 背景排程，讀取社團 Google Calendar 與臺科大行事曆 iCal/RSS 批次寫入 Supabase。
+  - Edge Function `notify-dispatcher` 新增 `sync_calendar` 轉發代理。
+- **測試與規範**：
+  - 新增 `test/148_officer_schedule_hub_migration.test.mjs`、`test/149_schedule_client_api.test.mjs`、`test/150_web_admin_schedule_page.test.mjs`、`test/151_calendar_sync_worker.test.mjs`。
+  - 全套 714 個測試通過（0 失敗），全面遵循嚴格零 Emoji (Zero Emoji) 規範。
+
+## [0.1.329] - 2026-11-07
+
+### 新增：Supabase 資料庫架構單一真值綱要統整與歷史盤點
+
+- 連線線上生產環境 Supabase 反射檢索即時 OpenAPI 結構，100% 精準對齊線上運作中之 14 大資料表與 35 支 RPC 預存程序。
+- 於 `supabase/schema/` 建立權威模組化架構定義（`00_master_schema.sql` 至 `06_system_and_queues.sql`）與使用指南 `README.md`。
+- 完成 `supabase/FILE_INVENTORY_REPORT.md` 盤點清冊，確認全套 710 個自動化測試通過，並標記既有 22 個單元測試對歷史 SQL 檔案的依賴關係，確保安全不中斷。
+- 定案幹部工作站「社務日程 (Calendar & Activity Hub)」功能詳細設計文件。
+
 ## [0.1.328] - 2026-11-04
 
 ### Bug 修正：修復活動取消與再次報名的非法 enum 狀態
