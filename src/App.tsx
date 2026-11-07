@@ -35,6 +35,7 @@ const WebAdminLoans = lazy(() => import('./pages/web-admin/WebAdminLoans').then(
 const WebAdminMembers = lazy(() => import('./pages/web-admin/WebAdminMembers').then(m => ({ default: m.WebAdminMembers })));
 const WebAdminFinance = lazy(() => import('./pages/web-admin/WebAdminFinance').then(m => ({ default: m.WebAdminFinance })));
 const WebAdminInventory = lazy(() => import('./pages/web-admin/WebAdminInventory').then(m => ({ default: m.WebAdminInventory })));
+const WebAdminSchedule = lazy(() => import('./pages/web-admin/WebAdminSchedule').then(m => ({ default: m.WebAdminSchedule })));
 
 function ExternalBrowserBlockScreen() {
   return (
@@ -708,6 +709,7 @@ function AppContent({ liffInit }: { liffInit: LiffInitState }) {
             <Route path="members" element={<WebAdminMembers />} />
             <Route path="finance" element={<WebAdminFinance />} />
             <Route path="inventory" element={<WebAdminInventory />} />
+            <Route path="schedule" element={<WebAdminSchedule />} />
           </Route>
           {/* 萬用路由：避免 any 其他路徑或 LIFF 狀態字串導致白畫面 */}
           <Route path="*" element={<Navigate to="/borrow" replace />} />

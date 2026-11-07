@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, Outlet } from 'react-router-dom';
-import { Mountain, LogOut, Calendar, Users, CreditCard, Package, RefreshCw, ClipboardList, Layers } from 'lucide-react';
+import { Mountain, LogOut, Calendar, Users, CreditCard, Package, RefreshCw, ClipboardList, Layers, CalendarDays } from 'lucide-react';
 import { getWebSession, webLogout, type WebAuthSession } from '../../utils/webAuth';
 import { setSupabaseAuthToken } from '../../utils/supabaseClient';
 import './webAdmin.css';
@@ -54,6 +54,14 @@ export const WebAdminLayout: React.FC = () => {
           </NavLink>
 
           <nav className="web-admin-nav">
+            <NavLink
+              to="/admin-web/schedule"
+              className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}
+            >
+              <CalendarDays size={16} />
+              <span>社務日程</span>
+            </NavLink>
+
             <NavLink
               to="/admin-web/events"
               className={({ isActive }) => `web-admin-nav-item ${isActive ? 'active' : ''}`}

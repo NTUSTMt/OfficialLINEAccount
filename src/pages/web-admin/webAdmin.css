@@ -3432,3 +3432,707 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   animation: wa-spin 1s linear infinite;
 }
 
+
+
+/* ==========================================================================
+   幹部後台社務日程 (Calendar & Activity Hub) 專用樣式
+   ========================================================================== */
+
+.wa-schedule-container {
+  width: 100%;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-sizing: border-box;
+}
+
+.wa-schedule-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  background-color: var(--wa-surface);
+  padding: 12px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--wa-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.wa-schedule-toolbar-left,
+.wa-schedule-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wa-schedule-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.wa-schedule-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--wa-text-muted);
+  pointer-events: none;
+}
+
+.wa-schedule-search-input {
+  padding: 7px 30px 7px 32px;
+  font-size: 0.88rem;
+  border: 1px solid var(--wa-border);
+  border-radius: 6px;
+  width: 250px;
+  outline: none;
+  background-color: var(--wa-surface);
+  color: var(--wa-text);
+  transition: border-color 0.15s ease;
+}
+
+.wa-schedule-search-input:focus {
+  border-color: var(--wa-primary);
+}
+
+.wa-schedule-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--wa-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+}
+
+.wa-schedule-search-clear:hover {
+  color: var(--wa-text);
+}
+
+.wa-schedule-filter-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wa-schedule-filter-select {
+  padding: 7px 10px;
+  font-size: 0.88rem;
+  border: 1px solid var(--wa-border);
+  border-radius: 6px;
+  background-color: var(--wa-surface);
+  color: var(--wa-text);
+  outline: none;
+  cursor: pointer;
+}
+
+.wa-schedule-filter-select:focus {
+  border-color: var(--wa-primary);
+}
+
+.wa-schedule-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wa-schedule-month-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  min-width: 110px;
+  text-align: center;
+  color: var(--wa-text);
+}
+
+.wa-schedule-view-switcher {
+  display: flex;
+  background-color: var(--wa-surface-alt);
+  border-radius: 6px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.wa-view-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--wa-text-muted);
+  transition: all 0.15s ease;
+}
+
+.wa-view-btn.active {
+  background-color: var(--wa-surface);
+  color: var(--wa-primary);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.wa-calendar-card {
+  background-color: var(--wa-surface);
+  border-radius: 8px;
+  border: 1px solid var(--wa-border);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.wa-calendar-header-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  background-color: var(--wa-surface-alt);
+  border-bottom: 1px solid var(--wa-border);
+}
+
+.wa-calendar-header-cell {
+  padding: 9px 12px;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--wa-text-muted);
+}
+
+.wa-calendar-header-cell.weekend {
+  color: #e11d48;
+}
+
+.wa-calendar-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.wa-calendar-week-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--wa-border);
+}
+
+.wa-calendar-week-row:last-child {
+  border-bottom: none;
+}
+
+/* 固定格高 110px，杜絕因內容過多撐開版面 */
+.wa-calendar-cell {
+  height: 110px;
+  min-height: 110px;
+  max-height: 110px;
+  padding: 6px;
+  border-right: 1px solid var(--wa-border);
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--wa-surface);
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  position: relative;
+}
+
+.wa-calendar-cell:last-child {
+  border-right: none;
+}
+
+.wa-calendar-cell:hover {
+  background-color: var(--wa-surface-hover);
+}
+
+.wa-calendar-cell.outside-month {
+  background-color: #fbfcfe;
+  opacity: 0.5;
+}
+
+.wa-calendar-cell.today {
+  background-color: rgba(5, 150, 105, 0.04);
+}
+
+.wa-calendar-cell.selected {
+  outline: 2px solid var(--wa-primary);
+  outline-offset: -2px;
+  background-color: rgba(5, 150, 105, 0.07);
+}
+
+.wa-calendar-cell-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.wa-calendar-day-number {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--wa-text);
+}
+
+.wa-calendar-today-pill {
+  background-color: var(--wa-primary);
+  color: #ffffff;
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  font-weight: 700;
+}
+
+.wa-calendar-cell-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+/* 多日行程橫跨長條 */
+.wa-cal-bar {
+  height: 20px;
+  line-height: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 5px;
+  box-sizing: border-box;
+}
+
+.wa-cal-bar.event-bar {
+  background-color: #059669;
+  color: #ffffff;
+}
+
+.wa-cal-bar.school-bar {
+  background-color: #7c3aed;
+  color: #ffffff;
+}
+
+.wa-cal-bar.bar-start {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  margin-right: -6px;
+  z-index: 2;
+}
+
+.wa-cal-bar.bar-middle {
+  border-radius: 0;
+  margin-left: -6px;
+  margin-right: -6px;
+  z-index: 2;
+}
+
+.wa-cal-bar.bar-end {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+  margin-left: -6px;
+  z-index: 2;
+}
+
+.wa-cal-bar.bar-start.bar-end {
+  border-radius: 4px;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* 單日行程標籤 */
+.wa-cal-badge {
+  height: 20px;
+  line-height: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+.wa-cal-badge.event-tag {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+.wa-cal-badge.deadline-tag {
+  background-color: #fef08a;
+  color: #854d0e;
+  border: 1px solid #fde047;
+}
+
+.wa-cal-badge.school-tag {
+  background-color: #ede9fe;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+
+/* 細部業務標籤：灰底白字 */
+.wa-cal-badge.micro-tag {
+  background-color: #475569;
+  color: #ffffff;
+}
+
+/* 超額省略按鈕 */
+.wa-cal-overflow-btn {
+  background: none;
+  border: none;
+  padding: 1px 4px;
+  font-size: 0.70rem;
+  font-weight: 600;
+  color: var(--wa-text-muted);
+  cursor: pointer;
+  text-align: left;
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
+.wa-cal-overflow-btn:hover {
+  color: var(--wa-text);
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 選定日期詳細清單 (向下展開區塊) */
+.wa-schedule-detail-section {
+  background-color: var(--wa-surface);
+  border-radius: 8px;
+  border: 1px solid var(--wa-border);
+  padding: 20px;
+  scroll-margin-top: 80px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.wa-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--wa-border);
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+}
+
+.wa-detail-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wa-detail-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--wa-text);
+}
+
+.wa-detail-badge {
+  background-color: var(--wa-primary-light);
+  color: var(--wa-primary);
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.wa-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.wa-detail-card {
+  border: 1px solid var(--wa-border);
+  border-radius: 6px;
+  padding: 14px;
+  background-color: var(--wa-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.wa-detail-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wa-status-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.wa-status-pill.event {
+  background-color: #ecfdf5;
+  color: #047857;
+}
+
+.wa-status-pill.deadline {
+  background-color: #fef9c3;
+  color: #a16207;
+}
+
+.wa-status-pill.finance {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+.wa-status-pill.loan_pickup,
+.wa-status-pill.loan_return,
+.wa-status-pill.loans {
+  background-color: #f1f5f9;
+  color: #334155;
+}
+
+.wa-status-pill.school {
+  background-color: #faf5ff;
+  color: #7e22ce;
+}
+
+.wa-status-pill.club_calendar {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.wa-detail-time {
+  font-size: 0.78rem;
+  color: var(--wa-text-muted);
+}
+
+.wa-detail-item-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: var(--wa-text);
+}
+
+.wa-detail-item-sub {
+  font-size: 0.82rem;
+  color: var(--wa-text-muted);
+  margin: 0;
+}
+
+.wa-detail-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 0.78rem;
+  color: var(--wa-text-muted);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--wa-border);
+}
+
+.wa-card-jump-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--wa-primary);
+  text-decoration: none;
+}
+
+.wa-card-jump-btn:hover {
+  text-decoration: underline;
+  color: var(--wa-primary-hover);
+}
+
+/* 時間軸檢視 (Timeline View) */
+.wa-timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.wa-timeline-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wa-timeline-date-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--wa-text);
+}
+
+.wa-timeline-date-bullet {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--wa-primary);
+}
+
+.wa-timeline-date-count {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--wa-text-muted);
+}
+
+.wa-timeline-items-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 14px;
+  border-left: 2px solid var(--wa-border);
+  margin-left: 3px;
+}
+
+.wa-timeline-card {
+  background-color: var(--wa-surface);
+  border: 1px solid var(--wa-border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.wa-timeline-card.finance-border {
+  border-left: 3px solid #3b82f6;
+}
+
+.wa-timeline-card.loan-border {
+  border-left: 3px solid #64748b;
+}
+
+.wa-timeline-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wa-timeline-item-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--wa-text-muted);
+}
+
+.wa-timeline-item-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: var(--wa-text);
+}
+
+.wa-timeline-item-sub {
+  font-size: 0.82rem;
+  color: var(--wa-text-muted);
+  margin: 0;
+}
+
+.wa-timeline-card-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.wa-timeline-aggregate-card {
+  background-color: var(--wa-surface-alt);
+  border: 1px dashed var(--wa-border-light);
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.wa-timeline-aggregate-card:hover {
+  background-color: #e2e8f0;
+}
+
+.wa-aggregate-icon {
+  color: var(--wa-primary);
+  display: flex;
+  align-items: center;
+}
+
+.wa-aggregate-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.wa-aggregate-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--wa-text);
+}
+
+.wa-aggregate-hint {
+  font-size: 0.75rem;
+  color: var(--wa-text-muted);
+}
+
+.wa-aggregate-chevron {
+  color: var(--wa-text-muted);
+}
+
+.wa-collapse-toggle {
+  font-size: 0.82rem;
+  color: var(--wa-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0;
+}
+
+.wa-collapse-toggle:hover {
+  color: var(--wa-text);
+}
+
+.wa-schedule-alert {
+  padding: 10px 14px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+
+.wa-alert-success {
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.wa-alert-danger {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.wa-schedule-loading-bar {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--wa-text-muted);
+  font-size: 0.88rem;
+}
+
+.wa-empty-state-sm {
+  padding: 24px;
+  text-align: center;
+  color: var(--wa-text-muted);
+  font-size: 0.88rem;
+}
