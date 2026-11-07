@@ -12,6 +12,11 @@ import type {
   AdminInventoryItem,
   MemberTimelineRecord
 } from '../types/admin';
+import type {
+  ScheduleFeedItem,
+  FetchScheduleOptions,
+  CalendarSyncResult
+} from '../types/schedule';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -2629,5 +2634,107 @@ export const fetchMemberTimelineRecordsFromSupabase = async (
     throw new Error(`[載入社員歷程失敗]: ${msg}`);
   }
 };
+
+/**
+ * 讀取幹部後台社務日程 (Calendar & Activity Hub) 聚合資料
+ * 調用 get_schedule_feed SECURITY DEFINER RPC 函式
+ */
+export const fetchScheduleFeed = async (
+  officerId: string,
+  options: FetchScheduleOptions = {}
+): Promise<ScheduleFeedItem[]> => {
+  if (!supabase) {
+    const msg = '[Supabase] 客戶端未初始化或配置無效 (Client not configured)';
+    setLastSupabaseError(msg);
+    throw new Error(msg);
+  }
+
+  if (!officerId) {
+    const msg = '[Supabase] 幹部 ID 為空，無法讀取社務日程 (Missing officer ID)';
+    setLastSupabaseError(msg);
+    throw new Error(msg);
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('get_schedule_feed', {
+      p_officer_line_user_id: officerId,
+      p_start_time: options.startTime || null,
+      p_end_time: options.endTime || null,
+      p_query_text: options.queryText ? options.queryText.trim() : null,
+      p_category: options.category || 'all'
+    });
+
+    if (error) {
+      const errMsg = `[Supabase get_schedule_feed 查詢失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`;
+      console.error(errMsg, error);
+      setLastSupabaseError(errMsg);
+      throw new Error(errMsg);
+    }
+
+    setLastSupabaseError(null);
+    return (data || []) as ScheduleFeedItem[];
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    setLastSupabaseError(errMsg);
+    console.error('[Supabase fetchScheduleFeed 例外]:', errMsg);
+    throw err instanceof Error ? err : new Error(errMsg);
+  }
+};
+
+/**
+ * 觸發 Google 日曆與學校校曆外部同步作業
+ * 透過 notify-dispatcher Edge Proxy 代理至 GAS Worker
+ */
+export const triggerCalendarSync = async (
+  jwt?: string | null
+): Promise<CalendarSyncResult> => {
+  try {
+    const url = (supabaseUrl || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || '').replace(/\/$/, '');
+    if (!url) {
+      return { success: false, message: '未設定 VITE_SUPABASE_URL 環境變數' };
+    }
+
+    const token = jwt || getSupabaseAuthToken();
+    const anonKey = supabaseAnonKey || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || '';
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (anonKey) {
+      headers['apikey'] = anonKey;
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${url}/functions/v1/notify-dispatcher`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action: 'sync_calendar' })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      let errMsg = errText;
+      try {
+        const errJson = JSON.parse(errText);
+        errMsg = errJson.message || errJson.error || errText;
+      } catch {
+        // 保留原始文字
+      }
+      return { success: false, message: `外部日曆同步失敗 (HTTP ${res.status}): ${errMsg}` };
+    }
+
+    const data = await res.json();
+    return {
+      success: data.success !== false && data.status !== 'error',
+      message: data.message || '外部日曆同步完成'
+    };
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: `調用日曆同步服務發生例外: ${errMsg}` };
+  }
+};
+
 
 
