@@ -3440,10 +3440,9 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
 
 .wa-schedule-container {
   width: 100%;
-  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   box-sizing: border-box;
 }
 
@@ -3535,10 +3534,75 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   border-color: var(--wa-primary);
 }
 
+/* 社務日程頂部工具列次要圖示按鈕 (同步外部日曆) */
+.wa-schedule-sync-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--wa-border);
+  background-color: var(--wa-surface);
+  color: var(--wa-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.wa-schedule-sync-btn:hover:not(:disabled) {
+  background-color: var(--wa-surface-alt);
+  border-color: var(--wa-border-dark, #cbd5e1);
+}
+
+.wa-schedule-sync-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .wa-schedule-month-nav {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 月份導覽切換按鈕 */
+.wa-month-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--wa-border);
+  background-color: var(--wa-surface);
+  color: var(--wa-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-month-nav-btn:hover {
+  background-color: var(--wa-surface-alt);
+  border-color: var(--wa-border-dark, #cbd5e1);
+}
+
+/* 「今天」跳轉按鈕 */
+.wa-btn-today {
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--wa-border);
+  background-color: var(--wa-surface);
+  color: var(--wa-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.wa-btn-today:hover {
+  background-color: var(--wa-surface-alt);
+  border-color: var(--wa-border-dark, #cbd5e1);
 }
 
 .wa-schedule-month-label {
@@ -3626,9 +3690,8 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   height: 110px;
   min-height: 110px;
   max-height: 110px;
-  padding: 6px;
+  padding: 6px 0;
   border-right: 1px solid var(--wa-border);
-  overflow: hidden;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -3665,6 +3728,7 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 0 8px;
   margin-bottom: 4px;
 }
 
@@ -3687,10 +3751,17 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  overflow: hidden;
+  position: relative;
 }
 
-/* 多日行程橫跨長條 */
+/* 跨天橫幅水平軌道佔位器 */
+.wa-cal-slot-spacer {
+  height: 20px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 多日行程橫跨長條 (無縫實心緞帶) */
 .wa-cal-bar {
   height: 20px;
   line-height: 20px;
@@ -3699,7 +3770,7 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 5px;
+  padding: 0 6px;
   box-sizing: border-box;
 }
 
@@ -3713,30 +3784,39 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   color: #ffffff;
 }
 
+/* 跨天橫幅連續緞帶樣式：向上覆蓋單元格隔線形成純無縫緞帶 */
+.wa-cal-bar.bar-single {
+  margin: 0 6px;
+  border-radius: 4px;
+}
+
 .wa-cal-bar.bar-start {
-  border-top-left-radius: 4px;
-  border-bottom-left-radius: 4px;
-  margin-right: -6px;
+  margin-left: 6px;
+  margin-right: -1px;
+  border-radius: 4px 0 0 4px;
+  position: relative;
   z-index: 2;
 }
 
 .wa-cal-bar.bar-middle {
+  margin-left: 0;
+  margin-right: -1px;
   border-radius: 0;
-  margin-left: -6px;
-  margin-right: -6px;
+  position: relative;
   z-index: 2;
 }
 
 .wa-cal-bar.bar-end {
-  border-top-right-radius: 4px;
-  border-bottom-right-radius: 4px;
-  margin-left: -6px;
-  z-index: 2;
+  margin-left: 0;
+  margin-right: 6px;
+  border-radius: 0 4px 4px 0;
+  position: relative;
+  z-index: 1;
 }
 
-.wa-cal-bar.bar-start.bar-end {
-  border-radius: 4px;
-  margin-left: 0;
+/* 當剛好位於週六 (最末欄) 時向右不得超出卡片邊界 */
+.wa-calendar-cell:last-child .wa-cal-bar.bar-start,
+.wa-calendar-cell:last-child .wa-cal-bar.bar-middle {
   margin-right: 0;
 }
 
@@ -3746,7 +3826,8 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   line-height: 20px;
   font-size: 0.72rem;
   font-weight: 600;
-  padding: 0 5px;
+  padding: 0 6px;
+  margin: 0 6px;
   border-radius: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -3782,6 +3863,7 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   background: none;
   border: none;
   padding: 1px 4px;
+  margin: 2px 6px 0 6px;
   font-size: 0.70rem;
   font-weight: 600;
   color: var(--wa-text-muted);
@@ -3789,6 +3871,7 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   text-align: left;
   border-radius: 3px;
   line-height: 1.4;
+  width: fit-content;
 }
 
 .wa-cal-overflow-btn:hover {
@@ -3813,6 +3896,26 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   border-bottom: 1px solid var(--wa-border);
   padding-bottom: 14px;
   margin-bottom: 16px;
+}
+
+/* 日曆下方展開詳情區塊之無框關閉按鈕 (Ghost Icon) */
+.wa-detail-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--wa-text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.wa-detail-close-btn:hover {
+  background-color: var(--wa-surface-alt);
+  color: var(--wa-text);
 }
 
 .wa-detail-title-group {

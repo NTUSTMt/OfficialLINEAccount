@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Search,
   RefreshCw,
-  Filter,
   CreditCard,
   Layers,
   ExternalLink,
@@ -454,7 +453,6 @@ export const WebAdminSchedule: React.FC = () => {
 
           {/* 分類篩選下拉 */}
           <div className="wa-schedule-filter-wrap">
-            <Filter size={15} style={{ color: 'var(--wa-text-muted)' }} />
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value as ScheduleCategoryFilter)}
@@ -468,6 +466,18 @@ export const WebAdminSchedule: React.FC = () => {
               <option value="club_calendar">社團行事曆</option>
             </select>
           </div>
+
+          {/* 外部日曆同步按鈕 (移至篩選右側，純圖示) */}
+          <button
+            type="button"
+            className="wa-schedule-sync-btn"
+            onClick={handleTriggerSync}
+            disabled={syncing}
+            title={syncing ? '同步中...' : '同步 Google 日曆與學校校曆'}
+            aria-label="同步 Google 日曆與學校校曆"
+          >
+            <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
+          </button>
         </div>
 
         <div className="wa-schedule-toolbar-right">
@@ -476,9 +486,10 @@ export const WebAdminSchedule: React.FC = () => {
             <div className="wa-schedule-month-nav">
               <button
                 type="button"
-                className="wa-btn-icon"
+                className="wa-month-nav-btn"
                 onClick={handlePrevMonth}
                 title="上個月"
+                aria-label="上個月"
               >
                 <ChevronLeft size={16} />
               </button>
@@ -487,18 +498,20 @@ export const WebAdminSchedule: React.FC = () => {
               </span>
               <button
                 type="button"
-                className="wa-btn-icon"
+                className="wa-month-nav-btn"
                 onClick={handleNextMonth}
                 title="下個月"
+                aria-label="下個月"
               >
                 <ChevronRight size={16} />
               </button>
               <button
                 type="button"
-                className="wa-btn-secondary wa-btn-sm"
+                className="wa-btn-today"
                 onClick={handleGoToday}
+                title="前往當前月份與今日"
               >
-                回到今日
+                今天
               </button>
             </div>
           )}
@@ -522,18 +535,6 @@ export const WebAdminSchedule: React.FC = () => {
               <span>時間軸檢視</span>
             </button>
           </div>
-
-          {/* 外部日曆同步按鈕 */}
-          <button
-            type="button"
-            className="wa-btn-secondary wa-btn-sm"
-            onClick={handleTriggerSync}
-            disabled={syncing}
-            title="同步 Google 日曆與學校校曆"
-          >
-            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-            <span>{syncing ? '同步中...' : '同步外部日曆'}</span>
-          </button>
         </div>
       </div>
 
@@ -618,29 +619,43 @@ export const WebAdminSchedule: React.FC = () => {
 
                             {/* 排程項目容器 (固定高度 110px 邊界內) */}
                             <div className="wa-calendar-cell-items">
-                              {/* 1. 多日行程長條 */}
-                              {daySlots.slice(0, 2).map((alloc) => {
-                                const isStart = colIdx === alloc.startCol;
-                                const isEnd = colIdx === alloc.endCol;
-                                const isMiddle = !isStart && !isEnd;
-                                const isSchool = alloc.item.source_type === 'school';
+                              {/* 1. 多日行程長條 (跨天無縫緞帶) */}
+                              {daySlots.some((a) => a.slot === 1) && !daySlots.some((a) => a.slot === 0) && (
+                                <div key="spacer-slot-0" className="wa-cal-slot-spacer" />
+                              )}
+                              {[...daySlots]
+                                .sort((a, b) => a.slot - b.slot)
+                                .slice(0, 2)
+                                .map((alloc) => {
+                                  const itemStartStr = toDateStr(alloc.item.start_time);
+                                  const itemEndStr = toDateStr(alloc.item.end_time || alloc.item.start_time);
+                                  const isActualStart = day.dateString === itemStartStr;
+                                  const isActualEnd = day.dateString === itemEndStr;
+                                  const isSchool = alloc.item.source_type === 'school';
 
-                                return (
-                                  <div
-                                    key={`multi-${alloc.item.item_id}`}
-                                    className={`wa-cal-bar ${isSchool ? 'school-bar' : 'event-bar'} ${
-                                      isStart ? 'bar-start' : ''
-                                    } ${isMiddle ? 'bar-middle' : ''} ${isEnd ? 'bar-end' : ''}`}
-                                    title={alloc.item.title}
-                                  >
-                                    {isStart || colIdx === 0 ? alloc.item.title : ''}
-                                  </div>
-                                );
-                              })}
+                                  let barTypeClass = 'bar-middle';
+                                  if (isActualStart && isActualEnd) {
+                                    barTypeClass = 'bar-single';
+                                  } else if (isActualStart) {
+                                    barTypeClass = 'bar-start';
+                                  } else if (isActualEnd) {
+                                    barTypeClass = 'bar-end';
+                                  }
+
+                                  return (
+                                    <div
+                                      key={`multi-${alloc.item.item_id}`}
+                                      className={`wa-cal-bar ${isSchool ? 'school-bar' : 'event-bar'} ${barTypeClass}`}
+                                      title={alloc.item.title}
+                                    >
+                                      {isActualStart || colIdx === 0 ? alloc.item.title : ''}
+                                    </div>
+                                  );
+                                })}
 
                               {/* 2. 單日項目標籤 (醒目置頂、細部灰底白字) */}
                               {daySingles
-                                .slice(0, Math.max(0, 2 - daySlots.length))
+                                .slice(0, Math.max(0, 2 - (daySlots.some((a) => a.slot === 0) ? 1 : 0) - (daySlots.some((a) => a.slot === 1) ? 1 : 0)))
                                 .map((item) => {
                                   const isDeadline = item.source_type === 'deadline';
                                   const isEvent = item.source_type === 'event';
@@ -868,11 +883,12 @@ export const WebAdminSchedule: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  className="wa-btn-secondary wa-btn-sm"
+                  className="wa-detail-close-btn"
                   onClick={() => setSelectedDate(null)}
+                  title="關閉展開"
+                  aria-label="關閉展開"
                 >
-                  <X size={15} />
-                  <span>關閉展開</span>
+                  <X size={18} />
                 </button>
               </div>
 

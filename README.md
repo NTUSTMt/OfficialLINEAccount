@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.330-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.331-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -13,7 +13,21 @@
 
 ---
 
-## 最新修正 (2026-11-07, v0.1.330)
+## 最新修正 (2026-11-07, v0.1.331)
+
+- **社務日程 (Calendar & Activity Hub) 工具列與視覺體驗細化**：
+  - **版面結構對齊**：移除 `.wa-schedule-container` 重複的 24px 內邊距，使日程頂部工具列與上方頁籤間距精準對齊活動管理與報名名冊。
+  - **工具列排版與按鈕風格統一**：
+    - 移除分類選單旁的篩選漏斗圖示，畫面更緊湊。
+    - 將外部日曆同步按鈕移至分類選單右側，採純圖示設計（`RefreshCw`），同步中旋轉防呆。
+    - 月份導覽（`<` 與 `>`）及「今天」按鈕套用系統次要按鈕設計，取代瀏覽器原生按鈕。
+  - **跨天數活動連貫無縫實心緞帶**：
+    - 移除日曆單元格水平內邊距與父層截斷，透過覆蓋 1px 隔線的連續色塊緞帶呈現跨日活動（首日左圓角、尾日右圓角、中間跨日緊密相連不留空隙）。
+    - 引入水平軌道佔位器（`wa-cal-slot-spacer`），維持同列活動垂直軌道高一致性。
+  - **展開明細輕量關閉按鈕**：
+    - 點選日期下方展開的業務清單，其關閉按鈕精簡為輕量無框叉叉（Ghost Icon）。
+
+## 過往重大修正 (2026-11-07, v0.1.330)
 
 - **幹部工作站「社務日程 (Calendar & Activity Hub)」功能上線**：
   - **功能定位與目標**：為社團幹部打造跨模組的全局社務中樞，一站聚合登山出隊活動、報名截止日、隊員繳費申報、裝備借用與應還雙錨點，以及臺科大校務與登山社外部 Google Calendar。

@@ -33,7 +33,14 @@ test('150. 電腦版幹部工作站「社務日程」頁面整合檢驗', () => 
   assert.ok(appContent.includes('WebAdminSchedule'), 'App.tsx 必須引入 WebAdminSchedule');
   assert.ok(appContent.includes('path="schedule"'), 'App.tsx 必須註冊 schedule 路由');
 
-  // 5. 零 Emoji 規範
+  // 5. 工具列與按鈕外觀細化驗證 (v0.1.331)
+  assert.ok(!content.includes('<Filter'), '已移除選單旁多餘之 Filter 漏斗圖示');
+  assert.ok(content.includes('wa-schedule-sync-btn'), '同步按鈕必須採用專屬圖示按鈕樣式');
+  assert.ok(content.includes('wa-btn-today') && content.includes('今天'), '回到今日按鈕已更名為「今天」並採用統一按鈕樣式');
+  assert.ok(content.includes('wa-detail-close-btn'), '展開明細關閉按鈕必須採用無框圖示按鈕樣式');
+  assert.ok(!content.includes('關閉展開</span>'), '已移除「關閉展開」冗餘文字標籤');
+
+  // 6. 零 Emoji 規範
   const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
   assert.ok(!emojiRegex.test(content), 'WebAdminSchedule.tsx 嚴禁包含任何 Emoji');
 });
