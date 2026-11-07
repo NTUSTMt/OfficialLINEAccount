@@ -773,7 +773,7 @@ BEGIN
             s.id,
             s.line_user_id,
             COALESCE(s.name, m.name, '活動參加者') AS name,
-            '🔸 活動：' || e.title AS type,
+            '[活動] ' || e.title AS type,
             COALESCE(e.fee, 0) AS amount,
             NULL AS bank_last5,
             NULL AS proof_image_url,

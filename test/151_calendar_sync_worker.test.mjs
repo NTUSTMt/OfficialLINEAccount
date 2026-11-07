@@ -11,6 +11,7 @@ test('151. Google 日曆與學校校曆同步 Worker 檢驗', () => {
 
   // 1. GAS Worker 動作支援與日曆讀取
   assert.ok(gasWorkerContent.includes('sync_calendar_events'), 'gas_worker.js 必須支援 sync_calendar_events 動作');
+  assert.ok(gasWorkerContent.includes('function syncExternalCalendars()'), 'gas_worker.js 必須公開無參定時排程函式 syncExternalCalendars');
   assert.ok(gasWorkerContent.includes('CalendarApp.getCalendarById'), '必須使用 CalendarApp 讀取指定日曆');
   assert.ok(gasWorkerContent.includes('external_calendar_events'), '必須將外部日程寫入 external_calendar_events 表');
 

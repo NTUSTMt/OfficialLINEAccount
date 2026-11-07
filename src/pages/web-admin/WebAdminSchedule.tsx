@@ -53,8 +53,10 @@ const toDateStr = (isoOrDateStr?: string | null): string => {
 // 格式化繁體中文日期顯示
 const formatTraditionalChineseDate = (dateStr: string): string => {
   if (!dateStr) return '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
   const [y, m, d] = dateStr.split('-').map(Number);
   const dateObj = new Date(y, m - 1, d);
+  if (isNaN(dateObj.getTime())) return dateStr;
   const dayOfWeek = WEEK_DAY_NAMES[dateObj.getDay()];
   return `${y} 年 ${m} 月 ${d} 日 (${dayOfWeek})`;
 };
@@ -69,9 +71,22 @@ export const WebAdminSchedule: React.FC = () => {
   // 視圖與篩選狀態
   const [viewMode, setViewMode] = useState<ScheduleViewMode>('calendar');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ScheduleCategoryFilter>('all');
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  // 搜尋防抖計時器參照 (300ms)
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 元件卸載時清除防抖計時器
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, []);
 
   // 資料狀態
   const [feedItems, setFeedItems] = useState<ScheduleFeedItem[]>([]);
@@ -137,7 +152,7 @@ export const WebAdminSchedule: React.FC = () => {
       let startTime: string | null = null;
       let endTime: string | null = null;
 
-      if (viewMode === 'calendar' && !searchQuery.trim()) {
+      if (viewMode === 'calendar' && !debouncedSearchQuery.trim()) {
         startTime = `${calendarGrid.startDateStr}T00:00:00+08:00`;
         endTime = `${calendarGrid.endDateStr}T23:59:59+08:00`;
       } else {
@@ -154,7 +169,7 @@ export const WebAdminSchedule: React.FC = () => {
       const items = await fetchScheduleFeed(officerId, {
         startTime,
         endTime,
-        queryText: searchQuery.trim() || null,
+        queryText: debouncedSearchQuery.trim() || null,
         category: selectedCategory
       });
 
@@ -165,25 +180,36 @@ export const WebAdminSchedule: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [officerId, viewMode, searchQuery, selectedCategory, calendarGrid, currentDate]);
+  }, [officerId, viewMode, debouncedSearchQuery, selectedCategory, calendarGrid, currentDate]);
 
   useEffect(() => {
     loadScheduleData();
   }, [loadScheduleData]);
 
-  // 搜尋關鍵字連動：輸入搜尋字串時自動切換至時間軸；清空搜尋時切回日曆
+  // 搜尋關鍵字連動：輸入搜尋字串時自動切換至時間軸；清空搜尋時切回日曆 (含 300ms 防抖防護)
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
-    if (value.trim().length > 0) {
-      if (viewMode === 'calendar') {
-        previousViewModeRef.current = 'calendar';
-        setViewMode('timeline');
-      }
-    } else {
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    if (!value.trim()) {
+      setDebouncedSearchQuery('');
       if (previousViewModeRef.current === 'calendar') {
         setViewMode('calendar');
       }
+      return;
     }
+
+    if (viewMode === 'calendar') {
+      previousViewModeRef.current = 'calendar';
+      setViewMode('timeline');
+    }
+
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedSearchQuery(value);
+    }, 300);
   };
 
   // 手動切換視圖

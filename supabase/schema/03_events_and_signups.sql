@@ -1087,7 +1087,7 @@ BEGIN
             e.title AS title,
             COALESCE(e.status, '活動') AS sub_text,
             (e.start_date::text || ' 00:00:00+08')::timestamptz AS start_time,
-            (e.end_date::text || ' 23:59:59+08')::timestamptz AS end_time,
+            (COALESCE(e.end_date, e.start_date)::text || ' 23:59:59+08')::timestamptz AS end_time,
             TRUE AS is_macro,
             e.status AS status_badge,
             '/admin-web/events?id=' || e.id AS link_path,

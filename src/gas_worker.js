@@ -988,6 +988,14 @@ function _findColIdx(headers, candidates) {
 }
 
 /**
+ * 定時觸發器公開無參進入點：同步外部日曆行程至 Supabase 快取表
+ * 供 Google Apps Script Time-driven Trigger 直接排程繫結
+ */
+function syncExternalCalendars() {
+  return _handleSyncCalendarEvents({});
+}
+
+/**
  * 同步 Google 日曆與學校校曆行程至 Supabase external_calendar_events 快取表
  */
 function _handleSyncCalendarEvents(params) {

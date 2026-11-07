@@ -23,6 +23,7 @@ test('148. 社務日程資料庫遷移與 RPC 結構檢驗', () => {
 
   // 3. 業務資料聚合 (UNION ALL)
   assert.ok(sql.includes("'event' AS source_type"), '必須聚合出隊活動');
+  assert.ok(sql.includes('COALESCE(e.end_date, e.start_date)'), '單日活動必須具備 COALESCE(e.end_date, e.start_date) 保底防護');
   assert.ok(sql.includes("'deadline' AS source_type"), '必須聚合報名截止日');
   assert.ok(sql.includes("'finance' AS source_type"), '必須聚合繳費申報');
   assert.ok(sql.includes("'loan_pickup' AS source_type"), '必須聚合裝備借出');

@@ -14,9 +14,11 @@ test('150. 電腦版幹部工作站「社務日程」頁面整合檢驗', () => 
   assert.ok(content.includes('fetchScheduleFeed'), '必須調用 fetchScheduleFeed 取得資料');
   assert.ok(content.includes('calendar') && content.includes('timeline'), '必須支援日曆與時間軸視圖切換');
 
-  // 2. 搜尋自動切換為時間軸機制
+  // 2. 搜尋自動切換為時間軸機制與 300ms 防抖
   assert.ok(content.includes('searchQuery') || content.includes('searchKeyword'), '必須包含搜尋關鍵字狀態');
+  assert.ok(content.includes('debounceTimer') && content.includes('300'), '必須實作 300ms 搜尋防抖計時器');
   assert.ok(content.includes("'timeline'"), '搜尋狀態下必須支援自動切換為時間軸檢視');
+  assert.ok(content.includes('formatTraditionalChineseDate'), '必須包含 formatTraditionalChineseDate 日期格式防護');
 
   // 3. 展開明細與向下滑動
   assert.ok(content.includes('selectedDate') || content.includes('activeDate'), '必須包含選定日期狀態');
