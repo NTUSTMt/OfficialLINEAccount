@@ -20,6 +20,7 @@ import {
   FolderPlus,
   FileSpreadsheet,
   User,
+  UserPlus,
   Sparkles,
 } from 'lucide-react';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
@@ -27,6 +28,7 @@ import { notifyDispatcher, callDispatcherAction, evaluateApplicantsViaAi } from 
 import type { ApplicantEvaluation } from '../../types/admin';
 import { MemberProfileModal } from '../../components/admin/MemberProfileModal';
 import { MemberEditDrawer } from '../../components/admin/MemberEditDrawer';
+import { RosterImportModal } from '../../components/admin/RosterImportModal';
 import { getNationalityLabel } from '../../constants/nationalities';
 import './webAdmin.css';
 
@@ -439,6 +441,7 @@ export const WebAdminRoster: React.FC = () => {
   const [profileModalMember, setProfileModalMember] = useState<any | null>(null);
   const [editDrawerUserId, setEditDrawerUserId] = useState<string | null>(null);
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // 儲存格原地展開與列高自訂狀態
   const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set());
@@ -1725,6 +1728,19 @@ export const WebAdminRoster: React.FC = () => {
               {copiedSuccess ? <Check size={15} color="var(--wa-primary)" /> : <Copy size={15} />}
             </button>
 
+            {/* 新增 / 導入人員按鈕 */}
+            <button
+              type="button"
+              className="web-admin-btn web-admin-btn-secondary"
+              onClick={() => setIsImportModalOpen(true)}
+              disabled={!selectedEventId}
+              title="從其他活動名冊複製或從社員名冊手動補登"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px' }}
+            >
+              <UserPlus size={15} />
+              <span>新增/導入人員</span>
+            </button>
+
             {/* 建立資料夾與 Google 試算表 / 即時同步並開啟試算表 */}
             <button
               type="button"
@@ -2526,6 +2542,21 @@ export const WebAdminRoster: React.FC = () => {
             }
           }}
         />
+
+        {/* 新增/導入人員彈窗 */}
+        {selectedEventId && (
+          <RosterImportModal
+            isOpen={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            targetEventId={selectedEventId}
+            targetEventTitle={currentEvent?.title || '目前活動'}
+            existingSignups={signups}
+            session={session}
+            onSuccess={async () => {
+              await loadSignups(selectedEventId);
+            }}
+          />
+        )}
       </div>
 
       {/* 調色盤 Portal：渲染至 body 以避免被 overflow:auto 截掉 */}

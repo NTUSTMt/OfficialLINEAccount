@@ -50,7 +50,7 @@ export const WebAdminLayout: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
           <NavLink to="/admin-web/events" className="web-admin-brand">
             <Mountain size={22} color="var(--wa-primary)" />
-            <span>NTUST Mountaineering</span>
+            <span>臺灣科技大學登山社</span>
           </NavLink>
 
           <nav className="web-admin-nav">

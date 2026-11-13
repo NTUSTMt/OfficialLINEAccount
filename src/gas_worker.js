@@ -314,7 +314,7 @@ function _handleUploadDriveFiles(json) {
         var blob = Utilities.newBlob(decoded, mimeType, name);
         var createdFile = targetFolder.createFile(blob);
         createdFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        
+
         var fileId = createdFile.getId();
         var cdnUrl = 'https://lh3.googleusercontent.com/d/' + fileId + '=s0';
         uploadedUrls.push(cdnUrl);
@@ -383,8 +383,8 @@ function _handleCreateEventSheet(json) {
 
     // 3. 建立或複製活動專屬試算表 (優先從 SPREADSHEET_ID 或 EVENT_SHEET_TEMPLATE_ID 範本複製)
     var templateId = SCRIPT_PROPERTIES.getProperty('SPREADSHEET_ID') ||
-                     SCRIPT_PROPERTIES.getProperty('EVENT_SHEET_TEMPLATE_ID') ||
-                     SPREADSHEET_ID || '';
+      SCRIPT_PROPERTIES.getProperty('EVENT_SHEET_TEMPLATE_ID') ||
+      SPREADSHEET_ID || '';
     var newSs = null;
 
     if (templateId) {
@@ -987,12 +987,188 @@ function _findColIdx(headers, candidates) {
   return -1;
 }
 
+var NTUST_CALENDAR_PAGE = 'https://www.academic.ntust.edu.tw/p/404-1048-78935.php?Lang=zh-tw';
+var NTUST_UID_TAG_KEY = 'ntust_uid';
+
 /**
- * 定時觸發器公開無參進入點：同步外部日曆行程至 Supabase 快取表
- * 供 Google Apps Script Time-driven Trigger 直接排程繫結
+ * 定時觸發器公開無參進入點：
+ * 1. 先從台科大官網同步最新 .ics 到 SCHOOL_CALENDAR_ID
+ * 2. 再將社團日曆與學校日曆同步至 Supabase external_calendar_events 快取表
  */
 function syncExternalCalendars() {
-  return _handleSyncCalendarEvents({});
+  var ntustResult = null;
+  try {
+    ntustResult = syncNtustIcsToSchoolCalendar();
+  } catch (e) {
+    console.warn('同步台科大 .ics 失敗（將繼續執行 Supabase 同步）:', e);
+    ntustResult = { error: e.toString() };
+  }
+  return _handleSyncCalendarEvents({ ntustSync: ntustResult });
+}
+
+/**
+ * 抓取台科大教務處最新學年度 .ics 並寫入 SCHOOL_CALENDAR_ID 子日曆
+ */
+function syncNtustIcsToSchoolCalendar() {
+  if (!SCHOOL_CALENDAR_ID) {
+    return { skipped: true, reason: '未設定 SCHOOL_CALENDAR_ID' };
+  }
+  var schoolCal = CalendarApp.getCalendarById(SCHOOL_CALENDAR_ID);
+  if (!schoolCal) {
+    throw new Error('找不到 SCHOOL_CALENDAR_ID 對應的日曆，請確認 GAS 帳號擁有該日曆權限');
+  }
+
+  var html = UrlFetchApp.fetch(NTUST_CALENDAR_PAGE, { muteHttpExceptions: true }).getContentText();
+  var icsLinks = _extractNtustIcsLinks(html);
+  if (icsLinks.length === 0) {
+    throw new Error('台科大頁面找不到 .ics 連結，可能網頁已改版');
+  }
+
+  var icsText = UrlFetchApp.fetch(icsLinks[0].url).getContentText('UTF-8');
+  var parsedEvents = _parseIcsEvents(icsText);
+  if (parsedEvents.length === 0) {
+    return { count: 0, sourceUrl: icsLinks[0].url };
+  }
+
+  var dates = parsedEvents.map(function (e) { return e.start.getTime(); });
+  var minDate = new Date(Math.min.apply(null, dates) - 7 * 86400000);
+  var maxDate = new Date(Math.max.apply(null, dates) + 30 * 86400000);
+  var existingEvents = schoolCal.getEvents(minDate, maxDate);
+
+  var existingByUid = {};
+  for (var i = 0; i < existingEvents.length; i++) {
+    var uid = existingEvents[i].getTag(NTUST_UID_TAG_KEY);
+    if (uid) existingByUid[uid] = existingEvents[i];
+  }
+
+  var seenUids = {};
+  var createdCount = 0;
+  var updatedCount = 0;
+  var deletedCount = 0;
+
+  for (var j = 0; j < parsedEvents.length; j++) {
+    var item = parsedEvents[j];
+    seenUids[item.uid] = true;
+    var existing = existingByUid[item.uid];
+
+    if (!existing) {
+      var created = item.isAllDay
+        ? schoolCal.createAllDayEvent(item.summary, item.start, item.end, { description: item.description })
+        : schoolCal.createEvent(item.summary, item.start, item.end, { description: item.description });
+      created.setTag(NTUST_UID_TAG_KEY, item.uid);
+      createdCount++;
+    } else {
+      var needUpdate =
+        existing.getTitle() !== item.summary ||
+        existing.getDescription() !== item.description ||
+        existing.getStartTime().getTime() !== item.start.getTime() ||
+        existing.getEndTime().getTime() !== item.end.getTime();
+
+      if (needUpdate) {
+        existing.setTitle(item.summary);
+        existing.setDescription(item.description);
+        if (item.isAllDay) {
+          existing.setAllDayDates(item.start, item.end);
+        } else {
+          existing.setTime(item.start, item.end);
+        }
+        updatedCount++;
+      }
+    }
+  }
+
+  for (var oldUid in existingByUid) {
+    if (Object.prototype.hasOwnProperty.call(existingByUid, oldUid) && !seenUids[oldUid]) {
+      existingByUid[oldUid].deleteEvent();
+      deletedCount++;
+    }
+  }
+
+  return {
+    sourceUrl: icsLinks[0].url,
+    year: icsLinks[0].year,
+    totalParsed: parsedEvents.length,
+    created: createdCount,
+    updated: updatedCount,
+    deleted: deletedCount
+  };
+}
+
+function _extractNtustIcsLinks(html) {
+  var regex = /<a[^>]+href=["']([^"']+\.ics[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  var results = [];
+  var match;
+  while ((match = regex.exec(html)) !== null) {
+    var href = match[1].trim();
+    var text = match[2].replace(/<[^>]+>/g, '').trim();
+    if (href.indexOf('/') === 0) {
+      href = 'https://www.academic.ntust.edu.tw' + href;
+    } else if (href.indexOf('http') !== 0) {
+      href = 'https://www.academic.ntust.edu.tw/' + href;
+    }
+    var yearMatch = text.match(/(\d{3})學年度/);
+    var year = yearMatch ? parseInt(yearMatch[1], 10) : 0;
+    results.push({ url: href, text: text, year: year });
+  }
+  return results.sort(function (a, b) { return b.year - a.year; });
+}
+
+function _parseIcsEvents(icsText) {
+  var unfolded = icsText.replace(/\r?\n[ \t]/g, '');
+  var lines = unfolded.split(/\r?\n/);
+  var events = [];
+  var cur = null;
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (line === 'BEGIN:VEVENT') {
+      cur = { uid: '', summary: '', description: '', start: null, end: null, isAllDay: false };
+    } else if (line === 'END:VEVENT' && cur) {
+      if (cur.uid && cur.summary && cur.start) {
+        if (!cur.end) {
+          cur.end = new Date(cur.start.getTime() + (cur.isAllDay ? 86400000 : 3600000));
+        }
+        events.push(cur);
+      }
+      cur = null;
+    } else if (cur) {
+      var idx = line.indexOf(':');
+      if (idx === -1) continue;
+      var rawKey = line.slice(0, idx);
+      var key = rawKey.split(';')[0];
+      var val = line.slice(idx + 1).replace(/\\n/g, '\n').replace(/\\,/g, ',');
+
+      if (key === 'UID') cur.uid = val.trim();
+      else if (key === 'SUMMARY') cur.summary = val.trim();
+      else if (key === 'DESCRIPTION') cur.description = val.trim();
+      else if (key === 'DTSTART') {
+        var parsed = _parseIcsDate(rawKey, val);
+        cur.start = parsed.date;
+        cur.isAllDay = parsed.isAllDay;
+      } else if (key === 'DTEND') {
+        cur.end = _parseIcsDate(rawKey, val).date;
+      }
+    }
+  }
+  return events;
+}
+
+function _parseIcsDate(rawKey, val) {
+  var v = val.trim();
+  if (rawKey.indexOf('VALUE=DATE') > -1 || /^\d{8}$/.test(v)) {
+    var y = parseInt(v.slice(0, 4), 10);
+    var m = parseInt(v.slice(4, 6), 10) - 1;
+    var d = parseInt(v.slice(6, 8), 10);
+    return { date: new Date(y, m, d), isAllDay: true };
+  }
+  var match = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
+  if (!match) return { date: new Date(v), isAllDay: false };
+  var yy = +match[1], mm = +match[2] - 1, dd = +match[3];
+  var hh = +match[4], mi = +match[5], ss = +match[6], z = match[7];
+  if (z === 'Z') {
+    return { date: new Date(Date.UTC(yy, mm, dd, hh, mi, ss)), isAllDay: false };
+  }
+  return { date: new Date(yy, mm, dd, hh, mi, ss), isAllDay: false };
 }
 
 /**
@@ -1006,17 +1182,21 @@ function _handleSyncCalendarEvents(params) {
 
   var clubCalendarId = params.clubCalendarId || CLUB_CALENDAR_ID || 'primary';
   var schoolCalendarId = params.schoolCalendarId || SCHOOL_CALENDAR_ID || '';
+  var warnings = [];
 
-  // 預設抓取前後區間：前 60 天至後 180 天
+  // 放寬預設區間：前 60 天至後 365 天（涵蓋完整學年度）
   var now = new Date();
   var startDate = params.startTime ? new Date(params.startTime) : new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
-  var endDate = params.endTime ? new Date(params.endTime) : new Date(now.getTime() + 180 * 24 * 60 * 60 * 1000);
+  var endDate = params.endTime ? new Date(params.endTime) : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
   var clubEvents = [];
   try {
     var clubCal = null;
     if (clubCalendarId && clubCalendarId !== 'primary') {
       clubCal = CalendarApp.getCalendarById(clubCalendarId);
+      if (!clubCal) {
+        warnings.push('找不到 CLUB_CALENDAR_ID (' + clubCalendarId + ')，已退回預設日曆');
+      }
     }
     if (!clubCal) {
       clubCal = CalendarApp.getDefaultCalendar();
@@ -1025,18 +1205,20 @@ function _handleSyncCalendarEvents(params) {
       clubEvents = _extractCalendarEvents(clubCal, 'club', startDate, endDate);
     }
   } catch (errClub) {
-    console.warn('讀取社團主日曆發生錯誤:', errClub);
+    warnings.push('讀取社團主日曆錯誤: ' + errClub.toString());
   }
 
   var schoolEvents = [];
   if (schoolCalendarId) {
     try {
       var schoolCal = CalendarApp.getCalendarById(schoolCalendarId);
-      if (schoolCal) {
+      if (!schoolCal) {
+        warnings.push('找不到 SCHOOL_CALENDAR_ID (' + schoolCalendarId + ')');
+      } else {
         schoolEvents = _extractCalendarEvents(schoolCal, 'school', startDate, endDate);
       }
     } catch (errSchool) {
-      console.warn('讀取學校校曆發生錯誤:', errSchool);
+      warnings.push('讀取學校校曆錯誤: ' + errSchool.toString());
     }
   }
 
@@ -1060,6 +1242,8 @@ function _handleSyncCalendarEvents(params) {
       count: 0,
       clubCount: clubEvents.length,
       schoolCount: schoolEvents.length,
+      warnings: warnings,
+      ntustSync: params.ntustSync || null,
       message: '外部日曆無任何行程需要同步'
     });
   }
@@ -1084,6 +1268,8 @@ function _handleSyncCalendarEvents(params) {
         count: allEvents.length,
         clubCount: clubEvents.length,
         schoolCount: schoolEvents.length,
+        warnings: warnings,
+        ntustSync: params.ntustSync || null,
         message: '成功同步 ' + allEvents.length + ' 筆外部日程至 Supabase'
       });
     } else {
@@ -1118,5 +1304,3 @@ function _extractCalendarEvents(calendar, calendarType, startDate, endDate) {
   }
   return list;
 }
-
-

@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.331-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.335-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -13,7 +13,43 @@
 
 ---
 
-## 最新修正 (2026-11-07, v0.1.331)
+## 最新修正 (2026-11-10, v0.1.335)
+
+- **人員導入彈窗右上角關閉按鈕無底色與無陰影修復 (`RosterImportModal.tsx`, `webAdmin.css`)**：
+  - 新增 `.wa-modal-close-btn` 樣式，移除原生瀏覽器按鈕預設產生的深灰方形底塊與外凸陰影邊框。
+  - 關閉按鈕改為純淨透明底色（`background: transparent`）、無邊框、細緻圓角與柔和灰圖示（`#64748b`），滑鼠懸停時微亮（`#f1f5f9`），與整體彈窗視覺完全融合。
+
+## 過往重大修正 (2026-11-10, v0.1.334)
+
+- **人員導入彈窗全白底勾選框、點擊冒泡修復與全扁平無陰影規範 (`RosterImportModal.tsx`, `webAdmin.css`)**：
+  - **白底勾選框規範**：自訂 `.wa-modal-checkbox` 樣式，預設強制為白底（`#ffffff`）搭配柔和邊框，勾選時呈現經典主題藍色與清晰白色勾勾，杜絕系統/暗黑模式原生深灰黑底 square。
+  - **點擊事件冒泡修復**：修正勾選框被點擊時同時觸發 `<tr>` 之 `onClick` 導致連續反轉兩次（即無法選取）之問題，加入 `e.stopPropagation()` 與標籤隔離，支援點擊勾選框或整列皆可流暢選取。
+  - **全面移除按鈕與分頁陰影**：分頁、輸入框、次要膠囊按鈕與確認送出按鈕（`wa-modal-btn-primary`）統一設為 `box-shadow: none !important;`，移除立體浮雕與原生 bevel 灰影，實現純粹現代的平面化視覺。
+
+## 過往重大修正 (2026-11-10, v0.1.333)
+
+- **人員導入彈窗 Safari 現代膠囊分頁與白底精緻風格重構 (`RosterImportModal.tsx`, `webAdmin.css`)**：
+  - **Safari 膠囊切換列 (Segmented Pill)**：頂部分頁重構為淡灰跑道圓角外框（`wa-segmented-tabs`），作用中分頁為白色立體浮雕滑塊（`wa-segmented-tab.active`），帶來 iOS/macOS 系統層級之流暢質感。
+  - **白底精緻表單規範**：下拉選單與輸入框改為純白底色與細緻邊框（`wa-modal-select`、`wa-modal-input`），徹底解決深色黑底背景反差。
+  - **快捷操作膠囊按鈕**：全選正取/備取/所有可用、清空選取與僅顯示幹部等按鈕改用統一白底精緻膠囊按鈕（`wa-modal-btn-pill`）。
+
+## 過往重大修正 (2026-11-10, v0.1.332)
+
+- **活動報名名冊跨活動與社員名冊人員導入功能 (Roster Import Modal)**：
+  - **功能背景與解決痛點**：
+    - 解決山岳行程因天候或山屋未抽中（如奇萊南華改雪山主東單攻）啟動備案時，需新開活動但報名已截止、原名冊留於舊活動的轉隊問題。
+    - 解決社團幹部隨隊出隊常口頭告知、未經由官方帳號填單報名的快速補登需求。
+  - **雙分頁導入彈窗 (`RosterImportModal.tsx`)**：
+    - **分頁 1【從其他活動複製 (備案轉隊)】**：下拉選擇來源活動，即時撈取該活動完整報名名單，提供「全選正取」、「全選備取」與「清空選取」快捷勾選；支援自訂入隊錄取狀態（維持原狀態 / 統一正取 / 統一備取 / 統一審核中）、繳費狀態（維持原繳費狀態並自動標記來源備註 / 統一未繳費 / 統一已繳費），並可選擇是否保留原隊員備註。
+    - **分頁 2【從社員名冊新增 (含幹部篩選)】**：即時支援姓名、學號、系所或電話模糊搜尋，提供「僅顯示幹部」切換開關快速選取幹部；若該社員缺少身分證字號或緊急聯絡人，自動呈現橘色「個資待補齊」警示徽章，但不強制阻擋幹部加入；支援指定入隊錄取狀態、繳費狀態與自訂幹部隨隊備註。
+  - **資料防重與重啟機制 (`rosterImportUtils.ts`)**：
+    - 實作候選名冊分流比對器 `partitionImportCandidates`：已在目標名冊有效報名者自動反灰禁選並提示「已在此名冊中」，杜絕觸發資料庫 `idx_event_signups_active_unique` 唯一性約束衝突。
+    - 若人員在目標活動中為「已取消 Cancelled」狀態，自動分流至 UPDATE 重啟更新，重設入隊與繳費狀態並清空 `cancel_reason`，避免名冊出現重複紀錄。
+    - 全新人員以 `generateSignupId()` 產生相容 S 開頭唯一序號批次寫入 Supabase `event_signups` 表，並寫入管理員操作稽核日誌（`BATCH_IMPORT_SIGNUPS`）。
+  - **名冊工作站整合 (`WebAdminRoster.tsx`)**：
+    - 工具列新增「新增/導入人員」圖示按鈕，完成導入後自動非同步刷新名冊，無需重整整個頁面。
+
+## 過往重大修正 (2026-11-07, v0.1.331)
 
 - **社務日程 (Calendar & Activity Hub) 工具列與視覺體驗細化**：
   - **版面結構對齊**：移除 `.wa-schedule-container` 重複的 24px 內邊距，使日程頂部工具列與上方頁籤間距精準對齊活動管理與報名名冊。
