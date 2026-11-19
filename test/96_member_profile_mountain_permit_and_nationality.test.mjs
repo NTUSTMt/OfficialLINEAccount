@@ -23,7 +23,7 @@ const NATIONALITY_LIST = eval(listMatch[1]);
 // 實作與 nationalities.ts 一致之純函式測試
 function getNationalityLabel(val, targetLang = 'zh') {
   if (!val || !val.trim()) {
-    return targetLang === 'zh' ? '中華民國' : 'Taiwan';
+    return '－';
   }
   const clean = val.trim();
   const cleanLower = clean.toLowerCase();
@@ -122,7 +122,7 @@ test('1. 國籍常數與轉換函式驗證 (NATIONALITY_LIST & getNationalityLab
   assert.equal(getNationalityLabel('中華民國', 'zh'), '中華民國');
   assert.equal(getNationalityLabel('🇰🇷 대한민국 - Korea', 'zh'), '韓國');
   assert.equal(getNationalityLabel('OtherCountry', 'zh'), 'OtherCountry');
-  assert.equal(getNationalityLabel(null, 'zh'), '中華民國');
+  assert.equal(getNationalityLabel(null, 'zh'), '－');
 
   // 驗證 getNationalityLabel 英文介面轉換
   assert.equal(getNationalityLabel('日本', 'en'), 'Japan');

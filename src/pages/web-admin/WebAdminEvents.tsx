@@ -1,28 +1,29 @@
-import React, { useState, useEffect, useMemo, type ChangeEvent } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import {
   Calendar,
   Plus,
   Edit3,
   Users,
-  Search,
   RefreshCw,
   AlertCircle,
   X,
-  Save,
   CheckCircle2,
   Mountain,
-  Link2,
-  ImageIcon,
-  Check,
-  Globe,
-  Trash2
+  Clock,
+  Hash,
+  CircleDot
 } from 'lucide-react';
+import { WebAdminToolbar } from '../../components/admin/WebAdminToolbar';
+import {
+  WebAdminEventModal,
+  type AdminEventRecord as ModalAdminEventRecord,
+  type EventFormData,
+} from '../../components/admin/WebAdminEventModal';
+import type { ScheduleFeedItem } from '../../types/schedule';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
-import { getDirectImageUrl, validateImageUploadFile } from '../../utils/image';
-import { GAS_API_URL } from '../../constants/api';
-import { withAuthPayload, translateEventViaAi } from '../../utils/api';
-import { parseTaiwanDeadline, buildTaiwanIsoString, formatTaiwanDateTime, isTaiwanDeadlinePassed } from '../../utils/dateUtils';
+import { getDirectImageUrl } from '../../utils/image';
+import { formatTaiwanDateTime, isTaiwanDeadlinePassed } from '../../utils/dateUtils';
 import './webAdmin.css';
 
 interface AdminEventRecord {
@@ -111,40 +112,8 @@ export const WebAdminEvents: React.FC = () => {
 
   // 置中彈窗狀態 (新增 / 編輯活動)
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [notifyOfficerGroup, setNotifyOfficerGroup] = useState(false);
-
-  // 本機圖片選取狀態
-  const [selectedFile, setSelectedFile] = useState<{ base64: string; name: string } | null>(null);
-  const [previewImage, setPreviewImage] = useState<string>('');
-
-  // 表單資料狀態 (包含共用設定與中英文雙欄獨立內容)
-  const [formData, setFormData] = useState({
-    id: '',
-    status: '開放',
-    start_date: '',
-    end_date: '',
-    deadline: '',
-    deadline_time: '23:59',
-    fee: '',
-    line_group_url: '',
-    cover_image_url: '',
-    title: '',
-    summary: '',
-    itinerary: '',
-    title_en: '',
-    summary_en: '',
-    itinerary_en: '',
-  });
-
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [translationSnapshot, setTranslationSnapshot] = useState<{
-    title_en: string;
-    summary_en: string;
-    itinerary_en: string;
-  } | null>(null);
+  const [editingEvent, setEditingEvent] = useState<ModalAdminEventRecord | null>(null);
+  const [createInitialOverrides, setCreateInitialOverrides] = useState<Partial<EventFormData> | undefined>(undefined);
 
   const client = useMemo(() => {
     return createAuthenticatedSupabaseClient(session.jwt);
@@ -194,56 +163,7 @@ export const WebAdminEvents: React.FC = () => {
     loadEvents();
   }, [client]);
 
-  // 2. 本機圖片選取與壓縮處理
-  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validation = validateImageUploadFile(file, 10 * 1024 * 1024);
-    if (!validation.valid) {
-      setErrorMsg(`[檔案驗證失敗]: ${validation.error || '圖片不合法'}`);
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxWidth = 2048;
-        const maxHeight = 2048;
-
-        if (width > height) {
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.88);
-        setSelectedFile({ base64: compressedBase64, name: file.name });
-        setPreviewImage(compressedBase64);
-        setFormData((prev) => ({ ...prev, cover_image_url: '' }));
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // 3. 開啟新增彈窗
+  // 2. 開啟新增彈窗
   const handleOpenCreate = () => {
     const now = new Date();
     const yy = String(now.getFullYear()).slice(-2);
@@ -261,342 +181,74 @@ export const WebAdminEvents: React.FC = () => {
     });
     const nextSeq = String(maxSeq + 1).padStart(2, '0');
 
-    setEditingEventId(null);
-    setSelectedFile(null);
-    setPreviewImage('');
-    setNotifyOfficerGroup(false);
-    setFormData({
+    setEditingEvent(null);
+    setCreateInitialOverrides({
       id: `${prefix}${nextSeq}`,
-      status: '開放',
-      start_date: '',
-      end_date: '',
-      deadline: '',
-      deadline_time: '23:59',
-      fee: '0',
-      line_group_url: '',
-      cover_image_url: '',
-      title: '',
-      summary: '',
-      itinerary: '',
-      title_en: '',
-      summary_en: '',
-      itinerary_en: '',
+      status: '未來開放',
     });
     setModalOpen(true);
     setErrorMsg(null);
   };
 
-  // 4. 開啟編輯彈窗
+  // 3. 開啟編輯彈窗
   const handleOpenEdit = (event: AdminEventRecord) => {
-    setEditingEventId(event.id);
-    setSelectedFile(null);
-    setNotifyOfficerGroup(false);
-    const existingImg = event.cover_image_url || event.cover_image || '';
-    setPreviewImage(existingImg ? (getDirectImageUrl(existingImg, 600) || existingImg) : '');
-    const parsedDeadline = parseTaiwanDeadline(event.deadline);
-    setFormData({
+    setCreateInitialOverrides(undefined);
+    setEditingEvent({
       id: event.id,
-      status: event.status === '開放報名中' ? '開放' : event.status || '開放',
-      start_date: event.start_date || '',
-      end_date: event.end_date || '',
-      deadline: parsedDeadline.date,
-      deadline_time: parsedDeadline.time || '23:59',
-      fee: event.fee !== undefined ? String(event.fee) : '0',
-      line_group_url: event.line_group_url || '',
-      cover_image_url: existingImg.startsWith('data:image/') ? '' : existingImg,
-      title: event.title || '',
-      summary: event.summary || '',
-      itinerary: event.itinerary || '',
-      title_en: event.title_en || '',
-      summary_en: event.summary_en || '',
-      itinerary_en: event.itinerary_en || '',
+      title: event.title,
+      title_en: event.title_en,
+      summary: event.summary,
+      summary_en: event.summary_en,
+      itinerary: event.itinerary,
+      itinerary_en: event.itinerary_en,
+      start_date: event.start_date,
+      end_date: event.end_date,
+      deadline: event.deadline,
+      fee: event.fee !== undefined && event.fee !== '' ? Number(event.fee) : undefined,
+      status: event.status,
+      cover_image_url: event.cover_image_url || event.cover_image || '',
+      line_group_url: event.line_group_url,
     });
     setModalOpen(true);
-    setTranslationSnapshot(null);
     setErrorMsg(null);
   };
 
-  // AI 一鍵雙語翻譯處理
-  const handleAiTranslate = async () => {
-    if (isTranslating) return;
-    if (!formData.title && !formData.summary && !formData.itinerary) {
-      alert('請先填寫中文活動名稱、簡介或行程內容');
-      return;
+  // 4. 排程衝突檢查來源 (以現有活動起訖日為主)
+  const conflictSourceItems = useMemo<ScheduleFeedItem[]>(() => {
+    return events
+      .filter((ev) => Boolean(ev.start_date))
+      .map((ev) => ({
+        item_id: `event:${ev.id}`,
+        source_type: 'event',
+        title: ev.title,
+        sub_text: '',
+        start_time: ev.start_date,
+        end_time: ev.end_date || ev.start_date,
+        is_all_day: true,
+        is_macro: true,
+        status: ev.status,
+        status_badge: ev.status,
+        link_path: '',
+        details: { event_id: ev.id },
+      }));
+  }, [events]);
+
+  const handleModalSaved = (result: {
+    action: 'create' | 'update' | 'delete';
+    eventId: string;
+    title: string;
+  }) => {
+    setModalOpen(false);
+    setEditingEvent(null);
+    if (result.action === 'delete') {
+      setSuccessMsg(`活動「[${result.eventId}] ${result.title}」已成功刪除！`);
+    } else if (result.action === 'update') {
+      setSuccessMsg(`活動「${result.title}」已成功更新！`);
+    } else {
+      setSuccessMsg(`新活動「${result.title}」已成功建立！`);
     }
-
-    setIsTranslating(true);
-    // 儲存目前翻譯快照以供一鍵還原
-    setTranslationSnapshot({
-      title_en: formData.title_en || '',
-      summary_en: formData.summary_en || '',
-      itinerary_en: formData.itinerary_en || '',
-    });
-
-    const res = await translateEventViaAi({
-      title: formData.title || '',
-      summary: formData.summary || '',
-      itinerary: formData.itinerary || '',
-    }, session?.userId);
-
-    setIsTranslating(false);
-
-    if (!res.success || !res.translation) {
-      alert(`AI 翻譯失敗: ${res.error || '未知錯誤'}`);
-      return;
-    }
-
-    setFormData((prev) => ({
-      ...prev,
-      title_en: res.translation!.title_en || prev.title_en,
-      summary_en: res.translation!.summary_en || prev.summary_en,
-      itinerary_en: res.translation!.itinerary_en || prev.itinerary_en,
-    }));
-  };
-
-  const handleUndoTranslation = () => {
-    if (!translationSnapshot) return;
-    setFormData((prev) => ({
-      ...prev,
-      title_en: translationSnapshot.title_en,
-      summary_en: translationSnapshot.summary_en,
-      itinerary_en: translationSnapshot.itinerary_en,
-    }));
-    setTranslationSnapshot(null);
-  };
-
-  // 5. 刪除活動（連帶清除報名名冊與心得，並跳出二次確認）
-  const handleDeleteEvent = async () => {
-    if (!editingEventId) return;
-
-    try {
-      setDeleting(true);
-      setErrorMsg(null);
-
-      // 查詢該活動目前報名人數
-      const { count, error: countErr } = await client
-        .from('event_signups')
-        .select('*', { count: 'exact', head: true })
-        .eq('event_id', editingEventId);
-
-      if (countErr) {
-        throw new Error(`[查詢報名名冊失敗]: ${countErr.message}`);
-      }
-
-      const signupCount = count || 0;
-      const confirmPrompt = signupCount > 0
-        ? `此活動目前已有 ${signupCount} 位社員報名！\n\n刪除活動將一併清除該活動的所有報名名冊與心得紀錄。\n\n確定要強制刪除活動「[${formData.id}] ${formData.title}」嗎？此動作無法復原！`
-        : `確定要刪除活動「[${formData.id}] ${formData.title}」嗎？此動作無法復原！`;
-
-      if (!window.confirm(confirmPrompt)) {
-        setDeleting(false);
-        return;
-      }
-
-      // 1. 刪除關聯心得 (reflections)
-      const { error: refErr } = await client
-        .from('reflections')
-        .delete()
-        .eq('event_id', editingEventId);
-      if (refErr) {
-        throw new Error(`[清除活動心得失敗]: ${refErr.message}`);
-      }
-
-      // 2. 刪除關聯報名名冊 (event_signups)
-      const { error: signupDelErr } = await client
-        .from('event_signups')
-        .delete()
-        .eq('event_id', editingEventId);
-      if (signupDelErr) {
-        throw new Error(`[清除活動報名名冊失敗]: ${signupDelErr.message}`);
-      }
-
-      // 3. 刪除活動本體 (events)
-      const { error: eventDelErr } = await client
-        .from('events')
-        .delete()
-        .eq('id', editingEventId);
-      if (eventDelErr) {
-        throw new Error(`[刪除活動失敗]: ${eventDelErr.message}`);
-      }
-
-      await logWebAuditAction(client, session.userId, 'DELETE_EVENT', 'events', editingEventId, {
-        id: editingEventId,
-        title: formData.title,
-        deletedSignupsCount: signupCount,
-      });
-
-      setSuccessMsg(`活動「[${formData.id}] ${formData.title}」已成功刪除！`);
-      setModalOpen(false);
-      loadEvents();
-      setTimeout(() => setSuccessMsg(null), 3000);
-    } catch (err: any) {
-      console.error('[WebAdminEvents] handleDeleteEvent error:', err);
-      setErrorMsg(err.message || String(err));
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  // 5. 儲存活動 (新增或修改)
-  const handleSaveEvent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.id.trim() || !formData.title.trim()) {
-      setErrorMsg('[驗證失敗]: 活動代號與中文活動名稱為必填項目');
-      return;
-    }
-
-    if (!formData.start_date || !formData.end_date) {
-      setErrorMsg('[驗證失敗]: 出隊開始日期與出隊結束日期均為必填項目');
-      return;
-    }
-
-    if (!formData.deadline) {
-      setErrorMsg('[驗證失敗]: 報名截止日期為必填項目');
-      return;
-    }
-
-    const zhLength = (formData.summary || '').length + (formData.itinerary || '').length;
-    if (zhLength > 1400) {
-      setErrorMsg(`[字數超出限制]: 中文簡介與行程合計共 ${zhLength} 字，超過 LINE 卡片傳送上限 1400 字！`);
-      return;
-    }
-
-    const enLength = (formData.summary_en || '').length + (formData.itinerary_en || '').length;
-    if (enLength > 1400) {
-      setErrorMsg(`[字數超出限制]: 英文簡介與行程合計共 ${enLength} 字，超過 LINE 卡片傳送上限 1400 字！`);
-      return;
-    }
-
-    setSaving(true);
-    setErrorMsg(null);
-
-    try {
-      let finalCoverUrl = formData.cover_image_url.trim();
-
-      // 若有新選取之本機圖檔，先呼叫 GAS API 壓縮上傳至 Google Drive 取得永續直連網址
-      if (selectedFile) {
-        try {
-          const uploadPayload = {
-            action: 'upload_drive_file',
-            userId: session.userId || 'officer',
-            folderType: 'events',
-            files: [
-              {
-                name: `event_${formData.id.trim()}_cover_${Date.now()}.jpg`,
-                base64: selectedFile.base64,
-              },
-            ],
-          };
-
-          const gasRes = await fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(withAuthPayload(uploadPayload)),
-            redirect: 'follow',
-          });
-
-          if (!gasRes.ok) {
-            throw new Error(`[封面圖片上傳失敗]: GAS 回應狀態碼 ${gasRes.status}`);
-          }
-
-          const gasData = await gasRes.json();
-          const validUrls = gasData.urls || gasData.uploadedUrls || (gasData.imageUrl ? [gasData.imageUrl] : []);
-          if (gasData.status === 'success' && Array.isArray(validUrls) && validUrls.length > 0) {
-            finalCoverUrl = validUrls[0];
-          } else {
-            throw new Error(`[封面圖片上傳失敗]: ${gasData.message || '無法從 Google Drive 取得檔案直連網址'}`);
-          }
-        } catch (uploadErr: any) {
-          console.error('[WebAdminEvents] 本機圖檔上傳 Drive 失敗:', uploadErr);
-          throw new Error(`[封面圖片上傳失敗]: ${uploadErr.message || String(uploadErr)}`);
-        }
-      }
-
-      // 防禦性校驗：若最終網址仍為 base64（表示上傳未完成或非正常 URL），嚴禁寫入 Supabase 以防污染資料庫與 LINE Flex 卡片
-      if (finalCoverUrl.startsWith('data:image/')) {
-        finalCoverUrl = '';
-      }
-
-      // 使用 save_admin_event_rpc 預存程序 (SECURITY DEFINER，完全豁免 RLS 42501，自帶 sync_queue 佇列同步)
-      const eventData = {
-        eventId: editingEventId || formData.id.trim(),
-        name: formData.title.trim(),
-        nameEn: formData.title_en.trim(),
-        startDate: formData.start_date,
-        endDate: formData.end_date || formData.start_date,
-        deadline: formData.deadline
-          ? buildTaiwanIsoString(formData.deadline, formData.deadline_time)
-          : (formData.start_date ? buildTaiwanIsoString(formData.start_date, '23:59') : ''),
-        cost: String(formData.fee || 0),
-        status: formData.status,
-        shortDesc: formData.summary.trim(),
-        shortDescEn: formData.summary_en.trim(),
-        fullDesc: formData.itinerary.trim(),
-        fullDescEn: formData.itinerary_en.trim(),
-        imageUrl: finalCoverUrl,
-        lineGroupUrl: formData.line_group_url.trim(),
-      };
-
-      const { data: rpcRes, error } = await client.rpc('save_admin_event_rpc', {
-        p_officer_line_user_id: session.userId,
-        p_event_data: eventData,
-      });
-
-      if (error) {
-        throw new Error(`[${editingEventId ? '更新' : '新增'}活動失敗]: ${error.message} (代碼: ${error.code || 'UNKNOWN'})`);
-      }
-
-      if (rpcRes?.status === 'error') {
-        throw new Error(`[${editingEventId ? '更新' : '新增'}活動失敗]: ${rpcRes.message || '權限不足或資料格式錯誤'}`);
-      }
-
-      const savedEventId = rpcRes?.eventId || editingEventId || formData.id.trim();
-
-      await logWebAuditAction(
-        client,
-        session.userId,
-        editingEventId ? 'UPDATE_EVENT' : 'CREATE_EVENT',
-        'events',
-        savedEventId,
-        eventData
-      );
-
-      if (editingEventId) {
-        setSuccessMsg(`活動「${formData.title}」已成功更新！`);
-      } else {
-        setSuccessMsg(`新活動「${formData.title}」已成功建立！`);
-      }
-
-      // 若勾選推播至幹部群組
-      if (notifyOfficerGroup) {
-        try {
-          const query = new URLSearchParams({
-            action: 'notify_officer_event',
-            userId: session.userId,
-            eventId: savedEventId,
-            name: formData.title.trim(),
-            startDate: formData.start_date || '',
-            endDate: formData.end_date || formData.start_date || '',
-            deadline: formData.deadline || '',
-            cost: String(formData.fee || 0),
-            status: formData.status,
-            isUpdate: String(!!editingEventId),
-          });
-          await fetch(`${GAS_API_URL}?${query.toString()}`);
-        } catch (pushErr) {
-          console.warn('[WebAdminEvents] 推播幹部群組失敗 (不影響活動儲存):', pushErr);
-        }
-      }
-
-      setModalOpen(false);
-      loadEvents();
-      setTimeout(() => setSuccessMsg(null), 3000);
-    } catch (err: any) {
-      console.error('[WebAdminEvents] handleSaveEvent error:', err);
-      setErrorMsg(err.message || String(err));
-    } finally {
-      setSaving(false);
-    }
+    loadEvents();
+    setTimeout(() => setSuccessMsg(null), 3000);
   };
 
   // 各狀態數量統計
@@ -661,82 +313,55 @@ export const WebAdminEvents: React.FC = () => {
     });
   }, [events, searchQuery, statusFilter, sortBy]);
 
-  // 中英文簡介與行程合計字數 (上限 1400 字，對應 LINE Flex 傳送限制)
-  const zhTotalCount = (formData.summary || '').length + (formData.itinerary || '').length;
-  const isZhOver = zhTotalCount > 1400;
-  const enTotalCount = (formData.summary_en || '').length + (formData.itinerary_en || '').length;
-  const isEnOver = enTotalCount > 1400;
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* 頂部操作工具列 */}
-      <div className="web-admin-toolbar">
-        <div className="web-admin-toolbar-left">
-          <div style={{ position: 'relative' }}>
-            <Search size={15} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--wa-text-muted)' }} />
-            <input
-              type="text"
-              className="web-admin-input"
-              placeholder="搜尋活動名稱、編號、簡介..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ paddingLeft: 32, width: 220 }}
-            />
-          </div>
-
-          {/* 狀態篩選：精準對齊真實狀態與截止日計算 */}
-          <select
-            className="web-admin-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="ALL">全部狀態 ({events.length})</option>
-            <option value="開放">開放中 ({statusCounts['開放'] || 0})</option>
-            <option value="未來開放">未來開放 ({statusCounts['未來開放'] || 0})</option>
-            <option value="已截止">已截止 ({statusCounts['已截止'] || 0})</option>
-            <option value="關閉">已關閉 ({statusCounts['關閉'] || 0})</option>
-          </select>
-
-          {/* 多維度排序功能 */}
-          <select
-            className="web-admin-select"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            title="活動排序方式"
-          >
-            <option value="startDateDesc">出隊日期 (由新到舊)</option>
-            <option value="startDateAsc">出隊日期 (由舊到新)</option>
-            <option value="deadlineAsc">截止日期 (即將截止優先)</option>
-            <option value="deadlineDesc">截止日期 (較晚截止優先)</option>
-            <option value="idDesc">活動代號 (由新到舊)</option>
-            <option value="idAsc">活動代號 (由舊到新)</option>
-            <option value="statusOrder">活動狀態 (開放中優先)</option>
-          </select>
-        </div>
-
-        <div className="web-admin-toolbar-right">
-          {/* 純圖示重新整理按鈕 */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={loadEvents}
-            title="重新整理活動清單"
-            style={{ padding: '7px 10px' }}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
-
-          {/* 新增活動按鈕 */}
-          <button
-            type="button"
-            className="web-admin-btn"
-            onClick={handleOpenCreate}
-          >
-            <Plus size={16} />
-            <span>新增活動</span>
-          </button>
-        </div>
-      </div>
+      {/* 頂部操作工具列 (Notion 極簡無框工具列) */}
+      <WebAdminToolbar
+        search={{
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: '搜尋活動名稱、編號、簡介...',
+        }}
+        filters={[
+          {
+            key: 'status',
+            label: '活動狀態',
+            selected: statusFilter,
+            onChange: setStatusFilter,
+            options: [
+              { value: 'ALL', label: `全部狀態 (${events.length})`, icon: <CircleDot size={13} /> },
+              { value: '開放', label: `開放中 (${statusCounts['開放'] || 0})`, icon: <CheckCircle2 size={13} /> },
+              { value: '未來開放', label: `未來開放 (${statusCounts['未來開放'] || 0})`, icon: <Clock size={13} /> },
+              { value: '已截止', label: `已截止 (${statusCounts['已截止'] || 0})`, icon: <AlertCircle size={13} /> },
+              { value: '關閉', label: `已關閉 (${statusCounts['關閉'] || 0})`, icon: <X size={13} /> },
+            ],
+          },
+        ]}
+        sort={{
+          value: sortBy,
+          defaultValue: 'startDateDesc',
+          onChange: setSortBy,
+          options: [
+            { value: 'startDateDesc', label: '出隊日期 (由新到舊)', icon: <Calendar size={13} /> },
+            { value: 'startDateAsc', label: '出隊日期 (由舊到新)', icon: <Calendar size={13} /> },
+            { value: 'deadlineAsc', label: '截止日期 (即將截止優先)', icon: <Clock size={13} /> },
+            { value: 'deadlineDesc', label: '截止日期 (較晚截止優先)', icon: <Clock size={13} /> },
+            { value: 'idDesc', label: '活動代號 (由新到舊)', icon: <Hash size={13} /> },
+            { value: 'idAsc', label: '活動代號 (由舊到新)', icon: <Hash size={13} /> },
+            { value: 'statusOrder', label: '活動狀態 (開放中優先)', icon: <CircleDot size={13} /> },
+          ],
+        }}
+        refresh={{
+          onClick: loadEvents,
+          loading,
+          title: '重新整理活動清單',
+        }}
+        primaryAction={{
+          label: '新增活動',
+          icon: <Plus size={15} />,
+          onClick: handleOpenCreate,
+        }}
+      />
 
       {/* 成功與錯誤提示 */}
       {successMsg && (
@@ -892,422 +517,20 @@ export const WebAdminEvents: React.FC = () => {
       )}
 
       {/* 置中活動新增 / 編輯彈窗 (Centered Modal) */}
-      {modalOpen && (
-        <div className="wa-modal-backdrop" onClick={() => !saving && !deleting && setModalOpen(false)}>
-          <div className="wa-modal-container" onClick={(e) => e.stopPropagation()}>
-            {/* 彈窗頂部 */}
-            <div className="wa-modal-header">
-              <h2 className="wa-modal-title">
-                <Calendar size={20} color="var(--wa-primary)" />
-                <span>{editingEventId ? `編輯活動 [${formData.id}]` : '新增活動'}</span>
-              </h2>
-              <button
-                type="button"
-                className="wa-drawer-close-btn"
-                onClick={() => !saving && setModalOpen(false)}
-                title="關閉視窗"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* 彈窗內容區 (可滾動) */}
-            <form onSubmit={handleSaveEvent} style={{ display: 'contents' }}>
-              <div className="wa-modal-body">
-                {/* 區塊 1：共用設定區 (Shared Settings) */}
-                <div style={{ backgroundColor: '#f8fafc', padding: '16px 18px', borderRadius: 12, border: '1px solid var(--wa-border)', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--wa-text)', borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}>
-                    活動基本與共用設定
-                  </div>
-
-                  {/* 第一列：活動代號 與 活動狀態 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div>
-                      <label className="wa-form-label">活動代號 *</label>
-                      <input
-                        type="text"
-                        required
-                        disabled={Boolean(editingEventId)}
-                        className="web-admin-input"
-                        value={formData.id}
-                        onChange={(e) => setFormData({ ...formData, id: e.target.value.toUpperCase().trim() })}
-                        style={{ fontFamily: 'monospace', width: '100%', backgroundColor: editingEventId ? '#f1f5f9' : '#ffffff' }}
-                        placeholder="例如: E2609-01"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">活動狀態 *</label>
-                      <select
-                        className="web-admin-select"
-                        style={{ width: '100%' }}
-                        value={formData.status}
-                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      >
-                        <option value="開放">開放 (正式開放報名填表)</option>
-                        <option value="未來開放">未來開放 (僅預告，暫不開放報名)</option>
-                        <option value="關閉">關閉 (不公開活動)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* 第二列：出隊日期區間 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div>
-                      <label className="wa-form-label">出隊開始日期 *</label>
-                      <input
-                        type="date"
-                        required
-                        className="web-admin-input"
-                        value={formData.start_date}
-                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">出隊結束日期 *</label>
-                      <input
-                        type="date"
-                        required
-                        className="web-admin-input"
-                        value={formData.end_date}
-                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* 第三列：報名截止日 與 預計費用 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
-                    <div>
-                      <label className="wa-form-label">報名截止日期 *</label>
-                      <input
-                        type="date"
-                        required
-                        className="web-admin-input"
-                        value={formData.deadline}
-                        onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">截止時間 (台灣時間) *</label>
-                      <input
-                        type="time"
-                        required
-                        className="web-admin-input"
-                        value={formData.deadline_time || '23:59'}
-                        onChange={(e) => setFormData({ ...formData, deadline_time: e.target.value })}
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">預計費用 (NT$) *</label>
-                      <input
-                        type="number"
-                        required
-                        min="0"
-                        className="web-admin-input"
-                        value={formData.fee}
-                        onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
-                        style={{ width: '100%' }}
-                        placeholder="例如: 3500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 第四列：LINE 群組邀請連結 (保密) */}
-                  <div>
-                    <label className="wa-form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Link2 size={14} color="var(--wa-primary)" />
-                      <span>活動專屬 LINE 群組邀請連結 (保密)</span>
-                    </label>
-                    <input
-                      type="url"
-                      className="web-admin-input"
-                      value={formData.line_group_url}
-                      onChange={(e) => setFormData({ ...formData, line_group_url: e.target.value })}
-                      style={{ width: '100%' }}
-                      placeholder="https://line.me/R/ti/g/... 或 https://line.me/ti/g/..."
-                    />
-                    <div style={{ fontSize: '0.78rem', color: 'var(--wa-text-muted)', marginTop: 4, textAlign: 'left' }}>
-                      此連結為出隊專屬保密資訊，僅在幹部審核為正取並推播時提供正取社員加入。
-                    </div>
-                  </div>
-
-                  {/* 第五列：封面照片設定 (支援檔案選取與 URL 雙軌) */}
-                  <div>
-                    <label className="wa-form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <ImageIcon size={14} color="var(--wa-primary)" />
-                      <span>活動封面照片</span>
-                    </label>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                      <label
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '8px 16px',
-                          backgroundColor: '#ffffff',
-                          border: '1.5px dashed var(--wa-border)',
-                          borderRadius: 8,
-                          cursor: 'pointer',
-                          fontSize: '0.84rem',
-                          fontWeight: 600,
-                          color: 'var(--wa-text)',
-                        }}
-                      >
-                        <ImageIcon size={15} />
-                        <span>{selectedFile ? '更換圖片檔案' : '選取本機圖片'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageChange}
-                          style={{ display: 'none' }}
-                        />
-                      </label>
-
-                      <span style={{ fontSize: '0.82rem', color: 'var(--wa-text-muted)' }}>或直接貼上圖片網址：</span>
-
-                      <input
-                        type="url"
-                        className="web-admin-input"
-                        placeholder="https://lh3.googleusercontent.com/... 或 https://..."
-                        value={formData.cover_image_url}
-                        onChange={(e) => {
-                          setFormData({ ...formData, cover_image_url: e.target.value });
-                          setSelectedFile(null);
-                          setPreviewImage(e.target.value);
-                        }}
-                        style={{ flex: 1, minWidth: 220 }}
-                      />
-                    </div>
-
-                    {/* 圖片預覽縮圖 */}
-                    {previewImage && (
-                      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 120, height: 70, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--wa-border)', backgroundColor: '#000' }}>
-                          <img
-                            src={previewImage}
-                            alt="預覽"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        </div>
-                        {selectedFile && (
-                          <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Check size={14} />
-                            <span>已選取圖檔：{selectedFile.name} (儲存時將自動壓縮上傳)</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 第六列：推播到幹部群組勾選框 (在封面照片下方) */}
-                  <div style={{ padding: '10px 14px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid var(--wa-border)' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        className="wa-checkbox"
-                        checked={notifyOfficerGroup}
-                        onChange={(e) => setNotifyOfficerGroup(e.target.checked)}
-                      />
-                      <span style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--wa-text)' }}>
-                        同步推播活動資訊至幹部群組 (LINE)
-                      </span>
-                    </label>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--wa-text-muted)', marginTop: 4, textAlign: 'left' }}>
-                      勾選後儲存時將自動向 LINE 幹部群組發送活動出隊摘要訊息
-                    </div>
-                  </div>
-                </div>
-
-                {/* 區塊 2：中英文雙欄對稱編輯區 (Bilingual 2-Column Grid) */}
-                <div className="wa-bilingual-grid">
-                  {/* 左欄：中文內容 (Traditional Chinese) */}
-                  <div className="wa-bilingual-col">
-                    <div className="wa-bilingual-header">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Globe size={15} color="var(--wa-primary)" />
-                        <span>中文內容 (Traditional Chinese)</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">活動名稱 (中文) *</label>
-                      <input
-                        type="text"
-                        required
-                        className="web-admin-input"
-                        value={formData.title}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                        placeholder="例如: 雪山主東峰雪期攀登"
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">活動簡介 (中文)</label>
-                      <textarea
-                        className="web-admin-textarea"
-                        rows={4}
-                        value={formData.summary}
-                        onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
-                        placeholder="請填寫簡短吸引人的中文出隊介紹..."
-                        style={{ width: '100%', minHeight: 110, backgroundColor: '#ffffff' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">詳細行程與裝備要求 (中文)</label>
-                      <textarea
-                        className="web-admin-textarea"
-                        rows={12}
-                        value={formData.itinerary}
-                        onChange={(e) => setFormData({ ...formData, itinerary: e.target.value })}
-                        placeholder="D0 台北集合出發&#10;D1 登山口 -> 七卡山莊 -> 三六九山莊&#10;D2 主峰登頂 -> 下山返程..."
-                        style={{ width: '100%', minHeight: 260, backgroundColor: '#ffffff' }}
-                      />
-                      <div style={{ textAlign: 'left', fontSize: '0.76rem', color: isZhOver ? '#dc2626' : 'var(--wa-text-muted)', marginTop: 4 }}>
-                        中文總字數 (簡介+行程)：{zhTotalCount} / 1400 字 (LINE 卡片傳送上限)
-                        {isZhOver && ' (已超出上限)'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 右欄：英文內容 (English Translation) */}
-                  <div className="wa-bilingual-col">
-                    <div className="wa-bilingual-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Globe size={15} color="#2563eb" />
-                        <span>英文內容</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {translationSnapshot && (
-                          <button
-                            type="button"
-                            className="web-admin-btn"
-                            onClick={handleUndoTranslation}
-                            style={{ padding: '2px 8px', fontSize: '0.75rem', height: 26 }}
-                            title="還原為翻譯前之內容"
-                          >
-                            一鍵還原
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="web-admin-btn web-admin-btn-primary"
-                          onClick={handleAiTranslate}
-                          disabled={isTranslating}
-                          style={{ padding: '2px 10px', fontSize: '0.75rem', height: 26, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                          title="使用 AI 自動將中文名稱、簡介與行程翻譯為英文"
-                        >
-                          {isTranslating ? (
-                            <>
-                              <RefreshCw size={12} className="wa-spin" />
-                              <span>翻譯中...</span>
-                            </>
-                          ) : (
-                            <span>AI 一鍵雙語翻譯</span>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">Event Title (English)</label>
-                      <input
-                        type="text"
-                        className="web-admin-input"
-                        value={formData.title_en}
-                        onChange={(e) => setFormData({ ...formData, title_en: e.target.value })}
-                        placeholder="e.g. Snow Mountain Main & East Peak"
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">Short Summary (English)</label>
-                      <textarea
-                        className="web-admin-textarea"
-                        rows={4}
-                        value={formData.summary_en}
-                        onChange={(e) => setFormData({ ...formData, summary_en: e.target.value })}
-                        placeholder="Brief summary in English for international members..."
-                        style={{ width: '100%', minHeight: 110, backgroundColor: '#ffffff' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="wa-form-label">Detailed Itinerary & Gear (English)</label>
-                      <textarea
-                        className="web-admin-textarea"
-                        rows={12}
-                        value={formData.itinerary_en}
-                        onChange={(e) => setFormData({ ...formData, itinerary_en: e.target.value })}
-                        placeholder="Day 0: Meet in Taipei&#10;Day 1: Trailhead -> 369 Cabin&#10;Day 2: Summit -> Return..."
-                        style={{ width: '100%', minHeight: 260, backgroundColor: '#ffffff' }}
-                      />
-                      <div style={{ textAlign: 'left', fontSize: '0.76rem', color: isEnOver ? '#dc2626' : 'var(--wa-text-muted)', marginTop: 4 }}>
-                        English Total (Summary+Itinerary): {enTotalCount} / 1400 chars (LINE Flex Limit)
-                        {isEnOver && ' (Exceeded limit)'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 彈窗底部固定按鈕列 */}
-              <div className="wa-modal-footer">
-                {editingEventId && (
-                  <button
-                    type="button"
-                    className="web-admin-btn"
-                    style={{
-                      marginRight: 'auto',
-                      backgroundColor: '#dc2626',
-                      color: '#ffffff',
-                      border: 'none',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '7px 14px',
-                    }}
-                    onClick={handleDeleteEvent}
-                    disabled={saving || deleting}
-                  >
-                    <Trash2 size={15} />
-                    <span>{deleting ? '刪除中...' : '刪除活動'}</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="web-admin-btn web-admin-btn-secondary"
-                  onClick={() => !saving && !deleting && setModalOpen(false)}
-                  disabled={saving || deleting}
-                >
-                  <span>取消</span>
-                </button>
-
-                <button
-                  type="submit"
-                  className="web-admin-btn"
-                  disabled={saving || deleting}
-                >
-                  <Save size={15} />
-                  <span>{saving ? '處理中...' : editingEventId ? '儲存活動變更' : '新增活動'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <WebAdminEventModal
+        isOpen={modalOpen}
+        editingEvent={editingEvent}
+        initialFormOverrides={createInitialOverrides}
+        conflictSourceItems={conflictSourceItems}
+        session={session}
+        client={client}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingEvent(null);
+        }}
+        onSaved={handleModalSaved}
+        onError={(msg) => setErrorMsg(msg)}
+      />
     </div>
   );
 };

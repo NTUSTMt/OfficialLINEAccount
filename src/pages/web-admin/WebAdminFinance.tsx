@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import {
-  Search,
-  RefreshCw,
   AlertCircle,
   CheckCircle2,
   Check,
@@ -25,8 +23,13 @@ import {
   Save,
   BarChart3,
   Plus,
-  Bell
+  Bell,
+  Calendar,
+  Clock,
+  DollarSign,
+  Tag
 } from 'lucide-react';
+import { WebAdminToolbar } from '../../components/admin/WebAdminToolbar';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import {
   fetchFinanceItemsFromSupabase,
@@ -981,125 +984,88 @@ export const WebAdminFinance: React.FC = () => {
         </div>
       </div>
 
-      {/* 工具列：精簡標題、重整純圖示、搜尋與狀態切換 */}
-      <div className="web-admin-toolbar" style={{ marginTop: 4 }}>
-        <div className="web-admin-toolbar-left">
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--wa-text-muted)' }} />
-            <input
-              type="text"
-              className="web-admin-input"
-              style={{ paddingLeft: 30, width: 220 }}
-              placeholder="搜尋姓名、單號、末五碼..."
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-            />
-          </div>
-
-          {/* 活動專屬篩選器 */}
-          <select
-            className="web-admin-select"
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-            title="活動專屬篩選器"
-            style={{ maxWidth: 220 }}
-          >
-            <option value="ALL">全部活動款項 (All Events)</option>
-            {activeEvents.length > 0 && (
-              <optgroup label="進行中 / 報名中活動">
-                {activeEvents.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.name} {ev.startDate ? `(${ev.startDate})` : ''}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {upcomingEvents.length > 0 && (
-              <optgroup label="籌備中 / 未來活動">
-                {upcomingEvents.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.name} {ev.startDate ? `(${ev.startDate})` : ''}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {pastEvents.length > 0 && (
-              <optgroup label="已結束歷史活動">
-                {pastEvents.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.name} {ev.startDate ? `(${ev.startDate})` : ''}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-
-          <select
-            className="web-admin-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-          >
-            <option value="ALL">全部狀態 ({activityFilteredItems.length})</option>
-            <option value="PENDING">待確認 / 待繳費 ({stats.pendingCount})</option>
-            <option value="CONFIRMED">已核銷 ({stats.confirmedCount})</option>
-          </select>
-
-          <select
-            className="web-admin-select"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-          >
-            <option value="ALL">全體款項類別</option>
-            <option value="activity">活動費用</option>
-            <option value="equipment">裝備租借</option>
-            <option value="membership">社籍社費</option>
-          </select>
-
-          {/* 排序方式下拉選單 */}
-          <select
-            className="web-admin-select"
-            value={sortMethod}
-            onChange={(e) => setSortMethod(e.target.value as any)}
-            title="排序方式"
-          >
-            <option value="TIME_DESC">時間戳記：新到舊</option>
-            <option value="TIME_ASC">時間戳記：舊到新</option>
-            <option value="AMOUNT_DESC">金額：高到低</option>
-            <option value="AMOUNT_ASC">金額：低到高</option>
-            <option value="STATUS">核銷狀態排序</option>
-          </select>
-
-          {/* 重新整理純圖示按鈕 */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={loadData}
-            disabled={loading}
-            title="重新整理財務款項清單"
-            aria-label="重新整理財務款項清單"
-            style={{ padding: '8px 12px' }}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
-
-          {/* 欄位與列可見度面板按鈕 */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className={`web-admin-btn web-admin-btn-secondary ${hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'active' : ''}`}
-              onClick={() => setShowHiddenMenu(!showHiddenMenu)}
-              title="顯示與隱藏項目"
-              style={{
-                padding: '7px 10px',
-                borderColor: hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'var(--wa-primary)' : undefined,
-                color: hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'var(--wa-primary)' : undefined,
-              }}
-            >
-              <Eye size={15} />
-            </button>
-
-            {showHiddenMenu && (
-              <div ref={hiddenMenuRef} className="wa-dropdown-panel">
+      {/* 工具列 (Notion 極簡無框工具列) */}
+      <WebAdminToolbar
+        search={{
+          value: searchKeyword,
+          onChange: setSearchKeyword,
+          placeholder: '搜尋姓名、單號、末五碼...',
+        }}
+        filters={[
+          {
+            key: 'event',
+            label: '活動項目',
+            selected: selectedEventId,
+            onChange: setSelectedEventId,
+            options: [
+              { value: 'ALL', label: '全部活動款項', icon: <Calendar size={13} /> },
+              ...activeEvents.map((ev) => ({
+                value: ev.id,
+                label: `${ev.name}${ev.startDate ? ` (${ev.startDate})` : ''}`,
+                subGroup: '進行中 / 報名中活動',
+                icon: <Calendar size={13} />,
+              })),
+              ...upcomingEvents.map((ev) => ({
+                value: ev.id,
+                label: `${ev.name}${ev.startDate ? ` (${ev.startDate})` : ''}`,
+                subGroup: '籌備中 / 未來活動',
+                icon: <Calendar size={13} />,
+              })),
+              ...pastEvents.map((ev) => ({
+                value: ev.id,
+                label: `${ev.name}${ev.startDate ? ` (${ev.startDate})` : ''}`,
+                subGroup: '已結束歷史活動',
+                icon: <Calendar size={13} />,
+              })),
+            ],
+          },
+          {
+            key: 'status',
+            label: '核銷狀態',
+            selected: statusFilter,
+            onChange: (val) => setStatusFilter(val as 'ALL' | 'PENDING' | 'CONFIRMED'),
+            options: [
+              { value: 'ALL', label: `全部狀態 (${activityFilteredItems.length})`, icon: <CheckCircle2 size={13} /> },
+              { value: 'PENDING', label: `待確認 / 待繳費 (${stats.pendingCount})`, icon: <Clock size={13} /> },
+              { value: 'CONFIRMED', label: `已核銷 (${stats.confirmedCount})`, icon: <CheckCircle2 size={13} /> },
+            ],
+          },
+          {
+            key: 'category',
+            label: '款項類別',
+            selected: categoryFilter,
+            onChange: setCategoryFilter,
+            options: [
+              { value: 'ALL', label: '全體款項類別', icon: <Tag size={13} /> },
+              { value: 'activity', label: '活動費用', icon: <Tag size={13} /> },
+              { value: 'equipment', label: '裝備租借', icon: <Tag size={13} /> },
+              { value: 'membership', label: '社籍社費', icon: <Tag size={13} /> },
+            ],
+          },
+        ]}
+        sort={{
+          value: sortMethod,
+          defaultValue: 'TIME_DESC',
+          onChange: (val) => setSortMethod(val as typeof sortMethod),
+          options: [
+            { value: 'TIME_DESC', label: '時間戳記：新到舊', icon: <Clock size={13} /> },
+            { value: 'TIME_ASC', label: '時間戳記：舊到新', icon: <Clock size={13} /> },
+            { value: 'AMOUNT_DESC', label: '金額：高到低', icon: <DollarSign size={13} /> },
+            { value: 'AMOUNT_ASC', label: '金額：低到高', icon: <DollarSign size={13} /> },
+            { value: 'STATUS', label: '核銷狀態排序', icon: <CheckCircle2 size={13} /> },
+          ],
+        }}
+        secondaryActions={[
+          {
+            key: 'visibility',
+            icon: <Eye size={15} />,
+            title: '顯示與隱藏項目',
+            active: hiddenColumns.length > 0 || hiddenRowIds.size > 0,
+            onClick: () => setShowHiddenMenu((prev) => !prev),
+            popoverOpen: showHiddenMenu,
+            onPopoverClose: () => setShowHiddenMenu(false),
+            popoverContent: (
+              <div ref={hiddenMenuRef} className="wa-dropdown-panel" style={{ left: 0, right: 'auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid var(--wa-border)' }}>
                   <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e293b' }}>欄位與列可見度</span>
                   <button
@@ -1144,81 +1110,63 @@ export const WebAdminFinance: React.FC = () => {
                   })}
                 </div>
               </div>
+            ),
+          },
+          {
+            key: 'reset-widths',
+            icon: <ArrowLeftRight size={15} />,
+            title: '一鍵恢復預設欄寬與順序',
+            onClick: resetColumnWidthsAndHeights,
+          },
+        ]}
+        refresh={{
+          onClick: loadData,
+          loading,
+          title: '重新整理財務款項清單',
+        }}
+        extraRightElement={
+          <>
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                className="web-admin-btn"
+                onClick={handleBatchVerify}
+                disabled={loading}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '0.82rem' }}
+              >
+                <Check size={14} />
+                <span>批次核銷 ({selectedIds.size} 筆)</span>
+              </button>
             )}
-          </div>
-
-          {/* 一鍵恢復預設欄寬按鈕 */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={resetColumnWidthsAndHeights}
-            title="一鍵恢復預設欄寬與順序"
-            style={{ padding: '7px 10px' }}
-          >
-            <ArrowLeftRight size={15} />
-          </button>
-        </div>
-
-        <div className="web-admin-toolbar-right">
-          {/* 財務分析報表按鈕 */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={() => setReportDrawerOpen(true)}
-            title="開啟財務分析報表與視覺化圖表"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: '0.82rem' }}
-          >
-            <BarChart3 size={14} />
-            <span>財務分析報表</span>
-          </button>
-
-          {/* 新增繳費項目按鈕 */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-primary"
-            onClick={() => setAddPaymentDrawerOpen(true)}
-            title="新增繳費項目或發布活動額外費用"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: '0.82rem' }}
-          >
-            <Plus size={14} />
-            <span>新增繳費項目</span>
-          </button>
-
-          {/* 一鍵發送通知按鈕 */}
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={handleBatchNotify}
-            disabled={isBatchNotifying || loading}
-            title="發送 LINE 核銷通知給所有符合「已核銷且未通知」之申報人"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: '0.82rem' }}
-          >
-            {isBatchNotifying ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Send size={14} />
-            )}
-            <span>一鍵發送通知</span>
-          </button>
-
-          {selectedIds.size > 0 && (
-            <button
-              type="button"
-              className="web-admin-btn"
-              onClick={handleBatchVerify}
-              disabled={loading}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: '0.82rem' }}
-            >
-              <Check size={14} />
-              <span>批次核銷 ({selectedIds.size} 筆)</span>
-            </button>
-          )}
-
-          <span className="web-admin-badge web-admin-badge-neutral">
-            符合條件: {filteredItems.length} 筆
-          </span>
-        </div>
-      </div>
+            <span style={{ fontSize: '0.8rem', color: 'var(--wa-text-subtle)' }}>
+              {filteredItems.length} 筆
+            </span>
+          </>
+        }
+        rightActions={[
+          {
+            key: 'finance-report',
+            label: '財務分析報表',
+            icon: <BarChart3 size={14} />,
+            title: '開啟財務分析報表與視覺化圖表',
+            onClick: () => setReportDrawerOpen(true),
+          },
+          {
+            key: 'batch-notify',
+            label: '一鍵發送通知',
+            icon: isBatchNotifying ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />,
+            title: '發送 LINE 核銷通知給所有符合「已核銷且未通知」之申報人',
+            onClick: handleBatchNotify,
+            disabled: isBatchNotifying || loading,
+          },
+        ]}
+        primaryAction={{
+          label: '新增繳費項目',
+          icon: <Plus size={15} />,
+          onClick: () => setAddPaymentDrawerOpen(true),
+          title: '新增繳費項目或發布活動額外費用',
+        }}
+      />
 
       {/* 財務紀錄資料表格 */}
       <div className="web-admin-grid-container">

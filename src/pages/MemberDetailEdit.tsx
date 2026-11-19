@@ -518,10 +518,11 @@ export default function MemberDetailEdit({ officerUserId }: { officerUserId?: st
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>國籍</label>
                     <select
-                      value={getNationalityLabel(formData.nationality, 'zh')}
+                      value={formData.nationality ? getNationalityLabel(formData.nationality, 'zh') : ''}
                       onChange={e => handleFieldChange('nationality', e.target.value)}
                       style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
                     >
+                      <option value="">－</option>
                       {NATIONALITY_LIST.map(item => (
                         <option key={item.zh} value={item.zh}>
                           {item.label}

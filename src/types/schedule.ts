@@ -114,4 +114,8 @@ export interface FetchScheduleOptions {
 export interface CalendarSyncResult {
   success: boolean;
   message: string;
+  clubCount?: number;
+  schoolCount?: number;
+  warnings?: string[];
+  ntustSync?: Record<string, unknown> | null;
 }

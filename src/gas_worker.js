@@ -87,7 +87,7 @@ function doGet(e) {
       return _handleSyncEventSheetSignups(e && e.parameter ? e.parameter : {});
     }
     if (action === 'sync_calendar_events') {
-      return _handleSyncCalendarEvents(e && e.parameter ? e.parameter : {});
+      return syncExternalCalendars(e && e.parameter ? e.parameter : {});
     }
     if (action === 'delete_drive_file' || action === 'delete_drive_files') {
       return _handleDeleteDriveFiles(e && e.parameter ? e.parameter : {});
@@ -140,7 +140,7 @@ function doPost(e) {
       return _handleSyncEventSheetSignups(json);
     }
     if (action === 'sync_calendar_events') {
-      return _handleSyncCalendarEvents(json);
+      return syncExternalCalendars(json);
     }
 
     // Gmail 管理員/社員郵件發送
@@ -995,25 +995,29 @@ var NTUST_UID_TAG_KEY = 'ntust_uid';
  * 1. 先從台科大官網同步最新 .ics 到 SCHOOL_CALENDAR_ID
  * 2. 再將社團日曆與學校日曆同步至 Supabase external_calendar_events 快取表
  */
-function syncExternalCalendars() {
+function syncExternalCalendars(params) {
+  params = params || {};
   var ntustResult = null;
-  try {
-    ntustResult = syncNtustIcsToSchoolCalendar();
-  } catch (e) {
-    console.warn('同步台科大 .ics 失敗（將繼續執行 Supabase 同步）:', e);
-    ntustResult = { error: e.toString() };
+  if (!params.skipNtustSync) {
+    try {
+      ntustResult = syncNtustIcsToSchoolCalendar(params.schoolCalendarId);
+    } catch (e) {
+      console.warn('同步台科大 .ics 失敗（將繼續執行 Supabase 同步）:', e);
+      ntustResult = { error: e.toString() };
+    }
   }
-  return _handleSyncCalendarEvents({ ntustSync: ntustResult });
+  return _handleSyncCalendarEvents(Object.assign({}, params, { ntustSync: ntustResult }));
 }
 
 /**
  * 抓取台科大教務處最新學年度 .ics 並寫入 SCHOOL_CALENDAR_ID 子日曆
  */
-function syncNtustIcsToSchoolCalendar() {
-  if (!SCHOOL_CALENDAR_ID) {
+function syncNtustIcsToSchoolCalendar(overrideSchoolCalendarId) {
+  var targetSchoolCalId = overrideSchoolCalendarId || SCHOOL_CALENDAR_ID;
+  if (!targetSchoolCalId) {
     return { skipped: true, reason: '未設定 SCHOOL_CALENDAR_ID' };
   }
-  var schoolCal = CalendarApp.getCalendarById(SCHOOL_CALENDAR_ID);
+  var schoolCal = CalendarApp.getCalendarById(targetSchoolCalId);
   if (!schoolCal) {
     throw new Error('找不到 SCHOOL_CALENDAR_ID 對應的日曆，請確認 GAS 帳號擁有該日曆權限');
   }
@@ -1287,8 +1291,10 @@ function _extractCalendarEvents(calendar, calendarType, startDate, endDate) {
     var events = calendar.getEvents(startDate, endDate);
     for (var k = 0; k < events.length; k++) {
       var ev = events[k];
+      var isRecurring = ev.isRecurringEvent ? ev.isRecurringEvent() : false;
+      var eventId = isRecurring ? (ev.getId() + '_' + ev.getStartTime().getTime()) : ev.getId();
       list.push({
-        id: ev.getId(),
+        id: eventId,
         calendar_type: calendarType,
         title: ev.getTitle() || '未命名行程',
         description: ev.getDescription() || '',

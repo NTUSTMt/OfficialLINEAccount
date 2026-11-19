@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import {
-  Search,
   Download,
   RefreshCw,
   AlertCircle,
@@ -10,8 +9,10 @@ import {
   Shield,
   ArrowRight,
   Copy,
-  Check
+  Check,
+  Users
 } from 'lucide-react';
+import { WebAdminToolbar } from '../../components/admin/WebAdminToolbar';
 import { createAuthenticatedSupabaseClient, type WebAuthSession } from '../../utils/webAuth';
 import { MemberEditDrawer, type MemberRecord } from '../../components/admin/MemberEditDrawer';
 import './webAdmin.css';
@@ -225,79 +226,65 @@ export const WebAdminMembers: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* 頂部操作工具列 */}
-      <div className="web-admin-toolbar">
-        <div className="web-admin-toolbar-left">
-          <div style={{ position: 'relative' }}>
-            <Search size={15} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--wa-text-muted)' }} />
-            <input
-              type="text"
-              className="web-admin-input"
-              placeholder="搜尋姓名、學號、電話、LINE ID..."
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              style={{ paddingLeft: 32, width: 240 }}
-            />
-          </div>
-
-          <select
-            className="web-admin-select"
-            value={identityFilter}
-            onChange={(e) => setIdentityFilter(e.target.value)}
-          >
-            <option value="ALL">全部身分別</option>
-            <option value="臺科在校生">臺科在校生</option>
-            <option value="畢業校友">畢業校友</option>
-            <option value="校外人士">校外人士</option>
-          </select>
-
-          <select
-            className="web-admin-select"
-            value={officialFilter}
-            onChange={(e) => setOfficialFilter(e.target.value)}
-          >
-            <option value="ALL">全部社籍狀態</option>
-            <option value="OFFICIAL">僅正式社員</option>
-            <option value="NON_OFFICIAL">非社員</option>
-          </select>
-
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={loadMembers}
-            title="重新整理名冊"
-            aria-label="重新整理名冊"
-            style={{ padding: '8px 12px' }}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
-
-        <div className="web-admin-toolbar-right">
-          <div style={{ fontSize: '0.85rem', color: 'var(--wa-text-muted)' }}>
-            篩選：<strong>{filteredMembers.length}</strong> / 總數：<strong>{members.length}</strong> 人
-          </div>
-
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={handleCopySchoolRoster}
-            title="一鍵複製社員名冊 (學校社團系統格式)"
-          >
-            <Copy size={14} />
-            <span>一鍵複製社員</span>
-          </button>
-
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={handleExportCSV}
-          >
-            <Download size={14} />
-            <span>匯出名冊 CSV</span>
-          </button>
-        </div>
-      </div>
+      {/* 頂部操作工具列 (Notion 極簡無框工具列) */}
+      <WebAdminToolbar
+        search={{
+          value: searchKeyword,
+          onChange: setSearchKeyword,
+          placeholder: '搜尋姓名、學號、電話、LINE ID...',
+        }}
+        filters={[
+          {
+            key: 'identity',
+            label: '身分別',
+            selected: identityFilter,
+            onChange: setIdentityFilter,
+            options: [
+              { value: 'ALL', label: '全部身分別', icon: <Users size={13} /> },
+              { value: '臺科在校生', label: '臺科在校生', icon: <Users size={13} /> },
+              { value: '畢業校友', label: '畢業校友', icon: <Award size={13} /> },
+              { value: '校外人士', label: '校外人士', icon: <Users size={13} /> },
+            ],
+          },
+          {
+            key: 'official',
+            label: '社籍狀態',
+            selected: officialFilter,
+            onChange: setOfficialFilter,
+            options: [
+              { value: 'ALL', label: '全部社籍狀態', icon: <Shield size={13} /> },
+              { value: 'OFFICIAL', label: '僅正式社員', icon: <CheckCircle2 size={13} /> },
+              { value: 'NON_OFFICIAL', label: '非社員', icon: <Shield size={13} /> },
+            ],
+          },
+        ]}
+        refresh={{
+          onClick: loadMembers,
+          loading,
+          title: '重新整理名冊',
+        }}
+        extraRightElement={
+          <span style={{ fontSize: '0.8rem', color: 'var(--wa-text-subtle)' }}>
+            {filteredMembers.length} / {members.length}
+          </span>
+        }
+        rightActions={[
+          {
+            key: 'copy-school-roster',
+            label: '一鍵複製社員',
+            icon: <Copy size={14} />,
+            title: '一鍵複製社員名冊 (學校社團系統格式)',
+            onClick: handleCopySchoolRoster,
+          },
+          {
+            key: 'export-csv',
+            label: '匯出名冊 CSV',
+            icon: <Download size={14} />,
+            title: '匯出名冊 CSV',
+            onClick: handleExportCSV,
+          },
+        ]}
+      />
 
       {/* 成功與錯誤提示 */}
       {successMsg && (

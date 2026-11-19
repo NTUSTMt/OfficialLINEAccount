@@ -56,7 +56,7 @@ export const NATIONALITY_LIST: NationalityItem[] = [
  */
 export function getNationalityLabel(val?: string | null, targetLang: 'zh' | 'en' = 'zh'): string {
   if (!val || !val.trim()) {
-    return targetLang === 'zh' ? '中華民國' : 'Taiwan';
+    return '－';
   }
   const clean = val.trim();
   const cleanLower = clean.toLowerCase();

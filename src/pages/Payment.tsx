@@ -183,7 +183,7 @@ function Payment({ userId }: { userId: string }) {
     const month = today.getMonth() + 1; // 1-12
     let rocYear = year - 1911;
     let semester: number;
-    
+
     if (month >= 2 && month <= 7) {
       rocYear = rocYear - 1;
       semester = 2;
@@ -422,19 +422,19 @@ function Payment({ userId }: { userId: string }) {
     const hasMembershipSelected = selectedIds.includes('fee_membership');
 
     // 依據 orderId 分組裝備
-    const equipGroups: { 
-      [orderId: string]: { 
-        id: string; 
-        orderId: string; 
-        purpose: string; 
+    const equipGroups: {
+      [orderId: string]: {
+        id: string;
+        orderId: string;
+        purpose: string;
         isOfficial: string;
-        amount: number; 
-        pickupDate: string; 
-        returnDate: string; 
-        items: { name: string; qty: number; amount: number }[] 
-      } 
+        amount: number;
+        pickupDate: string;
+        returnDate: string;
+        items: { name: string; qty: number; amount: number }[]
+      }
     } = {};
-    
+
     unpaidList.equipments.forEach(item => {
       const orderId = item.orderId || 'unknown';
       const purpose = item.purpose || '個人使用';
@@ -1119,12 +1119,12 @@ function Payment({ userId }: { userId: string }) {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '6px 0', flexWrap: 'wrap' }}>
               <strong>{t('payment.account.accountLabel')}</strong>
-              <span 
+              <span
                 onClick={handleCopyAccount}
-                style={{ 
-                  fontFamily: 'monospace', 
-                  fontSize: '15px', 
-                  fontWeight: 'bold', 
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: '15px',
+                  fontWeight: 'bold',
                   color: '#0f172a',
                   backgroundColor: '#f1f5f9',
                   padding: '2px 8px',
@@ -1169,7 +1169,7 @@ function Payment({ userId }: { userId: string }) {
         {/* 未繳費清單 */}
         <div className="drawer-section" style={{ backgroundColor: 'white', marginTop: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '16px', textAlign: 'left' }}>
           <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)', textAlign: 'left' }}>{t('payment.list.title')}</h4>
-          
+
           {loading ? (
             <div className="loading-state" style={{ padding: '24px 0', textAlign: 'center' }}>
               <div className="spinner"></div>
@@ -1186,14 +1186,14 @@ function Payment({ userId }: { userId: string }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {allItemsFlat.map(item => (
-                <div 
-                  key={item.id} 
-                  style={{ 
-                    display: 'flex', 
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
                     flexDirection: 'column',
-                    padding: item.type === 'equipment' ? '16px' : '12px', 
-                    borderRadius: '12px', 
-                    border: item.type === 'equipment' 
+                    padding: item.type === 'equipment' ? '16px' : '12px',
+                    borderRadius: '12px',
+                    border: item.type === 'equipment'
                       ? (selectedIds.includes(item.id) ? '2px solid var(--primary-color)' : '2px solid #cbd5e1')
                       : '1px solid var(--border-color)',
                     backgroundColor: selectedIds.includes(item.id) ? '#f0fdf4' : 'white',
@@ -1202,8 +1202,8 @@ function Payment({ userId }: { userId: string }) {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => handleCheckboxChange(item.id)}>
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       checked={selectedIds.includes(item.id)}
                       readOnly
                       style={{ width: '18px', height: '18px', accentColor: 'var(--primary-color)' }}
@@ -1228,7 +1228,7 @@ function Payment({ userId }: { userId: string }) {
                         </div>
                       </div>
                       <p style={{ fontSize: '13px', marginTop: '4px', color: 'var(--text-primary)', fontWeight: '500' }}>
-                        {item.type === 'equipment' 
+                        {item.type === 'equipment'
                           ? ((item.purpose === '社團出隊' || item.purpose === '社團出團') ? t('payment.list.equipClub') : t('payment.list.equipPersonal'))
                           : item.name}
                       </p>
@@ -1236,7 +1236,7 @@ function Payment({ userId }: { userId: string }) {
                   </div>
 
                   {item.type === 'membership' && (
-                    <div 
+                    <div
                       style={{
                         marginTop: '12px',
                         padding: '12px',
@@ -1253,11 +1253,11 @@ function Payment({ userId }: { userId: string }) {
                         <li>{t('payment.membership.semesterLabel')}<strong>$200</strong></li>
                         <li>{t('payment.membership.graduationLabel')}<strong>{t('payment.membership.graduationValue')}</strong></li>
                       </ul>
-                      
+
                       <label style={{ display: 'block', fontWeight: 'bold', color: '#475569', marginBottom: '6px', fontSize: '12px' }}>
                         {t('payment.membership.selectLabel')}
                       </label>
-                      <select 
+                      <select
                         value={membershipOption}
                         onChange={(e) => setMembershipOption(e.target.value as 'thisSem' | 'undergrad' | 'master')}
                         style={{
@@ -1279,7 +1279,7 @@ function Payment({ userId }: { userId: string }) {
                   )}
 
                   {item.type === 'equipment' && (
-                    <div 
+                    <div
                       style={{
                         marginTop: '10px',
                         padding: '12px',
@@ -1296,7 +1296,7 @@ function Payment({ userId }: { userId: string }) {
                           {item.pickupDate} ~ {item.returnDate}
                         </div>
                       </div>
-                      
+
                       <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
                         {t('payment.equip.itemsLabel')}
                       </div>
@@ -1319,7 +1319,7 @@ function Payment({ userId }: { userId: string }) {
                           {t('payment.equip.discountTip', { save: item.discountDiff })}
                         </div>
                       )}
-                      
+
                       <div style={{ fontSize: '11px', color: '#dc2626', backgroundColor: '#fef2f2', padding: '6px 10px', borderRadius: '6px', fontWeight: 'bold', display: 'inline-block', width: '100%', boxSizing: 'border-box' }}>
                         {t('payment.equip.modifyTip')}
                       </div>
@@ -1335,22 +1335,22 @@ function Payment({ userId }: { userId: string }) {
         {!loading && allItemsFlat.length > 0 && (
           <form onSubmit={handleFormSubmit} className="drawer-section" style={{ backgroundColor: 'white', marginTop: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '16px' }}>
             <h4 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>{t('payment.form.title')}</h4>
-            
+
             <div className="form-group" style={{ marginBottom: '16px' }}>
               <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>{t('payment.form.amountLabel')}</label>
-              <input 
-                type="text" 
-                value={`$${totalAmount}`} 
-                disabled 
+              <input
+                type="text"
+                value={`$${totalAmount}`}
+                disabled
                 style={{ backgroundColor: '#f1f5f9', fontWeight: 'bold', color: 'var(--primary-color)', fontSize: '16px' }}
               />
             </div>
 
             <div className="form-group" style={{ marginBottom: '20px', textAlign: 'left' }}>
               <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>{t('payment.form.digitsLabel')}</label>
-              <input 
-                type="text" 
-                placeholder={totalAmount === 0 ? '申報金額為 $0，免填末 5 碼' : t('payment.form.digitsPlaceholder')} 
+              <input
+                type="text"
+                placeholder={totalAmount === 0 ? '申報金額為 $0，免填末 5 碼' : t('payment.form.digitsPlaceholder')}
                 maxLength={5}
                 value={totalAmount === 0 ? '' : last5Digits}
                 onChange={(e) => setLast5Digits(e.target.value.replace(/\D/g, ''))} // 只允許數字
@@ -1367,9 +1367,9 @@ function Payment({ userId }: { userId: string }) {
               <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>
                 {t('payment.form.noteLabel', '匯款備註 (選填)')}
               </label>
-              <input 
-                type="text" 
-                placeholder={t('payment.form.notePlaceholder', '例如：王小明轉帳、兩筆合併匯款等備註說明')} 
+              <input
+                type="text"
+                placeholder={t('payment.form.notePlaceholder', '例如：王小明轉帳、兩筆合併匯款等備註說明')}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={50}
@@ -1384,7 +1384,7 @@ function Payment({ userId }: { userId: string }) {
             <div className="form-group" style={{ marginBottom: '20px', textAlign: 'left' }}>
               <label style={{ fontSize: '13px', fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <ImageIcon size={15} color="var(--primary-color)" />
-                <span>{t('payment.form.proofLabel', '匯款證明 / 水單截圖 (選填)')}</span>
+                <span>{t('payment.form.proofLabel', '匯款證明 (選填)')}</span>
               </label>
 
               {/* 隱藏原生 File Input */}
@@ -1481,21 +1481,21 @@ function Payment({ userId }: { userId: string }) {
                 )}
 
                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4, flex: 1 }}>
-                  {t('payment.form.proofTip', '支援上傳 1 張轉帳明細或水單截圖，點擊縮圖可放大預覽。')}
+                  {t('payment.form.proofTip', '支援上傳 1 張轉帳明細，點擊縮圖可放大預覽。')}
                 </p>
               </div>
             </div>
 
-            <button 
-              type="submit" 
-              className="submit-btn" 
+            <button
+              type="submit"
+              className="submit-btn"
               disabled={!isFormValid || isSubmitting || isUploadingProof}
-              style={{ 
-                width: '100%', 
-                backgroundColor: isFormValid && !isSubmitting && !isUploadingProof ? 'var(--primary-color)' : '#cbd5e1', 
-                color: 'white', 
-                padding: '14px', 
-                borderRadius: '8px', 
+              style={{
+                width: '100%',
+                backgroundColor: isFormValid && !isSubmitting && !isUploadingProof ? 'var(--primary-color)' : '#cbd5e1',
+                color: 'white',
+                padding: '14px',
+                borderRadius: '8px',
                 fontWeight: 'bold',
                 fontSize: '15px',
                 border: 'none',
@@ -1503,10 +1503,10 @@ function Payment({ userId }: { userId: string }) {
                 transition: 'background-color 0.2s'
               }}
             >
-              {isUploadingProof 
-                ? t('payment.form.uploadingProof', '正在上傳匯款截圖至雲端...') 
-                : isSubmitting 
-                  ? t('payment.form.submittingBtn') 
+              {isUploadingProof
+                ? t('payment.form.uploadingProof', '正在上傳匯款截圖至雲端...')
+                : isSubmitting
+                  ? t('payment.form.submittingBtn')
                   : t('payment.form.submitBtn')}
             </button>
           </form>

@@ -790,9 +790,10 @@ export const MemberEditDrawer: React.FC<MemberEditDrawerProps> = ({
                       <label className="wa-form-label">國籍</label>
                       <select
                         className="wa-form-select"
-                        value={getNationalityLabel(formData.nationality, 'zh')}
+                        value={formData.nationality ? getNationalityLabel(formData.nationality, 'zh') : ''}
                         onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
                       >
+                        <option value="">－</option>
                         {NATIONALITY_LIST.map((item) => (
                           <option key={item.zh} value={item.zh}>
                             {item.label}

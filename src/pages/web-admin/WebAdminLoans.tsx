@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import {
-  Search,
   RefreshCw,
   AlertCircle,
   CheckCircle2,
@@ -16,6 +15,7 @@ import {
   ImageIcon,
   ExternalLink
 } from 'lucide-react';
+import { WebAdminToolbar } from '../../components/admin/WebAdminToolbar';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import { fetchAllLoansFromSupabase, updateLoanStatusInSupabase } from '../../utils/supabaseClient';
 import { notifyDispatcher } from '../../utils/api';
@@ -77,7 +77,7 @@ export const WebAdminLoans: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      // 優先使用 Supabase Client 直讀 loans (選取安全關聯欄位與 items jsonb)
+      // 優先使用 Supabase Client 直讀 loans (選取安全關聯欄位、loan_items 明細與 items jsonb)
       const { data, error } = await client
         .from('loans')
         .select(`
@@ -93,6 +93,15 @@ export const WebAdminLoans: React.FC = () => {
           notes,
           created_at,
           items,
+          loan_items (
+            equipment_id,
+            quantity,
+            unit_price_snapshot,
+            subtotal,
+            equipments (
+              name
+            )
+          ),
           members:line_user_id (
             name,
             phone,
@@ -107,41 +116,49 @@ export const WebAdminLoans: React.FC = () => {
         // 回退調用 fetchAllLoansFromSupabase (使用已修復之 get_admin_loans_rpc)
         console.warn('[WebAdminLoans] 直查失敗，回退 RPC:', error.message);
         const fallbackData = await fetchAllLoansFromSupabase(session.userId);
-        setLoans(fallbackData);
-      } else {
-        const mappedList: AdminLoanItem[] = (data || []).map((l: any) => ({
-          id: l.id,
-          line_user_id: l.line_user_id,
-          name: l.members?.name || l.name || '未知申請人',
-          phone: l.members?.phone || l.phone || '',
-          student_id: l.members?.student_id || l.student_id || '',
-          department: l.members?.department || l.department || '',
-          line_id: l.members?.line_id || l.line_id || '',
-          start_date: l.start_date,
-          end_date: l.end_date,
-          days: l.days || (l.start_date && l.end_date ? Math.max(1, Math.round((new Date(l.end_date).getTime() - new Date(l.start_date).getTime()) / 86400000) + 1) : 1),
-          total_rent: l.total_rent || 0,
-          total_deposit: l.total_deposit || 0,
-          status: l.status || '待領取 To Be Collected',
-          payment_status: l.payment_status || '待繳費',
-          notes: l.notes || '',
-          created_at: l.created_at,
-          items: Array.isArray(l.items)
-            ? l.items.map((item: any) => ({
-              equipment_id: item.equipment_id || item.id,
-              name: item.name || item.equipment_name || item.equipment_id || '裝備品項',
-              quantity: item.quantity || 1,
-              rent: item.rent || item.rent_fee || 0,
-              deposit: item.deposit || item.deposit_fee || 0,
-            }))
-            : (l.loan_items || []).map((item: any) => ({
-              equipment_id: item.equipment_id,
-              name: item.equipment_name || item.equipment_id,
-              quantity: item.quantity || 1,
-              rent: item.rent_fee || 0,
-              deposit: item.deposit_fee || 0,
+        setLoans(
+          fallbackData.map((l: any) => ({
+            ...l,
+            items: (l.items || []).map((item: any) => ({
+              ...item,
+              rent: item.rent ?? item.subtotal ?? item.rent_fee ?? 0,
             })),
-        }));
+          }))
+        );
+      } else {
+        const mappedList: AdminLoanItem[] = (data || []).map((l: any) => {
+          const rawItems =
+            Array.isArray(l.loan_items) && l.loan_items.length > 0
+              ? l.loan_items
+              : Array.isArray(l.items) && l.items.length > 0
+                ? l.items
+                : [];
+          return {
+            id: l.id,
+            line_user_id: l.line_user_id,
+            name: l.members?.name || l.name || '未知申請人',
+            phone: l.members?.phone || l.phone || '',
+            student_id: l.members?.student_id || l.student_id || '',
+            department: l.members?.department || l.department || '',
+            line_id: l.members?.line_id || l.line_id || '',
+            start_date: l.start_date,
+            end_date: l.end_date,
+            days: l.days || (l.start_date && l.end_date ? Math.max(1, Math.round((new Date(l.end_date).getTime() - new Date(l.start_date).getTime()) / 86400000) + 1) : 1),
+            total_rent: l.total_rent || 0,
+            total_deposit: l.total_deposit || 0,
+            status: l.status || '待領取 To Be Collected',
+            payment_status: l.payment_status || '待繳費',
+            notes: l.notes || '',
+            created_at: l.created_at,
+            items: rawItems.map((item: any) => ({
+              equipment_id: item.equipment_id || item.id,
+              name: item.equipments?.name || item.name || item.equipment_name || item.equipment_id || '裝備品項',
+              quantity: item.quantity || 1,
+              rent: item.subtotal ?? item.rent ?? item.rent_fee ?? 0,
+              deposit: item.deposit ?? item.deposit_fee ?? 0,
+            })),
+          };
+        });
         setLoans(mappedList);
       }
     } catch (err: any) {
@@ -263,62 +280,51 @@ export const WebAdminLoans: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* 頂部操作工具列 */}
-      <div className="web-admin-toolbar">
-        <div className="web-admin-toolbar-left">
-          <div style={{ position: 'relative' }}>
-            <Search size={15} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--wa-text-muted)' }} />
-            <input
-              type="text"
-              className="web-admin-input"
-              placeholder="搜尋借用人、單號、裝備品項..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ paddingLeft: 32, width: 240 }}
-            />
-          </div>
-
-          <select
-            className="web-admin-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="ALL">全部借還狀態</option>
-            <option value="待領取">待領取 To Be Collected</option>
-            <option value="租借中">租借中 Borrowed</option>
-            <option value="已歸還">已歸還 Returned</option>
-            <option value="已取消">已取消 Cancelled</option>
-          </select>
-
-          <select
-            className="web-admin-select"
-            value={payFilter}
-            onChange={(e) => setPayFilter(e.target.value)}
-          >
-            <option value="ALL">全部繳費狀態</option>
-            <option value="待繳費">待繳費</option>
-            <option value="待確認">待確認</option>
-            <option value="已核銷">已核銷</option>
-          </select>
-
-          <button
-            type="button"
-            className="web-admin-btn web-admin-btn-secondary"
-            onClick={loadLoans}
-            title="重新整理借用清單"
-            aria-label="重新整理借用清單"
-            style={{ padding: '8px 12px' }}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
-
-        <div className="web-admin-toolbar-right">
-          <div style={{ fontSize: '0.85rem', color: 'var(--wa-text-muted)' }}>
-            共 <strong>{filteredLoans.length}</strong> 筆借用單
-          </div>
-        </div>
-      </div>
+      {/* 頂部操作工具列 (Notion 極簡無框工具列) */}
+      <WebAdminToolbar
+        search={{
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: '搜尋借用人、單號、裝備品項...',
+        }}
+        filters={[
+          {
+            key: 'status',
+            label: '借還狀態',
+            selected: statusFilter,
+            onChange: setStatusFilter,
+            options: [
+              { value: 'ALL', label: '全部借還狀態', icon: <PackageCheck size={13} /> },
+              { value: '待領取', label: '待領取 To Be Collected', icon: <Clock size={13} /> },
+              { value: '租借中', label: '租借中 Borrowed', icon: <PackageCheck size={13} /> },
+              { value: '已歸還', label: '已歸還 Returned', icon: <CheckCircle2 size={13} /> },
+              { value: '已取消', label: '已取消 Cancelled', icon: <X size={13} /> },
+            ],
+          },
+          {
+            key: 'pay',
+            label: '繳費狀態',
+            selected: payFilter,
+            onChange: setPayFilter,
+            options: [
+              { value: 'ALL', label: '全部繳費狀態', icon: <DollarSign size={13} /> },
+              { value: '待繳費', label: '待繳費', icon: <Clock size={13} /> },
+              { value: '待確認', label: '待確認', icon: <AlertCircle size={13} /> },
+              { value: '已核銷', label: '已核銷', icon: <CheckCircle2 size={13} /> },
+            ],
+          },
+        ]}
+        refresh={{
+          onClick: loadLoans,
+          loading,
+          title: '重新整理借用清單',
+        }}
+        extraRightElement={
+          <span style={{ fontSize: '0.8rem', color: 'var(--wa-text-subtle)' }}>
+            {filteredLoans.length} 筆
+          </span>
+        }
+      />
 
       {/* 成功與錯誤提示 */}
       {successMsg && (

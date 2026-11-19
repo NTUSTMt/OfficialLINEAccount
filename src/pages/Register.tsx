@@ -249,6 +249,8 @@ function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: bool
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   // 隱藏的 input file ref
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 待跳轉聚焦之未填欄位名稱（跨步驟切換後由 useEffect 執行捲動與聚焦）
+  const pendingFocusFieldRef = useRef<string | null>(null);
   // 社員系統使用指南導覽燈箱狀態
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
@@ -429,8 +431,37 @@ function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: bool
     }
   }, [formData, userId, loading, isSubmitting]);
 
-  // 切換步驟時自動平滑滾動至頁面頂端
+  // 捲動並聚焦至指定欄位
+  const scrollAndFocusField = (fieldName: string) => {
+    requestAnimationFrame(() => {
+      const target =
+        (document.querySelector(`[data-field="${fieldName}"]`) as HTMLElement | null) ||
+        (document.querySelector(`[name="${fieldName}"]`) as HTMLElement | null);
+      if (!target) return;
+
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      const focusable = target.matches('input, select, textarea, button, [tabindex]')
+        ? target
+        : (target.querySelector('input, select, textarea, button') as HTMLElement | null);
+      if (focusable && typeof focusable.focus === 'function') {
+        try {
+          focusable.focus({ preventScroll: true });
+        } catch {
+          focusable.focus();
+        }
+      }
+    });
+  };
+
+  // 切換步驟時自動平滑滾動至頁面頂端（若有待聚焦之缺漏欄位則優先定位至該欄位）
   useEffect(() => {
+    const pendingField = pendingFocusFieldRef.current;
+    if (pendingField) {
+      pendingFocusFieldRef.current = null;
+      scrollAndFocusField(pendingField);
+      return;
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [step]);
 
@@ -587,90 +618,148 @@ function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: bool
     setStrengthProofFiles((prev) => prev.filter((_, idx) => idx !== idxToRemove));
   };
 
+  // 驗證指定步驟是否有未填寫之必填欄位，並回傳第一個缺漏欄位與提示訊息
+  const findFirstMissingInStep = (targetStep: number): { step: number; field: string; message: string } | null => {
+    if (targetStep === 1 && !isBrowse) {
+      const step1Checks: Array<{ field: string; ok: boolean }> = [
+        { field: 'name', ok: formData.name.trim() !== '' },
+        { field: 'identityStatus', ok: formData.identityStatus.trim() !== '' },
+        { field: 'department', ok: formData.department.trim() !== '' },
+        { field: 'studentId', ok: formData.studentId.trim() !== '' },
+        { field: 'phone', ok: formData.phone.trim() !== '' },
+        { field: 'email', ok: formData.email.trim() !== '' },
+        { field: 'realLineId', ok: formData.realLineId.trim() !== '' },
+        { field: 'preferredLanguage', ok: Boolean(formData.preferredLanguage && formData.preferredLanguage.trim() !== '') },
+        { field: 'nationality', ok: Boolean(formData.nationality && formData.nationality.trim() !== '') },
+      ];
+      const missing = step1Checks.find((c) => !c.ok);
+      if (missing) {
+        return {
+          step: 1,
+          field: missing.field,
+          message: t('register.alert.fillStep1Required', '請先補齊基本資料必填欄位！'),
+        };
+      }
+    }
+
+    if (targetStep === 2 && isActivity) {
+      const step2Checks: Array<{ field: string; ok: boolean }> = [
+        { field: 'gender', ok: formData.gender.trim() !== '' },
+        { field: 'birthday', ok: formData.birthday.trim() !== '' },
+        { field: 'idNumber', ok: formData.idNumber.trim() !== '' },
+        { field: 'studentAddr', ok: formData.studentAddr.trim() !== '' },
+        { field: 'medicalHistory', ok: formData.medicalHistory.trim() !== '' },
+      ];
+      const missing = step2Checks.find((c) => !c.ok);
+      if (missing) {
+        return {
+          step: 2,
+          field: missing.field,
+          message: t('register.alert.fillStep2Required', '請先補齊身分、保險與特殊病史必填欄位！'),
+        };
+      }
+    }
+
+    if (targetStep === 3 && isActivity) {
+      const step3Checks: Array<{ field: string; ok: boolean }> = [
+        { field: 'emerName', ok: formData.emerName.trim() !== '' },
+        { field: 'emerRel', ok: formData.emerRel.trim() !== '' },
+        { field: 'emerPhone', ok: formData.emerPhone.trim() !== '' },
+        { field: 'emerAddr', ok: formData.emerAddr.trim() !== '' },
+      ];
+      const missing = step3Checks.find((c) => !c.ok);
+      if (missing) {
+        return {
+          step: 3,
+          field: missing.field,
+          message: t('register.alert.fillStep3Required', '請先補齊緊急聯絡人必填欄位！'),
+        };
+      }
+    }
+
+    if (targetStep === 4) {
+      if (isActivity) {
+        if (formData.exp.trim() === '') {
+          return {
+            step: 4,
+            field: 'exp',
+            message: t('register.alert.fillStep4Required', '請先補齊登山體能、體能證明照片與意願必填欄位！'),
+          };
+        }
+        if (formData.strength.trim() === '') {
+          return {
+            step: 4,
+            field: 'strength',
+            message: t('register.alert.fillStep4Required', '請先補齊登山體能、體能證明照片與意願必填欄位！'),
+          };
+        }
+        if (totalProofsCount === 0) {
+          return {
+            step: 4,
+            field: 'strengthProof',
+            message: t('register.alert.uploadProofRequired', '活動出隊請至少上傳一張體能證明照片！'),
+          };
+        }
+        if (formData.intendOfficial.trim() === '') {
+          return {
+            step: 4,
+            field: 'intendOfficial',
+            message: t('register.alert.fillStep4Required', '請先補齊登山體能、體能證明照片與意願必填欄位！'),
+          };
+        }
+      }
+      if (!isBrowse && !privacyAgreed) {
+        return {
+          step: 4,
+          field: 'privacyAgreed',
+          message: t('register.alert.agreePrivacy', '請勾選同意隱私權條款！'),
+        };
+      }
+    }
+
+    return null;
+  };
+
+  // 跳轉至缺漏步驟並滾動聚焦到第一個未填欄位
+  const focusMissingField = (targetStep: number, fieldName: string, message: string) => {
+    alert(message);
+    if (step !== targetStep) {
+      pendingFocusFieldRef.current = fieldName;
+      setStep(targetStep);
+    } else {
+      scrollAndFocusField(fieldName);
+    }
+  };
+
+  // 點擊「下一步」前先驗證當前步驟是否有未填寫之必填欄位
+  const handleNextStep = () => {
+    const missing = findFirstMissingInStep(step);
+    if (missing) {
+      focusMissingField(missing.step, missing.field, missing.message);
+      return;
+    }
+    if (step < 4) {
+      setStep(step + 1);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // 防呆：若在 0~3 步按下鍵盤的 Enter/Go 鍵，引導至下一步，而非直接送出表單
+    // 防呆：若在 0~3 步按下鍵盤的 Enter/Go 鍵，先驗證當前步驟並引導至下一步，而非直接送出表單
     if (step < 4) {
-      setStep(step + 1);
+      handleNextStep();
       return;
     }
 
-    const isStep1Complete = !isBrowse
-      ? Boolean(
-          formData.name.trim() !== '' &&
-          Boolean(formData.nationality && formData.nationality.trim() !== '') &&
-          formData.identityStatus.trim() !== '' &&
-          formData.department.trim() !== '' &&
-          formData.studentId.trim() !== '' &&
-          formData.phone.trim() !== '' &&
-          formData.email.trim() !== '' &&
-          formData.realLineId.trim() !== '' &&
-          Boolean(formData.preferredLanguage && formData.preferredLanguage.trim() !== '')
-        )
-      : true;
+    const firstMissing =
+      findFirstMissingInStep(1) ||
+      findFirstMissingInStep(2) ||
+      findFirstMissingInStep(3) ||
+      findFirstMissingInStep(4);
 
-    if (!isStep1Complete) {
-      setStep(1);
-      alert(t('register.alert.fillStep1Required', '請先補齊基本資料必填欄位！'));
-      return;
-    }
-
-    const isStep2Complete = isActivity
-      ? Boolean(
-          formData.gender.trim() !== '' &&
-          formData.birthday.trim() !== '' &&
-          formData.idNumber.trim() !== '' &&
-          formData.studentAddr.trim() !== '' &&
-          formData.medicalHistory.trim() !== ''
-        )
-      : true;
-
-    if (!isStep2Complete) {
-      setStep(2);
-      alert(t('register.alert.fillStep2Required', '請先補齊身分、保險與特殊病史必填欄位！'));
-      return;
-    }
-
-    const isStep3Complete = isActivity
-      ? Boolean(
-          formData.emerName.trim() !== '' &&
-          formData.emerRel.trim() !== '' &&
-          formData.emerPhone.trim() !== '' &&
-          formData.emerAddr.trim() !== ''
-        )
-      : true;
-
-    if (!isStep3Complete) {
-      setStep(3);
-      alert(t('register.alert.fillStep3Required', '請先補齊緊急聯絡人必填欄位！'));
-      return;
-    }
-
-    const isStep4Complete = isActivity
-      ? Boolean(
-          formData.exp.trim() !== '' &&
-          formData.strength.trim() !== '' &&
-          totalProofsCount > 0 &&
-          formData.intendOfficial.trim() !== ''
-        )
-      : true;
-
-    if (!isStep4Complete) {
-      setStep(4);
-      if (isActivity && totalProofsCount === 0 && formData.exp.trim() !== '' && formData.strength.trim() !== '' && formData.intendOfficial.trim() !== '') {
-        alert(t('register.alert.uploadProofRequired', '活動出隊請至少上傳一張體能證明照片！'));
-      } else {
-        alert(t('register.alert.fillStep4Required', '請先補齊登山體能、體能證明照片與意願必填欄位！'));
-      }
-      return;
-    }
-
-    const isPrivacyComplete = !isBrowse ? privacyAgreed : true;
-
-    if (!isPrivacyComplete) {
-      setStep(4);
-      alert(t('register.alert.agreePrivacy', '請勾選同意隱私權條款！'));
+    if (firstMissing) {
+      focusMissingField(firstMissing.step, firstMissing.field, firstMissing.message);
       return;
     }
 
@@ -1343,6 +1432,7 @@ function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: bool
               {isCustomNationality && (
                 <input
                   type="text"
+                  data-field="nationality"
                   placeholder={t('register.step1.nationalityPlaceholder', '請輸入國籍國家名稱')}
                   value={formData.nationality || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))}
@@ -1506,7 +1596,7 @@ function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: bool
             </div>
 
             {/* 上傳體能證明 */}
-            <div className="form-group" style={{ marginBottom: '20px' }}>
+            <div className="form-group" data-field="strengthProof" tabIndex={-1} style={{ marginBottom: '20px' }}>
               <label className={isActivity ? "required" : ""} style={{ display: 'block', marginBottom: '4px', fontWeight: 600 }}>
                 {t('register.step4.uploadProofLabel')}
               </label>
@@ -1679,7 +1769,7 @@ function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: bool
             </div>
 
             {/* 意願調查 */}
-            <div className="willingness-box" style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', textAlign: 'left' }}>
+            <div className="willingness-box" data-field="intendOfficial" tabIndex={-1} style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', textAlign: 'left' }}>
               <p style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: 'var(--text-primary)' }}>
                 {t('register.step4.intendOfficialTitle')} {isActivity && <span style={{ color: '#ef4444' }}>*</span>}
               </p>
@@ -1786,7 +1876,7 @@ function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: bool
             </div>
 
             {/* 隱私權同意書（移至最下方） */}
-            <div className="privacy-consent-box" style={{ marginTop: '24px' }}>
+            <div className="privacy-consent-box" data-field="privacyAgreed" style={{ marginTop: '24px' }}>
               <label className="checkbox-container">
                 <input
                   type="checkbox"
@@ -1823,7 +1913,7 @@ function Register({ userId, jwtReady = true }: { userId: string; jwtReady?: bool
               key="btn-next"
               type="button"
               className="btn btn-primary"
-              onClick={() => setStep(step + 1)}
+              onClick={handleNextStep}
               style={{ width: '45%' }}
             >
               {step === 0 ? t('register.intent.startBtn', '開始填寫資料') : t('register.nav.next')}

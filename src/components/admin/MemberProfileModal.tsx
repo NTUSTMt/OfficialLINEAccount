@@ -124,8 +124,8 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
   const merged: any = { ...initialMember, ...detail };
   const name = merged.name || '未命名社員';
   const gender = merged.gender || '未填';
-  const nationality = merged.nationality || '中華民國';
-  // 幹部在網頁後台看到的國籍為繁體中文
+  const nationality = merged.nationality || '';
+  // 幹部在網頁後台看到的國籍為繁體中文（未填寫則顯示 －）
   const nationalityLabel = getNationalityLabel(nationality, 'zh');
 
   const isOfficial = Boolean(

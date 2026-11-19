@@ -40,15 +40,12 @@ describe('Profile Intent-Driven Registration & Dynamic Required Validation', () 
 
   it('Submit validation enforces medicalHistory and totalProofsCount for activity intent', () => {
     assert.ok(registerContent.includes('formData.medicalHistory.trim() !== \'\''));
-    assert.ok(registerContent.includes('totalProofsCount > 0'));
-    assert.ok(registerContent.includes('setStep(1);'));
+    assert.ok(registerContent.includes('totalProofsCount === 0') || registerContent.includes('totalProofsCount > 0'));
+    assert.ok(registerContent.includes('setStep(targetStep)') || registerContent.includes('setStep(1);'));
     assert.ok(registerContent.includes('register.alert.fillStep1Required'));
-    assert.ok(registerContent.includes('setStep(2);'));
-    assert.ok(registerContent.includes('register.alert.fillStep2Required'));
-    assert.ok(registerContent.includes('setStep(3);'));
-    assert.ok(registerContent.includes('register.alert.fillStep3Required'));
-    assert.ok(registerContent.includes('setStep(4);'));
-    assert.ok(registerContent.includes('register.alert.fillStep4Required'));
+        assert.ok(registerContent.includes('register.alert.fillStep2Required'));
+        assert.ok(registerContent.includes('register.alert.fillStep3Required'));
+        assert.ok(registerContent.includes('register.alert.fillStep4Required'));
     assert.ok(registerContent.includes('register.alert.uploadProofRequired'));
     assert.ok(registerContent.includes('register.alert.agreePrivacy'));
   });

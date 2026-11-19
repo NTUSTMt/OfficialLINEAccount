@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import {
-  Search,
   Copy,
   Check,
   RefreshCw,
@@ -22,7 +21,12 @@ import {
   User,
   UserPlus,
   Sparkles,
+  ArrowUpDown,
+  CheckCircle2,
+  Clock,
+  X
 } from 'lucide-react';
+import { WebAdminToolbar } from '../../components/admin/WebAdminToolbar';
 import { createAuthenticatedSupabaseClient, type WebAuthSession, logWebAuditAction } from '../../utils/webAuth';
 import { notifyDispatcher, callDispatcherAction, evaluateApplicantsViaAi } from '../../utils/api';
 import type { ApplicantEvaluation } from '../../types/admin';
@@ -1300,6 +1304,13 @@ export const WebAdminRoster: React.FC = () => {
   const handleSyncOrOpenSheet = async () => {
     if (!selectedEventId || !currentEvent) return;
 
+    // 必須在非同步請求前同步開啟視窗，保留使用者點擊手勢 (User Activation)，避免被瀏覽器彈窗攔截
+    const popup = window.open('', '_blank');
+    if (popup && popup.document) {
+      popup.document.title = '正在開啟 Google 試算表...';
+      popup.document.body.innerHTML = '<p style="font-family:sans-serif;padding:24px;color:#334155;">正在同步最新名冊並開啟試算表，請稍候...</p>';
+    }
+
     setSyncingSheet(true);
     let targetSpreadsheetUrl = currentEvent.spreadsheet_url || '';
     let targetSpreadsheetId = currentEvent.spreadsheet_id || '';
@@ -1382,11 +1393,21 @@ export const WebAdminRoster: React.FC = () => {
       });
 
       if (targetSpreadsheetUrl) {
-        window.open(targetSpreadsheetUrl, '_blank', 'noopener,noreferrer');
+        if (popup && !popup.closed) {
+          popup.opener = null;
+          popup.location.replace(targetSpreadsheetUrl);
+        } else {
+          const fallbackWin = window.open(targetSpreadsheetUrl, '_blank', 'noopener,noreferrer');
+          if (!fallbackWin) {
+            alert(`瀏覽器已攔截彈出視窗，請允許彈出視窗或手動開啟試算表：\n${targetSpreadsheetUrl}`);
+          }
+        }
       } else {
+        if (popup && !popup.closed) popup.close();
         alert('試算表已處理，但尚未取得有效網址，請重新整理頁面');
       }
     } catch (err: any) {
+      if (popup && !popup.closed) popup.close();
       alert(`[試算表同步或建立失敗]: ${err.message || String(err)}`);
     } finally {
       setSyncingSheet(false);
@@ -1502,16 +1523,15 @@ export const WebAdminRoster: React.FC = () => {
   return (
     <React.Fragment>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* 單一整合控制橫條 */}
-        <div className="web-admin-toolbar" style={{ padding: '8px 14px' }}>
-          <div className="web-admin-toolbar-left" style={{ gap: 10 }}>
-            {/* 活動下拉選擇 */}
+        {/* 單一整合控制橫條 (Notion 極簡無框工具列) */}
+        <WebAdminToolbar
+          prefixElement={
             <select
-              className="web-admin-select"
+              className="wa-notion-prefix-select"
               value={selectedEventId}
               onChange={(e) => setSelectedEventId(e.target.value)}
               disabled={loadingEvents}
-              style={{ fontWeight: 600, minWidth: 240, maxWidth: 320 }}
+              title="切換活動名冊"
             >
               {events.map((ev) => (
                 <option key={ev.id} value={ev.id}>
@@ -1519,143 +1539,61 @@ export const WebAdminRoster: React.FC = () => {
                 </option>
               ))}
             </select>
-
-            {/* 搜尋關鍵字輸入框 */}
-            <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--wa-text-muted)' }} />
-              <input
-                type="text"
-                className="web-admin-input"
-                placeholder="搜尋姓名、電話、身分證、學號、LINE..."
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                style={{ paddingLeft: 30, width: 220 }}
-              />
-            </div>
-
-            {/* 審核狀態篩選選單 */}
-            <select
-              className="web-admin-select"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ minWidth: 140 }}
-            >
-              <option value="ALL">全體名冊 (全部狀態)</option>
-              <option value="CONFIRMED">僅顯示正取</option>
-              <option value="WAITLIST">僅顯示備取</option>
-              <option value="CHECKING">僅顯示審核中</option>
-              <option value="CANCELLED">僅顯示已取消</option>
-            </select>
-
-            {/* AI 智能評估與排序按鈕 */}
-            <button
-              type="button"
-              className="web-admin-btn web-admin-btn-primary"
-              onClick={handleTriggerAiEvaluation}
-              disabled={isAiEvaluating || loadingSignups || !selectedEventId}
-              style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-              title="去識別化送審體能與經驗，由 AI 根據活動難度產出分數與理由"
-            >
-              {isAiEvaluating ? (
-                <>
-                  <RefreshCw size={13} className="animate-spin" />
-                  <span>AI 評估中...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={13} />
-                  <span>AI 體能評估排序</span>
-                </>
-              )}
-            </button>
-
-            {/* AI 分數排序切換按鈕 */}
-            {Object.keys(aiEvaluations).length > 0 && (
-              <button
-                type="button"
-                className={`web-admin-btn ${aiSorted ? 'active' : 'web-admin-btn-secondary'}`}
-                onClick={() => {
-                  const nextState = !aiSorted;
-                  setAiSorted(nextState);
-                  if (nextState) {
-                    setPinnedColumns((prev) => {
-                      const next = [...prev];
-                      if (!next.includes('ai_score')) next.push('ai_score');
-                      if (!next.includes('ai_reasoning')) next.push('ai_reasoning');
-                      return next;
-                    });
-                    setHiddenColumns((prev) => prev.filter((k) => k !== 'ai_score' && k !== 'ai_reasoning'));
-                  }
-                }}
-                style={{ padding: '6px 10px', fontSize: '0.82rem' }}
-                title={aiSorted ? '切換回原始登記順序' : '依 AI 適合度分數排序'}
-              >
-                <span>{aiSorted ? '已依 AI 分數排序' : '依 AI 分數排序'}</span>
-              </button>
-            )}
-          </div>
-
-          <div className="web-admin-toolbar-right" style={{ gap: 8, position: 'relative' }}>
-            {/* 批次操作按鈕 */}
-            {selectedSignupIds.size > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--wa-primary)' }}>
-                  選取 {selectedSignupIds.size} 筆
-                </span>
-                <button
-                  type="button"
-                  className="web-admin-btn"
-                  style={{ padding: '6px 10px', fontSize: '0.82rem' }}
-                  onClick={() => handleBatchStatus('正取 Confirmed')}
-                  disabled={loadingSignups}
-                >
-                  <span>批次設為正取</span>
-                </button>
-                <button
-                  type="button"
-                  className="web-admin-btn web-admin-btn-secondary"
-                  style={{ padding: '6px 10px', fontSize: '0.82rem' }}
-                  onClick={() => handleBatchStatus('備取 Waitlisted')}
-                  disabled={loadingSignups}
-                >
-                  <span>批次設為備取</span>
-                </button>
-              </div>
-            )}
-
-            {/* 重新整理按鈕（移至隱藏按鈕左邊） */}
-            <button
-              type="button"
-              className="web-admin-btn web-admin-btn-secondary"
-              onClick={() => {
-                loadEvents();
-                if (selectedEventId) loadSignups(selectedEventId);
-              }}
-              title="重新整理名冊"
-              style={{ padding: '7px 10px' }}
-            >
-              <RefreshCw size={15} className={loadingSignups ? 'animate-spin' : ''} />
-            </button>
-
-            {/* 顯示隱藏項目按鈕（眼睛圖示） */}
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                className={`web-admin-btn web-admin-btn-secondary ${hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'active' : ''}`}
-                onClick={() => setShowHiddenMenu(!showHiddenMenu)}
-                title="顯示與隱藏項目"
-                style={{
-                  padding: '7px 10px',
-                  borderColor: hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'var(--wa-primary)' : undefined,
-                  color: hiddenColumns.length > 0 || hiddenRowIds.size > 0 ? 'var(--wa-primary)' : undefined,
-                }}
-              >
-                <Eye size={15} />
-              </button>
-
-              {/* 隱藏項目下拉面板 */}
-              {showHiddenMenu && (
-                <div ref={hiddenMenuRef} className="wa-dropdown-panel">
+          }
+          search={{
+            value: searchKeyword,
+            onChange: setSearchKeyword,
+            placeholder: '搜尋姓名、電話、身分證、學號、LINE...',
+          }}
+          filters={[
+            {
+              key: 'status',
+              label: '審核狀態',
+              selected: statusFilter,
+              onChange: setStatusFilter,
+              options: [
+                { value: 'ALL', label: '全體名冊 (全部狀態)', icon: <User size={13} /> },
+                { value: 'CONFIRMED', label: '僅顯示正取', icon: <CheckCircle2 size={13} /> },
+                { value: 'WAITLIST', label: '僅顯示備取', icon: <Clock size={13} /> },
+                { value: 'CHECKING', label: '僅顯示審核中', icon: <AlertCircle size={13} /> },
+                { value: 'CANCELLED', label: '僅顯示已取消', icon: <X size={13} /> },
+              ],
+            },
+          ]}
+          secondaryActions={[
+            ...(Object.keys(aiEvaluations).length > 0
+              ? [
+                  {
+                    key: 'ai-sort-toggle',
+                    icon: <ArrowUpDown size={15} />,
+                    title: aiSorted ? '切換回原始登記順序' : '依 AI 適合度分數排序',
+                    active: aiSorted,
+                    onClick: () => {
+                      const nextState = !aiSorted;
+                      setAiSorted(nextState);
+                      if (nextState) {
+                        setPinnedColumns((prev) => {
+                          const next = [...prev];
+                          if (!next.includes('ai_score')) next.push('ai_score');
+                          if (!next.includes('ai_reasoning')) next.push('ai_reasoning');
+                          return next;
+                        });
+                        setHiddenColumns((prev) => prev.filter((k) => k !== 'ai_score' && k !== 'ai_reasoning'));
+                      }
+                    },
+                  },
+                ]
+              : []),
+            {
+              key: 'visibility',
+              icon: <Eye size={15} />,
+              title: '顯示與隱藏項目',
+              active: hiddenColumns.length > 0 || hiddenRowIds.size > 0,
+              onClick: () => setShowHiddenMenu((prev) => !prev),
+              popoverOpen: showHiddenMenu,
+              onPopoverClose: () => setShowHiddenMenu(false),
+              popoverContent: (
+                <div ref={hiddenMenuRef} className="wa-dropdown-panel" style={{ left: 0, right: 'auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid var(--wa-border)' }}>
                     <span style={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e293b' }}>欄位與列可見度</span>
                     <button
@@ -1703,102 +1641,103 @@ export const WebAdminRoster: React.FC = () => {
                     })}
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* 一鍵恢復預設欄位寬度與高度（左右箭頭圖示） */}
-            <button
-              type="button"
-              className="web-admin-btn web-admin-btn-secondary"
-              onClick={resetColumnWidthsAndHeights}
-              title="一鍵恢復預設欄寬與列高"
-              style={{ padding: '7px 10px' }}
-            >
-              <ArrowLeftRight size={15} />
-            </button>
-
-            {/* 純圖示複製整份名冊（TSV） */}
-            <button
-              type="button"
-              className="web-admin-btn web-admin-btn-secondary"
-              onClick={handleCopyTSV}
-              title={copiedSuccess ? '已複製到剪貼簿！' : '複製當前名冊 (TSV 格式，供保險/入山表貼上)'}
-              style={{ padding: '7px 10px' }}
-            >
-              {copiedSuccess ? <Check size={15} color="var(--wa-primary)" /> : <Copy size={15} />}
-            </button>
-
-            {/* 新增 / 導入人員按鈕 */}
-            <button
-              type="button"
-              className="web-admin-btn web-admin-btn-secondary"
-              onClick={() => setIsImportModalOpen(true)}
-              disabled={!selectedEventId}
-              title="從其他活動名冊複製或從社員名冊手動補登"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px' }}
-            >
-              <UserPlus size={15} />
-              <span>新增/導入人員</span>
-            </button>
-
-            {/* 建立資料夾與 Google 試算表 / 即時同步並開啟試算表 */}
-            <button
-              type="button"
-              className="web-admin-btn web-admin-btn-secondary"
-              onClick={handleSyncOrOpenSheet}
-              disabled={syncingSheet}
-              title={
-                currentEvent?.spreadsheet_url
-                  ? '即時同步名冊並開啟 Google 試算表'
-                  : '為此活動在雲端硬碟建立資料夾與 Google 試算表'
-              }
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px' }}
-            >
-              {syncingSheet ? (
-                <>
-                  <RefreshCw size={15} className="animate-spin" />
-                  <span>同步中...</span>
-                </>
+              ),
+            },
+            {
+              key: 'reset-widths',
+              icon: <ArrowLeftRight size={15} />,
+              title: '一鍵恢復預設欄寬與列高',
+              onClick: resetColumnWidthsAndHeights,
+            },
+            {
+              key: 'copy-tsv',
+              icon: copiedSuccess ? <Check size={15} color="var(--wa-primary)" /> : <Copy size={15} />,
+              title: copiedSuccess ? '已複製到剪貼簿！' : '複製當前名冊 (TSV 格式，供保險/入山表貼上)',
+              active: copiedSuccess,
+              onClick: handleCopyTSV,
+            },
+          ]}
+          refresh={{
+            onClick: () => {
+              loadEvents();
+              if (selectedEventId) loadSignups(selectedEventId);
+            },
+            loading: loadingSignups,
+            title: '重新整理名冊',
+          }}
+          extraRightElement={
+            selectedSignupIds.size > 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--wa-primary)' }}>
+                  選取 {selectedSignupIds.size} 筆
+                </span>
+                <button
+                  type="button"
+                  className="web-admin-btn"
+                  style={{ padding: '5px 10px', fontSize: '0.8rem' }}
+                  onClick={() => handleBatchStatus('正取 Confirmed')}
+                  disabled={loadingSignups}
+                >
+                  <span>批次設為正取</span>
+                </button>
+                <button
+                  type="button"
+                  className="web-admin-btn web-admin-btn-secondary"
+                  style={{ padding: '5px 10px', fontSize: '0.8rem' }}
+                  onClick={() => handleBatchStatus('備取 Waitlisted')}
+                  disabled={loadingSignups}
+                >
+                  <span>批次設為備取</span>
+                </button>
+              </div>
+            ) : undefined
+          }
+          rightActions={[
+            {
+              key: 'ai-eval',
+              label: isAiEvaluating ? 'AI 評估中...' : 'AI 體能評估排序',
+              icon: isAiEvaluating ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />,
+              title: '去識別化送審體能與經驗，由 AI 根據活動難度產出分數與理由',
+              onClick: handleTriggerAiEvaluation,
+              disabled: isAiEvaluating || loadingSignups || !selectedEventId,
+            },
+            {
+              key: 'google-sheet',
+              label: syncingSheet
+                ? '同步中...'
+                : currentEvent?.spreadsheet_url
+                  ? '開啟試算表'
+                  : '建立資料夾與試算表',
+              icon: syncingSheet ? (
+                <RefreshCw size={14} className="animate-spin" />
               ) : currentEvent?.spreadsheet_url ? (
-                <>
-                  <FileSpreadsheet size={15} />
-                  <span>開啟試算表</span>
-                </>
+                <FileSpreadsheet size={14} />
               ) : (
-                <>
-                  <FolderPlus size={15} />
-                  <span>建立資料夾與試算表</span>
-                </>
-              )}
-            </button>
-
-            {/* 一鍵發送通知按鈕 (綠色按鈕白字) */}
-            <button
-              type="button"
-              className="web-admin-btn"
-              onClick={handleSendNotifications}
-              disabled={sendingNotification}
-              title="一鍵推播審核結果與行前通知至已報名社員 LINE"
-              style={{
-                backgroundColor: '#10b981',
-                color: '#ffffff',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '7px 14px',
-                fontWeight: 600,
-              }}
-            >
-              {sendingNotification ? (
-                <RefreshCw size={15} className="animate-spin" />
-              ) : (
-                <Send size={15} />
-              )}
-              <span>發送通知</span>
-            </button>
-          </div>
-        </div>
+                <FolderPlus size={14} />
+              ),
+              title: currentEvent?.spreadsheet_url
+                ? '即時同步名冊並開啟 Google 試算表'
+                : '為此活動在雲端硬碟建立資料夾與 Google 試算表',
+              onClick: handleSyncOrOpenSheet,
+              disabled: syncingSheet,
+            },
+            {
+              key: 'send-notifications',
+              label: sendingNotification ? '發送中...' : '一鍵發送通知',
+              icon: sendingNotification ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />,
+              title: '一鍵推播審核結果與行前通知至已報名社員 LINE',
+              onClick: handleSendNotifications,
+              disabled: sendingNotification,
+            },
+          ]}
+          primaryAction={{
+            label: '新增/導入人員',
+            icon: <UserPlus size={15} />,
+            onClick: () => setIsImportModalOpen(true),
+            disabled: !selectedEventId,
+            title: '從其他活動名冊複製或從社員名冊手動補登',
+          }}
+        />
 
         {/* 錯誤橫幅 */}
         {errorMsg && (

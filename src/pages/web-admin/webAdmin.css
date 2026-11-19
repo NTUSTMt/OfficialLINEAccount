@@ -236,10 +236,10 @@
 /* 核心工作區 */
 .web-admin-main {
   flex: 1;
-  padding: 24px;
+  padding: 12px 24px 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   max-width: 100%;
   overflow-x: hidden;
 }
@@ -3780,8 +3780,9 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
 }
 
 .wa-cal-bar.school-bar {
-  background-color: #7c3aed;
-  color: #ffffff;
+  background-color: #ede9fe;
+  color: #5b21b6;
+  font-weight: 600;
 }
 
 /* 跨天橫幅連續緞帶樣式：向上覆蓋單元格隔線形成純無縫緞帶 */
@@ -3836,26 +3837,28 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
 }
 
 .wa-cal-badge.event-tag {
-  background-color: #2563eb;
+  background-color: #059669;
   color: #ffffff;
 }
 
 .wa-cal-badge.deadline-tag {
-  background-color: #fef08a;
-  color: #854d0e;
-  border: 1px solid #fde047;
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
 }
 
 .wa-cal-badge.school-tag {
   background-color: #ede9fe;
-  color: #6d28d9;
+  color: #5b21b6;
   border: 1px solid #ddd6fe;
 }
 
-/* 細部業務標籤：灰底白字 */
+/* 細部業務標籤：淡灰底深灰字 (系統資訊退居次要層級) */
 .wa-cal-badge.micro-tag {
-  background-color: #475569;
-  color: #ffffff;
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  font-weight: 500;
 }
 
 /* 超額省略按鈕 */
@@ -4448,4 +4451,558 @@ input[type="checkbox"].wa-checkbox:indeterminate::after {
   border-color: #e2e8f0 !important;
   cursor: not-allowed !important;
   opacity: 0.6 !important;
+}
+
+/* ==========================================================================
+   Notion-style 極簡無框工具列與 Popover 小視窗 (WebAdminToolbar)
+   ========================================================================== */
+
+.wa-notion-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0 10px;
+  border-bottom: 1px solid var(--wa-border);
+  background: transparent;
+  flex-wrap: wrap;
+}
+
+.wa-notion-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-notion-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.wa-notion-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--wa-text-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+  user-select: none;
+}
+
+.wa-notion-icon-btn:hover:not(:disabled) {
+  background-color: var(--wa-surface-alt);
+  color: var(--wa-text);
+}
+
+.wa-notion-icon-btn:focus-visible {
+  outline: 2px solid var(--wa-primary);
+  outline-offset: 1px;
+}
+
+.wa-notion-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.wa-notion-icon-btn.is-open {
+  background-color: var(--wa-surface-alt);
+  color: var(--wa-text);
+}
+
+.wa-notion-icon-btn.is-active {
+  background-color: var(--wa-primary-light);
+  color: var(--wa-primary);
+}
+
+.wa-notion-icon-btn.is-active:hover:not(:disabled) {
+  background-color: rgba(5, 150, 105, 0.14);
+  color: var(--wa-primary-hover);
+}
+
+.wa-notion-badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background-color: var(--wa-primary);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* 展開式搜尋列 */
+.wa-notion-search-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background-color: var(--wa-surface);
+  border: 1px solid var(--wa-border-light);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.wa-notion-search-wrap:focus-within {
+  border-color: var(--wa-primary);
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.12);
+}
+
+.wa-notion-search-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--wa-text);
+  font-size: 0.84rem;
+  font-family: inherit;
+  width: 180px;
+  padding: 0;
+}
+
+.wa-notion-search-input::placeholder {
+  color: var(--wa-text-subtle);
+}
+
+.wa-notion-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--wa-text-subtle);
+  cursor: pointer;
+  padding: 0;
+}
+
+.wa-notion-search-clear:hover {
+  background-color: var(--wa-surface-alt);
+  color: var(--wa-text);
+}
+
+/* Popover 容器 */
+.wa-notion-popover-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.wa-notion-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 260;
+  min-width: 248px;
+  max-width: 320px;
+  background-color: var(--wa-surface);
+  border: 1px solid var(--wa-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.05);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wa-notion-popover.align-right {
+  left: auto;
+  right: 0;
+}
+
+.wa-notion-popover-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--wa-border-light);
+  background-color: var(--wa-bg);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.wa-notion-popover-search-box:focus-within {
+  border-color: var(--wa-primary);
+  background-color: var(--wa-surface);
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.12);
+}
+
+.wa-notion-popover-search-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--wa-text);
+  font-size: 0.83rem;
+  font-family: inherit;
+  width: 100%;
+  padding: 0;
+}
+
+.wa-notion-popover-search-input::placeholder {
+  color: var(--wa-text-subtle);
+}
+
+.wa-notion-popover-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0;
+}
+
+.wa-notion-popover-section {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--wa-text-subtle);
+  padding: 6px 8px 3px;
+  letter-spacing: 0.01em;
+}
+
+.wa-notion-popover-subgroup {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--wa-text-muted);
+  padding: 4px 8px 2px 12px;
+}
+
+.wa-notion-popover-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--wa-text);
+  font-size: 0.84rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.wa-notion-popover-item:hover {
+  background-color: var(--wa-surface-alt);
+}
+
+.wa-notion-popover-item.is-selected {
+  background-color: var(--wa-primary-light);
+  color: var(--wa-primary);
+  font-weight: 600;
+}
+
+.wa-notion-popover-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.wa-notion-popover-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wa-text-muted);
+  flex-shrink: 0;
+}
+
+.wa-notion-popover-item.is-selected .wa-notion-popover-item-icon {
+  color: var(--wa-primary);
+}
+
+.wa-notion-popover-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-notion-popover-empty {
+  padding: 14px 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--wa-text-subtle);
+}
+
+.wa-notion-popover-footer {
+  border-top: 1px solid var(--wa-border);
+  margin-top: 2px;
+  padding: 5px 4px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wa-notion-popover-reset {
+  border: none;
+  background: transparent;
+  color: var(--wa-text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-family: inherit;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wa-notion-popover-reset:hover {
+  background-color: var(--wa-surface-alt);
+  color: var(--wa-danger);
+}
+
+/* 主要新增按鈕 (固定最右側) */
+.wa-notion-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--wa-primary);
+  color: #ffffff;
+  font-size: 0.83rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+  white-space: nowrap;
+}
+
+.wa-notion-primary-btn:hover:not(:disabled) {
+  background-color: var(--wa-primary-hover);
+}
+
+.wa-notion-primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 右側有文字之次要操作按鈕 */
+.wa-notion-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--wa-border);
+  border-radius: 6px;
+  background-color: var(--wa-surface);
+  color: var(--wa-text);
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  white-space: nowrap;
+}
+
+.wa-notion-secondary-btn:hover:not(:disabled) {
+  background-color: var(--wa-surface-alt);
+  border-color: var(--wa-border-light);
+}
+
+.wa-notion-secondary-btn.is-active {
+  border-color: var(--wa-primary);
+  background-color: var(--wa-primary-light);
+  color: var(--wa-primary);
+}
+
+.wa-notion-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 極簡前綴選擇器 (如名冊活動切換) */
+.wa-notion-prefix-select {
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--wa-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  height: 30px;
+  padding: 0 28px 0 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+  max-width: 280px;
+  text-overflow: ellipsis;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.wa-notion-prefix-select:hover {
+  background-color: var(--wa-surface-alt);
+}
+
+.wa-notion-prefix-select:focus-visible {
+  border-color: var(--wa-primary);
+  background-color: var(--wa-surface);
+}
+
+/* ==================== 社務日程：可出隊時段底色與衝突提示 ==================== */
+.wa-cal-day-holiday {
+  background-color: #f3fbf6;
+}
+
+.wa-cal-day-holiday:hover {
+  background-color: #e6f7ec;
+}
+
+.wa-cal-day-break {
+  background-color: #f3f7ff;
+}
+
+.wa-cal-day-break:hover {
+  background-color: #e6effe;
+}
+
+.wa-cal-day-exam {
+  background-color: #fff8f1;
+}
+
+.wa-cal-day-exam:hover {
+  background-color: #ffefe0;
+}
+
+.wa-calendar-cell.outside-month.wa-cal-day-holiday,
+.wa-calendar-cell.outside-month.wa-cal-day-break,
+.wa-calendar-cell.outside-month.wa-cal-day-exam {
+  opacity: 0.6;
+}
+
+.wa-calendar-cell.today.wa-cal-day-holiday,
+.wa-calendar-cell.today.wa-cal-day-break,
+.wa-calendar-cell.today.wa-cal-day-exam {
+  box-shadow: inset 0 0 0 1.5px var(--wa-primary);
+}
+
+.wa-calendar-cell.selected.wa-cal-day-holiday,
+.wa-calendar-cell.selected.wa-cal-day-break,
+.wa-calendar-cell.selected.wa-cal-day-exam {
+  box-shadow: inset 0 0 0 2px var(--wa-primary);
+}
+
+.wa-cal-day-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0 2px;
+  line-height: 1.35;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-cal-day-tag--holiday {
+  color: #15803d;
+}
+
+.wa-cal-day-tag--break {
+  color: #1d4ed8;
+}
+
+.wa-cal-day-tag--exam {
+  color: #c2410c;
+}
+
+.wa-cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--wa-border-light);
+  background-color: var(--wa-surface-alt);
+  font-size: 0.78rem;
+  color: var(--wa-text-muted);
+}
+
+.wa-cal-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wa-cal-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  display: inline-block;
+}
+
+.wa-cal-legend-swatch--holiday {
+  background-color: #dcfce7;
+}
+
+.wa-cal-legend-swatch--break {
+  background-color: #dbeafe;
+}
+
+.wa-cal-legend-swatch--exam {
+  background-color: #ffedd5;
+}
+
+.wa-conflict-banner {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #fcd34d;
+  background-color: #fffbeb;
+  color: #92400e;
+  font-size: 0.84rem;
+}
+
+.wa-conflict-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.wa-conflict-banner-list {
+  margin: 4px 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }

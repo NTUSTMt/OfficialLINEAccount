@@ -2143,7 +2143,7 @@ export const updateLoanStatusInSupabase = async (
 ): Promise<{ success: boolean; error?: string }> => {
   if (!supabase || !loanId) return { success: false, error: '缺少必要參數' };
 
-  // 1. 優先嘗試 RPC
+  // 1. 優先透過原子性 RPC 更新狀態並連動回補/扣回裝備庫存，失敗時直接回報錯誤（不得靜默直更繞過庫存邏輯）
   if (officerUserId && officerUserId !== 'TEST_USER_ID') {
     try {
       const { data: rpcRes, error: rpcErr } = await supabase.rpc('update_admin_loan_status_rpc', {
@@ -2152,14 +2152,18 @@ export const updateLoanStatusInSupabase = async (
         p_status: newStatus,
         p_notes: notes || null
       });
-      if (!rpcErr && rpcRes && rpcRes.success) {
-        return { success: true };
-      }
       if (rpcErr) {
-        console.warn('[Supabase] update_admin_loan_status_rpc 失敗，切換直更模式:', rpcErr.message);
+        console.error('[Supabase] update_admin_loan_status_rpc 失敗:', rpcErr.message);
+        return { success: false, error: `[更新租借狀態失敗]: ${rpcErr.message} (代碼: ${rpcErr.code || 'RPC_ERROR'})` };
       }
-    } catch (err) {
-      console.warn('[Supabase] update_admin_loan_status_rpc 例外，切換直更模式:', err);
+      if (!rpcRes || !rpcRes.success) {
+        const msg = rpcRes?.message || 'update_admin_loan_status_rpc 回傳失敗';
+        return { success: false, error: `[更新租借狀態失敗]: ${msg}` };
+      }
+      return { success: true };
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { success: false, error: `[更新租借狀態例外]: ${msg}` };
     }
   }
 
@@ -2728,7 +2732,11 @@ export const triggerCalendarSync = async (
     const data = await res.json();
     return {
       success: data.success !== false && data.status !== 'error',
-      message: data.message || '外部日曆同步完成'
+      message: data.message || '外部日曆同步完成',
+      clubCount: typeof data.clubCount === 'number' ? data.clubCount : undefined,
+      schoolCount: typeof data.schoolCount === 'number' ? data.schoolCount : undefined,
+      warnings: Array.isArray(data.warnings) ? data.warnings : undefined,
+      ntustSync: data.ntustSync ?? null
     };
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);

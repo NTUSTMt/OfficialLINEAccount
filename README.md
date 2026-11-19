@@ -1,6 +1,6 @@
 # 國立臺灣科技大學登山社 - 社團官方數位系統 (NTUST Hiking Club Official System)
 
-[![Version](https://img.shields.io/badge/version-v0.1.335-emerald.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-v0.1.347-emerald.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19.2.7-blue.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0.2-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.1.1-646CFF.svg)](https://vitejs.dev/)
@@ -13,7 +13,92 @@
 
 ---
 
-## 最新修正 (2026-11-10, v0.1.335)
+## 最新修正 (2026-11-19, v0.1.347)
+
+- **修復裝備租借 `submit_equipment_loan_rpc` 欄位不存在錯誤 (`20261119_fix_submit_equipment_loan_rpc_price_columns.sql`)**：
+  - 新增 Migration `20261119_fix_submit_equipment_loan_rpc_price_columns.sql`（同步對齊 `supabase/schema/04_equipments_and_loans.sql`、`supabase/schema/00_master_schema.sql`、`supabase/fix_equipment_loan_rpc.sql`、`supabase/equipment_loan_rpc.sql` 並已套用至線上 Supabase），重建 `public.submit_equipment_loan_rpc`，徹底移除對已刪除欄位 `member_price_per_day` 與 `non_member_price_per_day` 的誤查詢，全面改以 `price_2day` 與 `price_extra_day` 計費，消除送出預訂單時出現 `column "member_price_per_day" does not exist` 的阻斷錯誤。
+  - 修正社員資格與效期判斷邏輯為 `is_official_member IS TRUE AND (membership_expires_at IS NULL OR membership_expires_at >= CURRENT_DATE)`，避免已過期社員誤享 5 折；並於借用前檢查 `is_borrowable`、於 `loans.items` 寫入標準化 JSON 陣列明細快照。
+
+## 過往重大修正 (2026-11-18, v0.1.346)
+
+- **裝備歸還／取消原子性自動補庫存 (`update_admin_loan_status_rpc`, `supabaseClient.ts`)**：
+  - 新增 Migration `20261118_fix_loan_status_rpc_inventory_restore.sql`（同步更新 `04_equipments_and_loans.sql`、`admin_portal_rpc.sql` 並已套用至線上 Supabase），於 `update_admin_loan_status_rpc` 內以 `FOR UPDATE` 鎖定訂單並檢查新舊狀態轉移：由佔用庫存狀態（待領取／租借中／使用中）轉為「已歸還 Returned」或「已取消」時，自動依 `loan_items` 將 `equipments.available_qty` 原子性加回（`LEAST(total_qty, available_qty + quantity)`）；誤從已結束狀態改回出借時則檢查並扣回庫存；同類狀態重複儲存不重複增減。
+  - 修正 `updateLoanStatusInSupabase` 在 RPC 失敗時直接回報具體錯誤，不再靜默切換直更模式而遺漏庫存回補。
+- **修復幹部借還管理「借用裝備清單 (0 項)」顯示空白 (`WebAdminLoans.tsx`)**：
+  - 補上 `loans` 查詢之 `loan_items` 與 `equipments(name)` 關聯，並修正 `l.items` 為空陣列 `[]` 時誤遮蔽 `loan_items` 的判斷邏輯，同時兼容 `subtotal` 與 `rent` 欄位顯示單項租金。
+
+## 過往重大修正 (2026-11-18, v0.1.345)
+
+- **幹部系統開啟試算表防彈窗攔截 (`WebAdminRoster.tsx`)**：
+  - 修正 `handleSyncOrOpenSheet` 在非同步同步名冊與寫入稽核紀錄後才呼叫 `window.open`，導致瀏覽器因使用者點擊手勢逾時而靜默攔截彈窗的問題；改為於非同步請求前同步預開分頁並於取得網址後導向，若仍遭瀏覽器阻擋則提供含試算表網址之明確提示。
+- **國籍未填寫顯示「－」 (`nationalities.ts`, `MemberProfileModal.tsx`, `MemberEditDrawer.tsx`, `MemberDetailEdit.tsx`)**：
+  - 移除 `getNationalityLabel` 與 `MemberProfileModal` 對空國籍預設補上「中華民國／Taiwan」的行為，未填寫一律回傳並顯示「－」；同步於 `MemberEditDrawer` 與 `MemberDetailEdit` 的國籍下拉選單加入 `<option value="">－</option>`，避免空白資料在編輯畫面誤顯示或被覆寫為中華民國。
+- **社員資料填寫分步驗證與自動跳轉聚焦 (`Register.tsx`)**：
+  - 新增 `findFirstMissingInStep`、`focusMissingField` 與 `handleNextStep`，點擊「下一步」及送出表單時皆依步驟檢查必填欄位，若有缺漏即自動切換至對應步驟並執行 `scrollIntoView({ behavior: 'smooth', block: 'center' })` 與 `.focus()` 直接定位至第一個未填寫欄位（涵蓋自訂國籍、體能證明照片、入社意願與隱私權同意書）。
+
+## 過往重大修正 (2026-11-14, v0.1.344)
+
+- **外部日曆重複事件前端去重 (`WebAdminSchedule.tsx`)**：
+  - 針對 Google 日曆因曾重複匯入 `.ics` 導致同一日期與標題出現多筆不同 `@google.com` ID 之相同校曆／社團日曆事件（如「就學貸款收件截止」或「和平紀念日」出現兩筆），於 `loadScheduleData` 依 `source_type + title + start_time + end_time` 自動去重顯示。
+
+## 過往重大修正 (2026-11-14, v0.1.343)
+
+- **修復合併標題假日覆蓋與移除全天事件誤顯示 `16:00` (`scheduleHighlightUtils.ts`, `WebAdminSchedule.tsx`)**：
+  - **合併型校曆事件獨立比對假日**：當同一筆校曆事件同時包含假日與考試週（如 `10/26 臺灣光復暨金門古寧頭大捷紀念日遇例假日補假。期中考試開始(至10月30日截止)...`）時，先標記考試週區間再獨立套用假日判斷，確保 `10/26` 以 `holiday` 優先覆蓋為綠色補假日，`10/27–10/30` 維持橘色 `期中考週`。
+  - **時間顯示改用本地時間並對無特定時間留白 (`formatItemTimeLabel`)**：修正先前直接截取 UTC 字串 `substring(11, 16)` 導致台灣時間 `00:00` 全天事件誤顯示為 `16:00` 的問題；純日期或本地時間為 `00:00` 的全天事件改為留白不顯示時間標籤。
+  - **無對應功能不顯示跳轉按鈕 (`getActionLinkPath`)**：針對學校校曆（`school`）、社團日曆（`club_calendar`）或僅指向社務日程頁本身的項目，隱藏「開啟對應功能／前往查看」按鈕，避免出現無意義的自我跳轉連結。
+
+## 過往重大修正 (2026-11-14, v0.1.342)
+
+- **修復外部日曆全天事件多算一天與國定假日優先權 (`scheduleHighlightUtils.ts`, `WebAdminSchedule.tsx`)**：
+  - **排他結束時間校正 (`getInclusiveEndDateKey`)**：Google Calendar / `.ics` 匯入之全天事件（`school`、`club_calendar`）結束時間為隔日 `00:00`（排他邊界，資料庫回傳 UTC 時常呈現為 `T16:00:00Z`），於月曆長條配置與底色計算改以本地午夜判斷並自動減一天，修正單日校曆事件（如 10/25 紀念日、10/26 補假）被誤畫為跨兩天長條的問題；社團內部活動（`event`）則維持包含式結束日期不變。
+  - **國定假日優先於考試週**：將 `PRIORITY` 調整為 `holiday (3) > exam (2) > break (1)`，當補假／國定假日與考試週起日重疊（例如 10/26 補假同時為期中考起始週）時，優先標示為綠色可出隊假日，10/27–10/30 則正確標示為期中考週。
+
+## 過往重大修正 (2026-11-14, v0.1.341)
+
+- **社務日程考試週日期解析與視覺階層優化 (`scheduleHighlightUtils.ts`, `webAdmin.css`)**：
+  - **期中／期末考截止日標題解析**：新增 `parseExplicitEndDateFromTitle`，支援從「`期中考試開始(至10月30日截止)...`」類型的單日校曆事件標題自動解析結束日期（含跨年處理）並標記整個考試週區間（精簡標籤顯示為 `期中考週`／`期末考週`），同步套用於排程衝突偵測。
+  - **日曆配色與視覺層級收斂**：
+    - 系統細部資訊標籤（`.wa-cal-badge.micro-tag`，如繳費申報、裝備借還）由深灰白字改為淡灰底深灰字（`#f1f5f9` / `#475569`），退居次要層級。
+    - 社團出隊活動（`.event-bar` / `.event-tag`）統一採用高山翠綠 `#059669` 作為唯一高視覺權重主角；學校校曆（`.school-bar` / `.school-tag`）統一收斂為柔紫（`#ede9fe` / `#5b21b6`）；報名截止日柔化為暖杏色（`#fef3c7` / `#92400e`）；日曆格右上角時段標示改為無框純色文字，大幅降低畫面雜亂感。
+
+## 過往重大修正 (2026-11-14, v0.1.340)
+
+- **學期初出隊規劃與可出隊時段視覺化 (`WebAdminSchedule.tsx`, `WebAdminEventModal.tsx`, `WebAdminEvents.tsx`, `scheduleHighlightUtils.ts`)**：
+  - **可出隊時段月曆底色標示**：自動解析台科大校曆與週末，於社務日程月曆標示淺綠（週末、國定假日、補假；自動排除補班/補課日）、淺藍（寒暑假區間、校慶運動會）與淺橘（期中/期末考週），並於工具列提供底色顯示切換與圖例說明。
+  - **月曆選定日期原地開隊**：於社務日程選定日期明細標題列新增「在此日期開隊」按鈕，原地開啟共用活動彈窗，自動帶入選定起訖日期並預設狀態為「未來開放」。
+  - **條件式必填欄位與排程衝突提示**：抽離共用 `<WebAdminEventModal />`，新增活動預設狀態改為「未來開放」；僅當狀態為「開放」時強制要求報名截止日、截止時間與預計費用，非開放狀態僅需活動代號、中文名稱與起訖日期即可儲存草案；表單並內建非阻擋式排程衝突偵測，即時提醒與既有活動、社團行事曆或學校考試週重疊的日期區間。
+
+## 過往重大修正 (2026-11-14, v0.1.339)
+
+- **Google 日曆同步與台科大行事曆 `.ics` 匯入機制修復 (`gas_worker.js`, `WebAdminSchedule.tsx`, `supabaseClient.ts`)**：
+  - **手動同步一併抓取台科大 `.ics`**：將 `gas_worker.js` 中 `action === 'sync_calendar_events'` 改為導向 `syncExternalCalendars(params)`，使後台點擊同步按鈕時也能自動從台科大教務處網頁抓取最新學年度 `.ics` 寫入 `SCHOOL_CALENDAR_ID`，再同步至 Supabase `external_calendar_events`。
+  - **重複性事件 ID 防碰撞**：修復 `_extractCalendarEvents` 對 Google 日曆重複性事件（`isRecurringEvent()`）以 `ev.getId() + '_' + ev.getStartTime().getTime()` 區分場次，避免多場次互相覆蓋。
+  - **錯誤與警告透明化**：修正 `WebAdminSchedule.tsx` 原先未檢查 `res.success === false` 導致同步失敗仍顯示綠色提示的問題，並於 `triggerCalendarSync` 回傳 `clubCount`、`schoolCount` 與 `warnings` 供即時診斷。
+
+## 過往重大修正 (2026-11-14, v0.1.338)
+
+- **社務日程 (`WebAdminSchedule.tsx`) 工具列統一接入 Notion 極簡無框設計**：
+  - 將 `.wa-schedule-toolbar` 替換為共用 `<WebAdminToolbar />`，左側統一為「展開式搜尋 -> 統整式日程分類 Filter Popover -> Google 日曆同步按鈕（純圖示）」。
+  - 右側保留「月份切換（`<`、`YYYY 年 M 月`、`>`、`今天`）」與「日曆檢視 / 時間軸檢視」具名切換按鈕，完整對齊全後台七大頁面的操作一致性。
+
+## 過往重大修正 (2026-11-14, v0.1.337)
+
+- **Web Admin 工具列上方留白平衡與右側具名按鈕配置 (`WebAdminToolbar.tsx`, `webAdmin.css`)**：
+  - **上方空間緊緻平衡**：將 `.web-admin-main` 頂部內距調整為 `padding: 12px 24px 24px;`、`gap: 14px`，並微調 `.wa-notion-toolbar` 底部間距，使工具列與頂部導航列及下方內容區間距更為均衡。
+  - **右側具名按鈕 (`rightActions`)**：於 `WebAdminToolbar` 新增 `.wa-notion-secondary-btn` 樣式與 `rightActions` 介面，將各頁面常用高頻操作置於右側並保留文字標籤：
+    - `WebAdminRoster`：右側配置「AI 體能評估排序」、「開啟試算表 / 建立資料夾與試算表」、「一鍵發送通知」與「新增/導入人員」。
+    - `WebAdminFinance`：右側配置「財務分析報表」、「一鍵發送通知」與「新增繳費項目」。
+    - `WebAdminMembers`：右側配置「一鍵複製社員」與「匯出名冊 CSV」。
+
+## 過往重大修正 (2026-11-14, v0.1.336)
+
+- **Web Admin 各頁面功能列 Notion 極簡無框重構 (`WebAdminToolbar.tsx`, `webAdmin.css`)**：
+  - **透明無框容器與懸浮顯色圖示**：移除 `.web-admin-toolbar` 原本的白底卡片外框，改為貼合淺色頁面背景的 `.wa-notion-toolbar`；所有次要操作與篩選/排序/搜尋/重新整理改為無邊框、無常駐底色的 `.wa-notion-icon-btn`，僅於滑鼠懸浮或開啟小視窗時顯示柔和背景。
+  - **固定且一致的操作順序**：全面統一 Web Admin 六大頁面（`WebAdminEvents`、`WebAdminMembers`、`WebAdminInventory`、`WebAdminLoans`、`WebAdminFinance`、`WebAdminRoster`）之工具列順序，左側依序為「展開式搜尋 -> 篩選 -> 排序 -> 次要操作圖示 -> 重新整理」，最右側固定為單一實心主要「新增」按鈕。
+  - **統整式 Filter 與 Sort Popover 小視窗**：點擊篩選或排序圖示開啟 `.wa-notion-popover` 浮動小視窗，頂部內建關鍵字搜尋框，下方列出附語意圖示的選項群組與即時高亮選中狀態；工具列表面不顯示條件 Pill，僅以主色高亮圖示與小數字角標提示啟用狀態。
+
+## 過往重大修正 (2026-11-10, v0.1.335)
 
 - **人員導入彈窗右上角關閉按鈕無底色與無陰影修復 (`RosterImportModal.tsx`, `webAdmin.css`)**：
   - 新增 `.wa-modal-close-btn` 樣式，移除原生瀏覽器按鈕預設產生的深灰方形底塊與外凸陰影邊框。

@@ -1,22 +1,55 @@
 {
   "nav": {
-    "borrow": { "title": "裝備租借", "subtitle": "Equipments Rental" },
-    "register": { "title": "資料填寫", "subtitle": "Register" },
-    "payment": { "title": "繳費系統", "subtitle": "Payment System" },
-    "dashboard": { "title": "個人主頁", "subtitle": "My Dashboard" },
-    "history": { "title": "歷史紀錄", "subtitle": "Payment History" },
-    "achievements": { "title": "出隊足跡", "subtitle": "Mountaineering Footprint" },
+    "borrow": {
+      "title": "裝備租借",
+      "subtitle": "Equipments Rental"
+    },
+    "register": {
+      "title": "資料填寫",
+      "subtitle": "Register"
+    },
+    "payment": {
+      "title": "繳費系統",
+      "subtitle": "Payment System"
+    },
+    "dashboard": {
+      "title": "個人主頁",
+      "subtitle": "My Dashboard"
+    },
+    "history": {
+      "title": "歷史紀錄",
+      "subtitle": "Payment History"
+    },
+    "achievements": {
+      "title": "出隊足跡",
+      "subtitle": "Mountaineering Footprint"
+    },
     "menuDashboard": "個人主頁",
     "menuRegister": "資料填寫",
     "menuBorrow": "裝備租借",
     "menuPayment": "繳費系統",
     "menuHistory": "繳費紀錄",
     "menuAchievements": "出隊足跡",
-    "adminEvents": { "title": "活動管理", "subtitle": "Events" },
-    "adminMembers": { "title": "社員資料", "subtitle": "Members" },
-    "adminFinance": { "title": "財務對帳", "subtitle": "Finance" },
-    "adminLoans": { "title": "租借管理", "subtitle": "Loans" },
-    "adminInventory": { "title": "裝備庫存", "subtitle": "Inventory" },
+    "adminEvents": {
+      "title": "活動管理",
+      "subtitle": "Events"
+    },
+    "adminMembers": {
+      "title": "社員資料",
+      "subtitle": "Members"
+    },
+    "adminFinance": {
+      "title": "財務對帳",
+      "subtitle": "Finance"
+    },
+    "adminLoans": {
+      "title": "租借管理",
+      "subtitle": "Loans"
+    },
+    "adminInventory": {
+      "title": "裝備庫存",
+      "subtitle": "Inventory"
+    },
     "menuAdminEvents": "活動管理",
     "menuAdminMembers": "社員資料",
     "menuAdminFinance": "財務對帳",
@@ -437,8 +470,8 @@
       "noteLabel": "匯款備註 (選填)",
       "notePlaceholder": "例如：王小明轉帳、兩筆合併匯款等備註說明",
       "noteTip": "此備註將同步顯示於幹部通知群組及繳費紀錄中。",
-      "proofLabel": "匯款證明 / 水單截圖 (選填)",
-      "proofTip": "支援上傳 1 張轉帳明細或水單截圖，點擊縮圖可放大預覽。",
+      "proofLabel": "匯款證明 (選填)",
+      "proofTip": "支援上傳 1 張轉帳明細，點擊縮圖可放大預覽。",
       "addProof": "新增證明",
       "removeProof": "移除照片",
       "previewProof": "點擊預覽大圖",
@@ -687,4 +720,3 @@
     "skip": "跳過導覽"
   }
 }
-
